@@ -1,0 +1,44 @@
+{
+  "summary": "Phase 3 (Fees & Subscriptions + Bank Operations + Financial Powers + member-portal Pay Dues) end-to-end testing complete. Backend: 19/19 new pytest cases pass against /api/fees, /api/fees/generate, /api/fees/{id}/pay, /api/bank/accounts, /api/bank/transactions, /api/financial-powers, /api/member-profile/{uid}, and updated /api/dashboard/stats. Frontend: all six new screens render and integrate correctly via sidebar navigation — Dashboard (Fee Collection 56% + Consolidated Bank Position ₹2,14,76,500), /fees (4 summary tiles, 5 status filter chips, Generate Cycle 2025-26 button, Mark Paid → MOCK-PAY- receipt flow), /bank (total balance hero + 2 account cards + recent transactions), /bank/:id (account detail + Record Transaction form + running balance ledger), /financial-powers (all 6 constitutional posts), and PUBLIC /member-profile/:uid (Pay Now per invoice → receipt modal with MOCK-PAY ref + Print/Save button; MPCA-HON-0001 correctly shows 'All Clear · No outstanding dues'). Phase 1 + Phase 2 also verified to still work (login persona → dashboard, sidebar nav, members register etc.). No regressions.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Card label is 'Consolidated Bank Position' (not the literal 'Bank Balance' phrase from the review request). Functionally identical — shows total of bank account current_balance with a 'View Accounts' link to /bank. No action needed unless main agent prefers the exact wording."]},
+      {"screen": "Sidebar testid (carried from iteration_4)", "issues": ["data-testid for Fees & Subscriptions is 'nav-fees-&-subscriptions' because AppLayout only sanitises whitespace, not '&'. Works in CSS attribute selectors but is awkward. Note: 'nav-financial-powers' is clean (no '&' in label) as the request mentioned."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase3_api.py",
+    "/app/test_reports/pytest/pytest_phase3.xml"
+  ],
+  "action_items": [
+    "(Optional) Rename Dashboard card 'Consolidated Bank Position' → 'Bank Balance' if exact wording from the spec is desired.",
+    "(Optional polish, carried from iteration_4) Sanitise non-alphanumerics in AppLayout's nav-testid generator so 'Fees & Subscriptions' → 'nav-fees-subscriptions' instead of 'nav-fees-&-subscriptions'.",
+    "Phase 3 is functionally complete. No code fixes required."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1250 lines (was 856 in iteration_4). Recommend splitting into routers/ subpackage (members.py, disclosures.py, meetings.py, elections.py, fees.py, bank.py) before Phase 4 — file size is becoming a maintainability concern.",
+    "list_fee_invoices and member_profile both compute Overdue at read-time without mutating DB — correct pattern, keeps source of truth on due_date only.",
+    "pay_invoice generates the MOCK-PAY reference inline; this is appropriately flagged as MOCKED in the request. When real Stripe/Razorpay/UPI is wired, gate this with an env flag like PAYMENT_PROVIDER and keep the mock path for tests.",
+    "/api/fees/generate is correctly idempotent (filters out existing member_uid+cycle pairs). Verified by running the endpoint twice — second call returns created=0.",
+    "Bank balance update path in add_transaction is atomic from a single-request standpoint but not transactional against concurrent writes. For Phase 4+ consider a MongoDB transaction or optimistic version stamp on bank_accounts.",
+    "member_profile correctly excludes phone/email from the public response payload — good privacy hygiene.",
+    "Dashboard stats now computes total_bank_balance from a server-side sum() over current_balance; fee_collection_pct is calculated as round(100*paid/total). Both are derived (not stored) so they self-heal.",
+    "FINANCIAL_POWERS is hard-coded — fine for the constitutional reference table since it derives from the Articles. If MC ever amends limits, this will need to move to DB."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase3_api.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 Phase 3 tests pass; iterations 1-3 backend tests not re-run but unchanged)",
+    "frontend": "100% (all 6 new screens + dashboard updates + public member portal verified via sidebar-driven Playwright)"
+  },
+  "test_credentials": "Persona-only demo auth via localStorage key 'mpca_persona'. Used Abhilash Khandekar (President) persona for all admin-side tests. /member-profile/:uid is genuinely public (no auth header, no /login redirect) — confirmed by direct goto in incognito-equivalent fresh page state.",
+  "seed_data_creation": "Test artifacts created against the live DB: 1 TEST_AcctPhase3 bank account (₹1,000 opening), 2 TEST_ bank transactions (credit ₹1000, debit ₹500) on the General Account, 1 TEST_extra fee invoice for MPCA-IND-0001 (cycle '2099-00', ₹500), and a full /fees/generate run for cycle '2026-27' (7 new invoices — 5 individual @ ₹3,000 + 2 institutional @ ₹15,000). Plus a Mark-Paid action on one previously-Overdue invoice via the UI. None of this affects Phase 1/2 functionality.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 3 is solid end-to-end. Same Playwright caveat as iteration_4 — drive Protected routes via sidebar clicks, not page.goto, to avoid the AuthContext-hydration race (App.js mounts AuthProvider above BrowserRouter, but Playwright's networkidle fires before the React tree's first render in some runs). Use MPCA-HON-0001 for the 'All Clear' member-portal case (Honorary members are skipped during invoice seeding). Use MPCA-INS-0001 or MPCA-INS-0002 for Pay-Now-with-dues; MPCA-IND-0002 may or may not have outstanding dues depending on whether iteration_4's manual smoke-test ran. After this iteration MPCA-IND-0001 also has a residual ₹500 cycle-2099-00 TEST invoice and a 2026-27 Pending invoice. Backend tests live in /app/backend/tests/test_phase3_api.py and run in ~1.7s.",
+  "rca of the issue": "No app bugs found. Only test-script-level artefacts (same AuthContext race as iteration_4) which do not affect real-user browser sessions."
+}

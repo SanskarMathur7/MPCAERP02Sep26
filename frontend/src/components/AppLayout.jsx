@@ -14,6 +14,7 @@ import {
     LogOut,
     ChevronRight,
     BookOpen,
+    Scale,
 } from "lucide-react";
 
 const PRIMARY_NAV = [
@@ -21,12 +22,13 @@ const PRIMARY_NAV = [
     { to: "/members", label: "Membership Register", icon: Users, phase: 1 },
     { to: "/meetings", label: "AGM & Meetings", icon: Calendar, phase: 2 },
     { to: "/elections", label: "Elections", icon: Vote, phase: 2 },
+    { to: "/fees", label: "Fees & Subscriptions", icon: Receipt, phase: 3 },
+    { to: "/bank", label: "Bank Operations", icon: Landmark, phase: 3 },
+    { to: "/financial-powers", label: "Financial Powers", icon: Scale, phase: 3 },
     { to: "/disclosures", label: "Public Disclosures", icon: FileText, phase: 1 },
 ];
 
 const FUTURE_NAV = [
-    { label: "Fees & Subscriptions", icon: Receipt, phase: 3 },
-    { label: "Bank Operations", icon: Landmark, phase: 3 },
     { label: "Player Registration", icon: Trophy, phase: 4 },
     { label: "Grievance Redressal", icon: AlertTriangle, phase: 4 },
     { label: "Constitution Library", icon: BookOpen, phase: 5 },
@@ -104,7 +106,7 @@ const AppLayout = ({ children }) => {
                 {/* Primary nav */}
                 <nav className="flex-1 px-4 py-6 overflow-y-auto">
                     <div className="overline text-[9px] text-mpca-gold-light/50 mb-3 px-2">
-                        Phases I & II — Live
+                        Phases I — III — Live
                     </div>
                     <ul className="space-y-0.5 mb-8">
                         {PRIMARY_NAV.map((item) => (

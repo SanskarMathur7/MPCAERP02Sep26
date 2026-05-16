@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchDashboardStats, fetchMembers, fetchDisclosures } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Users, FileText, Calendar, Receipt, AlertTriangle, TrendingUp, ChevronRight, Trophy } from "lucide-react";
+import { Users, FileText, Calendar, Receipt, AlertTriangle, TrendingUp, ChevronRight, Trophy, Landmark, IndianRupee } from "lucide-react";
 
 const StatTile = ({ label, value, sub, icon: Icon, accent = "green" }) => {
     const colorMap = {
@@ -110,12 +110,33 @@ const Dashboard = () => {
                     accent="brass"
                 />
                 <StatTile
-                    label="Open Elections"
-                    value={stats.elections_open ?? 0}
-                    sub="Voting in progress · Phase II"
+                    label="Fee Collection"
+                    value={`${stats.fee_collection_pct}%`}
+                    sub={`${stats.paid_invoices ?? 0}/${stats.total_invoices ?? 0} invoices paid`}
                     icon={Receipt}
                     accent="wood"
                 />
+            </div>
+
+            {/* Phase III tile band — Bank balance */}
+            <div className="bulletin-card p-8 mb-16 bg-gradient-to-br from-mpca-green-dark to-mpca-wood-dark text-mpca-ivory relative overflow-hidden" data-testid="bank-balance-card">
+                <div className="grid md:grid-cols-3 gap-8 items-center relative">
+                    <div className="md:col-span-2">
+                        <Landmark className="text-mpca-gold-light mb-3" size={28} strokeWidth={1.25} />
+                        <div className="overline !text-mpca-gold-light">Consolidated Bank Position</div>
+                        <div className="font-serif text-5xl md:text-6xl text-mpca-gold-light mt-3 leading-none">
+                            ₹{new Intl.NumberFormat("en-IN").format(stats.total_bank_balance ?? 0)}
+                        </div>
+                        <p className="text-mpca-ivory/70 mt-3 text-sm">
+                            Across all Association accounts · Live balance from the banker's ledger.
+                        </p>
+                    </div>
+                    <div className="md:text-right">
+                        <Link to="/bank" className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark" data-testid="goto-bank">
+                            View Accounts <ChevronRight size={14} />
+                        </Link>
+                    </div>
+                </div>
             </div>
 
             {/* Two-column: category breakdown + grievances */}

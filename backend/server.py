@@ -228,6 +228,86 @@ class Vote(VoteCast):
     cast_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+# ---------------- Phase 3: Fees & Subscriptions ----------------
+
+FeeStatus = Literal["Pending", "Paid", "Overdue", "Waived"]
+
+
+class FeeInvoiceBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    member_uid: str
+    member_name: Optional[str] = None
+    cycle: str  # e.g. "2025-26"
+    description: Optional[str] = None
+    amount: float
+    late_fee: float = 0.0
+    due_date: str  # ISO date
+    status: FeeStatus = "Pending"
+    paid_date: Optional[str] = None
+    payment_ref: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class FeeInvoice(FeeInvoiceBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    invoice_no: str
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class FeeInvoiceCreate(FeeInvoiceBase):
+    pass
+
+
+# ---------------- Phase 3: Bank Operations ----------------
+
+AccountType = Literal["Current", "Savings", "Fixed_Deposit"]
+TxnType = Literal["Credit", "Debit"]
+
+
+class BankAccountBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: str  # "MPCA General Account"
+    bank: str
+    branch: Optional[str] = None
+    account_no: str
+    ifsc: Optional[str] = None
+    account_type: AccountType = "Current"
+    opening_balance: float = 0.0
+    current_balance: float = 0.0
+    signatories: List[str] = []  # e.g. ["Hon. Secretary", "Hon. Treasurer"]
+    notes: Optional[str] = None
+
+
+class BankAccount(BankAccountBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class BankAccountCreate(BankAccountBase):
+    pass
+
+
+class BankTransactionBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    account_id: str
+    date: str  # ISO date
+    txn_type: TxnType
+    amount: float
+    narration: str
+    reference: Optional[str] = None
+    approved_by: Optional[str] = None  # post
+
+
+class BankTransaction(BankTransactionBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    balance_after: float = 0.0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class BankTransactionCreate(BankTransactionBase):
+    pass
+
+
 # ---------------- Helpers ----------------
 
 CATEGORY_PREFIX = {
@@ -338,6 +418,16 @@ async def dashboard_stats():
     disclosures_count = await db.disclosures.count_documents({})
     upcoming = await db.meetings.count_documents({"status": {"$in": ["Scheduled", "Notice_Issued"]}})
     elections_open = await db.elections.count_documents({"status": {"$in": ["Nominations_Open", "Voting_Open"]}})
+
+    # Real fee collection percentage
+    total_invoices = await db.fee_invoices.count_documents({})
+    paid_invoices = await db.fee_invoices.count_documents({"status": "Paid"})
+    fee_pct = round(100 * paid_invoices / total_invoices) if total_invoices else 0
+
+    # Bank balance
+    accts = await db.bank_accounts.find({}, {"_id": 0, "current_balance": 1}).to_list(50)
+    total_balance = sum(a.get("current_balance", 0) for a in accts)
+
     return {
         "total_members": total,
         "by_category": by_cat,
@@ -347,7 +437,10 @@ async def dashboard_stats():
         "upcoming_meetings": upcoming,
         "elections_open": elections_open,
         "pending_grievances": 0,  # placeholder until Phase 4
-        "fee_collection_pct": 78,  # placeholder until Phase 3
+        "fee_collection_pct": fee_pct,
+        "total_invoices": total_invoices,
+        "paid_invoices": paid_invoices,
+        "total_bank_balance": total_balance,
     }
 
 
@@ -551,9 +644,238 @@ async def verify_member(uid: str):
     }
 
 
+# ---------------- Phase 3: Fees & Subscriptions ----------------
+
+
+async def _next_invoice_no() -> str:
+    year = datetime.now(timezone.utc).year
+    count = await db.fee_invoices.count_documents({})
+    return f"MPCA-FEE-{year}-{count + 1:04d}"
+
+
+@api_router.get("/fees", response_model=List[FeeInvoice])
+async def list_fee_invoices(status: Optional[FeeStatus] = None, cycle: Optional[str] = None, member_uid: Optional[str] = None):
+    query = {}
+    if status:
+        query["status"] = status
+    if cycle:
+        query["cycle"] = cycle
+    if member_uid:
+        query["member_uid"] = member_uid
+    docs = await db.fee_invoices.find(query, {"_id": 0}).sort("due_date", -1).to_list(2000)
+    # Auto-flag Overdue (does not mutate DB)
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    for d in docs:
+        if d["status"] == "Pending" and d["due_date"] < today_str:
+            d["status"] = "Overdue"
+    return docs
+
+
+@api_router.post("/fees", response_model=FeeInvoice)
+async def create_fee_invoice(payload: FeeInvoiceCreate):
+    member = await db.members.find_one({"uid": payload.member_uid}, {"_id": 0})
+    if not member:
+        raise HTTPException(404, "Member UID not found")
+    data = payload.model_dump()
+    data["member_name"] = member["name"]
+    invoice_no = await _next_invoice_no()
+    inv = FeeInvoice(invoice_no=invoice_no, **data)
+    await db.fee_invoices.insert_one(inv.model_dump())
+    return inv
+
+
+@api_router.post("/fees/generate")
+async def generate_invoices(cycle: str, amount: float = 3000.0, due_date: Optional[str] = None):
+    """Bulk-generate invoices for the given cycle for every active Individual + Institutional member."""
+    if not due_date:
+        due_date = "2025-12-31"
+    active = await db.members.find({"status": "Active", "category": {"$in": ["Individual", "Institutional"]}}, {"_id": 0}).to_list(2000)
+    created = 0
+    for m in active:
+        existing = await db.fee_invoices.find_one({"member_uid": m["uid"], "cycle": cycle})
+        if existing:
+            continue
+        # Use category-appropriate amount
+        amt = 15000.0 if m["category"] == "Institutional" else amount
+        invoice_no = await _next_invoice_no()
+        inv = FeeInvoice(
+            invoice_no=invoice_no,
+            member_uid=m["uid"],
+            member_name=m["name"],
+            cycle=cycle,
+            description=f"Subscription · {cycle}",
+            amount=amt,
+            due_date=due_date,
+            status="Pending",
+        )
+        await db.fee_invoices.insert_one(inv.model_dump())
+        created += 1
+    return {"created": created, "cycle": cycle}
+
+
+@api_router.post("/fees/{invoice_id}/pay")
+async def pay_invoice(invoice_id: str, payment_ref: Optional[str] = None):
+    """Mock payment — marks invoice as Paid. In real life this would be Stripe/Razorpay."""
+    inv = await db.fee_invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+    if inv["status"] == "Paid":
+        return {"already_paid": True, "invoice": inv}
+    ref = payment_ref or f"MOCK-PAY-{uuid.uuid4().hex[:10].upper()}"
+    paid_date = datetime.now(timezone.utc).date().isoformat()
+    await db.fee_invoices.update_one(
+        {"id": invoice_id},
+        {"$set": {"status": "Paid", "paid_date": paid_date, "payment_ref": ref}},
+    )
+    updated = await db.fee_invoices.find_one({"id": invoice_id}, {"_id": 0})
+    return {"ok": True, "invoice": updated, "receipt_no": ref}
+
+
+@api_router.get("/fees/{invoice_id}", response_model=FeeInvoice)
+async def get_invoice(invoice_id: str):
+    doc = await db.fee_invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Invoice not found")
+    return doc
+
+
+# ---------------- Phase 3: Bank Operations ----------------
+
+
+@api_router.get("/bank/accounts", response_model=List[BankAccount])
+async def list_bank_accounts():
+    docs = await db.bank_accounts.find({}, {"_id": 0}).sort("name", 1).to_list(50)
+    return docs
+
+
+@api_router.post("/bank/accounts", response_model=BankAccount)
+async def create_bank_account(payload: BankAccountCreate):
+    data = payload.model_dump()
+    if not data.get("current_balance"):
+        data["current_balance"] = data.get("opening_balance", 0.0)
+    acct = BankAccount(**data)
+    await db.bank_accounts.insert_one(acct.model_dump())
+    return acct
+
+
+@api_router.get("/bank/accounts/{account_id}", response_model=BankAccount)
+async def get_bank_account(account_id: str):
+    doc = await db.bank_accounts.find_one({"id": account_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Account not found")
+    return doc
+
+
+@api_router.get("/bank/transactions", response_model=List[BankTransaction])
+async def list_transactions(account_id: Optional[str] = None, limit: int = 200):
+    query = {"account_id": account_id} if account_id else {}
+    docs = await db.bank_txns.find(query, {"_id": 0}).sort("date", -1).to_list(limit)
+    return docs
+
+
+@api_router.post("/bank/transactions", response_model=BankTransaction)
+async def add_transaction(payload: BankTransactionCreate):
+    acct = await db.bank_accounts.find_one({"id": payload.account_id}, {"_id": 0})
+    if not acct:
+        raise HTTPException(404, "Account not found")
+    delta = payload.amount if payload.txn_type == "Credit" else -payload.amount
+    new_balance = round(acct["current_balance"] + delta, 2)
+    txn = BankTransaction(balance_after=new_balance, **payload.model_dump())
+    await db.bank_txns.insert_one(txn.model_dump())
+    await db.bank_accounts.update_one(
+        {"id": payload.account_id}, {"$set": {"current_balance": new_balance}}
+    )
+    return txn
+
+
+# ---------------- Phase 3: Financial Powers ----------------
+
+FINANCIAL_POWERS = [
+    {
+        "post": "President",
+        "single_txn_limit": 500000,
+        "approval_required": "None — within budget",
+        "scope": "All heads, within sanctioned budget",
+    },
+    {
+        "post": "Honorary Secretary",
+        "single_txn_limit": 200000,
+        "approval_required": "Joint with Hon. Treasurer above ₹50,000",
+        "scope": "Administrative & operational expenditure",
+    },
+    {
+        "post": "Honorary Treasurer",
+        "single_txn_limit": 200000,
+        "approval_required": "Joint with Hon. Secretary above ₹50,000",
+        "scope": "All financial heads; bank signatory",
+    },
+    {
+        "post": "Joint Secretary",
+        "single_txn_limit": 25000,
+        "approval_required": "Hon. Secretary",
+        "scope": "Petty cash, office expenses",
+    },
+    {
+        "post": "Managing Committee (Resolution)",
+        "single_txn_limit": 5000000,
+        "approval_required": "Resolution at duly-convened meeting",
+        "scope": "Capital expenditure, grants, sanctions",
+    },
+    {
+        "post": "Annual General Meeting (Resolution)",
+        "single_txn_limit": None,
+        "approval_required": "GBM Resolution",
+        "scope": "Constitutional amendments, large capex, asset disposal",
+    },
+]
+
+
+@api_router.get("/financial-powers")
+async def get_financial_powers():
+    return {"powers": FINANCIAL_POWERS}
+
+
+# ---------------- Public: Member Profile + Pay Dues ----------------
+
+
+@api_router.get("/member-profile/{uid}")
+async def member_profile(uid: str):
+    """Public profile for a member — includes outstanding invoices for self-service pay."""
+    m = await db.members.find_one({"uid": uid}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "Member not found")
+    invoices = await db.fee_invoices.find(
+        {"member_uid": uid}, {"_id": 0}
+    ).sort("due_date", -1).to_list(500)
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    for inv in invoices:
+        if inv["status"] == "Pending" and inv["due_date"] < today_str:
+            inv["status"] = "Overdue"
+    total_outstanding = sum(
+        i["amount"] + i.get("late_fee", 0)
+        for i in invoices
+        if i["status"] in ("Pending", "Overdue")
+    )
+    # Return minimal member info (don't expose phone/email publicly)
+    return {
+        "member": {
+            "uid": m["uid"],
+            "name": m["name"],
+            "category": m["category"],
+            "sub_category": m.get("sub_category"),
+            "membership_date": m.get("membership_date"),
+            "effectiveness": m.get("effectiveness"),
+            "status": m["status"],
+            "photo_url": m.get("photo_url"),
+        },
+        "invoices": invoices,
+        "total_outstanding": total_outstanding,
+    }
+
+
 @api_router.get("/")
 async def root():
-    return {"app": "MPCA ERP", "version": "2.0.0", "status": "ok"}
+    return {"app": "MPCA ERP", "version": "3.0.0", "status": "ok"}
 
 
 app.include_router(api_router)
@@ -805,6 +1127,43 @@ SEED_ELECTIONS = [
 ]
 
 
+SEED_BANK_ACCOUNTS = [
+    {
+        "name": "MPCA General Account",
+        "bank": "State Bank of India",
+        "branch": "Race Course Road, Indore",
+        "account_no": "30215467881",
+        "ifsc": "SBIN0030045",
+        "account_type": "Current",
+        "opening_balance": 12500000.00,
+        "current_balance": 12500000.00,
+        "signatories": ["President", "Hon. Secretary", "Hon. Treasurer"],
+        "notes": "Primary operating account for the Association. Joint signature required above ₹50,000.",
+    },
+    {
+        "name": "MPCA Tournament Reserves",
+        "bank": "HDFC Bank",
+        "branch": "Vijay Nagar, Indore",
+        "account_no": "50100789456",
+        "ifsc": "HDFC0001284",
+        "account_type": "Savings",
+        "opening_balance": 8500000.00,
+        "current_balance": 8500000.00,
+        "signatories": ["Hon. Secretary", "Hon. Treasurer"],
+        "notes": "Reserves for Ranji Trophy and domestic tournaments.",
+    },
+]
+
+
+SEED_TXNS_TEMPLATE = [
+    {"date": "2025-09-01", "txn_type": "Credit", "amount": 2500000.0, "narration": "BCCI annual grant — Q2 FY 2025-26", "reference": "BCCI/GRANT/2025-Q2", "approved_by": "Hon. Treasurer"},
+    {"date": "2025-09-15", "txn_type": "Debit", "amount": 1500000.0, "narration": "Honorarium to district associations — Aug 2025", "reference": "MC-2025-12-RES-2", "approved_by": "Managing Committee"},
+    {"date": "2025-09-22", "txn_type": "Credit", "amount": 75000.0, "narration": "Subscription receipts (5 institutional members)", "reference": "FEE-BATCH-2509", "approved_by": "Hon. Treasurer"},
+    {"date": "2025-10-05", "txn_type": "Debit", "amount": 380000.0, "narration": "Stadium maintenance — Holkar pitch reconditioning", "reference": "PO-2025-INF-44", "approved_by": "Hon. Secretary"},
+    {"date": "2025-10-18", "txn_type": "Debit", "amount": 220000.0, "narration": "Selection committee honoraria — Ranji squad", "reference": "MC-2025-SEL-7", "approved_by": "Hon. Treasurer"},
+]
+
+
 async def seed_data():
     if await db.members.count_documents({}) == 0:
         logger.info("Seeding members…")
@@ -843,6 +1202,41 @@ async def seed_data():
                         status="Accepted",
                     )
                     await db.candidates.insert_one(c.model_dump())
+    if await db.bank_accounts.count_documents({}) == 0:
+        logger.info("Seeding bank accounts & transactions…")
+        for a in SEED_BANK_ACCOUNTS:
+            acct = BankAccount(**a)
+            await db.bank_accounts.insert_one(acct.model_dump())
+            # Apply sample transactions only to the General Account
+            if "General" in a["name"]:
+                running = acct.opening_balance
+                for t in SEED_TXNS_TEMPLATE:
+                    delta = t["amount"] if t["txn_type"] == "Credit" else -t["amount"]
+                    running = round(running + delta, 2)
+                    txn = BankTransaction(account_id=acct.id, balance_after=running, **t)
+                    await db.bank_txns.insert_one(txn.model_dump())
+                await db.bank_accounts.update_one({"id": acct.id}, {"$set": {"current_balance": running}})
+    if await db.fee_invoices.count_documents({}) == 0:
+        logger.info("Seeding fee invoices for cycle 2025-26…")
+        active = await db.members.find({"status": "Active", "category": {"$in": ["Individual", "Institutional"]}}, {"_id": 0}).to_list(2000)
+        for m in active:
+            amt = 15000.0 if m["category"] == "Institutional" else 3000.0
+            invoice_no = await _next_invoice_no()
+            # First invoice for each — mark a couple as Paid for realistic dashboard
+            already_paid = m["uid"] in ("MPCA-IND-0001", "MPCA-INS-0002")
+            inv = FeeInvoice(
+                invoice_no=invoice_no,
+                member_uid=m["uid"],
+                member_name=m["name"],
+                cycle="2025-26",
+                description="Subscription · 2025-26",
+                amount=amt,
+                due_date="2025-12-31",
+                status="Paid" if already_paid else "Pending",
+                paid_date="2025-09-12" if already_paid else None,
+                payment_ref=f"NEFT-2025-{m['uid'][-4:]}" if already_paid else None,
+            )
+            await db.fee_invoices.insert_one(inv.model_dump())
 
 
 @app.on_event("startup")

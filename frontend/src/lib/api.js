@@ -108,3 +108,60 @@ export const verifyMember = async (uid) => {
     const { data } = await api.get(`/verify/${uid}`);
     return data;
 };
+
+// ---------- Phase 3: Fees ----------
+export const fetchFees = async (params = {}) => {
+    const { data } = await api.get("/fees", { params });
+    return data;
+};
+export const fetchFee = async (id) => {
+    const { data } = await api.get(`/fees/${id}`);
+    return data;
+};
+export const createFee = async (payload) => {
+    const { data } = await api.post("/fees", payload);
+    return data;
+};
+export const generateInvoices = async (cycle, amount = 3000, due_date = "2025-12-31") => {
+    const { data } = await api.post(`/fees/generate`, null, { params: { cycle, amount, due_date } });
+    return data;
+};
+export const payInvoice = async (id, payment_ref = "") => {
+    const { data } = await api.post(`/fees/${id}/pay`, null, { params: payment_ref ? { payment_ref } : {} });
+    return data;
+};
+
+// ---------- Phase 3: Bank ----------
+export const fetchBankAccounts = async () => {
+    const { data } = await api.get("/bank/accounts");
+    return data;
+};
+export const fetchBankAccount = async (id) => {
+    const { data } = await api.get(`/bank/accounts/${id}`);
+    return data;
+};
+export const createBankAccount = async (payload) => {
+    const { data } = await api.post("/bank/accounts", payload);
+    return data;
+};
+export const fetchTransactions = async (accountId) => {
+    const params = accountId ? { account_id: accountId } : {};
+    const { data } = await api.get("/bank/transactions", { params });
+    return data;
+};
+export const addTransaction = async (payload) => {
+    const { data } = await api.post("/bank/transactions", payload);
+    return data;
+};
+
+// ---------- Phase 3: Financial Powers ----------
+export const fetchFinancialPowers = async () => {
+    const { data } = await api.get("/financial-powers");
+    return data;
+};
+
+// ---------- Public: Member Profile + Pay Dues ----------
+export const fetchMemberProfile = async (uid) => {
+    const { data } = await api.get(`/member-profile/${uid}`);
+    return data;
+};

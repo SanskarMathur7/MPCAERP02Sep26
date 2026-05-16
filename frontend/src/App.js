@@ -17,6 +17,11 @@ import Elections from "@/pages/Elections";
 import ElectionDetail from "@/pages/ElectionDetail";
 import ElectionNew from "@/pages/ElectionNew";
 import Verify from "@/pages/Verify";
+import Fees from "@/pages/Fees";
+import Bank from "@/pages/Bank";
+import BankAccountDetail from "@/pages/BankAccountDetail";
+import FinancialPowers from "@/pages/FinancialPowers";
+import MemberProfile from "@/pages/MemberProfile";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -39,6 +44,7 @@ function App() {
                         <Route path="/login" element={<Login />} />
                         <Route path="/disclosures-public" element={<Disclosures publicView />} />
                         <Route path="/verify/:uid" element={<Verify />} />
+                        <Route path="/member-profile/:uid" element={<MemberProfile />} />
 
                         {/* Protected — Phase 1 */}
                         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
@@ -57,6 +63,12 @@ function App() {
                         <Route path="/elections" element={<Protected><Elections /></Protected>} />
                         <Route path="/elections/new" element={<Protected><ElectionNew /></Protected>} />
                         <Route path="/elections/:id" element={<Protected><ElectionDetail /></Protected>} />
+
+                        {/* Protected — Phase 3: Fees, Bank, Financial Powers */}
+                        <Route path="/fees" element={<Protected><Fees /></Protected>} />
+                        <Route path="/bank" element={<Protected><Bank /></Protected>} />
+                        <Route path="/bank/:id" element={<Protected><BankAccountDetail /></Protected>} />
+                        <Route path="/financial-powers" element={<Protected><FinancialPowers /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { fetchMember, deleteMember } from "@/lib/api";
-import { ArrowLeft, Trash2, Mail, Phone, MapPin, Calendar, ShieldCheck, FileSignature, User, IdCard } from "lucide-react";
+import { ArrowLeft, Trash2, Mail, Phone, MapPin, Calendar, ShieldCheck, FileSignature, User, IdCard, Wallet } from "lucide-react";
 
 const Field = ({ label, value, mono }) => (
     <div className="py-3 border-b border-mpca-brass/15">
@@ -61,7 +61,10 @@ const MemberDetail = () => {
                 <ArrowLeft size={14} strokeWidth={1.5} /> Back to Register
             </Link>
 
-            <div className="flex justify-end mb-4 print:hidden">
+            <div className="flex justify-end gap-3 mb-4 print:hidden">
+                <Link to={`/member-profile/${member.uid}`} className="btn-heritage-ghost" data-testid="open-portal-btn">
+                    <Wallet size={14} strokeWidth={1.5} /> Member Portal
+                </Link>
                 <Link to={`/members/${id}/card`} className="btn-heritage-secondary" data-testid="view-card-btn">
                     <IdCard size={14} strokeWidth={1.5} /> View Identity Card
                 </Link>

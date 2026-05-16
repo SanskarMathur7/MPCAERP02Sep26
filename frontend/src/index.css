@@ -199,18 +199,16 @@
 
     /* Stately reveal */
     .stately-reveal {
-        animation: stately 1s cubic-bezier(0.25, 0.8, 0.25, 1) both;
+        animation: stately 0.7s cubic-bezier(0.25, 0.8, 0.25, 1) both;
     }
     @keyframes stately {
         from {
-            opacity: 0;
-            transform: translateY(20px);
-            filter: blur(2px);
+            opacity: 0.35;
+            transform: translateY(12px);
         }
         to {
             opacity: 1;
             transform: translateY(0);
-            filter: blur(0);
         }
     }
 

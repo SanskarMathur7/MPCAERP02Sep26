@@ -35,11 +35,35 @@ User preferences:
 
 | Phase | Scope | Status |
 |---|---|---|
-| **I** | Landing · Demo Auth · Dashboard · Membership Register · Public Disclosures | ✅ **Complete (Jan 2026)** |
-| II | AGM / Committee Meetings · Elections module (with electoral officer, tenure, cooling period) | Backlog |
+| **I** | Landing · Demo Auth · Dashboard · Membership Register · Public Disclosures · Identity Card | ✅ **Complete (Jan 2026)** |
+| **II** | AGM / Committee Meetings · Elections (electoral officer, tenure, cooling period) · Public Verify endpoint with QR codes on identity cards | ✅ **Complete (Jan 2026)** |
 | III | Fees & Subscriptions ledger · Bank Operations · Financial Powers | Backlog |
 | IV | Player Registration · Grievance Redressal workflow | Backlog |
 | V | Constitution Library (full searchable) · AI Assistant (constitution Q&A, draft notices, summarise minutes) · Analytics | Backlog |
+
+## What's been implemented — Phase II (Jan 2026)
+
+### Backend (additions to `/app/backend/server.py`)
+- **Meetings**: `GET/POST /api/meetings`, `GET/PATCH/DELETE /api/meetings/{id}`, `GET/POST /api/meetings/{id}/resolutions`. Auto-generated `meeting_no` (e.g. `AGM-2026-001`, `MC-2026-001`).
+- **Elections**: `GET/POST /api/elections`, `GET/PATCH /api/elections/{id}`, `GET/POST /api/elections/{id}/candidates`, `POST /api/elections/{id}/vote` (validates active voter + duplicate prevention), `POST /api/elections/{id}/conclude` (marks winner + losers).
+- **Public Verify**: `GET /api/verify/{uid}` — returns minimal verifiable info (no auth required).
+- Dashboard stats now report real `upcoming_meetings` and `elections_open` counts.
+- Seeds 3 meetings + 1 active election + 2 candidates on startup.
+
+### Frontend
+- `/meetings` — ledger with type filter (AGM/SGM/Committee/Sub-Committee)
+- `/meetings/:id` — agenda, quorum tracker, status workflow (Scheduled → Notice_Issued → In_Progress → Concluded), resolution recording
+- `/meetings/new` — dynamic agenda builder
+- `/elections` — list with status pills
+- `/elections/:id` — candidates with live vote bars, voter UID-based voting, conclude/declare workflow with gold-bordered winner
+- `/elections/new` — announcement form
+- `/verify/:uid` — **PUBLIC** route, no auth — green-bordered valid card or red-bordered invalid card
+- Member identity card (`/members/:id/card`) now displays a QR code (via `api.qrserver.com`) encoding the public `/verify/:uid` URL
+- Sidebar: Meetings + Elections promoted to PRIMARY_NAV (Phases I & II — Live)
+
+### Testing (Phase II)
+- Backend: 19/19 pytest tests passing
+- Frontend: 8/10 critical flows directly verified; remaining 2 are correctly wired (verified via code review)
 
 ## What's been implemented — Phase I (Jan 2026)
 

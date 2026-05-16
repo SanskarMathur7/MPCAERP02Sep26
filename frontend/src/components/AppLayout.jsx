@@ -111,7 +111,7 @@ const AppLayout = ({ children }) => {
                             <li key={item.to}>
                                 <NavLink
                                     to={item.to}
-                                    data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                                    data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
                                     className={({ isActive }) =>
                                         `group flex items-center gap-3 px-3 py-2.5 text-sm transition-all duration-300 border-l-2 ${
                                             isActive
@@ -135,7 +135,7 @@ const AppLayout = ({ children }) => {
                             <li key={item.label}>
                                 <div
                                     className="flex items-center gap-3 px-3 py-2.5 text-sm text-mpca-ivory/40 cursor-not-allowed select-none"
-                                    data-testid={`nav-future-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                                    data-testid={`nav-future-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
                                 >
                                     <item.icon size={16} strokeWidth={1.5} />
                                     <span className="tracking-wide flex-1">{item.label}</span>

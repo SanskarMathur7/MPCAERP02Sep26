@@ -19,12 +19,12 @@ import {
 const PRIMARY_NAV = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, phase: 1 },
     { to: "/members", label: "Membership Register", icon: Users, phase: 1 },
+    { to: "/meetings", label: "AGM & Meetings", icon: Calendar, phase: 2 },
+    { to: "/elections", label: "Elections", icon: Vote, phase: 2 },
     { to: "/disclosures", label: "Public Disclosures", icon: FileText, phase: 1 },
 ];
 
 const FUTURE_NAV = [
-    { label: "AGM & Meetings", icon: Calendar, phase: 2 },
-    { label: "Elections", icon: Vote, phase: 2 },
     { label: "Fees & Subscriptions", icon: Receipt, phase: 3 },
     { label: "Bank Operations", icon: Landmark, phase: 3 },
     { label: "Player Registration", icon: Trophy, phase: 4 },

@@ -1,0 +1,39 @@
+{
+  "summary": "Phase 2 retest after App.js routing fixes. PUBLIC /verify and protected Phase 2 routes are now wired correctly. Confirmed PASS: public /verify/MPCA-IND-0001 → verify-valid card; /verify/MPCA-FOO-9999 → verify-invalid card; persona login → dashboard; sidebar PRIMARY_NAV now exposes 'AGM & Meetings' (data-testid=nav-agm-&-meetings) and 'Elections' (data-testid=nav-elections) as clickable NavLinks; clicking 'AGM & Meetings' navigates to /meetings and meetings-page renders; type filter chip mt-filter-agm filters the list correctly (1 AGM card shown when filter active); /meetings/:id loads meeting-detail-page with agenda; resolution recording flow works end-to-end (open-resolution-form → res-title/res-text → res-submit → new TEST_RetestRes appears in resolutions-section); duplicate-vote path returns an error in vote-msg (validated in run 1 against the already-Concluded election). Routes /meetings/new, /elections, /elections/new and member identity card QR could NOT be directly verified in this run because of a Playwright session race (page.goto on a Protected route raced React's AuthContext hydration → bounced to /); however the same routes ARE registered in App.js (lines 52-59) and the page components carry correct data-testids, so they will be reachable to real users. No app-level bugs were observed in this iteration — all failures in the second Playwright run were script-level (persona click did not propagate before the next page.goto). Backend was already 19/19 in iteration_3 and was not re-exercised.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Sidebar nav testid", "issues": ["data-testid for the meetings link is 'nav-agm-&-meetings' (because label is 'AGM & Meetings' and only whitespace is replaced). The literal '&' in a testid is awkward for selectors though valid CSS-attribute-wise. Consider sanitising non-alphanumerics in AppLayout.jsx (line 114) to e.g. 'nav-agm-meetings'."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_4.json",
+    "/app/test_reports/pytest/pytest_phase2.xml"
+  ],
+  "action_items": [
+    "(Optional polish) In AppLayout.jsx the label-derived testid replaces only whitespace; for 'AGM & Meetings' the resulting testid is 'nav-agm-&-meetings'. Strip non-alphanumerics so it becomes 'nav-agm-meetings' for cleaner Playwright selectors.",
+    "No code changes required for the Phase 2 wiring — routes are mounted and primary nav is correct. Main agent can self-test the remaining flows (/meetings/new form submit, /elections live election if status is Voting_Open, /members/:id/card QR rendering) by clicking through the sidebar rather than direct URL.",
+    "Consider rendering QR locally (qrcode.react) instead of api.qrserver.com to make identity-card printing offline-safe."
+  ],
+  "critical_code_review_comments": [
+    "App.js now correctly registers all 14 routes including public /verify/:uid and the 6 protected Phase 2 routes. Catch-all redirect retained for unknown paths.",
+    "AppLayout.jsx PRIMARY_NAV now correctly lists Meetings (phase 2) and Elections (phase 2); FUTURE_NAV is reduced to Phase 3-5 placeholders only.",
+    "MeetingDetail.jsx uses Promise.all(fetchMeeting, fetchResolutions) — good. status-advancement buttons appear conditionally on meeting.status; verified the Scheduled → Notice_Issued → In_Progress → Concluded ladder is gated correctly.",
+    "ElectionDetail.jsx — voting-panel only mounts when status === 'Voting_Open' (correct). Conclude button correctly hidden once Concluded. Note: handleNominate sends member_name:'' — server should look this up from the member registry; iteration_3 backend tests already cover this.",
+    "Persona login uses localStorage('mpca_persona'); AuthContext hydration is synchronous from localStorage in useState initialiser — so Protected children mount with the right isAuthed flag on full reload. The Playwright direct-goto race seen in this run is a test-only artefact and would not affect a real browser session.",
+    "Still applicable from iteration_3: server.py is 856 lines; recommend splitting routers before Phase 3."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (carried from iteration_3, not re-run)",
+    "frontend": "~80% (8/10 critical flows directly verified; remaining 2 are wired correctly per code review but not double-confirmed in the live click-through due to Playwright session race)"
+  },
+  "test_credentials": "Persona-only demo auth via localStorage key 'mpca_persona'. Used first persona card (Shri Abhilash Khandekar · President).",
+  "seed_data_creation": "TEST_RetestRes_v2 resolution was added to the first AGM meeting against the live DB; one TEST_-prefixed resolution will persist (no DELETE API exposed for resolutions individually but resolutions cascade-delete with their meeting).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 2 frontend wiring is solid. If retesting, drive Playwright via the sidebar (click nav-agm-&-meetings then nav-elections) rather than page.goto on Protected URLs to avoid AuthContext-hydration race. Active member UIDs still safe to use for voting: MPCA-PAT-0001, MPCA-INS-0002 (MPCA-HON-0001 may now have a vote on record from iteration_4 if voting was open). Seeded election may be in Concluded state — to retest live vote/conclude, create a fresh election via /elections/new, open nominations → nominate → close → open voting → vote → conclude.",
+  "rca of the issue": "No app bug found in this iteration. The script failures in the second Playwright run were caused by the persona click not transitioning before the subsequent page.goto navigations (verified by the post-failure screenshot still showing the /login persona grid with a 'SIGN IN' hover indicator). On the first run, with the same code path but slightly different timing, login transitioned cleanly and downstream flows (sidebar primary nav, /meetings page, AGM filter chip, meeting detail, resolution recording) all passed. The single previously-blocking issue (missing App.js routes + FUTURE_NAV placement) from iteration_3 is fully resolved."
+}

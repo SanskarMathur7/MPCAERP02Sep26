@@ -24,65 +24,39 @@ const ProtectedShell = ({ children }) => {
     return <AppLayout>{children}</AppLayout>;
 };
 
+const Protected = ({ children }) => (
+    <ProtectedShell>{children}</ProtectedShell>
+);
+
 function App() {
     return (
         <div className="App">
             <AuthProvider>
                 <BrowserRouter>
                     <Routes>
+                        {/* Public routes */}
                         <Route path="/" element={<Landing />} />
                         <Route path="/login" element={<Login />} />
                         <Route path="/disclosures-public" element={<Disclosures publicView />} />
+                        <Route path="/verify/:uid" element={<Verify />} />
 
-                        {/* Protected (demo persona) */}
-                        <Route
-                            path="/dashboard"
-                            element={
-                                <ProtectedShell>
-                                    <Dashboard />
-                                </ProtectedShell>
-                            }
-                        />
-                        <Route
-                            path="/members"
-                            element={
-                                <ProtectedShell>
-                                    <Members />
-                                </ProtectedShell>
-                            }
-                        />
-                        <Route
-                            path="/members/new"
-                            element={
-                                <ProtectedShell>
-                                    <MemberNew />
-                                </ProtectedShell>
-                            }
-                        />
-                        <Route
-                            path="/members/:id"
-                            element={
-                                <ProtectedShell>
-                                    <MemberDetail />
-                                </ProtectedShell>
-                            }
-                        />
-                        <Route
-                            path="/members/:id/card"
-                            element={
-                                <ProtectedShell>
-                                    <MemberCard />
-                                </ProtectedShell>
-                            }
-                        />
-                        <Route
-                            path="/disclosures"
-                            element={
-                                <ProtectedShell>
-                                    <Disclosures />
-                                </ProtectedShell>
-                            }
-                        />
+                        {/* Protected — Phase 1 */}
+                        <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+                        <Route path="/members" element={<Protected><Members /></Protected>} />
+                        <Route path="/members/new" element={<Protected><MemberNew /></Protected>} />
+                        <Route path="/members/:id" element={<Protected><MemberDetail /></Protected>} />
+                        <Route path="/members/:id/card" element={<Protected><MemberCard /></Protected>} />
+                        <Route path="/disclosures" element={<Protected><Disclosures /></Protected>} />
+
+                        {/* Protected — Phase 2: Meetings */}
+                        <Route path="/meetings" element={<Protected><Meetings /></Protected>} />
+                        <Route path="/meetings/new" element={<Protected><MeetingNew /></Protected>} />
+                        <Route path="/meetings/:id" element={<Protected><MeetingDetail /></Protected>} />
+
+                        {/* Protected — Phase 2: Elections */}
+                        <Route path="/elections" element={<Protected><Elections /></Protected>} />
+                        <Route path="/elections/new" element={<Protected><ElectionNew /></Protected>} />
+                        <Route path="/elections/:id" element={<Protected><ElectionDetail /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

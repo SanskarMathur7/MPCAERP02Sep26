@@ -33,6 +33,12 @@ const BarcodeStrip = ({ uid }) => {
     );
 };
 
+/* QR code via api.qrserver.com — public, free, no dep */
+const QRCode = ({ value, size = 80 }) => {
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=4&data=${encodeURIComponent(value)}`;
+    return <img src={url} alt="QR verification code" width={size} height={size} className="block" />;
+};
+
 const MemberCard = () => {
     const { id } = useParams();
     const [member, setMember] = useState(null);
@@ -223,17 +229,21 @@ const MemberCard = () => {
                                 </div>
                                 <div className="overline !text-[7px] mt-1">Member Signature</div>
                             </div>
-                            <div>
-                                <BarcodeStrip uid={member.uid} />
-                                <div className="overline !text-[7px] mt-1">{member.uid}</div>
+                            <div className="flex flex-col items-end gap-1">
+                                <QRCode
+                                    value={`${window.location.origin}/verify/${member.uid}`}
+                                    size={72}
+                                />
+                                <div className="overline !text-[7px]">Scan to Verify</div>
                             </div>
                         </div>
 
-                        <div className="mt-4 pt-3 border-t border-mpca-brass/30 flex items-center justify-between">
+                        <div className="mt-4 pt-3 border-t border-mpca-brass/30 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-1.5 text-[8px] text-mpca-gray-dark tracking-wider uppercase">
                                 <ShieldCheck size={9} strokeWidth={1.5} />
                                 Verified · Issued {issuedOn}
                             </div>
+                            <BarcodeStrip uid={member.uid} />
                             <div className="font-serif italic text-[8px] text-mpca-charcoal/70">
                                 Hon. Secretary
                             </div>

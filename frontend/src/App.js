@@ -10,6 +10,13 @@ import MemberDetail from "@/pages/MemberDetail";
 import MemberNew from "@/pages/MemberNew";
 import MemberCard from "@/pages/MemberCard";
 import Disclosures from "@/pages/Disclosures";
+import Meetings from "@/pages/Meetings";
+import MeetingDetail from "@/pages/MeetingDetail";
+import MeetingNew from "@/pages/MeetingNew";
+import Elections from "@/pages/Elections";
+import ElectionDetail from "@/pages/ElectionDetail";
+import ElectionNew from "@/pages/ElectionNew";
+import Verify from "@/pages/Verify";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();

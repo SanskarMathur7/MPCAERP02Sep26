@@ -1,0 +1,47 @@
+{
+  "summary": "Phase 2 (Meetings, Elections, public Verify) end-to-end test. Backend: 19/19 pytest cases PASS — meetings CRUD/filters/meeting_no/cascade-delete of resolutions, elections CRUD, candidate UID validation, vote happy-path + duplicate + non-active + closed rejections, conclude marks Elected/Defeated, public /api/verify/{uid} returns correct shape for active/pending/invalid UIDs, dashboard now exposes upcoming_meetings & elections_open. Frontend: BLOCKING ISSUE — /app/frontend/src/App.js does NOT register any of the Phase 2 routes; all /meetings*, /elections*, and the public /verify/:uid routes fall through to the catch-all `<Navigate to=\"/\" replace/>`. Page components (Meetings.jsx, MeetingDetail.jsx, MeetingNew.jsx, Elections.jsx, ElectionDetail.jsx, ElectionNew.jsx, Verify.jsx) and the API helpers in lib/api.js exist correctly with data-testids, but they are unreachable in the running app. Sidebar also still lists 'AGM & Meetings' and 'Elections' under FUTURE_NAV (no `to` prop, not clickable) instead of PRIMARY_NAV.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/meetings/{id}", "issue": "Uses MeetingCreate (full body) rather than a partial; UI must send the entire object to update one field. Acceptable but consider a Partial schema."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js (router)", "issue": "Phase 2 routes are not registered. Missing: /meetings, /meetings/new, /meetings/:id, /elections, /elections/new, /elections/:id, and public /verify/:uid. The catch-all `<Route path='*' element={<Navigate to='/' replace/>}/>` consumes every Phase 2 URL.", "selector": "n/a", "priority": "CRITICAL"},
+      {"component": "AppLayout.jsx PRIMARY_NAV / FUTURE_NAV", "issue": "'AGM & Meetings' and 'Elections' are in FUTURE_NAV without a `to` prop → rendered as inactive labels under the 'Forthcoming Phases' section, NOT as live links under PRIMARY_NAV as required.", "selector": "FUTURE_NAV (lines 25-34)", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Public verify (QR scan target)", "issue": "/verify/MPCA-IND-0001 and /verify/MPCA-FOO-9999 both redirect to '/' (Landing) because route is missing in App.js. QR codes on identity cards will land users on the wrong page.", "affected_selectors": ["[data-testid='verify-page']", "[data-testid='verify-valid']", "[data-testid='verify-invalid']"]},
+      {"flow": "Meetings ledger / detail / create / resolutions", "issue": "All meetings UI is unreachable until routes are added to App.js. Page logic itself looks correct (uses fetchMeetings, fetchResolutions, etc.).", "affected_selectors": ["[data-testid='meetings-page']", "[data-testid='meeting-detail-page']"]},
+      {"flow": "Elections list / detail / vote / conclude", "issue": "Same — unreachable until routes added. Page components reference correct API helpers (castVote, concludeElection, addCandidate).", "affected_selectors": ["[data-testid='elections-page']", "[data-testid='election-detail-page']", "[data-testid='voter-uid']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase2_api.py",
+    "/app/test_reports/pytest/pytest_phase2.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Add the missing routes to /app/frontend/src/App.js. Public verify must sit OUTSIDE ProtectedShell. Suggested block:\n  <Route path=\"/verify/:uid\" element={<Verify />} />\n  <Route path=\"/meetings\" element={<ProtectedShell><Meetings/></ProtectedShell>} />\n  <Route path=\"/meetings/new\" element={<ProtectedShell><MeetingNew/></ProtectedShell>} />\n  <Route path=\"/meetings/:id\" element={<ProtectedShell><MeetingDetail/></ProtectedShell>} />\n  <Route path=\"/elections\" element={<ProtectedShell><Elections/></ProtectedShell>} />\n  <Route path=\"/elections/new\" element={<ProtectedShell><ElectionNew/></ProtectedShell>} />\n  <Route path=\"/elections/:id\" element={<ProtectedShell><ElectionDetail/></ProtectedShell>} />",
+    "HIGH: In /app/frontend/src/components/AppLayout.jsx, move 'AGM & Meetings' (to: '/meetings') and 'Elections' (to: '/elections') from FUTURE_NAV into PRIMARY_NAV so the sidebar links become active.",
+    "After fixes, re-run the Phase 2 frontend tests (see context for testing agent below)."
+  ],
+  "critical_code_review_comments": [
+    "App.js is the canonical wiring layer — verifying that newly-added page components are actually mounted should be part of every E1 self-check. Currently 7 new components exist but are dead code at runtime.",
+    "Meeting PATCH endpoint (server.py:392) accepts MeetingCreate (all required fields). UI doing partial updates must round-trip the entire meeting. Consider adding `Partial[MeetingBase]` schema for status-only transitions.",
+    "/api/elections/{id}/conclude allows concluding without ever opening voting (no status check). Consider rejecting unless status == 'Voting_Open' to enforce the lifecycle.",
+    "server.py is now 856 lines — at ~1.2× the 700-line guideline. Recommend splitting into routers (members.py / disclosures.py / meetings.py / elections.py / verify.py) before Phase 3.",
+    "MemberCard.jsx QR is rendered with a remote https://api.qrserver.com URL — if the printer/scanner is offline this fails silently. For production printing consider embedding a local QR generator (e.g. qrcode.react) so cards print regardless of network."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase2_api.py (new — 19 tests, all passing)"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "Blocked — all Phase 2 UI flows unreachable due to missing App.js routes. /verify also failed (public route missing)."},
+  "test_credentials": "No real auth — demo persona stored in localStorage key 'mpca_persona'. Used first persona card (Shri Abhilash Khandekar · President) for the run.",
+  "seed_data_creation": "TEST_-prefixed meetings/elections/resolutions/candidates/votes were created against the live DB by the pytest run; the autouse session fixture cleans up created meeting IDs on teardown. A handful of TEST_ elections and one extra candidate on the seeded election will persist (no delete API exposed for elections / candidates / votes).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After E1 fixes App.js routes and AppLayout PRIMARY_NAV, re-run the existing Playwright flow: (1) Hit /verify/MPCA-IND-0001 with NO persona in localStorage → expect [data-testid='verify-valid']. (2) /verify/MPCA-FOO-9999 → [data-testid='verify-invalid']. (3) Login via first persona-*-card on /login → dashboard. (4) Sidebar links labelled 'AGM & Meetings' and 'Elections' should now navigate. (5) /meetings → 3 cards, mt-filter-agm chip works. (6) Open AGM card → meeting-detail-page with status-advancement buttons. (7) open-resolution-form → fill res-title/res-text → res-submit, look for the new resolution in resolutions-section. (8) /elections → seeded election card → election-detail-page; nominate-toggle should be ABSENT (status=Voting_Open). Use voter UIDs MPCA-HON-0001 / MPCA-PAT-0001 / MPCA-INS-0002 / MPCA-IND-0002 — they are Active and likely have not voted yet (MPCA-INS-0001 already used by smoke test, MPCA-IND-0001/2 may have been used by backend pytest run). vote-msg should show success, then duplicate vote should show error. (9) /members → first member → /members/:id → 'View Identity Card' → /members/:id/card should now show <img src*=api.qrserver.com>. Backend is solid — focus retest entirely on UI.",
+  "rca of the issue": "Root cause is purely missing wiring in /app/frontend/src/App.js. Page components were created and Linked correctly, the API client functions (fetchMeetings, createMeeting, fetchResolutions, addResolution, fetchElections, createElection, fetchCandidates, addCandidate, castVote, concludeElection, verifyMember) all exist, but App.js was never updated with the corresponding <Route> entries. The catch-all `<Route path='*' element={<Navigate to='/' replace />}/>` therefore intercepts every Phase 2 URL and silently redirects to Landing. Reproduction: open /verify/MPCA-IND-0001 in an incognito window — you land on /. Mitigation is purely adding the 7 routes (1 public, 6 protected) as suggested in action_items[0]; no business logic change required."
+}

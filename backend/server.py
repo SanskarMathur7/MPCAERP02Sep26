@@ -92,6 +92,142 @@ class DisclosureCreate(DisclosureBase):
     pass
 
 
+# ---------------- Phase 2: Meetings ----------------
+
+MeetingType = Literal["AGM", "SGM", "Committee", "Sub_Committee"]
+MeetingStatus = Literal["Scheduled", "Notice_Issued", "In_Progress", "Concluded", "Cancelled"]
+
+
+class AgendaItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    number: int
+    title: str
+    description: Optional[str] = None
+    decided: bool = False
+    decision: Optional[str] = None
+
+
+class MeetingBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    title: str
+    meeting_type: MeetingType
+    scheduled_date: str  # ISO date
+    scheduled_time: Optional[str] = None  # "11:00 AM"
+    venue: str
+    notice_date: Optional[str] = None
+    quorum_required: int = 0
+    quorum_present: int = 0
+    chairperson: Optional[str] = None
+    convened_by: Optional[str] = None
+    agenda: List[AgendaItem] = []
+    attendees: List[str] = []  # list of member UIDs
+    minutes: Optional[str] = None
+    minutes_url: Optional[str] = None
+    status: MeetingStatus = "Scheduled"
+    notes: Optional[str] = None
+
+
+class Meeting(MeetingBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    meeting_no: str  # e.g. "AGM-2025-78"
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class MeetingCreate(MeetingBase):
+    pass
+
+
+ResolutionStatus = Literal["Proposed", "Carried", "Carried_Unanimously", "Rejected", "Deferred"]
+
+
+class ResolutionBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    meeting_id: str
+    number: int
+    title: str
+    text: str
+    proposed_by: Optional[str] = None
+    seconded_by: Optional[str] = None
+    votes_for: int = 0
+    votes_against: int = 0
+    votes_abstain: int = 0
+    status: ResolutionStatus = "Proposed"
+
+
+class Resolution(ResolutionBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ResolutionCreate(ResolutionBase):
+    pass
+
+
+# ---------------- Phase 2: Elections ----------------
+
+ElectionStatus = Literal["Announced", "Nominations_Open", "Nominations_Closed", "Voting_Open", "Concluded", "Cancelled"]
+
+
+class ElectionBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    title: str
+    post: str  # e.g. "President", "Hon. Secretary"
+    tenure_years: int = 4
+    cooling_period_years: int = 4
+    electoral_officer: str
+    nomination_open_date: str
+    nomination_close_date: str
+    voting_date: str
+    eligible_voters_count: int = 0
+    status: ElectionStatus = "Announced"
+    notes: Optional[str] = None
+
+
+class Election(ElectionBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ElectionCreate(ElectionBase):
+    pass
+
+
+CandidateStatus = Literal["Nominated", "Accepted", "Withdrawn", "Disqualified", "Elected", "Defeated"]
+
+
+class CandidateBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    election_id: str
+    member_uid: str  # references Member.uid
+    member_name: str
+    nominated_by: Optional[str] = None  # member uid
+    seconded_by: Optional[str] = None
+    manifesto: Optional[str] = None
+    status: CandidateStatus = "Nominated"
+    votes_received: int = 0
+
+
+class Candidate(CandidateBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class CandidateCreate(CandidateBase):
+    pass
+
+
+class VoteCast(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    election_id: str
+    candidate_id: str
+    voter_uid: str  # member uid
+
+
+class Vote(VoteCast):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    cast_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 # ---------------- Helpers ----------------
 
 CATEGORY_PREFIX = {
@@ -200,21 +336,224 @@ async def dashboard_stats():
     active = await db.members.count_documents({"status": "Active"})
     pending = await db.members.count_documents({"status": "Pending"})
     disclosures_count = await db.disclosures.count_documents({})
+    upcoming = await db.meetings.count_documents({"status": {"$in": ["Scheduled", "Notice_Issued"]}})
+    elections_open = await db.elections.count_documents({"status": {"$in": ["Nominations_Open", "Voting_Open"]}})
     return {
         "total_members": total,
         "by_category": by_cat,
         "active_members": active,
         "pending_members": pending,
         "total_disclosures": disclosures_count,
-        "upcoming_meetings": 2,  # placeholder until Phase 2
+        "upcoming_meetings": upcoming,
+        "elections_open": elections_open,
         "pending_grievances": 0,  # placeholder until Phase 4
         "fee_collection_pct": 78,  # placeholder until Phase 3
     }
 
 
+# ---------------- Routes: Meetings ----------------
+
+
+def _next_meeting_no(meeting_type: str, count: int) -> str:
+    year = datetime.now(timezone.utc).year
+    prefix = {"AGM": "AGM", "SGM": "SGM", "Committee": "MC", "Sub_Committee": "SC"}[meeting_type]
+    return f"{prefix}-{year}-{count + 1:03d}"
+
+
+@api_router.get("/meetings", response_model=List[Meeting])
+async def list_meetings(meeting_type: Optional[MeetingType] = None, status: Optional[MeetingStatus] = None):
+    query = {}
+    if meeting_type:
+        query["meeting_type"] = meeting_type
+    if status:
+        query["status"] = status
+    docs = await db.meetings.find(query, {"_id": 0}).sort("scheduled_date", -1).to_list(500)
+    return docs
+
+
+@api_router.get("/meetings/{meeting_id}", response_model=Meeting)
+async def get_meeting(meeting_id: str):
+    doc = await db.meetings.find_one({"id": meeting_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Meeting not found")
+    return doc
+
+
+@api_router.post("/meetings", response_model=Meeting)
+async def create_meeting(payload: MeetingCreate):
+    count = await db.meetings.count_documents({"meeting_type": payload.meeting_type})
+    meeting_no = _next_meeting_no(payload.meeting_type, count)
+    meeting = Meeting(meeting_no=meeting_no, **payload.model_dump())
+    await db.meetings.insert_one(meeting.model_dump())
+    return meeting
+
+
+@api_router.patch("/meetings/{meeting_id}", response_model=Meeting)
+async def update_meeting(meeting_id: str, payload: MeetingCreate):
+    doc = await db.meetings.find_one({"id": meeting_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Meeting not found")
+    update = payload.model_dump(exclude_unset=True)
+    await db.meetings.update_one({"id": meeting_id}, {"$set": update})
+    return await db.meetings.find_one({"id": meeting_id}, {"_id": 0})
+
+
+@api_router.delete("/meetings/{meeting_id}")
+async def delete_meeting(meeting_id: str):
+    result = await db.meetings.delete_one({"id": meeting_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Meeting not found")
+    await db.resolutions.delete_many({"meeting_id": meeting_id})
+    return {"deleted": True}
+
+
+@api_router.get("/meetings/{meeting_id}/resolutions", response_model=List[Resolution])
+async def list_resolutions(meeting_id: str):
+    docs = await db.resolutions.find({"meeting_id": meeting_id}, {"_id": 0}).sort("number", 1).to_list(200)
+    return docs
+
+
+@api_router.post("/meetings/{meeting_id}/resolutions", response_model=Resolution)
+async def add_resolution(meeting_id: str, payload: ResolutionCreate):
+    payload_data = payload.model_dump()
+    payload_data["meeting_id"] = meeting_id
+    res = Resolution(**payload_data)
+    await db.resolutions.insert_one(res.model_dump())
+    return res
+
+
+# ---------------- Routes: Elections ----------------
+
+
+@api_router.get("/elections", response_model=List[Election])
+async def list_elections(status: Optional[ElectionStatus] = None):
+    query = {"status": status} if status else {}
+    docs = await db.elections.find(query, {"_id": 0}).sort("voting_date", -1).to_list(200)
+    return docs
+
+
+@api_router.get("/elections/{election_id}", response_model=Election)
+async def get_election(election_id: str):
+    doc = await db.elections.find_one({"id": election_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Election not found")
+    return doc
+
+
+@api_router.post("/elections", response_model=Election)
+async def create_election(payload: ElectionCreate):
+    eligible = await db.members.count_documents({"status": "Active"})
+    data = payload.model_dump()
+    data["eligible_voters_count"] = eligible
+    election = Election(**data)
+    await db.elections.insert_one(election.model_dump())
+    return election
+
+
+@api_router.patch("/elections/{election_id}", response_model=Election)
+async def update_election(election_id: str, payload: ElectionCreate):
+    doc = await db.elections.find_one({"id": election_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Election not found")
+    update = payload.model_dump(exclude_unset=True)
+    await db.elections.update_one({"id": election_id}, {"$set": update})
+    return await db.elections.find_one({"id": election_id}, {"_id": 0})
+
+
+@api_router.get("/elections/{election_id}/candidates", response_model=List[Candidate])
+async def list_candidates(election_id: str):
+    docs = await db.candidates.find({"election_id": election_id}, {"_id": 0}).sort("votes_received", -1).to_list(200)
+    return docs
+
+
+@api_router.post("/elections/{election_id}/candidates", response_model=Candidate)
+async def add_candidate(election_id: str, payload: CandidateCreate):
+    # Verify member exists
+    member = await db.members.find_one({"uid": payload.member_uid}, {"_id": 0})
+    if not member:
+        raise HTTPException(404, "Member UID not found")
+    data = payload.model_dump()
+    data["election_id"] = election_id
+    data["member_name"] = member["name"]
+    cand = Candidate(**data)
+    await db.candidates.insert_one(cand.model_dump())
+    return cand
+
+
+@api_router.post("/elections/{election_id}/vote")
+async def cast_vote(election_id: str, payload: VoteCast):
+    # Check election is open
+    election = await db.elections.find_one({"id": election_id}, {"_id": 0})
+    if not election:
+        raise HTTPException(404, "Election not found")
+    if election["status"] != "Voting_Open":
+        raise HTTPException(400, "Voting is not currently open for this election")
+
+    # Check duplicate vote
+    existing = await db.votes.find_one({"election_id": election_id, "voter_uid": payload.voter_uid})
+    if existing:
+        raise HTTPException(400, "This voter has already cast a vote in this election")
+
+    # Check voter is a valid active member
+    voter = await db.members.find_one({"uid": payload.voter_uid, "status": "Active"}, {"_id": 0})
+    if not voter:
+        raise HTTPException(400, "Voter UID is not an active member of MPCA")
+
+    # Validate candidate
+    cand = await db.candidates.find_one({"id": payload.candidate_id, "election_id": election_id}, {"_id": 0})
+    if not cand:
+        raise HTTPException(400, "Candidate not found in this election")
+
+    vote = Vote(**payload.model_dump())
+    await db.votes.insert_one(vote.model_dump())
+    await db.candidates.update_one(
+        {"id": payload.candidate_id}, {"$inc": {"votes_received": 1}}
+    )
+    return {"ok": True, "vote_id": vote.id, "candidate": cand["member_name"]}
+
+
+@api_router.post("/elections/{election_id}/conclude")
+async def conclude_election(election_id: str):
+    election = await db.elections.find_one({"id": election_id}, {"_id": 0})
+    if not election:
+        raise HTTPException(404, "Election not found")
+    candidates = await db.candidates.find({"election_id": election_id}, {"_id": 0}).sort("votes_received", -1).to_list(200)
+    if not candidates:
+        raise HTTPException(400, "No candidates to conclude on")
+    winner_id = candidates[0]["id"]
+    await db.candidates.update_one({"id": winner_id}, {"$set": {"status": "Elected"}})
+    for c in candidates[1:]:
+        if c["status"] not in ["Withdrawn", "Disqualified"]:
+            await db.candidates.update_one({"id": c["id"]}, {"$set": {"status": "Defeated"}})
+    await db.elections.update_one({"id": election_id}, {"$set": {"status": "Concluded"}})
+    return {"ok": True, "winner": candidates[0]["member_name"]}
+
+
+# ---------------- Public: Verify Member ----------------
+
+
+@api_router.get("/verify/{uid}")
+async def verify_member(uid: str):
+    """Public endpoint — returns minimal verifiable info about a member by UID."""
+    member = await db.members.find_one({"uid": uid}, {"_id": 0})
+    if not member:
+        return {"valid": False, "uid": uid}
+    return {
+        "valid": True,
+        "uid": member["uid"],
+        "name": member["name"],
+        "category": member["category"],
+        "sub_category": member.get("sub_category"),
+        "membership_date": member.get("membership_date"),
+        "effectiveness": member.get("effectiveness"),
+        "status": member["status"],
+        "is_active": member["status"] == "Active",
+    }
+
+
 @api_router.get("/")
 async def root():
-    return {"app": "MPCA ERP", "version": "1.0.0", "status": "ok"}
+    return {"app": "MPCA ERP", "version": "2.0.0", "status": "ok"}
 
 
 app.include_router(api_router)
@@ -386,6 +725,86 @@ SEED_DISCLOSURES = [
 ]
 
 
+SEED_MEETINGS = [
+    {
+        "title": "78th Annual General Meeting",
+        "meeting_type": "AGM",
+        "scheduled_date": "2025-09-21",
+        "scheduled_time": "11:00 AM",
+        "venue": "Conference Hall, Holkar Stadium, Indore",
+        "notice_date": "2025-08-20",
+        "quorum_required": 35,
+        "quorum_present": 0,
+        "chairperson": "Shri Abhilash Khandekar",
+        "convened_by": "Hon. Secretary",
+        "status": "Notice_Issued",
+        "agenda": [
+            {"number": 1, "title": "Confirmation of minutes of 77th AGM", "description": "Read & confirm prior minutes."},
+            {"number": 2, "title": "Annual Report 2024-25", "description": "Tabled by Hon. Secretary."},
+            {"number": 3, "title": "Audited Statement of Accounts FY 2024-25", "description": "Tabled by Hon. Treasurer; auditor's certification."},
+            {"number": 4, "title": "Approval of Budget 2025-26", "description": "Income & expenditure for the next fiscal."},
+            {"number": 5, "title": "Election of Office Bearers", "description": "Conducted by appointed Electoral Officer."},
+            {"number": 6, "title": "Any other matter", "description": "With the permission of the Chair."},
+        ],
+        "attendees": [],
+    },
+    {
+        "title": "Managing Committee Meeting — August 2025",
+        "meeting_type": "Committee",
+        "scheduled_date": "2025-08-05",
+        "scheduled_time": "4:00 PM",
+        "venue": "Boardroom, MPCA Headquarters",
+        "notice_date": "2025-07-25",
+        "quorum_required": 9,
+        "quorum_present": 11,
+        "chairperson": "Shri Abhilash Khandekar",
+        "convened_by": "Hon. Joint Secretary",
+        "status": "Concluded",
+        "agenda": [
+            {"number": 1, "title": "Approval of Senior Selection Committee for Ranji 2025-26", "decided": True, "decision": "Approved unanimously."},
+            {"number": 2, "title": "Grant-in-aid of ₹15 lakh to District Associations", "decided": True, "decision": "Approved with one abstention."},
+            {"number": 3, "title": "Revised Umpire Panel 2025-26", "decided": True, "decision": "Approved; list to be circulated."},
+        ],
+        "attendees": [],
+        "minutes": "The meeting commenced at 4:05 PM after confirming quorum of 11 against the required 9. All three agenda items were taken up in seriatim. Resolutions on selection committee constitution and district grants were carried. The meeting concluded at 6:30 PM with a vote of thanks.",
+    },
+    {
+        "title": "Sub-Committee — Infrastructure & Stadium",
+        "meeting_type": "Sub_Committee",
+        "scheduled_date": "2026-02-12",
+        "scheduled_time": "3:00 PM",
+        "venue": "Holkar Stadium · Pavilion Lounge",
+        "notice_date": "2026-02-01",
+        "quorum_required": 5,
+        "quorum_present": 0,
+        "chairperson": "Capt. Rajinder Pal Singh",
+        "convened_by": "Hon. Secretary",
+        "status": "Scheduled",
+        "agenda": [
+            {"number": 1, "title": "Floodlight upgrade at Holkar Stadium", "description": "Tender evaluation."},
+            {"number": 2, "title": "Indoor practice facility — Bhopal", "description": "Status report."},
+        ],
+        "attendees": [],
+    },
+]
+
+
+SEED_ELECTIONS = [
+    {
+        "title": "Election of Hon. Treasurer · Term 2026-30",
+        "post": "Honorary Treasurer",
+        "tenure_years": 4,
+        "cooling_period_years": 4,
+        "electoral_officer": "Justice (Retd.) S.K. Awasthi",
+        "nomination_open_date": "2026-01-15",
+        "nomination_close_date": "2026-02-15",
+        "voting_date": "2026-03-10",
+        "status": "Voting_Open",
+        "notes": "Conducted under Article XII of the MPCA Constitution. Single transferable vote not applicable; first-past-the-post.",
+    },
+]
+
+
 async def seed_data():
     if await db.members.count_documents({}) == 0:
         logger.info("Seeding members…")
@@ -398,6 +817,32 @@ async def seed_data():
         for d in SEED_DISCLOSURES:
             doc = Disclosure(**d)
             await db.disclosures.insert_one(doc.model_dump())
+    if await db.meetings.count_documents({}) == 0:
+        logger.info("Seeding meetings…")
+        for m in SEED_MEETINGS:
+            count = await db.meetings.count_documents({"meeting_type": m["meeting_type"]})
+            meeting = Meeting(meeting_no=_next_meeting_no(m["meeting_type"], count), **m)
+            await db.meetings.insert_one(meeting.model_dump())
+    if await db.elections.count_documents({}) == 0:
+        logger.info("Seeding elections…")
+        eligible = await db.members.count_documents({"status": "Active"})
+        for e in SEED_ELECTIONS:
+            data = dict(e)
+            data["eligible_voters_count"] = eligible
+            elec = Election(**data)
+            await db.elections.insert_one(elec.model_dump())
+            # Seed two candidates for the open election
+            for cand_uid in ["MPCA-IND-0001", "MPCA-IND-0002"]:
+                m = await db.members.find_one({"uid": cand_uid}, {"_id": 0})
+                if m:
+                    c = Candidate(
+                        election_id=elec.id,
+                        member_uid=m["uid"],
+                        member_name=m["name"],
+                        manifesto=f"Pledged to strengthen the financial discipline and transparent disclosures of the Association.",
+                        status="Accepted",
+                    )
+                    await db.candidates.insert_one(c.model_dump())
 
 
 @app.on_event("startup")

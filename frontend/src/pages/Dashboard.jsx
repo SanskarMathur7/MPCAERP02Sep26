@@ -98,7 +98,7 @@ const Dashboard = () => {
                 <StatTile
                     label="Upcoming Meetings"
                     value={stats.upcoming_meetings}
-                    sub="AGM · Committee (Phase 2)"
+                    sub="AGM · Committee · Sub-Committee"
                     icon={Calendar}
                     accent="oxblood"
                 />
@@ -110,9 +110,9 @@ const Dashboard = () => {
                     accent="brass"
                 />
                 <StatTile
-                    label="Fee Collection"
-                    value={`${stats.fee_collection_pct}%`}
-                    sub="Current cycle (Phase 3 module)"
+                    label="Open Elections"
+                    value={stats.elections_open ?? 0}
+                    sub="Voting in progress · Phase II"
                     icon={Receipt}
                     accent="wood"
                 />

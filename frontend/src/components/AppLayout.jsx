@@ -104,7 +104,7 @@ const AppLayout = ({ children }) => {
                 {/* Primary nav */}
                 <nav className="flex-1 px-4 py-6 overflow-y-auto">
                     <div className="overline text-[9px] text-mpca-gold-light/50 mb-3 px-2">
-                        Phase 1 — Live
+                        Phases I & II — Live
                     </div>
                     <ul className="space-y-0.5 mb-8">
                         {PRIMARY_NAV.map((item) => (

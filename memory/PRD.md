@@ -43,6 +43,14 @@ User preferences:
 
 ## What's been implemented — Phase I (Jan 2026)
 
+### NEW: Member Identity Card Generator (Jan 2026)
+- `/members/:id/card` — ID-1 ratio printable card (front + back).
+- Front: MPCA pitch-green band, emblem, photo (or initials), name, UID, category, enrolled date, validity, motto ribbon.
+- Back: Issued by Managing Committee, terms-of-use, member signature line, barcode strip generated from UID, issued date, Hon. Secretary label, Holkar Stadium address.
+- "Print · Save as PDF" button uses native `window.print()` with `@media print { @page { size: A4 } }` rules. Sidebar + toolbar hidden in print.
+- Reachable from MemberDetail via "View Identity Card" button.
+- Frontend: 13/13 tests pass.
+
 ### Backend (`/app/backend/server.py`)
 - `GET /api/` — version probe
 - `GET /api/dashboard/stats` — totals, by-category, placeholders for Phase 2-4 metrics

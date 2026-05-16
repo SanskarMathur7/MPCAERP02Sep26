@@ -8,6 +8,7 @@ import Dashboard from "@/pages/Dashboard";
 import Members from "@/pages/Members";
 import MemberDetail from "@/pages/MemberDetail";
 import MemberNew from "@/pages/MemberNew";
+import MemberCard from "@/pages/MemberCard";
 import Disclosures from "@/pages/Disclosures";
 
 const ProtectedShell = ({ children }) => {
@@ -56,6 +57,14 @@ function App() {
                             element={
                                 <ProtectedShell>
                                     <MemberDetail />
+                                </ProtectedShell>
+                            }
+                        />
+                        <Route
+                            path="/members/:id/card"
+                            element={
+                                <ProtectedShell>
+                                    <MemberCard />
                                 </ProtectedShell>
                             }
                         />

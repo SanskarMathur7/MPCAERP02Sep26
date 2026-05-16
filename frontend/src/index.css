@@ -230,4 +230,68 @@
     .stately-reveal[data-delay="6"] {
         animation-delay: 0.9s;
     }
+
+    /* ===== MPCA Identity Card ===== */
+    .mpca-card {
+        width: 540px;
+        max-width: 100%;
+        aspect-ratio: 1.586 / 1; /* ID-1 ratio */
+        background: var(--mpca-ivory);
+        border: 1px solid var(--mpca-brass);
+        box-shadow:
+            0 1px 0 var(--mpca-brass) inset,
+            0 30px 60px -20px rgba(15, 41, 30, 0.25);
+        position: relative;
+        overflow: hidden;
+        background-image:
+            radial-gradient(rgba(28, 20, 15, 0.04) 1px, transparent 1px),
+            radial-gradient(rgba(28, 20, 15, 0.025) 1px, transparent 1px);
+        background-size: 14px 14px, 22px 22px;
+        background-position: 0 0, 7px 11px;
+    }
+    .mpca-card-front::before,
+    .mpca-card-back::before {
+        content: "";
+        position: absolute;
+        inset: 6px;
+        border: 1px solid rgba(197, 160, 89, 0.4);
+        pointer-events: none;
+    }
+    .mpca-card-band {
+        background: linear-gradient(135deg, var(--mpca-green-dark) 0%, #0a1e15 100%);
+        color: var(--mpca-ivory);
+        padding: 14px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+        border-bottom: 2px solid var(--mpca-brass);
+    }
+    .mpca-card-band-bottom {
+        background: linear-gradient(135deg, var(--mpca-green-dark) 0%, #0a1e15 100%);
+        color: var(--mpca-ivory);
+        padding: 10px 20px;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-top: 2px solid var(--mpca-brass);
+        text-align: center;
+    }
+    .mpca-card-body {
+        padding: 18px 22px;
+    }
+    .mpca-card-ribbon {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 8px 20px;
+        background: var(--mpca-parchment);
+        border-top: 1px solid rgba(197, 160, 89, 0.5);
+        text-align: center;
+    }
+    .mpca-card-back {
+        background: var(--mpca-parchment);
+    }
 }

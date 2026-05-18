@@ -2,34 +2,37 @@
 
 > **Madhya Pradesh Cricket Association — Enterprise Resource Planning System**
 > Reference plan: https://mpca-plan-updated.netlify.app/
-> Started: Jan 2026 · Version 1.0 (Phase 1 of V)
+> Started: Jan 2026 · Currently on Phase III.5 (re-architecture) · Version 3.5.0
 
 ## Original Problem Statement
 
-User requested an ERP application for the Madhya Pradesh Cricket Association based on the system-design plan published at mpca-plan-updated.netlify.app. The plan covers 16 governance areas drawn from the MPCA Constitution (as amended 12.11.2022): Legal Identity, Constitution Tracking, Important Dates, Membership Base & Norms, Membership Register, Voting & Member Actions, Managing Committee, AGM Management, Special/Extraordinary GM, Committee Meetings, Elections, Post Holder Rules, Fees & Subscriptions, Bank Operations, Disclosures, Grievance Redressal.
+User requested an ERP application for the Madhya Pradesh Cricket Association based on the system-design plan published at mpca-plan-updated.netlify.app/. The plan covers 10 core modules (M1 Player Management, M2 Tournament Management, M3 Match Officials, M4 Team Officials, M5 Finance & Compliance, M6 Infrastructure, M7-M10 HR/Compliance/Docs/Meetings), 5-tier RBAC (MPCA HQ → Division Leaders → District Officers → Field Users → External Stakeholders), 3-domain access control (Secretarial / Financial / Administration & Tournaments), full BCCI → MPCA → 10 Divisions → 54 Districts hierarchy with maker-checker workflows, AI Assistant, OCR, bilingual EN+HI, and Android+iOS mobile apps.
 
-User preferences:
-- **Design**: "Cricket feeler, fantastic experience" — Classic/Heritage direction
-- **Auth**: Demo login for now (Gmail OAuth in a later phase)
-- **Approach**: Phased development
+User preferences (locked):
+- **Visual**: Indian Cricket palette — BCCI Navy `#0a1f3d` + Saffron `#ff6a13` + Marigold `#e9b949` + Maroon `#7a1f2c` + Warm Cream `#fbf7ed`. (User explicitly rejected the earlier British-pavilion green/brass palette.)
+- **Org seed scale**: Full — MPCA HQ + all 10 divisions + 54 districts as per the SET-UP diagram.
+- **Existing modules**: Keep all (Membership, Disclosures, Meetings, Elections, Fees, Bank, Financial Powers, Member Portal). Re-scope to State HQ + add lower-body equivalents.
+- **Sequencing**: Architecture rebase + Indian theme first; Finance/Grant workflow next; Player + Tournament after.
+- **AI Assistant**: Deferred to Phase V (per plan).
+- **Auth**: Demo persona login for now (real auth deferred).
 
 ## Architecture
 
-- **Frontend**: React 19 + React Router + Tailwind CSS + lucide-react. Cormorant Garamond (serif headings), Bricolage Grotesque (sans body), IBM Plex Mono (numerics). Custom heritage colour tokens (pitch green, brass, ivory, oxblood).
-- **Backend**: FastAPI + Motor (MongoDB async). All routes prefixed `/api`.
-- **Storage**: MongoDB (`members`, `disclosures` collections). Seed data on startup.
-- **Auth (Phase 1)**: Persona-based, stored in `localStorage` as `mpca_persona`. NOT a security boundary.
+- **Frontend**: React 19 + React Router + Tailwind CSS + lucide-react. Fraunces / Inter / IBM Plex Mono. Indian palette via shared CSS custom properties.
+- **Backend**: FastAPI + Motor (MongoDB async). All routes prefixed `/api`. Monolithic `server.py` (~1430 lines) pending split into routers.
+- **Storage**: MongoDB collections — `bodies`, `members`, `disclosures`, `meetings`, `resolutions`, `elections`, `candidates`, `votes`, `fee_invoices`, `bank_accounts`, `bank_txns`. Auto-seeded on startup.
+- **Auth (Demo)**: 6 personas in `localStorage`, each carrying `body_type` (State / Division / District / Public) and `body_code`. NOT a security boundary.
 
-## User Personas (Phase 1 Demo Auth)
+## User Personas (Demo Auth)
 
-| ID | Role | Persona | Notes |
-|---|---|---|---|
-| president | President | Shri Abhilash Khandekar | Full executive |
-| secretary | Hon. Secretary | Shri Sanjay Jagdale | Register custody, AGM convener |
-| treasurer | Hon. Treasurer | Smt. Meera Verma | Bank & fees |
-| committee | Committee Member | Capt. Rajinder Pal Singh | Vote, propose |
-| member | Member | Shri Naveen Joshi | View self, pay fees |
-| public | Public | Guest Viewer | Disclosures only |
+| ID | Role | Persona | Body Tier | Body |
+|---|---|---|---|---|
+| president | President | Shri Abhilash Khandekar | State | MPCA HQ |
+| secretary | Hon. Secretary | Shri Sanjay Jagdale | State | MPCA HQ |
+| treasurer | Hon. Treasurer | Smt. Meera Verma | State | MPCA HQ |
+| division-secretary | Hon. Secretary | Shri Vikram Patil | Division | Indore Division |
+| district-secretary | Hon. Secretary | Shri Anil Sharma | District | Ujjain District |
+| public | Public | Guest Viewer | Public | — |
 
 ## Phase Roadmap
 
@@ -38,10 +41,47 @@ User preferences:
 | **I** | Landing · Demo Auth · Dashboard · Membership Register · Public Disclosures · Identity Card | ✅ **Complete (Jan 2026)** |
 | **II** | AGM / Committee Meetings · Elections (electoral officer, tenure, cooling period) · Public Verify endpoint with QR codes on identity cards | ✅ **Complete (Jan 2026)** |
 | **III** | Fees & Subscriptions ledger · Bank Operations · Financial Powers · Public Member Portal with Pay Dues + digital receipt | ✅ **Complete (Jan 2026)** |
+| **III.5** | Indian Cricket UI re-skin · Multi-tenant Org Hierarchy (BCCI + MPCA + 10 Divisions + 54 Districts) · `/api/bodies` endpoints · Org Structure tree view · Body-scoped personas | ✅ **Complete (May 2026)** — 25/25 backend tests pass |
+| **III.6** | District → Division → MPCA Grant Workflow · Per-body budget ledgers · Maker-checker on every transaction · Finance Claim Register · Anti-fragmentation rule | 🔴 P0 NEXT |
 | IV | Player Registration · Grievance Redressal workflow | Backlog |
 | V | Constitution Library (full searchable) · AI Assistant (constitution Q&A, draft notices, summarise minutes) · Analytics | Backlog |
 
-## What's been implemented — Phase III (Jan 2026)
+## What's been implemented — Phase III.5 (May 2026) — Re-Architecture
+
+### User-driven rebase
+The user reviewed every tab of the reference plan and identified that the existing build was a single-tenant HQ-only ERP and the UI was "too Australian". This phase corrects both:
+
+### Backend (`/app/backend/server.py`)
+- **NEW: `bodies` collection** modelling the BCCI → MPCA → 10 Divisions → 54 Districts hierarchy. Each body has `code`, `name`, `body_type` (BCCI/State/Division/District/Club), `parent_code`, `seat`, `annual_grant_inr`, `secretary_name`, `treasurer_name`.
+- **NEW: `seed_bodies()`** auto-seeds 66 bodies (1 BCCI + 1 MPCA + 10 Divisions + 54 Districts). Division grant = ₹30,000/yr; District grant = ₹1,10,000/yr. Realistic MP district names per the SET-UP diagram.
+- **NEW endpoints** (all prefixed `/api`):
+  - `GET /api/bodies?body_type=&parent_code=` — list / filter
+  - `GET /api/bodies/tree` — nested tree starting from BCCI root
+  - `GET /api/bodies/{code}` — single body
+  - `GET /api/bodies/{code}/summary` — division/district counts + total annual grant to children
+  - `POST /api/bodies` — create (rejects duplicate codes with 400)
+- Backend version bumped to **3.5.0**.
+
+### Frontend
+- **NEW visual identity**: Indian Cricket palette (BCCI Navy `#0a1f3d` + Saffron `#ff6a13` + Marigold `#e9b949` + Maroon `#7a1f2c` + Warm Cream `#fbf7ed`). Implemented as **CSS-variable remap** — every existing page automatically inherits the new theme without touching component code. Tailwind `mpca-*` tokens now resolve to the Indian palette. Khadi-weave background. Saffron selection highlight. Hindi motto "खेल भावना से, राष्ट्र सम्मान से" replaces the prior Latin tag-line.
+- **NEW route**: `/org` — `OrgStructure.jsx` — interactive expandable tree (iterative flatten, not recursive — avoided Babel `Maximum call stack` issue) showing all 66 bodies with grant amounts and tier badges.
+- **NEW personas** (6 total): President / Hon. Secretary / Hon. Treasurer (State tier) · Division Secretary (Indore) · District Secretary (Ujjain) · Public. Each carries `body_type`, `body_code`, `body_name`.
+- **Login page rebuilt** with tricolour stripe atop every persona card + tier icon (Landmark/Building2/MapPin/ShieldCheck) + body chip.
+- **Landing rebuilt** — copy now reads "From Holkar to every maidan of Madhya Pradesh"; stats: 10 Divisions · 54 Districts · 10 Core Modules.
+- **AppLayout** — saffron underline beneath brand, body-aware "Signed In As" card showing tier + body name, new "Org Structure" nav item, roadmap section listing Grant Workflow / Player Module / Tournament Module / AI Assistant.
+- **Dashboard** — new "Organisational Footprint" maroon band ("10 Divisions · 54 Districts"), tier-aware persona greeting, phase tags on stat tiles.
+
+### Testing (Phase III.5)
+- Backend: 25/25 pytest tests passing (`/app/backend/tests/test_phase3_5_api.py`). Validates body counts, tree shape, summary aggregates, duplicate rejection, 404 handling, and regression of every Phase I-III endpoint.
+- Frontend: Smoke-tested visually — Landing, Login (6 persona cards), Dashboard (with tier chip), Org Structure tree all render correctly in Indian palette.
+
+### What is still NOT done (Phase III.6 P0)
+- `body_id` field is NOT yet enforced on members/fees/meetings/bank — they remain implicitly MPCA-HQ-scoped. Tagging is the very next task.
+- Grant workflow (District claim → Division recommendation → MPCA Treasurer sanction → MC resolution) — not yet built.
+- Per-body bank ledgers — not yet built.
+- Maker-checker `approval_chain` JSONB on transactions — not yet built.
+
+## What's been implemented — Phase III (Jan 2026) (Jan 2026)
 
 ### Backend (additions to `/app/backend/server.py`)
 - **Fees & Subscriptions**: `GET/POST /api/fees`, `POST /api/fees/generate?cycle=…` (idempotent bulk-generate), `POST /api/fees/{id}/pay` (MOCKED payment — returns receipt_no), `GET /api/fees/{id}`. Auto-flags Overdue on read (no DB mutation). Auto-numbered `MPCA-FEE-YYYY-NNNN`.
@@ -134,17 +174,44 @@ User preferences:
 - `PATCH /api/members/{id}` accepts the full `MemberCreate` schema. For true partial updates introduce a `MemberUpdate` schema with all-Optional fields.
 - Frontend auth is `localStorage`-only — replace with real Gmail/OAuth + JWT in Phase 2.
 
-## Next Action Items
+## Next Action Items (P0 → P2)
 
-1. **Phase 2 kick-off**: AGM/Committee Meetings module (notice generation, agenda templates from constitution, quorum tracker, minutes editor) + Elections module.
-2. **Authentication upgrade**: Emergent-managed Google OAuth, with RBAC enforcement per persona.
-3. **AI Assistant scoping**: decide model (Claude Sonnet via Emergent LLM key) + RAG over constitution PDF.
+### 🔴 P0 — Phase III.6 (Finance & Grant Workflow)
+1. Add `body_id` to every existing record (members, fees, meetings, bank, etc.). Default existing rows to `MPCA`. Scope all read queries by persona's body.
+2. **Grant Request Workflow** — `claims` collection with stages: District submits → Division Sec recommends → MPCA Treasurer sanctions → MC Resolution → Disbursement. `approval_chain` JSONB on every record.
+3. **Per-body budget ledger** — annual grant budget + actual spend visualisation.
+4. **Anti-fragmentation rule** — block multiple sub-threshold claims that cumulatively exceed sanctioning authority.
 
-## Future / Backlog
+### 🟠 P1 — Phase IV
+5. **Player Management (M1)** — registration portal, Local-MP / Out-of-MP / Guest eligibility validator, unique Player ID generator (`yr/dd-mm-yy/serial`), transfer NOC workflow, BCCI sync stub.
+6. **Tournament Management (M2)** — seed all 10 inter-divisional tournaments (MY Memorial, Madhavrao Scindia, JN Bhaya, Parmanandbhai Patel, Hiralal Gaekwad, SM Khan, MM Jagdale, AW Kanmadikar, JS Anand) + 5 championship trophies. Squad assignment + placard generation + fixture/results module.
+7. **Match Officials (M3)** + **Team Officials (M4)** registries with renewal cycles.
+8. **Grievance Redressal** workflow.
 
-- Real Gmail OAuth (Phase 2 priority)
-- File uploads (photo + signature) instead of URLs
-- Audit log of every register write
-- BCCI sync (player registration, age verification)
-- Mobile-responsive refinements for ledger tables
-- Multi-language (Hindi) toggle
+### 🟡 P2 — Phase V
+9. **AI Assistant** — Claude Sonnet via Emergent LLM key. Constitution Q&A, claim-status queries, compliance reminders.
+10. **Real Auth** — Emergent-managed Google OAuth replacing demo personas; MFA + RBAC enforcement.
+11. **Real Payment Gateway** — Stripe/Razorpay UPI (test keys already in env).
+12. **Constitution Library** — full searchable text + amendment history.
+13. **Audit Log** — every register write traced.
+
+### 🛠️ Refactoring / Tech-debt
+- Split `server.py` (now 1430 lines) into `/app/backend/routes/{bodies,members,meetings,...}.py`.
+- `next_uid` → counters collection with `findOneAndUpdate $inc` (concurrency-safe).
+- MongoDB indices on `bodies.code`, `bodies.parent_code`, `members.uid`, `fee_invoices.member_uid`.
+- FastAPI `on_event` → lifespan migration.
+- Frontend `localStorage` auth → real OAuth in P2.
+- Bilingual EN+HI toggle.
+- Local QR code generation (replace remote dep).
+- File uploads (photo, signature) instead of URLs.
+
+## Future / Backlog (deferred or out-of-scope on Emergent web stack)
+
+- React Native mobile apps (Android + iOS) — separate native dev cycle
+- Offline-first mode (mobile)
+- OCR / handwriting digitisation (Google Vision)
+- Google Calendar / Gmail integration for AGM notice mailing
+- BCCI HQ Federation API sync (player registration, age verification)
+- Elasticsearch for global search across modules
+- ABC analysis dashboard for procurement spend
+- Predictive renewal-risk model

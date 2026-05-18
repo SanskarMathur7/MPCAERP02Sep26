@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useState } from "react";
 
 const AuthContext = createContext(null);
 
@@ -86,16 +86,17 @@ export const PERSONAS = [
 ];
 
 export const AuthProvider = ({ children }) => {
-    const [persona, setPersona] = useState(null);
-
-    useEffect(() => {
-        const stored = localStorage.getItem("mpca_persona");
-        if (stored) {
-            try {
-                setPersona(JSON.parse(stored));
-            } catch (_) { /* ignore */ }
+    // Initialise from localStorage SYNCHRONOUSLY so the first render of any
+    // ProtectedShell already sees a hydrated `persona`. Avoids the race where
+    // a hard reload on a protected route flashes a redirect to /login.
+    const [persona, setPersona] = useState(() => {
+        try {
+            const stored = typeof window !== "undefined" && window.localStorage.getItem("mpca_persona");
+            return stored ? JSON.parse(stored) : null;
+        } catch (_) {
+            return null;
         }
-    }, []);
+    });
 
     const login = (personaObj) => {
         localStorage.setItem("mpca_persona", JSON.stringify(personaObj));

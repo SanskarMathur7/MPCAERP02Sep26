@@ -43,9 +43,39 @@ User preferences (locked):
 | **III** | Fees & Subscriptions ledger · Bank Operations · Financial Powers · Public Member Portal with Pay Dues + digital receipt | ✅ **Complete (Jan 2026)** |
 | **III.5** | Indian Cricket UI re-skin · Multi-tenant Org Hierarchy (BCCI + MPCA + 10 Divisions + 54 Districts) · `/api/bodies` endpoints · Org Structure tree view · Body-scoped personas | ✅ **Complete (May 2026)** — 25/25 backend tests pass |
 | **III.6** | `body_id` scoping on all collections · Idempotent migration · Claims & Grant Workflow (District → Division → MPCA) · Maker-checker `approval_chain` JSONB · Claims register + new-claim form · Persona-aware action buttons · Dashboard claims band | ✅ **Complete (May 2026)** — 47/47 backend tests pass |
-| **III.7** | Per-body budget ledger · Anti-fragmentation rule · Real cheque/NEFT issue against bank account · Body-scoped queries enforced in middleware | 🔴 P0 NEXT |
+| **III.7** | Per-body Budget Ledger (reconciled live vs claims) · Auto bank-debit on Disburse · 2-signatory enforcement >₹50k · Anti-fragmentation rule per Art. 28(v) · Sanctioning matrix reference | ✅ **Complete (May 2026)** — 28/28 backend tests pass |
+| **III.8** | Server-side body-scoped read enforcement · Claim attachment uploads · Procurement protocol (3-quote / QCBS) · ABC analysis · Reconciliation against bank statements | 🔴 P0 NEXT |
 | IV | Player Registration · Grievance Redressal workflow | Backlog |
 | V | Constitution Library (full searchable) · AI Assistant (constitution Q&A, draft notices, summarise minutes) · Analytics | Backlog |
+
+## What's been implemented — Phase III.7 (May 2026) — Finance Close-out
+
+### Backend (`/app/backend/server.py`)
+- **NEW `body_budgets` collection** + endpoint suite:
+  - `GET /api/budgets?fiscal_cycle=&body_id=` — returns one row per body, reconciled live against `claims` (annual / committed / disbursed / available / utilisation_pct / claim_count)
+  - `GET /api/budgets/{body_id}` — single body
+  - `POST /api/budgets` — upsert annual budget override (default = body.annual_grant_inr)
+- **NEW `GET /api/sanction-thresholds`** — reference for Art. 28(v) (6 levels: District Sec ≤₹25k · District Cmt ≤₹2L · Division Sec ≤₹5L · MPCA Treasurer ≤₹10L · MC ≤₹50L · AGM unlimited) + 2-signatory threshold ₹50,000.
+- **Anti-fragmentation rule** on `POST /api/claims`: if the new claim is individually within authority X's limit but the body's cumulative open spend for the cycle would cross authority Y's limit, the call returns 400 with a message naming both authorities. Overridable with `?force=true`.
+- **Auto bank-debit on Disburse**: when a claim transitions to Disbursed, a `BankTransaction` is atomically inserted (txn_type=Debit, narration referencing the claim_no, reference `CLAIM/CLM-...`), the source account balance is decremented, and `disbursement_txn_id` + `disbursement_account_id` are written back to the claim for traceability.
+- **Two-signatory enforcement**: `POST /api/claims/{id}/disburse` requires `co_signatory_post` + `co_signatory_name` when `amount > ₹50,000`. Co-signature is appended to the approval chain note.
+- **Insufficient-balance guard** on Disburse.
+- `Claim.supporting_doc_urls` — multi-attachment array.
+- Version bumped to **3.7.0**.
+
+### Frontend
+- **NEW route `/budgets`** — `Budgets.jsx`:
+  - 4 totals tiles (Annual / In-Flight / Disbursed / Available headroom)
+  - Art. 28(v) sanctioning matrix card (6 rows + 2-signatory threshold)
+  - Filter chips (All / Divisions / Districts) + "Include bodies with no activity"
+  - Per-body table with utilisation bars (green <80% · saffron 80-100% · maroon >100%)
+  - Persona-aware scoping (Division sees own + districts; District sees own)
+- **Claims action dialog** now surfaces co-signatory inputs automatically when `amount > ₹50,000` and the action is `disburse`.
+- **AppLayout** — "Budget Ledger" promoted to PRIMARY_NAV.
+
+### Testing (Phase III.7)
+- Backend: **28/28 pytest tests pass · 100% · zero issues** (`/app/test_reports/iteration_8.json`). Covered: version, budget ledger reconciliation, 404 + idempotent upsert + body-exists guard, sanction-thresholds, anti-fragmentation (block + force-override), auto bank-debit (claim linkage + balance decrement + Debit txn inserted), 2-signatory enforcement (both paths), insufficient-balance guard, full Phase I-III.6 regression sweep.
+- Frontend: Smoke-tested visually — budget ledger renders cleanly with all utilisation bars and Art. 28(v) matrix.
 
 ## What's been implemented — Phase III.6 (May 2026) — Body Scoping + Grant Workflow
 
@@ -216,24 +246,25 @@ The user reviewed every tab of the reference plan and identified that the existi
 
 ## Next Action Items (P0 → P2)
 
-### 🔴 P0 — Phase III.7 (Body-scoped queries + Budget Ledger)
-1. **Body-scoped reads** — middleware that injects the persona's `body_id` into every list query. State personas see all; Division sees own + descendants; District sees own.
-2. **Per-body budget ledger** — `body_budgets` collection with annual_budget / committed / disbursed / available; reconciled against `claims.amount_inr` and `bank_txns`.
-3. **Anti-fragmentation rule** — block creation of multiple sub-threshold claims that cumulatively exceed sanctioning authority within a window.
-4. **Auto bank-debit on Disburse** — disbursement should optionally generate a `BankTransaction` against MPCA General Account for ATG (auto-traceability).
+### 🔴 P0 — Phase III.8 (Finance polish + procurement)
+1. **Server-side body-scoped reads** — dependency that scopes every list query to the persona's tree (State sees all; Division sees self + descendants; District sees self).
+2. **Claim attachments** — proper file upload (PDF/JPEG) instead of URL paste; stored in disk + signed-URL flow.
+3. **Procurement protocol** — 3-quote required for ₹1-10L · QCBS for >₹75L · EMD + security deposit tracking.
+4. **ABC expenditure analysis** — A/B/C bucketed view of past disbursements with chart.
+5. **Reconciliation** — bank statement upload (CSV) → match against ledger; flag mismatches.
 
 ### 🟠 P1 — Phase IV (Cricket Operations)
-5. **Player Management (M1)** — registration portal, Local-MP / Out-of-MP / Guest eligibility validator, unique Player ID generator (`yr/dd-mm-yy/serial`), transfer NOC workflow, BCCI sync stub.
-6. **Tournament Management (M2)** — seed all 10 inter-divisional tournaments (MY Memorial, Madhavrao Scindia, JN Bhaya, Parmanandbhai Patel, Hiralal Gaekwad, SM Khan, MM Jagdale, AW Kanmadikar, JS Anand) + 5 championship trophies. Squad assignment + placard generation + fixture/results module.
-7. **Match Officials (M3)** + **Team Officials (M4)** registries with renewal cycles.
-8. **Grievance Redressal** workflow.
+6. **Player Management (M1)** — registration portal, Local-MP / Out-of-MP / Guest eligibility validator, unique Player ID generator, transfer NOC workflow, BCCI sync stub.
+7. **Tournament Management (M2)** — seed all 10 inter-divisional tournaments + 5 championship trophies. Squad assignment + placard generation + fixtures/results.
+8. **Match Officials (M3)** + **Team Officials (M4)** registries with renewal cycles.
+9. **Grievance Redressal** workflow.
 
 ### 🟡 P2 — Phase V
-9. **AI Assistant** — Claude Sonnet via Emergent LLM key. Constitution Q&A, claim-status queries, compliance reminders.
-10. **Real Auth** — Emergent-managed Google OAuth replacing demo personas; MFA + RBAC enforcement.
-11. **Real Payment Gateway** — Stripe/Razorpay UPI (test keys already in env).
-12. **Constitution Library** — full searchable text + amendment history.
-13. **Audit Log** — every register write traced.
+10. **AI Assistant** — Claude Sonnet via Emergent LLM key. Constitution Q&A, claim-status queries, compliance reminders.
+11. **Real Auth** — Emergent-managed Google OAuth replacing demo personas; MFA + RBAC enforcement.
+12. **Real Payment Gateway** — Stripe/Razorpay UPI (test keys already in env).
+13. **Constitution Library** — full searchable text + amendment history.
+14. **Audit Log** — every register write traced.
 
 ### 🛠️ Refactoring / Tech-debt
 - Split `server.py` (now 1430 lines) into `/app/backend/routes/{bodies,members,meetings,...}.py`.

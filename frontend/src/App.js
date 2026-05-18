@@ -23,6 +23,8 @@ import BankAccountDetail from "@/pages/BankAccountDetail";
 import FinancialPowers from "@/pages/FinancialPowers";
 import MemberProfile from "@/pages/MemberProfile";
 import OrgStructure from "@/pages/OrgStructure";
+import Claims from "@/pages/Claims";
+import ClaimNew from "@/pages/ClaimNew";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -71,6 +73,10 @@ function App() {
                         <Route path="/bank" element={<Protected><Bank /></Protected>} />
                         <Route path="/bank/:id" element={<Protected><BankAccountDetail /></Protected>} />
                         <Route path="/financial-powers" element={<Protected><FinancialPowers /></Protected>} />
+
+                        {/* Protected — Phase III.6: Grant Workflow */}
+                        <Route path="/claims" element={<Protected><Claims /></Protected>} />
+                        <Route path="/claims/new" element={<Protected><ClaimNew /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

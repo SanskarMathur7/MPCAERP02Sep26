@@ -183,3 +183,45 @@ export const fetchBodySummary = async (code) => {
     const { data } = await api.get(`/bodies/${code}/summary`);
     return data;
 };
+
+// ---------- Phase III.6: Claims & Grant Workflow ----------
+export const fetchClaims = async (params = {}) => {
+    const { data } = await api.get("/claims", { params });
+    return data;
+};
+export const fetchClaim = async (id) => {
+    const { data } = await api.get(`/claims/${id}`);
+    return data;
+};
+export const createClaim = async (payload) => {
+    const { data } = await api.post("/claims", payload);
+    return data;
+};
+export const submitClaim = async (id, action) => {
+    const { data } = await api.post(`/claims/${id}/submit`, action);
+    return data;
+};
+export const recommendClaim = async (id, action) => {
+    const { data } = await api.post(`/claims/${id}/recommend`, action);
+    return data;
+};
+export const sanctionClaim = async (id, action) => {
+    const { data } = await api.post(`/claims/${id}/sanction`, action);
+    return data;
+};
+export const disburseClaim = async (id, action) => {
+    const { data } = await api.post(`/claims/${id}/disburse`, action);
+    return data;
+};
+export const rejectClaim = async (id, action) => {
+    const { data } = await api.post(`/claims/${id}/reject`, action);
+    return data;
+};
+export const returnClaim = async (id, action) => {
+    const { data } = await api.post(`/claims/${id}/return`, action);
+    return data;
+};
+export const fetchClaimsStats = async () => {
+    const { data } = await api.get("/claims-stats/summary");
+    return data;
+};

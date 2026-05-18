@@ -37,6 +37,7 @@ MemberStatus = Literal["Active", "Suspended", "Lapsed", "Transferred", "Pending"
 class MemberBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    body_id: str = "MPCA"  # owning body — defaults to MPCA HQ
     name: str
     category: MemberCategory
     sub_category: Optional[str] = None  # e.g. "Life Member", "Annual", "School", "District Assoc."
@@ -74,6 +75,7 @@ DisclosureType = Literal["AGM_Notice", "Committee_Minutes", "GBM_Minutes", "Audi
 class DisclosureBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    body_id: str = "MPCA"
     title: str
     disclosure_type: DisclosureType
     summary: Optional[str] = None
@@ -109,6 +111,7 @@ class AgendaItem(BaseModel):
 
 class MeetingBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
+    body_id: str = "MPCA"
     title: str
     meeting_type: MeetingType
     scheduled_date: str  # ISO date
@@ -170,6 +173,7 @@ ElectionStatus = Literal["Announced", "Nominations_Open", "Nominations_Closed", 
 
 class ElectionBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
+    body_id: str = "MPCA"
     title: str
     post: str  # e.g. "President", "Hon. Secretary"
     tenure_years: int = 4
@@ -235,6 +239,7 @@ FeeStatus = Literal["Pending", "Paid", "Overdue", "Waived"]
 
 class FeeInvoiceBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
+    body_id: str = "MPCA"
     member_uid: str
     member_name: Optional[str] = None
     cycle: str  # e.g. "2025-26"
@@ -266,6 +271,7 @@ TxnType = Literal["Credit", "Debit"]
 
 class BankAccountBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
+    body_id: str = "MPCA"
     name: str  # "MPCA General Account"
     bank: str
     branch: Optional[str] = None
@@ -289,6 +295,7 @@ class BankAccountCreate(BankAccountBase):
 
 class BankTransactionBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
+    body_id: str = "MPCA"
     account_id: str
     date: str  # ISO date
     txn_type: TxnType
@@ -341,6 +348,68 @@ class BodyCreate(BodyBase):
     pass
 
 
+# ---------------- Phase III.6: Claims & Grant Workflow ----------------
+# Models a grant claim that flows District → Division → MPCA per Art. 28(v).
+# `approval_chain` is the maker-checker audit trail — append-only.
+
+ClaimCategory = Literal["Annual_Grant", "Tournament_Expense", "Infrastructure", "Honorarium", "Special_Sanction"]
+ClaimStatus = Literal[
+    "Draft",                    # district sec is preparing
+    "Submitted",                # forwarded to Division
+    "Division_Recommended",     # division has signed off → MPCA queue
+    "MPCA_Sanctioned",          # MPCA Treasurer sanctioned
+    "Disbursed",                # cheque/NEFT released
+    "Rejected",                 # rejected at any stage
+    "Returned",                 # sent back for clarification
+]
+
+
+class ApprovalStep(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    stage: str                          # "Submitted" / "Division_Recommended" / etc.
+    actor_post: str                     # e.g. "Hon. Secretary"
+    actor_name: Optional[str] = None
+    actor_body_id: str                  # body the actor represents
+    decision: Literal["Submitted", "Recommended", "Sanctioned", "Disbursed", "Rejected", "Returned"]
+    notes: Optional[str] = None
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ClaimBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    body_id: str                            # submitting body (district / division)
+    title: str
+    description: Optional[str] = None
+    category: ClaimCategory
+    amount_inr: float
+    fiscal_cycle: str = "2025-26"           # e.g. "2025-26"
+    supporting_doc_url: Optional[str] = None
+
+
+class Claim(ClaimBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    claim_no: str                            # "CLM-2025-26-001"
+    status: ClaimStatus = "Draft"
+    approval_chain: List[ApprovalStep] = []
+    parent_body_id: Optional[str] = None    # division code, computed on submit
+    created_by: Optional[str] = None         # actor name at creation
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ClaimCreate(ClaimBase):
+    created_by: Optional[str] = None
+
+
+class ClaimAction(BaseModel):
+    """Payload for any approval action (submit/recommend/sanction/disburse/reject/return)."""
+    model_config = ConfigDict(extra="ignore")
+    actor_post: str
+    actor_name: Optional[str] = None
+    actor_body_id: str
+    notes: Optional[str] = None
+
+
 # ---------------- Helpers ----------------
 
 CATEGORY_PREFIX = {
@@ -361,10 +430,12 @@ async def next_uid(category: MemberCategory) -> str:
 
 
 @api_router.get("/members", response_model=List[Member])
-async def list_members(category: Optional[MemberCategory] = None, search: Optional[str] = None):
+async def list_members(category: Optional[MemberCategory] = None, search: Optional[str] = None, body_id: Optional[str] = None):
     query = {}
     if category:
         query["category"] = category
+    if body_id:
+        query["body_id"] = body_id
     if search:
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
@@ -981,9 +1052,246 @@ async def create_body(payload: BodyCreate):
     return body
 
 
+# ---------------- Routes: Claims & Grant Workflow ----------------
+
+
+async def _next_claim_no(cycle: str) -> str:
+    count = await db.claims.count_documents({"fiscal_cycle": cycle})
+    return f"CLM-{cycle}-{count + 1:03d}"
+
+
+async def _resolve_parent_body(body_id: str) -> Optional[str]:
+    body = await db.bodies.find_one({"code": body_id}, {"_id": 0, "parent_code": 1})
+    return body.get("parent_code") if body else None
+
+
+@api_router.get("/claims", response_model=List[Claim])
+async def list_claims(
+    body_id: Optional[str] = None,
+    parent_body_id: Optional[str] = None,
+    status: Optional[ClaimStatus] = None,
+    fiscal_cycle: Optional[str] = None,
+):
+    """List claims. body_id filters claims submitted BY that body.
+    parent_body_id filters claims pending review BY that body (for Division/MPCA inboxes)."""
+    query: dict = {}
+    if body_id:
+        query["body_id"] = body_id
+    if parent_body_id:
+        query["parent_body_id"] = parent_body_id
+    if status:
+        query["status"] = status
+    if fiscal_cycle:
+        query["fiscal_cycle"] = fiscal_cycle
+    docs = await db.claims.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@api_router.get("/claims/{claim_id}", response_model=Claim)
+async def get_claim(claim_id: str):
+    doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    return doc
+
+
+@api_router.post("/claims", response_model=Claim)
+async def create_claim(payload: ClaimCreate):
+    """Drafts a new claim. The submitting body must exist."""
+    body = await db.bodies.find_one({"code": payload.body_id}, {"_id": 0})
+    if not body:
+        raise HTTPException(400, f"Body {payload.body_id} does not exist")
+    cycle = payload.fiscal_cycle
+    claim_no = await _next_claim_no(cycle)
+    parent_id = await _resolve_parent_body(payload.body_id)
+    claim = Claim(
+        claim_no=claim_no,
+        parent_body_id=parent_id,
+        **payload.model_dump(),
+    )
+    await db.claims.insert_one(claim.model_dump())
+    return claim
+
+
+def _append_step(claim_doc: dict, step: ApprovalStep, new_status: ClaimStatus) -> dict:
+    chain = claim_doc.get("approval_chain", []) or []
+    chain.append(step.model_dump())
+    return {
+        "approval_chain": chain,
+        "status": new_status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@api_router.post("/claims/{claim_id}/submit", response_model=Claim)
+async def submit_claim(claim_id: str, action: ClaimAction):
+    """District submits Draft claim → Division (Submitted)."""
+    doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if doc["status"] not in ("Draft", "Returned"):
+        raise HTTPException(400, f"Cannot submit a claim in status {doc['status']}")
+    step = ApprovalStep(
+        stage="Submitted",
+        actor_post=action.actor_post,
+        actor_name=action.actor_name,
+        actor_body_id=action.actor_body_id,
+        decision="Submitted",
+        notes=action.notes,
+    )
+    update = _append_step(doc, step, "Submitted")
+    await db.claims.update_one({"id": claim_id}, {"$set": update})
+    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+
+
+@api_router.post("/claims/{claim_id}/recommend", response_model=Claim)
+async def recommend_claim(claim_id: str, action: ClaimAction):
+    """Division Secretary recommends a Submitted claim → MPCA queue."""
+    doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if doc["status"] != "Submitted":
+        raise HTTPException(400, f"Cannot recommend a claim in status {doc['status']}")
+    step = ApprovalStep(
+        stage="Division_Recommended",
+        actor_post=action.actor_post,
+        actor_name=action.actor_name,
+        actor_body_id=action.actor_body_id,
+        decision="Recommended",
+        notes=action.notes,
+    )
+    update = _append_step(doc, step, "Division_Recommended")
+    # Once a Division has recommended, the parent for the MPCA queue is MPCA itself.
+    update["parent_body_id"] = "MPCA"
+    await db.claims.update_one({"id": claim_id}, {"$set": update})
+    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+
+
+@api_router.post("/claims/{claim_id}/sanction", response_model=Claim)
+async def sanction_claim(claim_id: str, action: ClaimAction):
+    """MPCA Hon. Treasurer sanctions a Division-recommended claim."""
+    doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if doc["status"] != "Division_Recommended":
+        raise HTTPException(400, f"Cannot sanction a claim in status {doc['status']}")
+    step = ApprovalStep(
+        stage="MPCA_Sanctioned",
+        actor_post=action.actor_post,
+        actor_name=action.actor_name,
+        actor_body_id=action.actor_body_id,
+        decision="Sanctioned",
+        notes=action.notes,
+    )
+    update = _append_step(doc, step, "MPCA_Sanctioned")
+    await db.claims.update_one({"id": claim_id}, {"$set": update})
+    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+
+
+@api_router.post("/claims/{claim_id}/disburse", response_model=Claim)
+async def disburse_claim(claim_id: str, action: ClaimAction):
+    """Marks the sanctioned claim as disbursed (cheque / NEFT released)."""
+    doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if doc["status"] != "MPCA_Sanctioned":
+        raise HTTPException(400, f"Cannot disburse a claim in status {doc['status']}")
+    step = ApprovalStep(
+        stage="Disbursed",
+        actor_post=action.actor_post,
+        actor_name=action.actor_name,
+        actor_body_id=action.actor_body_id,
+        decision="Disbursed",
+        notes=action.notes,
+    )
+    update = _append_step(doc, step, "Disbursed")
+    await db.claims.update_one({"id": claim_id}, {"$set": update})
+    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+
+
+@api_router.post("/claims/{claim_id}/reject", response_model=Claim)
+async def reject_claim(claim_id: str, action: ClaimAction):
+    """Reject at any non-terminal stage."""
+    doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if doc["status"] in ("Disbursed", "Rejected"):
+        raise HTTPException(400, f"Cannot reject a claim in status {doc['status']}")
+    step = ApprovalStep(
+        stage="Rejected",
+        actor_post=action.actor_post,
+        actor_name=action.actor_name,
+        actor_body_id=action.actor_body_id,
+        decision="Rejected",
+        notes=action.notes,
+    )
+    update = _append_step(doc, step, "Rejected")
+    await db.claims.update_one({"id": claim_id}, {"$set": update})
+    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+
+
+@api_router.post("/claims/{claim_id}/return", response_model=Claim)
+async def return_claim(claim_id: str, action: ClaimAction):
+    """Send the claim back to the originator for clarification."""
+    doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if doc["status"] not in ("Submitted", "Division_Recommended"):
+        raise HTTPException(400, f"Cannot return a claim in status {doc['status']}")
+    step = ApprovalStep(
+        stage="Returned",
+        actor_post=action.actor_post,
+        actor_name=action.actor_name,
+        actor_body_id=action.actor_body_id,
+        decision="Returned",
+        notes=action.notes,
+    )
+    update = _append_step(doc, step, "Returned")
+    # When returned, the parent becomes the originating body so it shows in their queue
+    update["parent_body_id"] = await _resolve_parent_body(doc["body_id"])
+    await db.claims.update_one({"id": claim_id}, {"$set": update})
+    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+
+
+@api_router.get("/claims-stats/summary")
+async def claims_stats():
+    """Top-of-page tile data: total / pending / disbursed / amount."""
+    total = await db.claims.count_documents({})
+    pending = await db.claims.count_documents({"status": {"$in": ["Submitted", "Division_Recommended"]}})
+    disbursed = await db.claims.count_documents({"status": "Disbursed"})
+    rejected = await db.claims.count_documents({"status": "Rejected"})
+
+    pipeline = [
+        {"$match": {"status": "Disbursed"}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount_inr"}}},
+    ]
+    cursor = db.claims.aggregate(pipeline)
+    total_disbursed_amt = 0.0
+    async for row in cursor:
+        total_disbursed_amt = row.get("total", 0.0)
+
+    pipeline2 = [
+        {"$match": {"status": {"$in": ["Submitted", "Division_Recommended", "MPCA_Sanctioned"]}}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount_inr"}}},
+    ]
+    cursor2 = db.claims.aggregate(pipeline2)
+    total_in_flight_amt = 0.0
+    async for row in cursor2:
+        total_in_flight_amt = row.get("total", 0.0)
+
+    return {
+        "total_claims": total,
+        "pending_claims": pending,
+        "disbursed_claims": disbursed,
+        "rejected_claims": rejected,
+        "amount_disbursed_inr": total_disbursed_amt,
+        "amount_in_flight_inr": total_in_flight_amt,
+    }
+
+
 @api_router.get("/")
 async def root():
-    return {"app": "MPCA ERP", "version": "3.5.0", "status": "ok"}
+    return {"app": "MPCA ERP", "version": "3.6.0", "status": "ok"}
 
 
 app.include_router(api_router)
@@ -1342,8 +1650,152 @@ async def seed_bodies():
     logger.info(f"Seeded {len(bodies)} bodies (BCCI, MPCA, 10 divisions, {sum(len(v) for v in district_map.values())} districts).")
 
 
+async def migrate_body_ids():
+    """Phase III.6 migration: backfill `body_id` = 'MPCA' on every existing record
+    that predates the multi-tenant column. Idempotent."""
+    collections_to_tag = [
+        "members", "disclosures", "meetings", "elections",
+        "fee_invoices", "bank_accounts", "bank_txns",
+    ]
+    total = 0
+    for coll in collections_to_tag:
+        result = await db[coll].update_many(
+            {"body_id": {"$exists": False}},
+            {"$set": {"body_id": "MPCA"}},
+        )
+        if result.modified_count:
+            logger.info(f"Migrated {result.modified_count} records in '{coll}' to body_id=MPCA")
+            total += result.modified_count
+    if total:
+        logger.info(f"Phase III.6 migration: tagged {total} legacy records with body_id=MPCA")
+
+
+async def seed_claims():
+    """Seed a realistic Phase III.6 demo of the grant workflow lifecycle."""
+    if await db.claims.count_documents({}) > 0:
+        return
+    logger.info("Seeding sample grant claims across the workflow…")
+
+    # Pull a few real district / division codes
+    ujjain = await db.bodies.find_one({"code": "DIST-UJJA-UJN"}, {"_id": 0})
+    indore_dist = await db.bodies.find_one({"code": "DIST-INDO-IND"}, {"_id": 0})
+    jabalpur_dist = await db.bodies.find_one({"code": "DIST-JABA-JBP"}, {"_id": 0})
+
+    samples = []
+
+    # 1) Draft claim — Ujjain District, in progress (no submission yet)
+    if ujjain:
+        samples.append({
+            "claim": ClaimBase(
+                body_id="DIST-UJJA-UJN",
+                title="U-15 Inter-District League — Travel & Boarding",
+                description="3-night travel for the U-15 squad to the SM Khan zonal qualifier at Indore.",
+                category="Tournament_Expense",
+                amount_inr=87500.0,
+                fiscal_cycle="2025-26",
+            ),
+            "stages": [],
+            "status": "Draft",
+            "creator": "Shri Anil Sharma",
+        })
+
+    # 2) Submitted claim — Indore District → Indore Division (awaiting recommendation)
+    if indore_dist:
+        samples.append({
+            "claim": ClaimBase(
+                body_id="DIST-INDO-IND",
+                title="Annual District Grant 2025-26",
+                description="Statutory annual district grant per MPCA constitution Art. 28(v).",
+                category="Annual_Grant",
+                amount_inr=110000.0,
+                fiscal_cycle="2025-26",
+            ),
+            "stages": [
+                ("Submitted", "Hon. Secretary", "Shri Rakesh Singh", "DIST-INDO-IND",
+                 "Submitted", "Quarter-1 receipts attached, audited."),
+            ],
+            "status": "Submitted",
+            "creator": "Shri Rakesh Singh",
+        })
+
+    # 3) Division_Recommended claim — Jabalpur District → MPCA queue
+    if jabalpur_dist:
+        samples.append({
+            "claim": ClaimBase(
+                body_id="DIST-JABA-JBP",
+                title="Ranital Stadium — Pitch Roller Procurement",
+                description="One heavy-duty pitch roller for Ranital stadium pre-season prep.",
+                category="Infrastructure",
+                amount_inr=425000.0,
+                fiscal_cycle="2025-26",
+            ),
+            "stages": [
+                ("Submitted", "Hon. Secretary", "Shri Anand Pandey", "DIST-JABA-JBP",
+                 "Submitted", "Three quotations attached as per procurement protocol."),
+                ("Division_Recommended", "Hon. Secretary", "Shri Devendra Tiwari", "DIV-JBP",
+                 "Recommended", "Recommended; lowest L1 quote highlighted. Onward to MPCA."),
+            ],
+            "status": "Division_Recommended",
+            "creator": "Shri Anand Pandey",
+        })
+
+    # 4) MPCA_Sanctioned + Disbursed example — historical Sehore District grant
+    samples.append({
+        "claim": ClaimBase(
+            body_id="DIST-SEHO-BPL",
+            title="Sehore District — Honorarium to local umpire panel",
+            description="Honoraria to the 12-member panel for the inter-school tournament Aug 2025.",
+            category="Honorarium",
+            amount_inr=72000.0,
+            fiscal_cycle="2025-26",
+        ),
+        "stages": [
+            ("Submitted", "Hon. Secretary", "Shri Ramesh Yadav", "DIST-SEHO-BPL",
+             "Submitted", "12 umpires × ₹6,000."),
+            ("Division_Recommended", "Hon. Secretary", "Shri Praveen Mishra", "DIV-BPL",
+             "Recommended", "List vetted; recommended in full."),
+            ("MPCA_Sanctioned", "Hon. Treasurer", "Smt. Meera Verma", "MPCA",
+             "Sanctioned", "Sanctioned per MC Resolution 2025-09-RES-3."),
+            ("Disbursed", "Hon. Treasurer", "Smt. Meera Verma", "MPCA",
+             "Disbursed", "NEFT released; ref MPCA/2025-26/HON/0044."),
+        ],
+        "status": "Disbursed",
+        "creator": "Shri Ramesh Yadav",
+    })
+
+    cycle_counter: dict = {}
+    for s in samples:
+        cycle = s["claim"].fiscal_cycle
+        cycle_counter[cycle] = cycle_counter.get(cycle, 0) + 1
+        claim_no = f"CLM-{cycle}-{cycle_counter[cycle]:03d}"
+        parent = await _resolve_parent_body(s["claim"].body_id)
+        chain: List[dict] = []
+        for stage, post, name, body_id, decision, notes in s["stages"]:
+            chain.append(ApprovalStep(
+                stage=stage, actor_post=post, actor_name=name, actor_body_id=body_id,
+                decision=decision, notes=notes,
+            ).model_dump())
+        # When status is Division_Recommended or MPCA-stage, parent should be MPCA
+        if s["status"] in ("Division_Recommended", "MPCA_Sanctioned", "Disbursed"):
+            parent_for_inbox = "MPCA"
+        else:
+            parent_for_inbox = parent
+        claim = Claim(
+            claim_no=claim_no,
+            status=s["status"],
+            approval_chain=[ApprovalStep(**c) for c in chain],
+            parent_body_id=parent_for_inbox,
+            created_by=s["creator"],
+            **s["claim"].model_dump(),
+        )
+        await db.claims.insert_one(claim.model_dump())
+    logger.info(f"Seeded {len(samples)} sample claims.")
+
+
 async def seed_data():
     await seed_bodies()
+    await migrate_body_ids()
+    await seed_claims()
     if await db.members.count_documents({}) == 0:
         logger.info("Seeding members…")
         for m in SEED_MEMBERS:

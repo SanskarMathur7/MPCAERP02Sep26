@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchDashboardStats, fetchMembers, fetchDisclosures, fetchBodiesTree } from "@/lib/api";
+import { fetchDashboardStats, fetchMembers, fetchDisclosures, fetchBodiesTree, fetchClaimsStats } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Users, FileText, Calendar, Receipt, AlertTriangle, TrendingUp, ChevronRight, Trophy, Landmark, Building2, MapPin } from "lucide-react";
+import { Users, FileText, Calendar, Receipt, AlertTriangle, TrendingUp, ChevronRight, Trophy, Landmark, Building2, HandCoins } from "lucide-react";
 
 const StatTile = ({ label, value, sub, icon: Icon, accent = "green", phase = "Live" }) => {
     const colorMap = {
@@ -30,20 +30,23 @@ const Dashboard = () => {
     const [recentMembers, setRecentMembers] = useState([]);
     const [recentDisclosures, setRecentDisclosures] = useState([]);
     const [orgCounts, setOrgCounts] = useState({ divisions: 0, districts: 0 });
+    const [claimsStats, setClaimsStats] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         (async () => {
             try {
-                const [s, m, d, tree] = await Promise.all([
+                const [s, m, d, tree, cs] = await Promise.all([
                     fetchDashboardStats(),
                     fetchMembers(),
                     fetchDisclosures(),
                     fetchBodiesTree(),
+                    fetchClaimsStats(),
                 ]);
                 setStats(s);
                 setRecentMembers(m.slice(0, 5));
                 setRecentDisclosures(d.slice(0, 4));
+                setClaimsStats(cs);
                 let divisions = 0, districts = 0;
                 const walk = (nodes) => {
                     for (const n of nodes) {
@@ -141,7 +144,7 @@ const Dashboard = () => {
             </div>
 
             {/* Hierarchy band — Phase III.5 */}
-            <div className="bulletin-card p-8 mb-16 bg-gradient-to-br from-mpca-burgundy-dark to-mpca-wood-dark text-mpca-ivory relative overflow-hidden" data-testid="org-band">
+            <div className="bulletin-card p-8 mb-8 bg-gradient-to-br from-mpca-burgundy-dark to-mpca-wood-dark text-mpca-ivory relative overflow-hidden" data-testid="org-band">
                 <div className="grid md:grid-cols-3 gap-8 items-center relative">
                     <div className="md:col-span-2">
                         <Building2 className="text-mpca-gold-light mb-3" size={28} strokeWidth={1.25} />
@@ -162,6 +165,42 @@ const Dashboard = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Claims band — Phase III.6 */}
+            {claimsStats && (
+                <div className="bulletin-card p-8 mb-16 bg-mpca-ivory border-2 border-mpca-oxblood/50 relative overflow-hidden" data-testid="claims-band">
+                    <div className="grid md:grid-cols-4 gap-6 items-center">
+                        <div className="md:col-span-1">
+                            <HandCoins className="text-mpca-oxblood mb-3" size={28} strokeWidth={1.25} />
+                            <div className="overline">Grant Workflow</div>
+                            <h3 className="font-serif text-2xl text-mpca-green-dark mt-2 leading-tight">
+                                District → Division → MPCA
+                            </h3>
+                        </div>
+                        <div className="md:col-span-2 grid grid-cols-3 gap-4">
+                            <div>
+                                <div className="overline text-[9px]">Total</div>
+                                <div className="font-serif text-3xl text-mpca-green-dark mt-1 leading-none">{claimsStats.total_claims}</div>
+                            </div>
+                            <div>
+                                <div className="overline text-[9px]">In-Flight</div>
+                                <div className="font-serif text-3xl text-mpca-oxblood mt-1 leading-none">{claimsStats.pending_claims}</div>
+                                <div className="text-[10px] text-mpca-gray-dark mt-1">{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(claimsStats.amount_in_flight_inr)}</div>
+                            </div>
+                            <div>
+                                <div className="overline text-[9px]">Disbursed</div>
+                                <div className="font-serif text-3xl text-mpca-gold mt-1 leading-none">{claimsStats.disbursed_claims}</div>
+                                <div className="text-[10px] text-mpca-gray-dark mt-1">{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(claimsStats.amount_disbursed_inr)}</div>
+                            </div>
+                        </div>
+                        <div className="md:text-right">
+                            <Link to="/claims" className="btn-heritage-primary" data-testid="goto-claims">
+                                Grant Register <ChevronRight size={14} />
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Phase III tile band — Bank balance */}
             <div className="bulletin-card p-8 mb-16 bg-gradient-to-br from-mpca-green-dark to-mpca-wood-dark text-mpca-ivory relative overflow-hidden" data-testid="bank-balance-card">

@@ -22,6 +22,7 @@ import {
 const PRIMARY_NAV = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/org", label: "Org Structure", icon: Building2 },
+    { to: "/claims", label: "Grant Claims", icon: HandCoins },
     { to: "/members", label: "Membership Register", icon: Users },
     { to: "/meetings", label: "AGM & Meetings", icon: Calendar },
     { to: "/elections", label: "Elections", icon: Vote },
@@ -32,7 +33,6 @@ const PRIMARY_NAV = [
 ];
 
 const FUTURE_NAV = [
-    { label: "Grant Workflow", icon: HandCoins, phase: "III.5" },
     { label: "Player Module (M1)", icon: Trophy, phase: "IV" },
     { label: "Tournament Module (M2)", icon: Trophy, phase: "IV" },
     { label: "Grievance Redressal", icon: AlertTriangle, phase: "IV" },

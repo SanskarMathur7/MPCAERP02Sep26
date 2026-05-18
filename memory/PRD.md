@@ -42,9 +42,49 @@ User preferences (locked):
 | **II** | AGM / Committee Meetings · Elections (electoral officer, tenure, cooling period) · Public Verify endpoint with QR codes on identity cards | ✅ **Complete (Jan 2026)** |
 | **III** | Fees & Subscriptions ledger · Bank Operations · Financial Powers · Public Member Portal with Pay Dues + digital receipt | ✅ **Complete (Jan 2026)** |
 | **III.5** | Indian Cricket UI re-skin · Multi-tenant Org Hierarchy (BCCI + MPCA + 10 Divisions + 54 Districts) · `/api/bodies` endpoints · Org Structure tree view · Body-scoped personas | ✅ **Complete (May 2026)** — 25/25 backend tests pass |
-| **III.6** | District → Division → MPCA Grant Workflow · Per-body budget ledgers · Maker-checker on every transaction · Finance Claim Register · Anti-fragmentation rule | 🔴 P0 NEXT |
+| **III.6** | `body_id` scoping on all collections · Idempotent migration · Claims & Grant Workflow (District → Division → MPCA) · Maker-checker `approval_chain` JSONB · Claims register + new-claim form · Persona-aware action buttons · Dashboard claims band | ✅ **Complete (May 2026)** — 47/47 backend tests pass |
+| **III.7** | Per-body budget ledger · Anti-fragmentation rule · Real cheque/NEFT issue against bank account · Body-scoped queries enforced in middleware | 🔴 P0 NEXT |
 | IV | Player Registration · Grievance Redressal workflow | Backlog |
 | V | Constitution Library (full searchable) · AI Assistant (constitution Q&A, draft notices, summarise minutes) · Analytics | Backlog |
+
+## What's been implemented — Phase III.6 (May 2026) — Body Scoping + Grant Workflow
+
+### Backend (`/app/backend/server.py`)
+- **`body_id` field** added to base models for: Member, Disclosure, Meeting, Election, FeeInvoice, BankAccount, BankTransaction. Defaults to `"MPCA"`.
+- **`migrate_body_ids()`** — idempotent backfill on startup that tags every legacy record (those without a `body_id`) as `MPCA`.
+- **NEW `claims` collection** + models: `Claim`, `ClaimBase`, `ClaimCreate`, `ApprovalStep`, `ClaimAction`.
+- **NEW: maker-checker `approval_chain`** — append-only JSONB list on every claim recording stage / actor_post / actor_name / actor_body_id / decision / notes / timestamp for full audit.
+- **NEW endpoints** (all `/api`):
+  - `GET /api/claims?body_id=&parent_body_id=&status=&fiscal_cycle=` — list with filters
+  - `GET /api/claims/{id}` — fetch single
+  - `POST /api/claims` — create Draft (validates `body_id` exists)
+  - `POST /api/claims/{id}/submit` — District → Division (Draft|Returned → Submitted)
+  - `POST /api/claims/{id}/recommend` — Division → MPCA (Submitted → Division_Recommended)
+  - `POST /api/claims/{id}/sanction` — MPCA Treasurer (Division_Recommended → MPCA_Sanctioned)
+  - `POST /api/claims/{id}/disburse` — MPCA Treasurer (MPCA_Sanctioned → Disbursed)
+  - `POST /api/claims/{id}/reject` — at any non-terminal stage
+  - `POST /api/claims/{id}/return` — send back to originator
+  - `GET /api/claims-stats/summary` — total/pending/disbursed/rejected counts + ₹ in-flight + ₹ disbursed
+- **State-machine guards**: every action validates the current status and returns 400 with a descriptive message if violated (e.g. cannot submit a non-Draft claim, cannot reject a Disbursed claim).
+- **`seed_claims()`** — auto-seeds 4 demo claims: CLM-2025-26-001 (Draft @ Ujjain), -002 (Submitted @ Indore), -003 (Division_Recommended @ Jabalpur Stadium), -004 (Disbursed @ Sehore — full 4-step audit trail).
+- Backend version bumped to **3.6.0**.
+
+### Frontend
+- **NEW route**: `/claims` — `Claims.jsx` — register with 4 stat tiles (Total/Pending/Disbursed/Rejected), 8 filter tabs including dynamic "My Queue" that adapts per persona (District→originated; Division→awaiting recommendation; State→awaiting MPCA action), and a detail drawer showing the full approval timeline.
+- **Persona-aware action buttons** — each claim row's drawer surfaces only the actions the current persona can perform per the state machine (e.g. only MPCA Treasurer sees "Sanction" / "Disburse"; only the parent Division Sec sees "Recommend"; only the originating District Sec sees "Submit" for Drafts).
+- **NEW route**: `/claims/new` — `ClaimNew.jsx` — form for District/State personas to draft a claim with category selector (5 categories: Annual Grant / Tournament / Infrastructure / Honorarium / Special Sanction), amount, cycle.
+- **Action dialog modal** — every workflow action opens a confirmation dialog capturing optional notes for the audit trail.
+- **AppLayout**: "Grant Claims" promoted to PRIMARY_NAV with HandCoins icon. Removed from Roadmap section.
+- **Dashboard**: New "Grant Workflow" band showing claims counts + ₹ in-flight + ₹ disbursed + CTA to register.
+
+### Testing (Phase III.6)
+- Backend: **47/47 pytest tests pass · 100% · zero issues** (`/app/test_reports/iteration_7.json`). Covered: version probe, body_id presence across all 7 collections, claims CRUD, filters (body_id / parent_body_id / status / fiscal_cycle), stats aggregation, full happy-path lifecycle, all guards, return-and-resubmit, reject at 3 stages, full Phase I-III.5 regression.
+- Frontend: Smoke-tested visually — claims list, persona-aware action buttons, full audit trail drawer all render correctly.
+
+### Demo Workflow (suggested click-through)
+1. **As District Secretary (Anil Sharma · Ujjain)**: open `/claims` → see CLM-2025-26-001 (Draft) → click → **Submit to Division**.
+2. **Switch persona to Division Secretary (Vikram Patil · Indore)** *(currently demo personas don't include Ujjain Div Sec; use the Indore one for demo)* → switch logical scope — claim now lives at Division.
+3. **As MPCA Treasurer (Meera Verma)**: switch persona → claim shows in "Awaiting MPCA Action" → **Sanction** → **Disburse** → claim now in Disbursed bucket; ₹ disbursed total updates.
 
 ## What's been implemented — Phase III.5 (May 2026) — Re-Architecture
 
@@ -176,13 +216,13 @@ The user reviewed every tab of the reference plan and identified that the existi
 
 ## Next Action Items (P0 → P2)
 
-### 🔴 P0 — Phase III.6 (Finance & Grant Workflow)
-1. Add `body_id` to every existing record (members, fees, meetings, bank, etc.). Default existing rows to `MPCA`. Scope all read queries by persona's body.
-2. **Grant Request Workflow** — `claims` collection with stages: District submits → Division Sec recommends → MPCA Treasurer sanctions → MC Resolution → Disbursement. `approval_chain` JSONB on every record.
-3. **Per-body budget ledger** — annual grant budget + actual spend visualisation.
-4. **Anti-fragmentation rule** — block multiple sub-threshold claims that cumulatively exceed sanctioning authority.
+### 🔴 P0 — Phase III.7 (Body-scoped queries + Budget Ledger)
+1. **Body-scoped reads** — middleware that injects the persona's `body_id` into every list query. State personas see all; Division sees own + descendants; District sees own.
+2. **Per-body budget ledger** — `body_budgets` collection with annual_budget / committed / disbursed / available; reconciled against `claims.amount_inr` and `bank_txns`.
+3. **Anti-fragmentation rule** — block creation of multiple sub-threshold claims that cumulatively exceed sanctioning authority within a window.
+4. **Auto bank-debit on Disburse** — disbursement should optionally generate a `BankTransaction` against MPCA General Account for ATG (auto-traceability).
 
-### 🟠 P1 — Phase IV
+### 🟠 P1 — Phase IV (Cricket Operations)
 5. **Player Management (M1)** — registration portal, Local-MP / Out-of-MP / Guest eligibility validator, unique Player ID generator (`yr/dd-mm-yy/serial`), transfer NOC workflow, BCCI sync stub.
 6. **Tournament Management (M2)** — seed all 10 inter-divisional tournaments (MY Memorial, Madhavrao Scindia, JN Bhaya, Parmanandbhai Patel, Hiralal Gaekwad, SM Khan, MM Jagdale, AW Kanmadikar, JS Anand) + 5 championship trophies. Squad assignment + placard generation + fixture/results module.
 7. **Match Officials (M3)** + **Team Officials (M4)** registries with renewal cycles.

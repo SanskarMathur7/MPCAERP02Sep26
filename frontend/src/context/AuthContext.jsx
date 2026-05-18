@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 const AuthContext = createContext(null);
 
+// Personas now carry body-scope info: body_type (State/Division/District),
+// body_code (MPCA / IND / UJN-MN etc.), and accent for visual differentiation.
 export const PERSONAS = [
     {
         id: "president",
@@ -9,49 +11,64 @@ export const PERSONAS = [
         honorific: "Shri",
         name: "Abhilash Khandekar",
         post: "President, MPCA",
-        scope: "Full executive access — chairs AGM & Committee",
+        scope: "Full executive — sees all divisions & districts",
         privileges: ["Read All", "Approve", "Chair Meetings", "Sign Resolutions"],
-        accent: "green",
+        accent: "navy",
+        body_type: "State",
+        body_code: "MPCA",
+        body_name: "MPCA Headquarters",
     },
     {
         id: "secretary",
         title: "Hon. Secretary",
         honorific: "Shri",
         name: "Sanjay Jagdale",
-        post: "Honorary Secretary",
-        scope: "Membership, AGM convening, correspondence, register custody",
+        post: "Honorary Secretary, MPCA",
+        scope: "Membership, AGM, register custody — state-wide",
         privileges: ["Manage Members", "Convene Meetings", "Issue Notices"],
-        accent: "oxblood",
+        accent: "saffron",
+        body_type: "State",
+        body_code: "MPCA",
+        body_name: "MPCA Headquarters",
     },
     {
         id: "treasurer",
         title: "Hon. Treasurer",
         honorific: "Smt.",
         name: "Meera Verma",
-        post: "Honorary Treasurer",
-        scope: "Bank operations, fees, subscriptions, audit",
-        privileges: ["Financial Powers", "Fees Ledger", "Bank Signatory"],
-        accent: "brass",
+        post: "Honorary Treasurer, MPCA",
+        scope: "State bank operations, grants, audit",
+        privileges: ["Financial Powers", "Approve Grants", "Bank Signatory"],
+        accent: "marigold",
+        body_type: "State",
+        body_code: "MPCA",
+        body_name: "MPCA Headquarters",
     },
     {
-        id: "committee",
-        title: "Committee Member",
-        honorific: "Capt.",
-        name: "Rajinder Pal Singh",
-        post: "Managing Committee",
-        scope: "Vote in committee, propose resolutions, review reports",
-        privileges: ["Vote", "View Minutes", "Propose"],
-        accent: "wood",
-    },
-    {
-        id: "member",
-        title: "Member",
+        id: "division-secretary",
+        title: "Division Secretary",
         honorific: "Shri",
-        name: "Naveen Joshi",
-        post: "Individual Annual Member",
-        scope: "View profile, pay fees, attend AGM, raise grievances",
-        privileges: ["View Self", "Pay Fees", "Vote at AGM"],
-        accent: "ivory",
+        name: "Vikram Patil",
+        post: "Hon. Secretary, Indore Division",
+        scope: "Indore Division — 8 districts under jurisdiction",
+        privileges: ["Recommend Grants", "Review Districts", "Submit Claims"],
+        accent: "maroon",
+        body_type: "Division",
+        body_code: "DIV-IND",
+        body_name: "Indore Division",
+    },
+    {
+        id: "district-secretary",
+        title: "District Secretary",
+        honorific: "Shri",
+        name: "Anil Sharma",
+        post: "Hon. Secretary, Ujjain District",
+        scope: "Ujjain District — submits claims to Indore Division",
+        privileges: ["Submit Claims", "Manage Local Players", "Sign Receipts"],
+        accent: "navy-light",
+        body_type: "District",
+        body_code: "DIST-UJJA-UJN",
+        body_name: "Ujjain District",
     },
     {
         id: "public",
@@ -61,7 +78,10 @@ export const PERSONAS = [
         post: "Unauthenticated Public",
         scope: "View public disclosures, AGM notices & audited accounts",
         privileges: ["View Disclosures"],
-        accent: "parchment",
+        accent: "cream",
+        body_type: "Public",
+        body_code: null,
+        body_name: null,
     },
 ];
 
@@ -73,7 +93,7 @@ export const AuthProvider = ({ children }) => {
         if (stored) {
             try {
                 setPersona(JSON.parse(stored));
-            } catch (_) {}
+            } catch (_) { /* ignore */ }
         }
     }, []);
 

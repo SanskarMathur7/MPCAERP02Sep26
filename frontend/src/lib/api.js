@@ -165,3 +165,21 @@ export const fetchMemberProfile = async (uid) => {
     const { data } = await api.get(`/member-profile/${uid}`);
     return data;
 };
+
+// ---------- Phase III.5: Org Structure (Multi-Tenant) ----------
+export const fetchBodies = async (params = {}) => {
+    const { data } = await api.get("/bodies", { params });
+    return data;
+};
+export const fetchBodiesTree = async () => {
+    const { data } = await api.get("/bodies/tree");
+    return data;
+};
+export const fetchBody = async (code) => {
+    const { data } = await api.get(`/bodies/${code}`);
+    return data;
+};
+export const fetchBodySummary = async (code) => {
+    const { data } = await api.get(`/bodies/${code}/summary`);
+    return data;
+};

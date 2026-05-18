@@ -2,11 +2,11 @@ import { Link } from "react-router-dom";
 import { ChevronRight, ScrollText, Users, Vote, Landmark, Sparkles } from "lucide-react";
 
 const PILLARS = [
-    { icon: Users, label: "Membership Register", note: "Individual · Institutional · Honorary" },
-    { icon: ScrollText, label: "Constitution & Disclosures", note: "Annexed & Auditable" },
-    { icon: Vote, label: "AGM, Committee & Elections", note: "Quorum · Tenure · Cooling Period" },
-    { icon: Landmark, label: "Financial Powers & Audit", note: "Bank · Subscriptions · Sanctions" },
-    { icon: Sparkles, label: "AI Assistant (Roadmap)", note: "Constitution Q&A · Drafting" },
+    { icon: Users, label: "Membership & Players", note: "Register · Eligibility · BCCI sync" },
+    { icon: ScrollText, label: "Constitution & Disclosures", note: "Article-wise · Auditable" },
+    { icon: Vote, label: "AGM · Committee · Elections", note: "Quorum · Tenure · Cooling Period" },
+    { icon: Landmark, label: "Finance & Grants", note: "District → Division → MPCA flow" },
+    { icon: Sparkles, label: "Player Module & AI (Roadmap)", note: "Eligibility · OCR · Compliance" },
 ];
 
 const MPCAEmblem = ({ className = "" }) => (
@@ -47,7 +47,7 @@ const Landing = () => {
                     </div>
                 </div>
                 <Link to="/login" data-testid="header-enter-btn" className="btn-heritage-secondary !text-mpca-gold-light !border-mpca-brass/60 hover:!bg-white/5">
-                    Enter Pavilion
+                    Sign In
                     <ChevronRight size={14} strokeWidth={1.5} />
                 </Link>
             </header>
@@ -76,41 +76,41 @@ const Landing = () => {
                 <div className="relative z-10 max-w-7xl mx-auto px-8 md:px-16 py-32 grid lg:grid-cols-12 gap-12 items-center w-full">
                     <div className="lg:col-span-7 stately-reveal text-mpca-ivory">
                         <div className="overline mb-6 !text-mpca-gold-light">
-                            Volumen I · System of Records
+                            BCCI Affiliated · Est. 1956
                         </div>
                         <h1 className="font-serif text-5xl md:text-6xl lg:text-7xl leading-[1.05] text-mpca-ivory">
-                            A Pavilion,<br />
-                            <em className="text-mpca-gold-light not-italic font-light">re-imagined</em><br />
-                            for the digital age.
+                            From <em className="text-mpca-oxblood not-italic font-medium">Holkar</em><br />
+                            to every <em className="text-mpca-gold-light not-italic font-medium">maidan</em><br />
+                            of Madhya Pradesh.
                         </h1>
-                        <p className="mt-8 max-w-xl text-mpca-ivory/80 text-lg leading-relaxed font-light">
-                            The Enterprise Resource Planning system of the Madhya Pradesh Cricket
-                            Association — custodian of the constitution, the register, the ledger,
-                            and the proceedings of seven decades of cricket in the heart of India.
+                        <p className="mt-8 max-w-xl text-mpca-ivory/85 text-lg leading-relaxed font-light">
+                            The unified ERP of the Madhya Pradesh Cricket Association — BCCI HQ,
+                            10 divisions, 54 districts — one ledger, one register, one source of truth
+                            for selections, finances, tournaments, and compliance.
                         </p>
 
                         <div className="mt-12 flex flex-wrap items-center gap-4">
-                            <Link to="/login" data-testid="hero-enter-btn" className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark hover:!bg-mpca-gold hover:!border-mpca-gold-light">
-                                Enter the Pavilion
+                            <Link to="/login" data-testid="hero-enter-btn" className="btn-heritage-primary">
+                                Sign In
                                 <ChevronRight size={14} strokeWidth={1.5} />
                             </Link>
-                            <Link to="/disclosures-public" data-testid="hero-disclosures-btn" className="btn-heritage-secondary !text-mpca-gold-light !border-mpca-brass/60">
+                            <Link to="/disclosures-public" data-testid="hero-disclosures-btn" className="btn-heritage-secondary !text-mpca-gold-light !border-mpca-brass/60 hover:!bg-white/5">
                                 Public Disclosures
                             </Link>
                         </div>
 
                         <div className="mt-16 grid grid-cols-3 gap-8 max-w-xl">
                             <div>
-                                <div className="font-serif text-3xl text-mpca-gold-light">68+</div>
-                                <div className="overline text-[9px] mt-2 !text-mpca-ivory/60">Years of Service</div>
+                                <div className="font-serif text-3xl text-mpca-oxblood">10</div>
+                                <div className="overline text-[9px] mt-2 !text-mpca-ivory/60 !text-mpca-gold-light">Divisions</div>
                             </div>
                             <div>
-                                <div className="font-serif text-3xl text-mpca-gold-light">16</div>
-                                <div className="overline text-[9px] mt-2 !text-mpca-ivory/60">Governance Modules</div>
+                                <div className="font-serif text-3xl text-mpca-gold-light">54</div>
+                                <div className="overline text-[9px] mt-2 !text-mpca-ivory/60 !text-mpca-gold-light">Districts</div>
                             </div>
                             <div>
-                                <div className="font-serif text-3xl text-mpca-gold-light">∞</div>
-                                <div className="overline text-[9px] mt-2 !text-mpca-ivory/60">Auditable Records</div>
+                                <div className="font-serif text-3xl text-mpca-ivory">10</div>
+                                <div className="overline text-[9px] mt-2 !text-mpca-ivory/60 !text-mpca-gold-light">Core Modules</div>
                             </div>
                         </div>
                     </div>
@@ -135,12 +135,12 @@ const Landing = () => {
                                 <div className="mt-1 font-serif text-2xl text-mpca-ivory">
                                     Cricket Association
                                 </div>
-                                <div className="crest-divider w-full mt-5 mb-5" style={{ background: "linear-gradient(to right, transparent, rgba(197,160,89,0.6), transparent)" }} />
-                                <div className="text-xs italic text-mpca-ivory/70 font-serif tracking-wider">
-                                    "Ludus Cum Honore"
+                                <div className="crest-divider w-full mt-5 mb-5" />
+                                <div className="text-xs italic text-mpca-ivory/85 font-serif tracking-wider">
+                                    "खेल भावना से, राष्ट्र सम्मान से"
                                 </div>
-                                <div className="overline text-[9px] mt-2 !text-mpca-gold-light/60">
-                                    The Game · With Honour
+                                <div className="overline text-[9px] mt-2 !text-mpca-gold-light/70">
+                                    With Sport · With Honour
                                 </div>
                             </div>
                         </div>
@@ -191,12 +191,12 @@ const Landing = () => {
                     }}
                 />
                 <div className="relative max-w-4xl mx-auto text-center">
-                    <span className="font-serif text-7xl text-mpca-brass leading-none">“</span>
+                    <span className="font-serif text-7xl text-mpca-oxblood leading-none">"</span>
                     <blockquote className="font-serif text-2xl md:text-3xl italic leading-relaxed text-mpca-ivory mt-2">
-                        Cricket is a game played in the mind. The pavilion remembers every
-                        innings, every decision, every signature. So shall this ledger.
+                        From the maidans of every district to the floodlights at Holkar Stadium —
+                        every signature, every selection, every rupee, accounted for.
                     </blockquote>
-                    <div className="overline mt-8 !text-mpca-gold-light/80">
+                    <div className="overline mt-8 !text-mpca-gold-light/90">
                         — Charter of the MPCA ERP
                     </div>
                 </div>

@@ -308,6 +308,39 @@ class BankTransactionCreate(BankTransactionBase):
     pass
 
 
+# ---------------- Phase III.5: Org Hierarchy (Multi-Tenant) ----------------
+# Models the BCCI → MPCA HQ → 10 Divisions → 52 Districts tree.
+# Every existing collection (members, fees, meetings, bank, etc.) can be scoped
+# by `body_id` for hierarchical RBAC. Existing data — if unscoped — implicitly
+# belongs to MPCA HQ.
+
+BodyType = Literal["BCCI", "State", "Division", "District", "Club"]
+
+
+class BodyBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    code: str                                  # e.g. "MPCA", "DIV-IND", "DIST-UJN"
+    name: str                                  # e.g. "Indore Division"
+    body_type: BodyType
+    parent_code: Optional[str] = None          # e.g. "MPCA" for divisions
+    state: str = "Madhya Pradesh"
+    seat: Optional[str] = None                 # HQ city
+    founded_year: Optional[int] = None
+    annual_grant_inr: float = 0.0              # standard annual grant they receive
+    secretary_name: Optional[str] = None
+    treasurer_name: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class Body(BodyBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class BodyCreate(BodyBase):
+    pass
+
+
 # ---------------- Helpers ----------------
 
 CATEGORY_PREFIX = {
@@ -873,9 +906,84 @@ async def member_profile(uid: str):
     }
 
 
+# ---------------- Routes: Org Structure (Multi-Tenant) ----------------
+
+
+@api_router.get("/bodies", response_model=List[Body])
+async def list_bodies(body_type: Optional[BodyType] = None, parent_code: Optional[str] = None):
+    query: dict = {}
+    if body_type:
+        query["body_type"] = body_type
+    if parent_code:
+        query["parent_code"] = parent_code
+    docs = await db.bodies.find(query, {"_id": 0}).sort("code", 1).to_list(200)
+    return docs
+
+
+@api_router.get("/bodies/tree")
+async def bodies_tree():
+    """Returns the entire MPCA org tree shaped for UI consumption."""
+    docs = await db.bodies.find({}, {"_id": 0}).sort("code", 1).to_list(200)
+    by_parent: dict = {}
+    for d in docs:
+        by_parent.setdefault(d.get("parent_code") or "ROOT", []).append(d)
+
+    def build(parent_code: str):
+        children = by_parent.get(parent_code, [])
+        return [{**c, "children": build(c["code"])} for c in children]
+
+    return build("ROOT")
+
+
+@api_router.get("/bodies/{code}", response_model=Body)
+async def get_body(code: str):
+    doc = await db.bodies.find_one({"code": code}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Body not found")
+    return doc
+
+
+@api_router.get("/bodies/{code}/summary")
+async def body_summary(code: str):
+    """Aggregates a body's footprint: children count, district count under it, total grant budget, etc."""
+    doc = await db.bodies.find_one({"code": code}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Body not found")
+
+    direct_children = await db.bodies.find({"parent_code": code}, {"_id": 0}).to_list(200)
+    # Descendant district count for divisions
+    district_count = 0
+    if doc["body_type"] == "Division":
+        district_count = await db.bodies.count_documents({"parent_code": code, "body_type": "District"})
+    elif doc["body_type"] == "State":
+        district_count = await db.bodies.count_documents({"body_type": "District"})
+    division_count = 0
+    if doc["body_type"] == "State":
+        division_count = await db.bodies.count_documents({"body_type": "Division"})
+
+    total_annual_grant = sum(c.get("annual_grant_inr", 0) for c in direct_children)
+
+    return {
+        "body": doc,
+        "direct_children_count": len(direct_children),
+        "division_count": division_count,
+        "district_count": district_count,
+        "total_annual_grant_inr_to_children": total_annual_grant,
+    }
+
+
+@api_router.post("/bodies", response_model=Body)
+async def create_body(payload: BodyCreate):
+    if await db.bodies.find_one({"code": payload.code}):
+        raise HTTPException(400, f"Body with code {payload.code} already exists")
+    body = Body(**payload.model_dump())
+    await db.bodies.insert_one(body.model_dump())
+    return body
+
+
 @api_router.get("/")
 async def root():
-    return {"app": "MPCA ERP", "version": "3.0.0", "status": "ok"}
+    return {"app": "MPCA ERP", "version": "3.5.0", "status": "ok"}
 
 
 app.include_router(api_router)
@@ -1164,7 +1272,78 @@ SEED_TXNS_TEMPLATE = [
 ]
 
 
+async def seed_bodies():
+    """Seed the BCCI → MPCA HQ → 10 Divisions → districts hierarchy."""
+    if await db.bodies.count_documents({}) > 0:
+        return
+    logger.info("Seeding org hierarchy (BCCI, MPCA, 10 divisions, districts)…")
+
+    bodies: List[dict] = [
+        # ─── Apex ───
+        {"code": "BCCI", "name": "Board of Control for Cricket in India", "body_type": "BCCI",
+         "parent_code": None, "state": "All India", "seat": "Mumbai", "founded_year": 1928,
+         "annual_grant_inr": 0.0},
+        {"code": "MPCA", "name": "Madhya Pradesh Cricket Association",
+         "body_type": "State", "parent_code": "BCCI", "seat": "Indore", "founded_year": 1956,
+         "annual_grant_inr": 0.0,
+         "secretary_name": "Shri Sanjay Jagdale", "treasurer_name": "Smt. Meera Verma"},
+
+        # ─── 10 Divisions (per MPCA setup diagram) ───
+        # Each Division gets an annual grant of ₹30,000 from MPCA.
+        {"code": "DIV-JBP", "name": "Jabalpur Division",      "body_type": "Division", "parent_code": "MPCA", "seat": "Jabalpur",     "annual_grant_inr": 30000.0},
+        {"code": "DIV-RWA", "name": "Rewa Division",          "body_type": "Division", "parent_code": "MPCA", "seat": "Rewa",         "annual_grant_inr": 30000.0},
+        {"code": "DIV-SHD", "name": "Shahdol Division",       "body_type": "Division", "parent_code": "MPCA", "seat": "Shahdol",      "annual_grant_inr": 30000.0},
+        {"code": "DIV-BPL", "name": "Bhopal Division",        "body_type": "Division", "parent_code": "MPCA", "seat": "Bhopal",       "annual_grant_inr": 30000.0},
+        {"code": "DIV-NMD", "name": "Narmadapuram Division",  "body_type": "Division", "parent_code": "MPCA", "seat": "Narmadapuram", "annual_grant_inr": 30000.0},
+        {"code": "DIV-SAG", "name": "Sagar Division",         "body_type": "Division", "parent_code": "MPCA", "seat": "Sagar",        "annual_grant_inr": 30000.0},
+        {"code": "DIV-UJN", "name": "Ujjain Division",        "body_type": "Division", "parent_code": "MPCA", "seat": "Ujjain",       "annual_grant_inr": 30000.0,
+         "secretary_name": "Shri Vikram Patil"},
+        {"code": "DIV-CHM", "name": "Chambal Division",       "body_type": "Division", "parent_code": "MPCA", "seat": "Morena",       "annual_grant_inr": 30000.0},
+        {"code": "DIV-GWL", "name": "Gwalior Division",       "body_type": "Division", "parent_code": "MPCA", "seat": "Gwalior",      "annual_grant_inr": 30000.0},
+        {"code": "DIV-IND", "name": "Indore Division",        "body_type": "Division", "parent_code": "MPCA", "seat": "Indore",       "annual_grant_inr": 30000.0,
+         "secretary_name": "Shri Vikram Patil"},
+    ]
+
+    # ─── Districts (52 total — per MPCA plan v2.0) ───
+    # Each district receives ₹1,10,000 annual grant via its parent Division.
+    district_map = {
+        "DIV-JBP": ["Jabalpur", "Katni", "Narsinghpur", "Chhindwara", "Seoni", "Mandla", "Dindori", "Balaghat"],
+        "DIV-RWA": ["Rewa", "Satna", "Sidhi", "Singrauli", "Maihar", "Mauganj"],
+        "DIV-SHD": ["Shahdol", "Anuppur", "Umaria"],
+        "DIV-BPL": ["Bhopal", "Sehore", "Raisen", "Rajgarh", "Vidisha"],
+        "DIV-NMD": ["Narmadapuram", "Harda", "Betul"],
+        "DIV-SAG": ["Sagar", "Damoh", "Panna", "Tikamgarh", "Chhatarpur", "Niwari"],
+        "DIV-UJN": ["Ujjain", "Dewas", "Shajapur", "Agar Malwa", "Mandsaur", "Neemuch", "Ratlam"],
+        "DIV-CHM": ["Morena", "Bhind", "Sheopur"],
+        "DIV-GWL": ["Gwalior", "Datia", "Shivpuri", "Guna", "Ashoknagar"],
+        "DIV-IND": ["Indore", "Dhar", "Khargone", "Khandwa", "Burhanpur", "Barwani", "Alirajpur", "Jhabua"],
+    }
+
+    for div_code, districts in district_map.items():
+        for dname in districts:
+            # 4-char prefix to avoid collisions like Khargone/Khandwa or Gwalior/Guna
+            slug = ''.join(ch for ch in dname.upper() if ch.isalpha())[:4]
+            # Special-case Ujjain for the demo persona
+            sec_name = "Shri Anil Sharma" if dname == "Ujjain" else None
+            bodies.append({
+                "code": f"DIST-{slug}-{div_code[-3:]}",
+                "name": f"{dname} District Cricket Association",
+                "body_type": "District",
+                "parent_code": div_code,
+                "seat": dname,
+                "annual_grant_inr": 110000.0,
+                "secretary_name": sec_name,
+            })
+
+    for b in bodies:
+        body = Body(**b)
+        await db.bodies.insert_one(body.model_dump())
+
+    logger.info(f"Seeded {len(bodies)} bodies (BCCI, MPCA, 10 divisions, {sum(len(v) for v in district_map.values())} districts).")
+
+
 async def seed_data():
+    await seed_bodies()
     if await db.members.count_documents({}) == 0:
         logger.info("Seeding members…")
         for m in SEED_MEMBERS:
@@ -1198,7 +1377,7 @@ async def seed_data():
                         election_id=elec.id,
                         member_uid=m["uid"],
                         member_name=m["name"],
-                        manifesto=f"Pledged to strengthen the financial discipline and transparent disclosures of the Association.",
+                        manifesto="Pledged to strengthen the financial discipline and transparent disclosures of the Association.",
                         status="Accepted",
                     )
                     await db.candidates.insert_one(c.model_dump())

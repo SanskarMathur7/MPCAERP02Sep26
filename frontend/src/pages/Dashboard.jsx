@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchDashboardStats, fetchMembers, fetchDisclosures } from "@/lib/api";
+import { fetchDashboardStats, fetchMembers, fetchDisclosures, fetchBodiesTree } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Users, FileText, Calendar, Receipt, AlertTriangle, TrendingUp, ChevronRight, Trophy, Landmark, IndianRupee } from "lucide-react";
+import { Users, FileText, Calendar, Receipt, AlertTriangle, TrendingUp, ChevronRight, Trophy, Landmark, Building2, MapPin } from "lucide-react";
 
-const StatTile = ({ label, value, sub, icon: Icon, accent = "green" }) => {
+const StatTile = ({ label, value, sub, icon: Icon, accent = "green", phase = "Live" }) => {
     const colorMap = {
         green: "text-mpca-green-dark",
         oxblood: "text-mpca-oxblood",
@@ -15,7 +15,7 @@ const StatTile = ({ label, value, sub, icon: Icon, accent = "green" }) => {
         <div className="bulletin-card p-7 relative" data-testid={`stat-${label.toLowerCase().replace(/\s+/g, "-")}`}>
             <div className="flex items-start justify-between mb-6">
                 <Icon className={colorMap[accent]} size={22} strokeWidth={1.25} />
-                <div className="overline">Phase 1</div>
+                <div className="overline">{phase}</div>
             </div>
             <div className="font-serif text-5xl text-mpca-green-dark leading-none">{value}</div>
             <div className="mt-3 text-sm tracking-wide text-mpca-charcoal">{label}</div>
@@ -29,19 +29,31 @@ const Dashboard = () => {
     const [stats, setStats] = useState(null);
     const [recentMembers, setRecentMembers] = useState([]);
     const [recentDisclosures, setRecentDisclosures] = useState([]);
+    const [orgCounts, setOrgCounts] = useState({ divisions: 0, districts: 0 });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         (async () => {
             try {
-                const [s, m, d] = await Promise.all([
+                const [s, m, d, tree] = await Promise.all([
                     fetchDashboardStats(),
                     fetchMembers(),
                     fetchDisclosures(),
+                    fetchBodiesTree(),
                 ]);
                 setStats(s);
                 setRecentMembers(m.slice(0, 5));
                 setRecentDisclosures(d.slice(0, 4));
+                let divisions = 0, districts = 0;
+                const walk = (nodes) => {
+                    for (const n of nodes) {
+                        if (n.body_type === "Division") divisions += 1;
+                        if (n.body_type === "District") districts += 1;
+                        if (n.children) walk(n.children);
+                    }
+                };
+                walk(tree);
+                setOrgCounts({ divisions, districts });
             } catch (e) {
                 console.error(e);
             } finally {
@@ -63,14 +75,20 @@ const Dashboard = () => {
             {/* Header */}
             <div className="flex flex-wrap items-end justify-between gap-6 mb-12">
                 <div>
-                    <div className="overline">Pavilion · Dashboard</div>
+                    <div className="overline">Command Centre · Dashboard</div>
                     <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
                         Good day, {persona?.honorific} {persona?.name?.split(" ").slice(-1)}.
                     </h1>
                     <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        A glance at the register, the meetings, and the obligations of the
-                        Association. The full ledger awaits below.
+                        A glance across the MPCA hierarchy — the register, the meetings,
+                        the obligations, and the divisional footprint. The full ledger awaits below.
                     </p>
+                    {persona?.body_name && persona?.body_type !== "State" && (
+                        <div className="mt-4 inline-flex items-center gap-2 text-[10px] tracking-[0.2em] uppercase px-3 py-1.5 border border-mpca-oxblood/40 bg-mpca-oxblood/10 text-mpca-oxblood">
+                            <span className="w-1.5 h-1.5 rounded-full bg-mpca-oxblood" />
+                            Viewing as · {persona.body_type} · {persona.body_name}
+                        </div>
+                    )}
                 </div>
                 <div className="text-right">
                     <div className="overline">As On</div>
@@ -94,6 +112,7 @@ const Dashboard = () => {
                     sub={`Active: ${stats.active_members} · Pending: ${stats.pending_members}`}
                     icon={Users}
                     accent="green"
+                    phase="Register · Live"
                 />
                 <StatTile
                     label="Upcoming Meetings"
@@ -101,6 +120,7 @@ const Dashboard = () => {
                     sub="AGM · Committee · Sub-Committee"
                     icon={Calendar}
                     accent="oxblood"
+                    phase="Meetings · Live"
                 />
                 <StatTile
                     label="Public Disclosures"
@@ -108,6 +128,7 @@ const Dashboard = () => {
                     sub="AGM notices · Minutes · Audits"
                     icon={FileText}
                     accent="brass"
+                    phase="Disclosures · Live"
                 />
                 <StatTile
                     label="Fee Collection"
@@ -115,7 +136,31 @@ const Dashboard = () => {
                     sub={`${stats.paid_invoices ?? 0}/${stats.total_invoices ?? 0} invoices paid`}
                     icon={Receipt}
                     accent="wood"
+                    phase="Finance · Live"
                 />
+            </div>
+
+            {/* Hierarchy band — Phase III.5 */}
+            <div className="bulletin-card p-8 mb-16 bg-gradient-to-br from-mpca-burgundy-dark to-mpca-wood-dark text-mpca-ivory relative overflow-hidden" data-testid="org-band">
+                <div className="grid md:grid-cols-3 gap-8 items-center relative">
+                    <div className="md:col-span-2">
+                        <Building2 className="text-mpca-gold-light mb-3" size={28} strokeWidth={1.25} />
+                        <div className="overline !text-mpca-gold-light">Organisational Footprint</div>
+                        <div className="font-serif text-4xl md:text-5xl text-mpca-ivory mt-3 leading-tight">
+                            <span className="text-mpca-gold-light">{orgCounts.divisions}</span> Divisions ·
+                            <span className="text-mpca-gold-light"> {orgCounts.districts}</span> Districts
+                        </div>
+                        <p className="text-mpca-ivory/85 mt-3 text-sm">
+                            From Jabalpur to Indore — every district association onboarded into the
+                            MPCA register, ready for grant routing, AGM quorum, and tournament selection.
+                        </p>
+                    </div>
+                    <div className="md:text-right">
+                        <Link to="/org" className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark" data-testid="goto-org">
+                            View Hierarchy <ChevronRight size={14} />
+                        </Link>
+                    </div>
+                </div>
             </div>
 
             {/* Phase III tile band — Bank balance */}
@@ -298,9 +343,9 @@ const Dashboard = () => {
                 <div className="relative grid md:grid-cols-3 gap-8 items-center">
                     <div className="md:col-span-2">
                         <Trophy className="text-mpca-gold-light mb-4" size={28} strokeWidth={1.25} />
-                        <div className="overline !text-mpca-gold-light">Phases II — V</div>
+                        <div className="overline !text-mpca-gold-light">Roadmap · Phases IV — V</div>
                         <h3 className="font-serif text-3xl md:text-4xl mt-3 leading-tight text-mpca-ivory">
-                            AGM, Elections, Finance, Player Registration and the AI Assistant —
+                            Player Module · Tournament Calendar · Grant Workflow · AI Assistant —
                             <em className="text-mpca-gold-light not-italic"> all forthcoming.</em>
                         </h3>
                     </div>

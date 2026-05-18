@@ -15,24 +15,29 @@ import {
     ChevronRight,
     BookOpen,
     Scale,
+    Building2,
+    HandCoins,
 } from "lucide-react";
 
 const PRIMARY_NAV = [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, phase: 1 },
-    { to: "/members", label: "Membership Register", icon: Users, phase: 1 },
-    { to: "/meetings", label: "AGM & Meetings", icon: Calendar, phase: 2 },
-    { to: "/elections", label: "Elections", icon: Vote, phase: 2 },
-    { to: "/fees", label: "Fees & Subscriptions", icon: Receipt, phase: 3 },
-    { to: "/bank", label: "Bank Operations", icon: Landmark, phase: 3 },
-    { to: "/financial-powers", label: "Financial Powers", icon: Scale, phase: 3 },
-    { to: "/disclosures", label: "Public Disclosures", icon: FileText, phase: 1 },
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/org", label: "Org Structure", icon: Building2 },
+    { to: "/members", label: "Membership Register", icon: Users },
+    { to: "/meetings", label: "AGM & Meetings", icon: Calendar },
+    { to: "/elections", label: "Elections", icon: Vote },
+    { to: "/fees", label: "Fees & Subscriptions", icon: Receipt },
+    { to: "/bank", label: "Bank Operations", icon: Landmark },
+    { to: "/financial-powers", label: "Financial Powers", icon: Scale },
+    { to: "/disclosures", label: "Disclosures", icon: FileText },
 ];
 
 const FUTURE_NAV = [
-    { label: "Player Registration", icon: Trophy, phase: 4 },
-    { label: "Grievance Redressal", icon: AlertTriangle, phase: 4 },
-    { label: "Constitution Library", icon: BookOpen, phase: 5 },
-    { label: "AI Assistant", icon: Sparkles, phase: 5 },
+    { label: "Grant Workflow", icon: HandCoins, phase: "III.5" },
+    { label: "Player Module (M1)", icon: Trophy, phase: "IV" },
+    { label: "Tournament Module (M2)", icon: Trophy, phase: "IV" },
+    { label: "Grievance Redressal", icon: AlertTriangle, phase: "IV" },
+    { label: "Constitution Library", icon: BookOpen, phase: "V" },
+    { label: "AI Assistant", icon: Sparkles, phase: "V" },
 ];
 
 const MPCACrest = ({ className = "" }) => (
@@ -74,39 +79,47 @@ const AppLayout = ({ children }) => {
                 }}
             >
                 {/* Brand */}
-                <div className="px-6 pt-8 pb-6 border-b border-mpca-brass/20">
+                <div className="px-6 pt-8 pb-6 border-b-2 border-mpca-oxblood">
                     <div className="flex items-center gap-3">
                         <MPCACrest className="w-11 h-11 text-mpca-brass" />
                         <div>
                             <div className="font-serif text-xl text-mpca-ivory leading-none">
-                                MPCA
+                                MPCA · ERP
                             </div>
-                            <div className="overline text-[9px] mt-1.5 text-mpca-gold-light/70">
-                                Est. 1956 · BCCI Affiliated
+                            <div className="overline text-[9px] mt-1.5 !text-mpca-gold-light/80">
+                                BCCI Affiliated · Est. 1956
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Persona card */}
+                {/* Persona / Tenant card */}
                 {persona && (
-                    <div className="px-6 py-5 border-b border-mpca-brass/20 bg-black/20">
-                        <div className="overline text-[9px] text-mpca-gold-light/60 mb-2">
+                    <div className="px-6 py-5 border-b border-mpca-brass/20 bg-black/30">
+                        <div className="overline text-[9px] !text-mpca-gold-light/70 mb-2">
                             Signed In As
                         </div>
                         <div className="font-serif text-lg text-mpca-ivory leading-tight">
                             {persona.honorific} {persona.name}
                         </div>
-                        <div className="text-[11px] tracking-wide text-mpca-gold-light/80 mt-1">
+                        <div className="text-[11px] tracking-wide text-mpca-gold-light/85 mt-1">
                             {persona.post}
                         </div>
+                        {persona.body_name && (
+                            <div className="mt-3 flex items-center gap-2">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-mpca-oxblood" />
+                                <span className="text-[10px] tracking-[0.2em] uppercase text-mpca-brass font-semibold">
+                                    {persona.body_type} · {persona.body_name}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {/* Primary nav */}
                 <nav className="flex-1 px-4 py-6 overflow-y-auto">
-                    <div className="overline text-[9px] text-mpca-gold-light/50 mb-3 px-2">
-                        Phases I — III — Live
+                    <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
+                        Live Modules
                     </div>
                     <ul className="space-y-0.5 mb-8">
                         {PRIMARY_NAV.map((item) => (
@@ -129,19 +142,19 @@ const AppLayout = ({ children }) => {
                         ))}
                     </ul>
 
-                    <div className="overline text-[9px] text-mpca-gold-light/50 mb-3 px-2">
-                        Roadmap — Coming Soon
+                    <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
+                        Roadmap
                     </div>
                     <ul className="space-y-0.5">
                         {FUTURE_NAV.map((item) => (
                             <li key={item.label}>
                                 <div
-                                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-mpca-ivory/40 cursor-not-allowed select-none"
+                                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-mpca-ivory/45 cursor-not-allowed select-none"
                                     data-testid={`nav-future-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
                                 >
                                     <item.icon size={16} strokeWidth={1.5} />
                                     <span className="tracking-wide flex-1">{item.label}</span>
-                                    <span className="text-[9px] tracking-[0.2em] uppercase text-mpca-brass/50">
+                                    <span className="text-[9px] tracking-[0.2em] uppercase text-mpca-brass/60 font-semibold">
                                         P{item.phase}
                                     </span>
                                 </div>

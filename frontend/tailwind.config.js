@@ -5,8 +5,8 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                serif: ['"Cormorant Garamond"', '"EB Garamond"', "Georgia", "serif"],
-                sans: ['"Bricolage Grotesque"', "system-ui", "sans-serif"],
+                serif: ['"Fraunces"', '"Cormorant Garamond"', "Georgia", "serif"],
+                sans: ['"Inter"', '"Bricolage Grotesque"', "system-ui", "sans-serif"],
                 mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
             },
             borderRadius: {
@@ -15,20 +15,29 @@ module.exports = {
                 sm: "calc(var(--radius) - 4px)",
             },
             colors: {
-                "mpca-green-dark": "#0F291E",
-                "mpca-green": "#153F2D",
-                "mpca-green-light": "#1E523A",
-                "mpca-oxblood": "#8A2832",
-                "mpca-burgundy-dark": "#4A151E",
-                "mpca-brass": "#C5A059",
-                "mpca-gold": "#D4AF37",
-                "mpca-gold-light": "#EEDC9A",
-                "mpca-ivory": "#FDFBF7",
-                "mpca-parchment": "#F4F1EA",
-                "mpca-wood-dark": "#1C140F",
-                "mpca-charcoal": "#1A1A1A",
-                "mpca-gray-dark": "#4A4A4A",
-                "mpca-gray": "#737373",
+                // ==== Indian Cricket Palette ====
+                // Tokens keep their existing names for backward-compat across the codebase,
+                // but now resolve to BCCI-inspired colours (navy / saffron / marigold / maroon / cream).
+                "mpca-green-dark": "#0a1f3d",     // BCCI Navy (dominant)
+                "mpca-green": "#0e2747",          // Navy-2
+                "mpca-green-light": "#163558",    // Navy-3
+                "mpca-oxblood": "#ff6a13",        // Indian Saffron (high-pop accent)
+                "mpca-burgundy-dark": "#7a1f2c",  // Maroon
+                "mpca-brass": "#e9b949",          // Marigold (primary metallic)
+                "mpca-gold": "#d4a017",           // Marigold-Deep
+                "mpca-gold-light": "#f6d97a",     // Marigold-Light
+                "mpca-ivory": "#fbf7ed",          // Warm Cream
+                "mpca-parchment": "#f1ead7",      // Cream
+                "mpca-wood-dark": "#06122a",      // Ink (deeper than navy, for footers)
+                "mpca-charcoal": "#1a1a1a",
+                "mpca-gray-dark": "#3d4a5f",
+                "mpca-gray": "#6b7a90",
+                // Direct semantic aliases
+                "bcci-navy": "#0a1f3d",
+                "saffron": "#ff6a13",
+                "marigold": "#e9b949",
+                "maroon": "#7a1f2c",
+                "warm-cream": "#fbf7ed",
                 background: "hsl(var(--background))",
                 foreground: "hsl(var(--foreground))",
                 card: {

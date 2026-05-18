@@ -22,6 +22,7 @@ import Bank from "@/pages/Bank";
 import BankAccountDetail from "@/pages/BankAccountDetail";
 import FinancialPowers from "@/pages/FinancialPowers";
 import MemberProfile from "@/pages/MemberProfile";
+import OrgStructure from "@/pages/OrgStructure";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -48,6 +49,7 @@ function App() {
 
                         {/* Protected — Phase 1 */}
                         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+                        <Route path="/org" element={<Protected><OrgStructure /></Protected>} />
                         <Route path="/members" element={<Protected><Members /></Protected>} />
                         <Route path="/members/new" element={<Protected><MemberNew /></Protected>} />
                         <Route path="/members/:id" element={<Protected><MemberDetail /></Protected>} />

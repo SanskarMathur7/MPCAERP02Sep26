@@ -17,12 +17,14 @@ import {
     Scale,
     Building2,
     HandCoins,
+    Coins,
 } from "lucide-react";
 
 const PRIMARY_NAV = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/org", label: "Org Structure", icon: Building2 },
     { to: "/claims", label: "Grant Claims", icon: HandCoins },
+    { to: "/budgets", label: "Budget Ledger", icon: Coins },
     { to: "/members", label: "Membership Register", icon: Users },
     { to: "/meetings", label: "AGM & Meetings", icon: Calendar },
     { to: "/elections", label: "Elections", icon: Vote },

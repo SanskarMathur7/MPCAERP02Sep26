@@ -225,3 +225,21 @@ export const fetchClaimsStats = async () => {
     const { data } = await api.get("/claims-stats/summary");
     return data;
 };
+
+// ---------- Phase III.7: Body Budget Ledger + Thresholds ----------
+export const fetchBudgets = async (params = {}) => {
+    const { data } = await api.get("/budgets", { params });
+    return data;
+};
+export const fetchBudget = async (body_id, fiscal_cycle = "2025-26") => {
+    const { data } = await api.get(`/budgets/${body_id}`, { params: { fiscal_cycle } });
+    return data;
+};
+export const upsertBudget = async (payload) => {
+    const { data } = await api.post("/budgets", payload);
+    return data;
+};
+export const fetchSanctionThresholds = async () => {
+    const { data } = await api.get("/sanction-thresholds");
+    return data;
+};

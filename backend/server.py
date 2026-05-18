@@ -384,6 +384,7 @@ class ClaimBase(BaseModel):
     amount_inr: float
     fiscal_cycle: str = "2025-26"           # e.g. "2025-26"
     supporting_doc_url: Optional[str] = None
+    supporting_doc_urls: List[str] = []     # multi-attachment (Phase III.7)
 
 
 class Claim(ClaimBase):
@@ -393,6 +394,9 @@ class Claim(ClaimBase):
     approval_chain: List[ApprovalStep] = []
     parent_body_id: Optional[str] = None    # division code, computed on submit
     created_by: Optional[str] = None         # actor name at creation
+    # Phase III.7: filled when Disbursed
+    disbursement_txn_id: Optional[str] = None
+    disbursement_account_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -408,6 +412,48 @@ class ClaimAction(BaseModel):
     actor_name: Optional[str] = None
     actor_body_id: str
     notes: Optional[str] = None
+    # 2-signatory support (Phase III.7) — only required when amount > ₹50,000 on Disburse
+    co_signatory_post: Optional[str] = None
+    co_signatory_name: Optional[str] = None
+    # Optional override of the source bank account on Disburse
+    source_account_id: Optional[str] = None
+
+
+# ---------------- Phase III.7: Body Budget Ledger ----------------
+# Tracks per-body annual budget consumption. Reconciled lazily on read against
+# the live `claims` collection so we never have to worry about double-entry drift.
+
+class BodyBudgetBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    body_id: str
+    fiscal_cycle: str
+    annual_budget_inr: float = 0.0
+    note: Optional[str] = None
+
+
+class BodyBudget(BodyBudgetBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class BodyBudgetCreate(BodyBudgetBase):
+    pass
+
+
+# ---------------- Phase III.7: Sanctioning Thresholds (Art. 28(v) excerpt) ----------------
+# Drives the anti-fragmentation rule on POST /api/claims.
+
+SANCTION_THRESHOLDS = [
+    {"post": "District Secretary",  "limit_inr": 25_000,    "scope": "Within district, single sanction"},
+    {"post": "District Committee",  "limit_inr": 200_000,   "scope": "District-level sanction with quorum"},
+    {"post": "Division Secretary",  "limit_inr": 500_000,   "scope": "Division-level sanction"},
+    {"post": "MPCA Hon. Treasurer", "limit_inr": 1_000_000, "scope": "Sole-Treasurer sanction"},
+    {"post": "MPCA Managing Committee", "limit_inr": 5_000_000, "scope": "MC resolution required"},
+    {"post": "MPCA AGM",            "limit_inr": float("inf"), "scope": "AGM approval required"},
+]
+
+# 2-signatory threshold on bank disbursement (per plan's Art. 28(v))
+TWO_SIGNATORY_THRESHOLD_INR = 50_000
 
 
 # ---------------- Helpers ----------------
@@ -1096,11 +1142,49 @@ async def get_claim(claim_id: str):
 
 
 @api_router.post("/claims", response_model=Claim)
-async def create_claim(payload: ClaimCreate):
-    """Drafts a new claim. The submitting body must exist."""
+async def create_claim(payload: ClaimCreate, force: bool = False):
+    """Drafts a new claim. The submitting body must exist.
+
+    Phase III.7: anti-fragmentation guard — if a body raises multiple
+    sub-threshold claims within the same fiscal cycle whose cumulative value
+    crosses the next sanctioning authority's limit, the call is rejected
+    (with 400 and a clear message) unless ?force=true is passed."""
     body = await db.bodies.find_one({"code": payload.body_id}, {"_id": 0})
     if not body:
         raise HTTPException(400, f"Body {payload.body_id} does not exist")
+
+    if not force and payload.amount_inr > 0:
+        cumulative = payload.amount_inr
+        cursor = db.claims.find(
+            {
+                "body_id": payload.body_id,
+                "fiscal_cycle": payload.fiscal_cycle,
+                "status": {"$nin": ["Rejected"]},
+            },
+            {"_id": 0, "amount_inr": 1},
+        )
+        async for c in cursor:
+            cumulative += c.get("amount_inr", 0) or 0
+
+        # Determine the sanctioning authority for the *new individual* claim
+        single_auth = next(
+            (t for t in SANCTION_THRESHOLDS if payload.amount_inr <= t["limit_inr"]),
+            SANCTION_THRESHOLDS[-1],
+        )
+        cum_auth = next(
+            (t for t in SANCTION_THRESHOLDS if cumulative <= t["limit_inr"]),
+            SANCTION_THRESHOLDS[-1],
+        )
+        if cum_auth["post"] != single_auth["post"]:
+            raise HTTPException(
+                400,
+                f"Anti-fragmentation: this claim is individually within "
+                f"{single_auth['post']}'s limit, but the body's cumulative "
+                f"open spend for cycle {payload.fiscal_cycle} would reach "
+                f"₹{cumulative:,.0f} — requiring {cum_auth['post']}'s sanction. "
+                "Either consolidate the claims or pass ?force=true with an MC note.",
+            )
+
     cycle = payload.fiscal_cycle
     claim_no = await _next_claim_no(cycle)
     parent_id = await _resolve_parent_body(payload.body_id)
@@ -1190,21 +1274,82 @@ async def sanction_claim(claim_id: str, action: ClaimAction):
 
 @api_router.post("/claims/{claim_id}/disburse", response_model=Claim)
 async def disburse_claim(claim_id: str, action: ClaimAction):
-    """Marks the sanctioned claim as disbursed (cheque / NEFT released)."""
+    """Marks the sanctioned claim as disbursed and atomically creates a
+    BankTransaction debit against the source account. Two-signatory is
+    enforced for amounts above the threshold (Art. 28(v))."""
     doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
     if doc["status"] != "MPCA_Sanctioned":
         raise HTTPException(400, f"Cannot disburse a claim in status {doc['status']}")
+
+    amount = doc.get("amount_inr") or 0
+    # Two-signatory rule
+    if amount > TWO_SIGNATORY_THRESHOLD_INR and not (action.co_signatory_post and action.co_signatory_name):
+        raise HTTPException(
+            400,
+            f"Disbursement above ₹{TWO_SIGNATORY_THRESHOLD_INR:,} requires two signatories "
+            "(provide co_signatory_post and co_signatory_name).",
+        )
+
+    # Resolve source account — explicit override or the first MPCA General account
+    source_account = None
+    if action.source_account_id:
+        source_account = await db.bank_accounts.find_one(
+            {"id": action.source_account_id}, {"_id": 0},
+        )
+    if not source_account:
+        source_account = await db.bank_accounts.find_one(
+            {"body_id": "MPCA", "name": {"$regex": "General", "$options": "i"}}, {"_id": 0},
+        )
+    if not source_account:
+        raise HTTPException(400, "No MPCA bank account available for disbursement")
+    if (source_account.get("current_balance") or 0) < amount:
+        raise HTTPException(
+            400,
+            f"Insufficient balance in {source_account['name']} "
+            f"(₹{source_account['current_balance']:,.0f}) for disbursement of ₹{amount:,.0f}.",
+        )
+
+    # Append approval step (with co-signatory note if any)
+    notes_with_cosig = (action.notes or "").strip()
+    if action.co_signatory_post and action.co_signatory_name:
+        cosig_line = f"Co-signed by {action.co_signatory_post} · {action.co_signatory_name}."
+        notes_with_cosig = (notes_with_cosig + " " if notes_with_cosig else "") + cosig_line
+
     step = ApprovalStep(
         stage="Disbursed",
         actor_post=action.actor_post,
         actor_name=action.actor_name,
         actor_body_id=action.actor_body_id,
         decision="Disbursed",
-        notes=action.notes,
+        notes=notes_with_cosig or None,
     )
     update = _append_step(doc, step, "Disbursed")
+
+    # Atomically debit the bank account and write a transaction with claim linkage
+    new_balance = round((source_account.get("current_balance") or 0) - amount, 2)
+    txn_ref = f"CLAIM/{doc['claim_no']}"
+    bank_txn = BankTransaction(
+        body_id="MPCA",
+        account_id=source_account["id"],
+        date=datetime.now(timezone.utc).date().isoformat(),
+        txn_type="Debit",
+        amount=amount,
+        narration=f"Grant disbursement — {doc['claim_no']} · {doc['title']} → {doc['body_id']}",
+        reference=txn_ref,
+        approved_by=action.actor_post,
+        balance_after=new_balance,
+    )
+    await db.bank_txns.insert_one(bank_txn.model_dump())
+    await db.bank_accounts.update_one(
+        {"id": source_account["id"]}, {"$set": {"current_balance": new_balance}},
+    )
+
+    # Link the txn id back into the claim for traceability
+    update["disbursement_txn_id"] = bank_txn.id
+    update["disbursement_account_id"] = source_account["id"]
+
     await db.claims.update_one({"id": claim_id}, {"$set": update})
     return await db.claims.find_one({"id": claim_id}, {"_id": 0})
 
@@ -1289,9 +1434,117 @@ async def claims_stats():
     }
 
 
+# ---------------- Routes: Body Budgets & Reconciliation (Phase III.7) ----------------
+
+
+@api_router.get("/budgets")
+async def list_budgets(fiscal_cycle: str = "2025-26", body_id: Optional[str] = None):
+    """Returns every body's budget for a cycle, reconciled live against claims."""
+    bodies_query: dict = {}
+    if body_id:
+        bodies_query["code"] = body_id
+    bodies = await db.bodies.find(bodies_query, {"_id": 0}).sort("code", 1).to_list(200)
+
+    # Pre-load all existing budget overrides
+    budget_docs = await db.body_budgets.find(
+        {"fiscal_cycle": fiscal_cycle}, {"_id": 0},
+    ).to_list(500)
+    budgets_by_body = {b["body_id"]: b for b in budget_docs}
+
+    # Aggregate claim totals once
+    pipeline = [
+        {"$match": {"fiscal_cycle": fiscal_cycle}},
+        {"$group": {
+            "_id": {"body_id": "$body_id", "status": "$status"},
+            "total": {"$sum": "$amount_inr"},
+            "count": {"$sum": 1},
+        }},
+    ]
+    sums: dict = {}
+    async for row in db.claims.aggregate(pipeline):
+        b = row["_id"]["body_id"]
+        st = row["_id"]["status"]
+        sums.setdefault(b, {}).setdefault(st, {"total": 0.0, "count": 0})
+        sums[b][st]["total"] = row["total"]
+        sums[b][st]["count"] = row["count"]
+
+    rows = []
+    for body in bodies:
+        code = body["code"]
+        override = budgets_by_body.get(code)
+        # Default budget = the body's annual_grant_inr (state/BCCI are sources, not consumers)
+        if body["body_type"] in ("BCCI", "State"):
+            default_budget = 0.0
+        else:
+            default_budget = body.get("annual_grant_inr", 0.0)
+        annual = override["annual_budget_inr"] if override else default_budget
+
+        body_sums = sums.get(code, {})
+        committed = sum(
+            (body_sums.get(s, {}).get("total", 0.0))
+            for s in ("Draft", "Submitted", "Division_Recommended", "MPCA_Sanctioned")
+        )
+        disbursed = body_sums.get("Disbursed", {}).get("total", 0.0)
+        rejected = body_sums.get("Rejected", {}).get("total", 0.0)
+        available = round(annual - committed - disbursed, 2)
+        utilisation_pct = round(((committed + disbursed) / annual) * 100, 1) if annual else 0.0
+
+        rows.append({
+            "body_id": code,
+            "body_name": body["name"],
+            "body_type": body["body_type"],
+            "fiscal_cycle": fiscal_cycle,
+            "annual_budget_inr": annual,
+            "committed_inr": round(committed, 2),
+            "disbursed_inr": round(disbursed, 2),
+            "rejected_inr": round(rejected, 2),
+            "available_inr": available,
+            "utilisation_pct": utilisation_pct,
+            "claim_count": sum(v["count"] for v in body_sums.values()),
+        })
+    return rows
+
+
+@api_router.get("/budgets/{body_id}")
+async def get_budget(body_id: str, fiscal_cycle: str = "2025-26"):
+    all_rows = await list_budgets(fiscal_cycle=fiscal_cycle, body_id=body_id)
+    if not all_rows:
+        raise HTTPException(404, f"Body {body_id} not found")
+    return all_rows[0]
+
+
+@api_router.post("/budgets", response_model=BodyBudget)
+async def upsert_budget(payload: BodyBudgetCreate):
+    """Set/override the annual budget for a body × cycle."""
+    body = await db.bodies.find_one({"code": payload.body_id}, {"_id": 0})
+    if not body:
+        raise HTTPException(400, f"Body {payload.body_id} does not exist")
+    existing = await db.body_budgets.find_one(
+        {"body_id": payload.body_id, "fiscal_cycle": payload.fiscal_cycle}, {"_id": 0},
+    )
+    if existing:
+        await db.body_budgets.update_one(
+            {"id": existing["id"]},
+            {"$set": {"annual_budget_inr": payload.annual_budget_inr, "note": payload.note}},
+        )
+        return await db.body_budgets.find_one({"id": existing["id"]}, {"_id": 0})
+    doc = BodyBudget(**payload.model_dump())
+    await db.body_budgets.insert_one(doc.model_dump())
+    return doc
+
+
+@api_router.get("/sanction-thresholds")
+async def sanction_thresholds():
+    """Public reference: Art. 28(v) sanctioning matrix and the 2-signatory threshold."""
+    return {
+        "thresholds": [{"post": t["post"], "limit_inr": t["limit_inr"] if t["limit_inr"] != float("inf") else None, "scope": t["scope"]} for t in SANCTION_THRESHOLDS],
+        "two_signatory_threshold_inr": TWO_SIGNATORY_THRESHOLD_INR,
+    }
+
+
 @api_router.get("/")
 async def root():
-    return {"app": "MPCA ERP", "version": "3.6.0", "status": "ok"}
+    return {"app": "MPCA ERP", "version": "3.7.0", "status": "ok"}
 
 
 app.include_router(api_router)

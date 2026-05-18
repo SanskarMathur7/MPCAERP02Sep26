@@ -1,0 +1,36 @@
+{
+  "summary": "Phase III.7 (Finance close-out) backend testing — 28/28 tests pass. Validated version bump (3.7.0), budget ledger reconciliation (~66 body rows + per-body filter + 404 + idempotent upsert + body-exists guard), sanction thresholds reference (6 rows + 50k two-sig threshold), anti-fragmentation rule (blocks 2nd sub-threshold claim, message mentions force=true, override works), auto bank-debit on disbursement (claim links txn_id/account_id, MPCA General balance decrements by exact amount, BankTransaction with txn_type=Debit and CLAIM/... reference inserted), two-signatory enforcement (>50k without co-sig => 400 'two signatories'; with co-sig => 200 and 'Co-signed by ...' note in chain), insufficient-balance guard via TEST bank account (1000 bal vs 40000 disburse => 400 'Insufficient balance'). Regression sweep on 14 Phase I-III.6 endpoints all green. All test artefacts cleaned up: TEST_ fiscal-cycle claims deleted, TEST bank account deleted, MPCA General balance restored to seeded 12,975,000, 4 seeded claims (CLM-2025-26-001..004) intact.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase3_7_finance.py",
+    "/app/test_reports/pytest/phase3_7_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 2134 lines — should be split into routers/modules (claims, budgets, bank, bodies, members, fees, meetings) per the >700-line guideline before Phase IV.",
+    "Anti-fragmentation includes Draft claims in cumulative sum; this is conservative but may surprise users who expect only Submitted+ claims to count. Consider adding a comment or excluding Draft.",
+    "disburse_claim updates bank balance and inserts a txn in two separate awaits (no transaction). If the second op fails mid-flight, ledger drift is possible. Acceptable for MVP but flag for Phase IV (use MongoDB session/transaction or compensating logic).",
+    "_walk_to_sanctioned in tests bypasses anti-fragmentation via force=true — fine for unit tests, but in product behaviour, force=true should ideally require a mandatory 'override reason' note logged in the chain. Currently it silently allows it.",
+    "Budget ledger /api/budgets/{body_id} re-uses list_budgets which scans all bodies when not filtered properly — already filters by body_id in the call, so OK, but worth a single-doc query micro-optimisation later."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase3_7_finance.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (28/28)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "none required (no auth on these endpoints)",
+  "seed_data_creation": "Created throwaway TEST_AF_*, TEST_DISB_*, TEST_BUDG_* fiscal cycles + a TEST_Low_Balance_* bank account during tests. All cleaned up in teardown. Demo data verified intact post-run (MPCA General balance 12,975,000; CLM-2025-26-001..004 present).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Phase III.7 finance close-out is fully green. Reusable regression suite is at /app/backend/tests/test_phase3_7_finance.py — includes a parametrised endpoint smoke for /api/, /bodies, /bodies/tree, /members, /disclosures, /meetings, /elections, /fees, /bank/accounts, /bank/transactions, /financial-powers, /dashboard/stats, /claims, /claims-stats/summary. ClaimCreate.category is a Literal: Annual_Grant | Tournament_Expense | Infrastructure | Honorarium | Special_Sanction (not 'Equipment'). Use ?force=true to bypass anti-fragmentation when walking test claims through workflow. To get a Sanctioned claim, do POST /claims?force=true → /submit → /recommend (actor_body_id should match div) → /sanction (actor_post 'MPCA Hon. Treasurer'). Disbursement auto-debits MPCA General Account by default — for non-destructive tests, restore the balance manually or use a TEST source_account_id."
+}

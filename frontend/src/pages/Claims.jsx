@@ -106,11 +106,20 @@ const StatTile = ({ icon: Icon, label, value, sub, accent = "navy" }) => {
 
 const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
     const [notes, setNotes] = useState("");
+    const [coPost, setCoPost] = useState("");
+    const [coName, setCoName] = useState("");
     const [busy, setBusy] = useState(false);
     if (!open || !action) return null;
     const meta = ACTION_META[action];
 
+    // 2-signatory needed only on Disburse > ₹50,000
+    const needsCoSig = action === "disburse" && (claim?.amount_inr || 0) > 50000;
+
     const handleConfirm = async () => {
+        if (needsCoSig && (!coPost.trim() || !coName.trim())) {
+            alert("Disbursement above ₹50,000 requires both co-signatory post and name.");
+            return;
+        }
         setBusy(true);
         try {
             await meta.api(claim.id, {
@@ -118,6 +127,8 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
                 actor_name: persona.name,
                 actor_body_id: persona.body_code,
                 notes: notes.trim() || null,
+                co_signatory_post: needsCoSig ? coPost.trim() : null,
+                co_signatory_name: needsCoSig ? coName.trim() : null,
             });
             onDone();
         } catch (e) {
@@ -125,6 +136,8 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
         } finally {
             setBusy(false);
             setNotes("");
+            setCoPost("");
+            setCoName("");
         }
     };
 
@@ -135,18 +148,51 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
                     <div className="overline !text-mpca-gold-light">Workflow · Action</div>
                     <div className="font-serif text-2xl mt-1">{meta.label}</div>
                 </div>
-                <div className="p-6">
-                    <div className="text-sm text-mpca-charcoal mb-1">{claim.claim_no} · {claim.title}</div>
-                    <div className="font-serif text-xl text-mpca-green-dark mb-5">{fmtINR(claim.amount_inr)}</div>
-                    <label className="label-heritage">Remarks / Notes</label>
-                    <textarea
-                        rows={4}
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Optional — note any conditions or references for the audit trail."
-                        className="input-heritage !border-mpca-gray/40 !p-2"
-                        data-testid="claim-action-notes"
-                    />
+                <div className="p-6 space-y-5">
+                    <div>
+                        <div className="text-sm text-mpca-charcoal mb-1">{claim.claim_no} · {claim.title}</div>
+                        <div className="font-serif text-xl text-mpca-green-dark">{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(claim.amount_inr || 0)}</div>
+                    </div>
+
+                    {needsCoSig && (
+                        <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/5 p-3" data-testid="co-signatory-section">
+                            <div className="overline !text-mpca-oxblood mb-2">Two-Signatory Required (Art. 28(v) · &gt;₹50,000)</div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="label-heritage">Co-Signatory Post</label>
+                                    <input
+                                        value={coPost}
+                                        onChange={(e) => setCoPost(e.target.value)}
+                                        placeholder="Hon. Secretary"
+                                        className="input-heritage"
+                                        data-testid="co-sig-post"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label-heritage">Co-Signatory Name</label>
+                                    <input
+                                        value={coName}
+                                        onChange={(e) => setCoName(e.target.value)}
+                                        placeholder="Shri Sanjay Jagdale"
+                                        className="input-heritage"
+                                        data-testid="co-sig-name"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="label-heritage">Remarks / Notes</label>
+                        <textarea
+                            rows={3}
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            placeholder="Optional — note any conditions or references for the audit trail."
+                            className="input-heritage !border-mpca-gray/40 !p-2"
+                            data-testid="claim-action-notes"
+                        />
+                    </div>
                 </div>
                 <div className="px-6 pb-5 flex items-center justify-end gap-3">
                     <button onClick={onClose} disabled={busy} data-testid="claim-action-cancel" className="btn-heritage-ghost">

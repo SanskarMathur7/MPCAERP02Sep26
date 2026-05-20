@@ -1756,6 +1756,8 @@ async def close_procurement(pr_id: str):
     doc = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Procurement request not found")
+    if doc["status"] not in ("Awarded", "Linked_To_Claim"):
+        raise HTTPException(400, f"Cannot close a procurement request in status {doc['status']}")
     update = {
         "status": "Closed",
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -1769,6 +1771,8 @@ async def cancel_procurement(pr_id: str):
     doc = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Procurement request not found")
+    if doc["status"] in ("Closed", "Cancelled"):
+        raise HTTPException(400, f"Cannot cancel a procurement request in status {doc['status']}")
     update = {
         "status": "Cancelled",
         "updated_at": datetime.now(timezone.utc).isoformat(),

@@ -44,9 +44,44 @@ User preferences (locked):
 | **III.5** | Indian Cricket UI re-skin · Multi-tenant Org Hierarchy (BCCI + MPCA + 10 Divisions + 54 Districts) · `/api/bodies` endpoints · Org Structure tree view · Body-scoped personas | ✅ **Complete (May 2026)** — 25/25 backend tests pass |
 | **III.6** | `body_id` scoping on all collections · Idempotent migration · Claims & Grant Workflow (District → Division → MPCA) · Maker-checker `approval_chain` JSONB · Claims register + new-claim form · Persona-aware action buttons · Dashboard claims band | ✅ **Complete (May 2026)** — 47/47 backend tests pass |
 | **III.7** | Per-body Budget Ledger (reconciled live vs claims) · Auto bank-debit on Disburse · 2-signatory enforcement >₹50k · Anti-fragmentation rule per Art. 28(v) · Sanctioning matrix reference | ✅ **Complete (May 2026)** — 28/28 backend tests pass |
-| **III.8** | Server-side body-scoped read enforcement · Claim attachment uploads · Procurement protocol (3-quote / QCBS) · ABC analysis · Reconciliation against bank statements | 🔴 P0 NEXT |
+| **III.8** | Procurement Protocol (3-quote / QCBS / L1-or-justify) · EMD + Security Deposit tracking · ABC Expenditure Analysis (Pareto bucketing) · Status guards on close/cancel | ✅ **Complete (May 2026)** — 40/40 backend tests pass |
+| **III.9** | Server-side body-scoped read enforcement · Claim/PR attachment uploads (real files) · Bank statement CSV reconciliation · Write-off & bad-debt provisioning | 🔴 P0 NEXT |
 | IV | Player Registration · Grievance Redressal workflow | Backlog |
 | V | Constitution Library (full searchable) · AI Assistant (constitution Q&A, draft notices, summarise minutes) · Analytics | Backlog |
+
+## What's been implemented — Phase III.8 (May 2026) — Procurement + ABC
+
+### Backend (`/app/backend/server.py`)
+- **NEW `procurement_requests` collection** + models: `ProcurementRequest`, `Quotation`, `AwardPayload`, `ProcurementMethod` (Direct/Three_Quote/QCBS/Open_Tender), `ProcurementStatus`.
+- **Auto method derivation** via `_procurement_method_for()`: < ₹1L → Direct, ₹1L–₹75L → Three_Quote, > ₹75L → QCBS.
+- **NEW endpoints** (all `/api`):
+  - `GET /api/procurement?body_id=&status=&method=&fiscal_cycle=` — list with filters
+  - `GET /api/procurement/{id}` — fetch single
+  - `POST /api/procurement` — create Draft (validates `body_id`, sets `pr_no` `PR-{cycle}-NNN`)
+  - `POST /api/procurement/{id}/quotations` — append a Quotation; ≥3 quotes flips status to `Quotes_Collected`
+  - `POST /api/procurement/{id}/award` — enforces **3-quote rule** for Three_Quote/QCBS, **vendor must be quoted**, **L1-or-justify** (justification >10 chars required if awarded ≠ lowest)
+  - `POST /api/procurement/{id}/close` — only from `Awarded` or `Linked_To_Claim`
+  - `POST /api/procurement/{id}/cancel` — from any non-terminal status
+  - `POST /api/procurement/{pr_id}/link-claim/{claim_id}` — ties a PR to a Claim for payment
+- **NEW `GET /api/finance/abc-analysis?fiscal_cycle=`** — Pareto bucketing of disbursed claims: A (top ~70% of value), B (next ~20%), C (trailing ~10%). Bucket assignment uses *previous* cumulative percentage (so the item that crosses the boundary is still credited to the bucket it pushed past — standard ABC convention).
+- **`seed_procurement()`** — 3 demo PRs covering Direct/Awarded, Three_Quote/Awarded with 3 vendors and L1 highlighted (GroundCraft India L1 at ₹4,25,000), and Three_Quote/Draft awaiting quotes.
+- Version → **3.8.0**.
+
+### Frontend
+- **NEW route `/procurement`** — `Procurement.jsx`:
+  - Procurement Register with filter chips (All / From My Body / Draft / Quotes Collected / Awarded / Closed / Cancelled)
+  - Per-row method & status pills, awarded-vendor inline
+  - Detail drawer showing all quotations with L1 badge + awarded badge
+  - New PR dialog with live method preview as user types amount
+  - Add-Quotation dialog with GSTIN + date + amount
+  - Award dialog with vendor select (shows L1 marker), auto-justification warning when not awarding L1, justification textarea becomes required
+  - Close / Cancel buttons gated by current status
+- **Budget Ledger page** now shows the **ABC Expenditure Analysis card** above the per-body table — 3 bucket tiles (A saffron / B marigold / C navy) + cumulative saffron-marigold-navy bar with vendor tooltip.
+- **AppLayout** — "Procurement" added to PRIMARY_NAV.
+
+### Testing (Phase III.8)
+- Backend: **40/40 pytest tests pass · 100%** (`/app/test_reports/iteration_9.json`). Covered: method derivation across thresholds, 3-quote enforcement, L1-or-justify rule (3 sub-cases), award guards, lifecycle close/cancel + status guards (added post-test feedback), link-claim, ABC bucket assignment edge cases (single claim should land in A), Phase I-III.7 regression.
+- Frontend: Smoke-tested visually — procurement register, ABC band, threshold matrix all render correctly.
 
 ## What's been implemented — Phase III.7 (May 2026) — Finance Close-out
 
@@ -246,25 +281,24 @@ The user reviewed every tab of the reference plan and identified that the existi
 
 ## Next Action Items (P0 → P2)
 
-### 🔴 P0 — Phase III.8 (Finance polish + procurement)
-1. **Server-side body-scoped reads** — dependency that scopes every list query to the persona's tree (State sees all; Division sees self + descendants; District sees self).
-2. **Claim attachments** — proper file upload (PDF/JPEG) instead of URL paste; stored in disk + signed-URL flow.
-3. **Procurement protocol** — 3-quote required for ₹1-10L · QCBS for >₹75L · EMD + security deposit tracking.
-4. **ABC expenditure analysis** — A/B/C bucketed view of past disbursements with chart.
-5. **Reconciliation** — bank statement upload (CSV) → match against ledger; flag mismatches.
+### 🔴 P0 — Phase III.9 (Finance hardening)
+1. **Server-side body-scoped reads** — FastAPI dependency that scopes every list query to the persona's tree (State sees all; Division sees self + descendants; District sees self).
+2. **Real file attachments** for Claim + Procurement (PDF/JPEG upload to disk + signed-URL flow).
+3. **Bank statement reconciliation** — CSV upload → match against ledger by amount + date; flag mismatches.
+4. **Write-off + bad-debt provisioning** — for unpaid member subscriptions and uncollectable claims.
 
 ### 🟠 P1 — Phase IV (Cricket Operations)
-6. **Player Management (M1)** — registration portal, Local-MP / Out-of-MP / Guest eligibility validator, unique Player ID generator, transfer NOC workflow, BCCI sync stub.
-7. **Tournament Management (M2)** — seed all 10 inter-divisional tournaments + 5 championship trophies. Squad assignment + placard generation + fixtures/results.
-8. **Match Officials (M3)** + **Team Officials (M4)** registries with renewal cycles.
-9. **Grievance Redressal** workflow.
+5. **Player Management (M1)** — registration portal, Local-MP / Out-of-MP / Guest eligibility validator, unique Player ID generator, transfer NOC workflow, BCCI sync stub.
+6. **Tournament Management (M2)** — seed 10 inter-divisional tournaments + 5 championship trophies. Squad assignment + placard + fixtures/results.
+7. **Match Officials (M3)** + **Team Officials (M4)** registries with renewal cycles.
+8. **Grievance Redressal** workflow.
 
 ### 🟡 P2 — Phase V
-10. **AI Assistant** — Claude Sonnet via Emergent LLM key. Constitution Q&A, claim-status queries, compliance reminders.
-11. **Real Auth** — Emergent-managed Google OAuth replacing demo personas; MFA + RBAC enforcement.
-12. **Real Payment Gateway** — Stripe/Razorpay UPI (test keys already in env).
-13. **Constitution Library** — full searchable text + amendment history.
-14. **Audit Log** — every register write traced.
+9. **AI Assistant** — Claude Sonnet via Emergent LLM key (Constitution Q&A · claim-status · compliance reminders).
+10. **Real Auth** — Emergent-managed Google OAuth replacing demo personas; MFA + RBAC enforcement.
+11. **Real Payment Gateway** — Stripe/Razorpay UPI (test keys already in env).
+12. **Constitution Library** — searchable text + amendment history.
+13. **Audit Log** — every register write traced.
 
 ### 🛠️ Refactoring / Tech-debt
 - Split `server.py` (now 1430 lines) into `/app/backend/routes/{bodies,members,meetings,...}.py`.

@@ -26,6 +26,7 @@ import OrgStructure from "@/pages/OrgStructure";
 import Claims from "@/pages/Claims";
 import ClaimNew from "@/pages/ClaimNew";
 import Budgets from "@/pages/Budgets";
+import Procurement from "@/pages/Procurement";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -81,6 +82,9 @@ function App() {
 
                         {/* Protected — Phase III.7: Body Budget Ledger */}
                         <Route path="/budgets" element={<Protected><Budgets /></Protected>} />
+
+                        {/* Protected — Phase III.8: Procurement */}
+                        <Route path="/procurement" element={<Protected><Procurement /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

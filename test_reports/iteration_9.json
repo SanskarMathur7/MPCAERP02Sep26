@@ -1,0 +1,53 @@
+{
+  "summary": "Phase III.8 backend test pass. Wrote /app/backend/tests/test_phase3_8_procurement.py with 40 tests covering procurement CRUD, 3-quote rule, QCBS threshold, L1-or-justify rule, lifecycle (award/close/cancel/link-claim), ABC Pareto analysis, and Phase I-III.7 regression. 40/40 passing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/procurement (method derivation)",
+        "issue": "Review-request bullet states 'estimated_amount_inr=10000000 → Three_Quote', but 10,000,000 = ₹1Cr (100L) > ₹75L QCBS threshold, so implementation correctly returns 'QCBS' (matches the documented 'QCBS for >₹75L' rule and the _procurement_method_for code at lines 473-480). The problem statement bullet is inconsistent with both the plan and the implementation; the implementation is correct. Test updated to reflect actual (correct) behaviour."
+      },
+      {
+        "endpoint": "POST /api/procurement/{id}/close",
+        "issue": "Endpoint accepts ANY non-terminal status, not just Awarded. The route has no status guard (server.py:1754-1764) — a Draft PR could be marked 'Closed' directly. Consider enforcing transition only from Awarded or Linked_To_Claim. Not blocking, but worth tightening."
+      },
+      {
+        "endpoint": "POST /api/procurement/{id}/cancel",
+        "issue": "Also has no status guard — a Closed or Cancelled PR can be re-cancelled. Idempotent, but should reject from terminal states (Closed)."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase3_8_procurement.py",
+    "/app/test_reports/pytest/phase3_8_results.xml"
+  ],
+  "action_items": [
+    "Confirm intended behaviour for 10000000 (₹1Cr) — implementation returns QCBS (correct per >75L rule). Update the problem-statement bullet to match if it was a typo.",
+    "Optional: add status-transition guards to /procurement/{id}/close (only from Awarded/Linked_To_Claim) and /cancel (reject from Closed/Cancelled).",
+    "Optional: validate quote_amount_inr > 0 and quote_date format on POST /procurement/{id}/quotations (currently any string accepted)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 2486 lines — split into routers (procurement.py, claims.py, finance.py, bodies.py, seed.py) for maintainability. Already past the 700-line guidance.",
+    "_procurement_method_for has two branches both returning 'Three_Quote' (lines 476-479) — collapse the redundant if-blocks. The QCBS threshold logic is correct but the dead branch makes intent unclear.",
+    "close_procurement/cancel_procurement lack status guards (any status → terminal) — see minor issues above.",
+    "ABC bucketing in /finance/abc-analysis (server.py:1789-1830) is well-implemented and uses prev_cum_pct correctly so the boundary item stays in A as documented.",
+    "Award route's L1 check (server.py:1714-1721) correctly enforces notes>10 chars only when awarded != lowest-quote vendor — clean implementation.",
+    "Three_Quote 3-quote enforcement happens at /award (line 1700) — good. But /quotations allows unlimited quotes past 3, which is fine but worth noting.",
+    "MongoDB _id properly excluded everywhere via {\"_id\": 0} projections — no leakage observed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase3_8_procurement.py (new)"
+  ],
+  "success_rate": {"backend": "100% (40/40)", "frontend": "n/a (backend-only request)"},
+  "test_credentials": "none required (no auth on these endpoints)",
+  "seed_data_creation": "Created ~10 throwaway PRs with TEST_ prefix titles via fixtures, all cancelled in module teardown so demo seed (PR-2025-26-001..003) remains untouched. Verified post-test that all 3 seed PRs are present with original status/method/body_id, and MPCA General Account balance is unchanged at ₹1,29,75,000.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase III.8 backend is fully green. Test file /app/backend/tests/test_phase3_8_procurement.py is regression-ready. Run via: REACT_APP_BACKEND_URL=<url> pytest backend/tests/test_phase3_8_procurement.py. Seed data integrity assertions are included. The single problem-statement vs implementation mismatch (10000000 → Three_Quote claim) was resolved in favour of the implementation since it matches the documented '>75L → QCBS' rule.",
+  "rca of the issue": "N/A — no bugs found requiring RCA. The one discrepancy (1Cr → QCBS vs Three_Quote per problem-statement bullet) is a problem-statement typo; the code is internally consistent with its own documented 75L threshold and the Phase III.8 plan comment at server.py:460."
+}

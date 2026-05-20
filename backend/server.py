@@ -456,6 +456,76 @@ SANCTION_THRESHOLDS = [
 TWO_SIGNATORY_THRESHOLD_INR = 50_000
 
 
+# ---------------- Phase III.8: Procurement Protocol ----------------
+# Plan asks: 3 quotes for ₹1L-10L · QCBS for >₹75L · EMD + Security Deposit tracking.
+
+ProcurementMethod = Literal["Direct", "Three_Quote", "QCBS", "Open_Tender"]
+ProcurementStatus = Literal[
+    "Draft",                 # capturing requirements & quotes
+    "Quotes_Collected",      # ≥3 quotes attached
+    "Awarded",               # vendor selected
+    "Linked_To_Claim",       # tied to a claim that will pay it
+    "Closed",                # fulfilled
+    "Cancelled",
+]
+
+
+def _procurement_method_for(amount: float) -> ProcurementMethod:
+    if amount < 100_000:
+        return "Direct"
+    if amount <= 1_000_000:
+        return "Three_Quote"
+    if amount <= 7_500_000:
+        return "Three_Quote"          # 3 quotes still required, plus committee approval
+    return "QCBS"                     # >75L
+
+
+class Quotation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    vendor_name: str
+    vendor_gstin: Optional[str] = None
+    quote_amount_inr: float
+    quote_date: str
+    notes: Optional[str] = None
+
+
+class ProcurementRequestBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    body_id: str = "MPCA"
+    title: str
+    description: Optional[str] = None
+    estimated_amount_inr: float
+    fiscal_cycle: str = "2025-26"
+    quotations: List[Quotation] = []
+    awarded_vendor: Optional[str] = None
+    awarded_amount_inr: Optional[float] = None
+    emd_inr: float = 0.0                       # earnest money deposit collected
+    security_deposit_inr: float = 0.0          # post-award security deposit
+    linked_claim_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ProcurementRequest(ProcurementRequestBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    pr_no: str                                  # "PR-2025-26-001"
+    method: ProcurementMethod
+    status: ProcurementStatus = "Draft"
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ProcurementRequestCreate(ProcurementRequestBase):
+    pass
+
+
+class AwardPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    awarded_vendor: str
+    awarded_amount_inr: float
+    security_deposit_inr: float = 0.0
+    notes: Optional[str] = None
+
+
 # ---------------- Helpers ----------------
 
 CATEGORY_PREFIX = {
@@ -1542,9 +1612,227 @@ async def sanction_thresholds():
     }
 
 
+# ---------------- Routes: Procurement (Phase III.8) ----------------
+
+
+async def _next_pr_no(cycle: str) -> str:
+    count = await db.procurement_requests.count_documents({"fiscal_cycle": cycle})
+    return f"PR-{cycle}-{count + 1:03d}"
+
+
+@api_router.get("/procurement", response_model=List[ProcurementRequest])
+async def list_procurement(
+    body_id: Optional[str] = None,
+    status: Optional[ProcurementStatus] = None,
+    method: Optional[ProcurementMethod] = None,
+    fiscal_cycle: Optional[str] = None,
+):
+    query: dict = {}
+    if body_id:
+        query["body_id"] = body_id
+    if status:
+        query["status"] = status
+    if method:
+        query["method"] = method
+    if fiscal_cycle:
+        query["fiscal_cycle"] = fiscal_cycle
+    docs = await db.procurement_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@api_router.get("/procurement/{pr_id}", response_model=ProcurementRequest)
+async def get_procurement(pr_id: str):
+    doc = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Procurement request not found")
+    return doc
+
+
+@api_router.post("/procurement", response_model=ProcurementRequest)
+async def create_procurement(payload: ProcurementRequestCreate):
+    body = await db.bodies.find_one({"code": payload.body_id}, {"_id": 0})
+    if not body:
+        raise HTTPException(400, f"Body {payload.body_id} does not exist")
+    method = _procurement_method_for(payload.estimated_amount_inr)
+    pr_no = await _next_pr_no(payload.fiscal_cycle)
+    pr = ProcurementRequest(
+        pr_no=pr_no,
+        method=method,
+        **payload.model_dump(),
+    )
+    await db.procurement_requests.insert_one(pr.model_dump())
+    return pr
+
+
+@api_router.post("/procurement/{pr_id}/quotations", response_model=ProcurementRequest)
+async def add_quotation(pr_id: str, quote: Quotation):
+    doc = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Procurement request not found")
+    if doc["status"] not in ("Draft", "Quotes_Collected"):
+        raise HTTPException(400, f"Cannot add quotation in status {doc['status']}")
+    quotations = doc.get("quotations", []) or []
+    quotations.append(quote.model_dump())
+    update = {
+        "quotations": quotations,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # If this is the 3rd+ quote and method requires it, transition to Quotes_Collected
+    if len(quotations) >= 3 and doc["method"] in ("Three_Quote", "QCBS"):
+        update["status"] = "Quotes_Collected"
+    elif doc["method"] == "Direct" and len(quotations) >= 1:
+        update["status"] = "Quotes_Collected"
+    await db.procurement_requests.update_one({"id": pr_id}, {"$set": update})
+    return await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+
+
+@api_router.post("/procurement/{pr_id}/award", response_model=ProcurementRequest)
+async def award_procurement(pr_id: str, payload: AwardPayload):
+    """Award the contract — enforces 3-quote rule, QCBS rule, and L1-or-justify."""
+    doc = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Procurement request not found")
+    if doc["status"] not in ("Draft", "Quotes_Collected"):
+        raise HTTPException(400, f"Cannot award in status {doc['status']}")
+
+    quotations = doc.get("quotations", []) or []
+    method = doc["method"]
+    if method in ("Three_Quote", "QCBS") and len(quotations) < 3:
+        raise HTTPException(
+            400,
+            f"Procurement method '{method}' requires at least 3 quotations "
+            f"(currently {len(quotations)}). Please attach more quotations.",
+        )
+
+    # Verify awarded vendor is one of the quoted vendors
+    quoted_vendors = {q["vendor_name"]: q for q in quotations}
+    if payload.awarded_vendor not in quoted_vendors:
+        raise HTTPException(400, f"Awarded vendor '{payload.awarded_vendor}' is not among the quoted vendors.")
+
+    # L1 check — if awarded is not the lowest quote, demand a justification note
+    lowest = min(quotations, key=lambda q: q["quote_amount_inr"])
+    if payload.awarded_vendor != lowest["vendor_name"]:
+        if not (payload.notes and len(payload.notes.strip()) > 10):
+            raise HTTPException(
+                400,
+                f"Awarding to '{payload.awarded_vendor}' over L1 ('{lowest['vendor_name']}' "
+                f"at ₹{lowest['quote_amount_inr']:,.0f}) requires a justification note "
+                "(min 10 chars) recorded in `notes`.",
+            )
+
+    update = {
+        "awarded_vendor": payload.awarded_vendor,
+        "awarded_amount_inr": payload.awarded_amount_inr,
+        "security_deposit_inr": payload.security_deposit_inr,
+        "status": "Awarded",
+        "notes": payload.notes,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.procurement_requests.update_one({"id": pr_id}, {"$set": update})
+    return await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+
+
+@api_router.post("/procurement/{pr_id}/link-claim/{claim_id}", response_model=ProcurementRequest)
+async def link_procurement_claim(pr_id: str, claim_id: str):
+    doc = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Procurement request not found")
+    claim = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not claim:
+        raise HTTPException(404, "Claim not found")
+    if doc["status"] != "Awarded":
+        raise HTTPException(400, "Only Awarded procurement requests may be linked to a claim")
+    update = {
+        "linked_claim_id": claim_id,
+        "status": "Linked_To_Claim",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.procurement_requests.update_one({"id": pr_id}, {"$set": update})
+    return await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+
+
+@api_router.post("/procurement/{pr_id}/close", response_model=ProcurementRequest)
+async def close_procurement(pr_id: str):
+    doc = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Procurement request not found")
+    update = {
+        "status": "Closed",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.procurement_requests.update_one({"id": pr_id}, {"$set": update})
+    return await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+
+
+@api_router.post("/procurement/{pr_id}/cancel", response_model=ProcurementRequest)
+async def cancel_procurement(pr_id: str):
+    doc = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Procurement request not found")
+    update = {
+        "status": "Cancelled",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.procurement_requests.update_one({"id": pr_id}, {"$set": update})
+    return await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+
+
+# ---------------- Routes: ABC Expenditure Analysis (Phase III.8) ----------------
+
+
+@api_router.get("/finance/abc-analysis")
+async def abc_analysis(fiscal_cycle: str = "2025-26"):
+    """Pareto-style ABC bucketing of disbursed expenditure.
+    A = top ~70% of value · B = next ~20% · C = trailing ~10%.
+
+    Returns per-claim row with bucket + cumulative %, plus bucket totals."""
+    pipeline = [
+        {"$match": {"status": "Disbursed", "fiscal_cycle": fiscal_cycle}},
+        {"$sort": {"amount_inr": -1}},
+    ]
+    rows: List[dict] = []
+    async for c in db.claims.aggregate(pipeline):
+        rows.append({
+            "claim_id": c["id"],
+            "claim_no": c["claim_no"],
+            "title": c["title"],
+            "category": c["category"],
+            "body_id": c["body_id"],
+            "amount_inr": c["amount_inr"],
+        })
+    total = sum(r["amount_inr"] for r in rows) or 1.0
+    cumulative = 0.0
+    out_rows = []
+    buckets = {"A": {"count": 0, "total_inr": 0.0}, "B": {"count": 0, "total_inr": 0.0}, "C": {"count": 0, "total_inr": 0.0}}
+    for r in rows:
+        prev_cum_pct = cumulative / total * 100
+        cumulative += r["amount_inr"]
+        cum_pct = cumulative / total * 100
+        # Bucket = the bucket the item crossed *into* (so the item that
+        # pushes you past 70% is still an A-item; ABC pareto convention).
+        if prev_cum_pct < 70:
+            bucket = "A"
+        elif prev_cum_pct < 90:
+            bucket = "B"
+        else:
+            bucket = "C"
+        r["bucket"] = bucket
+        r["cum_pct"] = round(cum_pct, 1)
+        r["share_pct"] = round(r["amount_inr"] / total * 100, 1)
+        buckets[bucket]["count"] += 1
+        buckets[bucket]["total_inr"] += r["amount_inr"]
+        out_rows.append(r)
+    return {
+        "fiscal_cycle": fiscal_cycle,
+        "total_disbursed_inr": total if rows else 0,
+        "buckets": buckets,
+        "rows": out_rows,
+    }
+
+
 @api_router.get("/")
 async def root():
-    return {"app": "MPCA ERP", "version": "3.7.0", "status": "ok"}
+    return {"app": "MPCA ERP", "version": "3.8.0", "status": "ok"}
 
 
 app.include_router(api_router)
@@ -2045,10 +2333,74 @@ async def seed_claims():
     logger.info(f"Seeded {len(samples)} sample claims.")
 
 
+async def seed_procurement():
+    """Phase III.8 — seed a few demo procurement requests."""
+    if await db.procurement_requests.count_documents({}) > 0:
+        return
+    logger.info("Seeding sample procurement requests…")
+
+    samples = [
+        # Small Direct procurement at MPCA HQ
+        {
+            "body_id": "MPCA",
+            "title": "Office stationery — Q3 replenishment",
+            "description": "Routine stationery supplies for MPCA HQ administrative office.",
+            "estimated_amount_inr": 35_000,
+            "quotations": [
+                Quotation(vendor_name="Indore Stationers", quote_amount_inr=33_400, quote_date="2025-09-15"),
+            ],
+            "awarded_vendor": "Indore Stationers",
+            "awarded_amount_inr": 33_400,
+            "security_deposit_inr": 0,
+            "status": "Awarded",
+        },
+        # Three-Quote at Jabalpur Division — Pitch Roller (will tie to CLM-003)
+        {
+            "body_id": "DIST-JABA-JBP",
+            "title": "Ranital Stadium — Pitch Roller procurement",
+            "description": "Heavy-duty pitch roller, 1.2T, with 12-month warranty.",
+            "estimated_amount_inr": 450_000,
+            "quotations": [
+                Quotation(vendor_name="GroundCraft India Pvt Ltd", vendor_gstin="23AABCG1234C1Z5", quote_amount_inr=425_000, quote_date="2025-08-20"),
+                Quotation(vendor_name="Bhopal Sports Engg.",       vendor_gstin="23AABCB7890D1Z9", quote_amount_inr=448_000, quote_date="2025-08-21"),
+                Quotation(vendor_name="Pune Maidan Works",          vendor_gstin="27AAACP1212F1Z3", quote_amount_inr=462_500, quote_date="2025-08-22"),
+            ],
+            "awarded_vendor": "GroundCraft India Pvt Ltd",
+            "awarded_amount_inr": 425_000,
+            "security_deposit_inr": 21_250,
+            "emd_inr": 10_000,
+            "status": "Awarded",
+        },
+        # Draft, no quotes yet — Sehore District equipment
+        {
+            "body_id": "DIST-SEHO-BPL",
+            "title": "Sehore Cricket Kit Refresh",
+            "description": "Bats, balls, helmets and pads for the U-15 squad.",
+            "estimated_amount_inr": 140_000,
+            "quotations": [],
+            "status": "Draft",
+        },
+    ]
+
+    for s in samples:
+        method = _procurement_method_for(s["estimated_amount_inr"])
+        pr_no = await _next_pr_no("2025-26")
+        # Avoid passing keys to ProcurementRequest that conflict with constructor positionals
+        pr = ProcurementRequest(
+            pr_no=pr_no,
+            method=method,
+            **{k: v for k, v in s.items() if k != "method"},
+        )
+        await db.procurement_requests.insert_one(pr.model_dump())
+
+    logger.info(f"Seeded {len(samples)} procurement requests.")
+
+
 async def seed_data():
     await seed_bodies()
     await migrate_body_ids()
     await seed_claims()
+    await seed_procurement()
     if await db.members.count_documents({}) == 0:
         logger.info("Seeding members…")
         for m in SEED_MEMBERS:

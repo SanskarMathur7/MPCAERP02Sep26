@@ -18,6 +18,7 @@ import {
     Building2,
     HandCoins,
     Coins,
+    ShoppingCart,
 } from "lucide-react";
 
 const PRIMARY_NAV = [
@@ -25,6 +26,7 @@ const PRIMARY_NAV = [
     { to: "/org", label: "Org Structure", icon: Building2 },
     { to: "/claims", label: "Grant Claims", icon: HandCoins },
     { to: "/budgets", label: "Budget Ledger", icon: Coins },
+    { to: "/procurement", label: "Procurement", icon: ShoppingCart },
     { to: "/members", label: "Membership Register", icon: Users },
     { to: "/meetings", label: "AGM & Meetings", icon: Calendar },
     { to: "/elections", label: "Elections", icon: Vote },

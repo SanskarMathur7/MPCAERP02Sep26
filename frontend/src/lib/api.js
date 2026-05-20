@@ -243,3 +243,37 @@ export const fetchSanctionThresholds = async () => {
     const { data } = await api.get("/sanction-thresholds");
     return data;
 };
+
+// ---------- Phase III.8: Procurement & ABC ----------
+export const fetchProcurement = async (params = {}) => {
+    const { data } = await api.get("/procurement", { params });
+    return data;
+};
+export const fetchProcurementOne = async (id) => {
+    const { data } = await api.get(`/procurement/${id}`);
+    return data;
+};
+export const createProcurement = async (payload) => {
+    const { data } = await api.post("/procurement", payload);
+    return data;
+};
+export const addQuotation = async (id, quote) => {
+    const { data } = await api.post(`/procurement/${id}/quotations`, quote);
+    return data;
+};
+export const awardProcurement = async (id, payload) => {
+    const { data } = await api.post(`/procurement/${id}/award`, payload);
+    return data;
+};
+export const closeProcurement = async (id) => {
+    const { data } = await api.post(`/procurement/${id}/close`);
+    return data;
+};
+export const cancelProcurement = async (id) => {
+    const { data } = await api.post(`/procurement/${id}/cancel`);
+    return data;
+};
+export const fetchABCAnalysis = async (fiscal_cycle = "2025-26") => {
+    const { data } = await api.get("/finance/abc-analysis", { params: { fiscal_cycle } });
+    return data;
+};

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchBudgets, fetchSanctionThresholds } from "@/lib/api";
+import { fetchBudgets, fetchSanctionThresholds, fetchABCAnalysis } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Coins, AlertTriangle, ShieldCheck, TrendingUp, Filter, Building2, MapPin, Landmark } from "lucide-react";
+import { Coins, AlertTriangle, ShieldCheck, TrendingUp, Filter, Building2, MapPin, Landmark, BarChart3 } from "lucide-react";
 
 const fmtINR = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n || 0);
 
@@ -16,6 +16,7 @@ const Budgets = () => {
     const { persona } = useAuth();
     const [rows, setRows] = useState([]);
     const [thresholds, setThresholds] = useState(null);
+    const [abc, setAbc] = useState(null);
     const [loading, setLoading] = useState(true);
     const [cycle, setCycle] = useState("2025-26");
     const [typeFilter, setTypeFilter] = useState("all");
@@ -25,12 +26,14 @@ const Budgets = () => {
         (async () => {
             setLoading(true);
             try {
-                const [b, t] = await Promise.all([
+                const [b, t, a] = await Promise.all([
                     fetchBudgets({ fiscal_cycle: cycle }),
                     fetchSanctionThresholds(),
+                    fetchABCAnalysis(cycle),
                 ]);
                 setRows(b);
                 setThresholds(t);
+                setAbc(a);
             } catch (e) {
                 console.error(e);
             } finally {
@@ -145,6 +148,50 @@ const Budgets = () => {
                     <div className="mt-4 text-[11px] text-mpca-gray-dark italic">
                         Two-signatory required for bank disbursements above {fmtINR(thresholds.two_signatory_threshold_inr)}.
                         Anti-fragmentation: claims that cumulatively cross the next authority's limit must be consolidated or expressly over-ridden.
+                    </div>
+                </div>
+            )}
+
+            {/* ABC Expenditure Analysis */}
+            {abc && abc.rows.length > 0 && (
+                <div className="bulletin-card p-6 mb-10" data-testid="abc-card">
+                    <div className="flex items-baseline gap-3 mb-4">
+                        <BarChart3 className="text-mpca-burgundy-dark" size={16} />
+                        <div className="overline">ABC Expenditure Analysis · Cycle {abc.fiscal_cycle}</div>
+                        <div className="text-[10px] text-mpca-gray-dark ml-auto font-mono">
+                            Total disbursed: {fmtINR(abc.total_disbursed_inr)}
+                        </div>
+                    </div>
+                    <div className="grid sm:grid-cols-3 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-5">
+                        {["A", "B", "C"].map((bk) => {
+                            const meta = { A: { tone: "saffron", text: "text-mpca-oxblood", note: "Top ~70% of value · close monitoring" }, B: { tone: "marigold", text: "text-mpca-gold", note: "Next ~20% · periodic review" }, C: { tone: "navy", text: "text-mpca-green-dark", note: "Trailing ~10% · light-touch" } }[bk];
+                            const b = abc.buckets[bk] || { count: 0, total_inr: 0 };
+                            return (
+                                <div key={bk} className="bg-mpca-ivory p-4" data-testid={"abc-bucket-" + bk}>
+                                    <div className="overline">{bk} · {meta.note.split(" · ")[0]}</div>
+                                    <div className={"font-serif text-3xl mt-2 leading-none " + meta.text}>{fmtINR(b.total_inr)}</div>
+                                    <div className="text-[11px] text-mpca-gray-dark mt-2">{b.count} claim{b.count === 1 ? "" : "s"} · {meta.note.split(" · ")[1]}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {/* Cumulative bar */}
+                    <div className="flex h-3 border border-mpca-brass/30" data-testid="abc-bar">
+                        {abc.rows.map((r) => (
+                            <div
+                                key={r.claim_id}
+                                title={r.claim_no + " · " + r.title + " · " + fmtINR(r.amount_inr)}
+                                style={{ width: r.share_pct + "%" }}
+                                className={
+                                    r.bucket === "A" ? "bg-mpca-oxblood" :
+                                    r.bucket === "B" ? "bg-mpca-gold" :
+                                    "bg-mpca-green-dark"
+                                }
+                            />
+                        ))}
+                    </div>
+                    <div className="text-[10px] text-mpca-gray-dark mt-2 italic">
+                        Hover a band to see the underlying claim. A-items demand strategic oversight; C-items can be delegated.
                     </div>
                 </div>
             )}

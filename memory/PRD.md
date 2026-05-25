@@ -45,9 +45,53 @@ User preferences (locked):
 | **III.6** | `body_id` scoping on all collections · Idempotent migration · Claims & Grant Workflow (District → Division → MPCA) · Maker-checker `approval_chain` JSONB · Claims register + new-claim form · Persona-aware action buttons · Dashboard claims band | ✅ **Complete (May 2026)** — 47/47 backend tests pass |
 | **III.7** | Per-body Budget Ledger (reconciled live vs claims) · Auto bank-debit on Disburse · 2-signatory enforcement >₹50k · Anti-fragmentation rule per Art. 28(v) · Sanctioning matrix reference | ✅ **Complete (May 2026)** — 28/28 backend tests pass |
 | **III.8** | Procurement Protocol (3-quote / QCBS / L1-or-justify) · EMD + Security Deposit tracking · ABC Expenditure Analysis (Pareto bucketing) · Status guards on close/cancel | ✅ **Complete (May 2026)** — 40/40 backend tests pass |
-| **III.9** | Server-side body-scoped read enforcement · Claim/PR attachment uploads (real files) · Bank statement CSV reconciliation · Write-off & bad-debt provisioning | 🔴 P0 NEXT |
+| **IV.1**  | **Player Module (M1)** — Player Register with Local-MP / Born-Outside / Guest categories · Eligibility validator (MP domicile, TW3 for Guest, age) · Auto Player ID (MPCA/YYYY/NNNNNN) · Disqualification flags (Two-Year/Lifetime/Division-Penalty/Age-Misrep) · Reinstate · **Transfer NOC workflow** (Draft → From-Body → To-Body → MPCA → Completed with body_id move) reusing III.6 ApprovalStep | ✅ **Complete (May 2026)** — 45/45 backend tests pass |
+| **IV.2**  | Tournament Module (M2) — seed 10 inter-divisional tournaments · Squad assignment · Fixtures · Results | 🔴 P1 NEXT |
 | IV | Player Registration · Grievance Redressal workflow | Backlog |
 | V | Constitution Library (full searchable) · AI Assistant (constitution Q&A, draft notices, summarise minutes) · Analytics | Backlog |
+
+## What's been implemented — Phase IV.1 (May 2026) — Player Module (M1)
+
+### Backend (`/app/backend/server.py`)
+- **NEW `players` collection** + models: `Player`, `PlayerCreate`, `PlayerBase`, `DisqualificationFlag`. Categories: `Local_MP` / `Born_Outside` / `Guest`. Roles: Batter/Bowler/All-Rounder/Wicket-Keeper. Statuses: Pending/Active/Suspended/Banned/Transferred/Retired.
+- **Eligibility validator** (`_validate_eligibility`) enforces: Local_MP requires `domicile_state == "Madhya Pradesh"` (else hard-fail); Guest requires `tw3_verified == True` (else hard-fail); flags missing residency evidence for Born_Outside; computes age and warns on <12 or >60.
+- **Unique Player ID generator** (`_next_player_id`) — format `MPCA/{YYYY}/{6-digit-serial}` (e.g. `MPCA/2026/000007`). Year-scoped serials.
+- **NEW endpoints** (all `/api`):
+  - `GET /api/players?body_id=&category=&status=&search=` — list + filter + search
+  - `GET /api/players/{pid}` — accepts either UUID or `MPCA/YYYY/NNNNNN` (URL-encoded)
+  - `POST /api/players/check-eligibility` — dry-run validator (returns ok + notes + age)
+  - `POST /api/players` — register; runs validator first; hard-fails on category errors
+  - `POST /api/players/{id}/approve` — Pending → Active
+  - `POST /api/players/{id}/disqualify` — appends a `DisqualificationFlag`; Two_Year_Ban → Suspended, Lifetime_Ban → Banned
+  - `POST /api/players/{id}/reinstate` — Suspended → Active
+  - `GET /api/players-stats/summary` — totals + by_category breakdown
+- **NEW `transfer_requests` collection** + Transfer NOC workflow (reuses III.6 `ApprovalStep` model). Endpoints:
+  - `POST /api/transfers` — creates with `noc_no` like `NOC-2025-26-001`; validates `from_body_id == player.body_id` and from ≠ to.
+  - `POST /api/transfers/{id}/approve-from` (Draft → From_Body_Approved)
+  - `POST /api/transfers/{id}/approve-to` (From → To_Body_Approved)
+  - `POST /api/transfers/{id}/approve-mpca` (To → MPCA_Approved)
+  - `POST /api/transfers/{id}/complete` (MPCA_Approved → Completed; **moves `player.body_id` to `to_body_id`**)
+  - `POST /api/transfers/{id}/reject` (any non-terminal → Rejected)
+  - State-machine guards on every transition.
+- **`seed_players()`** — 7 demo players spanning 5 districts, all 3 categories, all 3 working statuses, with one Two-Year-Ban example (Sahil Verma, Gwalior).
+- Version → **4.0.0**.
+
+### Frontend
+- **NEW route `/players`** — `Players.jsx`:
+  - 4 stat tiles (Total / Active / Pending / Suspended) + 3-tile category breakdown
+  - 8-chip filter bar (All / My Scope / Active / Pending / Suspended / Local-MP / Born-Outside / Guest) + name/ID search
+  - Per-row avatar initials, Player ID, body, role, age, batting/bowling style + category & status pills
+  - Detail drawer with all identity fields + bowling/batting style + TW3 status (Guest) + Eligibility validator output + Disqualifications list + persona-aware actions (Approve · Suspend · Reinstate)
+  - New-Player dialog with live age computation, conditional guardian fields for minors, conditional TW3 checkbox for Guest, "Check Eligibility" dry-run button, full eligibility result panel
+  - Suspend dialog with 5 sanction types + expiry date
+- **AppLayout** — "Player Register" promoted to PRIMARY_NAV (between Org Structure and Grant Claims) with Trophy icon. "Player Module (M1)" removed from roadmap.
+
+### Testing (Phase IV.1)
+- Backend: **45/45 pytest tests pass · 100%** (`/app/test_reports/iteration_10.json`). Covered: every CRUD, every validator path, every lifecycle transition, the full 4-step NOC workflow (including body_id move on completion), every guard rail, regression of all Phase I-III.8 endpoints, seeded data integrity.
+- Frontend: Smoke-tested visually — register list, detail drawer, sanctioned player showing Two-Year-Ban audit all render correctly.
+
+### Minor (non-blocking)
+- `GET /api/players/{player_id}` with the human-friendly form (containing slashes) requires URL-encoding. UUID lookup works without encoding. Acceptable trade-off.
 
 ## What's been implemented — Phase III.8 (May 2026) — Procurement + ABC
 
@@ -281,24 +325,23 @@ The user reviewed every tab of the reference plan and identified that the existi
 
 ## Next Action Items (P0 → P2)
 
-### 🔴 P0 — Phase III.9 (Finance hardening)
-1. **Server-side body-scoped reads** — FastAPI dependency that scopes every list query to the persona's tree (State sees all; Division sees self + descendants; District sees self).
-2. **Real file attachments** for Claim + Procurement (PDF/JPEG upload to disk + signed-URL flow).
-3. **Bank statement reconciliation** — CSV upload → match against ledger by amount + date; flag mismatches.
-4. **Write-off + bad-debt provisioning** — for unpaid member subscriptions and uncollectable claims.
+### 🟠 P1 — Phase IV.2 (Tournament Module M2)
+1. **Tournament Module (M2)** — seed all 10 inter-divisional tournaments (MY Memorial · Madhavrao Scindia · JN Bhaya · Parmanandbhai Patel · Hiralal Gaekwad · SM Khan · MM Jagdale · AW Kanmadikar · JS Anand · Holkar Trophy) + 5 championship trophies. Squad assignment (drawing from Player Register) + age-cap enforcement + placard generation + fixtures/results.
+2. **Match Officials (M3)** + **Team Officials (M4)** registries with renewal cycles.
+3. **Grievance Redressal** workflow.
 
-### 🟠 P1 — Phase IV (Cricket Operations)
-5. **Player Management (M1)** — registration portal, Local-MP / Out-of-MP / Guest eligibility validator, unique Player ID generator, transfer NOC workflow, BCCI sync stub.
-6. **Tournament Management (M2)** — seed 10 inter-divisional tournaments + 5 championship trophies. Squad assignment + placard + fixtures/results.
-7. **Match Officials (M3)** + **Team Officials (M4)** registries with renewal cycles.
-8. **Grievance Redressal** workflow.
+### 🔴 P0 — Phase III.9 (Finance hardening — when ready)
+4. Server-side body-scoped read enforcement (FastAPI dep).
+5. Real file attachments (PDF/JPEG upload) for Claim + Procurement.
+6. Bank statement CSV reconciliation.
+7. Write-off + bad-debt provisioning.
 
 ### 🟡 P2 — Phase V
-9. **AI Assistant** — Claude Sonnet via Emergent LLM key (Constitution Q&A · claim-status · compliance reminders).
-10. **Real Auth** — Emergent-managed Google OAuth replacing demo personas; MFA + RBAC enforcement.
-11. **Real Payment Gateway** — Stripe/Razorpay UPI (test keys already in env).
-12. **Constitution Library** — searchable text + amendment history.
-13. **Audit Log** — every register write traced.
+8. **AI Assistant** — Claude Sonnet via Emergent LLM key (Constitution Q&A · claim/transfer status · compliance reminders).
+9. **Real Auth** — Emergent-managed Google OAuth replacing demo personas; MFA + RBAC enforcement.
+10. **Real Payment Gateway** — Stripe/Razorpay UPI (test keys already in env).
+11. **Constitution Library** — searchable text + amendment history.
+12. **Audit Log** — every register write traced.
 
 ### 🛠️ Refactoring / Tech-debt
 - Split `server.py` (now 1430 lines) into `/app/backend/routes/{bodies,members,meetings,...}.py`.

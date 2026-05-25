@@ -277,3 +277,49 @@ export const fetchABCAnalysis = async (fiscal_cycle = "2025-26") => {
     const { data } = await api.get("/finance/abc-analysis", { params: { fiscal_cycle } });
     return data;
 };
+
+// ---------- Phase IV: Player Module (M1) ----------
+export const fetchPlayers = async (params = {}) => {
+    const { data } = await api.get("/players", { params });
+    return data;
+};
+export const fetchPlayer = async (pid) => {
+    const { data } = await api.get(`/players/${pid}`);
+    return data;
+};
+export const checkPlayerEligibility = async (payload) => {
+    const { data } = await api.post("/players/check-eligibility", payload);
+    return data;
+};
+export const createPlayer = async (payload) => {
+    const { data } = await api.post("/players", payload);
+    return data;
+};
+export const approvePlayer = async (id) => {
+    const { data } = await api.post(`/players/${id}/approve`);
+    return data;
+};
+export const disqualifyPlayer = async (id, flag) => {
+    const { data } = await api.post(`/players/${id}/disqualify`, flag);
+    return data;
+};
+export const reinstatePlayer = async (id) => {
+    const { data } = await api.post(`/players/${id}/reinstate`);
+    return data;
+};
+export const fetchPlayerStats = async () => {
+    const { data } = await api.get("/players-stats/summary");
+    return data;
+};
+export const fetchTransfers = async (params = {}) => {
+    const { data } = await api.get("/transfers", { params });
+    return data;
+};
+export const createTransfer = async (payload) => {
+    const { data } = await api.post("/transfers", payload);
+    return data;
+};
+export const transferAction = async (id, stage, payload) => {
+    const { data } = await api.post(`/transfers/${id}/${stage}`, payload);
+    return data;
+};

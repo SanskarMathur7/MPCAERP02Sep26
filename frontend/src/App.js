@@ -27,6 +27,7 @@ import Claims from "@/pages/Claims";
 import ClaimNew from "@/pages/ClaimNew";
 import Budgets from "@/pages/Budgets";
 import Procurement from "@/pages/Procurement";
+import Players from "@/pages/Players";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -85,6 +86,9 @@ function App() {
 
                         {/* Protected — Phase III.8: Procurement */}
                         <Route path="/procurement" element={<Protected><Procurement /></Protected>} />
+
+                        {/* Protected — Phase IV: Player Module */}
+                        <Route path="/players" element={<Protected><Players /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

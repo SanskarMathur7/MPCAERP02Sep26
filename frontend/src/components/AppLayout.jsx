@@ -19,11 +19,13 @@ import {
     HandCoins,
     Coins,
     ShoppingCart,
+    Trophy as TrophyIcon,
 } from "lucide-react";
 
 const PRIMARY_NAV = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/org", label: "Org Structure", icon: Building2 },
+    { to: "/players", label: "Player Register", icon: TrophyIcon },
     { to: "/claims", label: "Grant Claims", icon: HandCoins },
     { to: "/budgets", label: "Budget Ledger", icon: Coins },
     { to: "/procurement", label: "Procurement", icon: ShoppingCart },
@@ -37,8 +39,8 @@ const PRIMARY_NAV = [
 ];
 
 const FUTURE_NAV = [
-    { label: "Player Module (M1)", icon: Trophy, phase: "IV" },
     { label: "Tournament Module (M2)", icon: Trophy, phase: "IV" },
+    { label: "Match Officials (M3)", icon: Trophy, phase: "IV" },
     { label: "Grievance Redressal", icon: AlertTriangle, phase: "IV" },
     { label: "Constitution Library", icon: BookOpen, phase: "V" },
     { label: "AI Assistant", icon: Sparkles, phase: "V" },

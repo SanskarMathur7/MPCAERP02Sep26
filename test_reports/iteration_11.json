@@ -1,0 +1,37 @@
+{
+  "summary": "Phase IV.2 (Tournament Module M2) backend testing: 44/44 pytest cases passing including tournament CRUD, status state machine, squad creation, all six player-eligibility rules (age cap, age floor, guest allowance, suspended/banned, capacity, captain uniqueness, cross-body protection), modification lock once In_Progress, stats summary, and regression on 16 Phase I-IV.1 endpoints.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/tournaments?format=T20", "issue": "Test plan said 3 (PPT, MMJT, MPL) but seed actually has 4 T20s — JS Anand Memorial Trophy (JSAT) is also seeded as T20. Updated test to expect 4. Not a backend bug, just a doc/expectation mismatch."},
+      {"endpoint": "/api/bodies", "issue": "Leftover seed pollution: a stray 'TEST-BODY-CF0C02' body from an earlier iteration was found (total 67 instead of 66). Cleaned via direct Mongo deletion. There is no DELETE endpoint for /api/bodies; consider adding one or making tests immutable."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_phase4_2_tournaments.py",
+    "/app/test_reports/pytest/phase4_2_results.xml"
+  ],
+  "action_items": [
+    "Optional: add a DELETE /api/bodies/{code} endpoint (or admin cleanup) so test-created bodies do not accumulate in the demo DB.",
+    "Optional: update product description / problem statement to note JSAT is also T20 (so format=T20 returns 4, not 3)."
+  ],
+  "critical_code_review_comments": [
+    "server.py has grown to 3353 lines — consider splitting Phase modules (players, tournaments, claims, procurement) into separate routers for maintainability.",
+    "Cross-body matching in add_player_to_squad relies on string suffix heuristic ('div_short = body_id[-3:]') and 'player_id endswith div_short'. This is fragile — recommend a proper parent-lookup on db.bodies (parent_code) instead of substring matching. It currently works only because Division→District codes share a 3-letter division suffix.",
+    "No DELETE endpoint for tournaments — cleanup must go through status=Cancelled which leaves rows behind. Consider adding admin-only DELETE.",
+    "_check_player_against_tournament returns 400 with concatenated warnings using ' · ' separator; the cross-body and capacity checks short-circuit before this, which is correct, but the error messages are not Pydantic-typed; consider a structured error model for the frontend.",
+    "Captain uniqueness mutates the in-memory list but the previous-captain reset is done before the new member is appended (line 2442-2443). That works since members are re-saved, but writing a small unit test for the clearing behaviour would be valuable (currently asserted only implicitly via test_captain_uniqueness).",
+    "No index on (tournament_id, body_id) for db.squads to enforce the duplicate-squad-per-tournament rule at DB layer — code-level check works but race conditions possible."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase4_2_tournaments.py"
+  ],
+  "success_rate": {"backend": "100% (44/44)", "frontend": "N/A — backend only"},
+  "test_credentials": "Not required — no auth on backend endpoints.",
+  "seed_data_creation": "Used existing seeded data (15 tournaments, 7 players, 66 bodies). Tests created TEST_-prefixed tournaments + squads only; all cleaned post-run via Mongo (no DELETE endpoint for tournaments). Final DB state verified: tournaments=15, bodies=66, players=7.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase IV.2 tournament + squad module fully validated. Test file /app/backend/tests/test_phase4_2_tournaments.py is the canonical regression suite for tournaments. Includes a parametrized regression block for /bodies, /members, /disclosures, /meetings, /elections, /fees, /bank/accounts, /financial-powers, /dashboard/stats, /claims, /budgets, /procurement, /finance/abc-analysis, /players, /players-stats/summary, /transfers. The test plan's claim of 3 T20 tournaments was incorrect — actual seed has 4 (JSAT is also T20). Captain-uniqueness test covers only single captain assertion (not the cross-flip behaviour). Cleanup is performed via direct Mongo (no /api DELETE for bodies/tournaments).",
+  "rca_of_failures": "Two initial failures were both test-plan mismatches, not backend bugs: (1) bodies count was 67 because previous testing iterations left behind a TEST-BODY-CF0C02 row (no DELETE endpoint exists, so prior testers couldn't clean it). Cleaned via Mongo. (2) format=T20 returned 4 instead of 3 because JS Anand Memorial Trophy is seeded with format='T20'. Test updated to match implemented seed."
+}

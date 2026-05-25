@@ -28,6 +28,8 @@ import ClaimNew from "@/pages/ClaimNew";
 import Budgets from "@/pages/Budgets";
 import Procurement from "@/pages/Procurement";
 import Players from "@/pages/Players";
+import Tournaments from "@/pages/Tournaments";
+import TournamentDetail from "@/pages/TournamentDetail";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -89,6 +91,10 @@ function App() {
 
                         {/* Protected — Phase IV: Player Module */}
                         <Route path="/players" element={<Protected><Players /></Protected>} />
+
+                        {/* Protected — Phase IV.2: Tournament Module */}
+                        <Route path="/tournaments" element={<Protected><Tournaments /></Protected>} />
+                        <Route path="/tournaments/:id" element={<Protected><TournamentDetail /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

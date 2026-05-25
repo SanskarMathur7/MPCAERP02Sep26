@@ -323,3 +323,41 @@ export const transferAction = async (id, stage, payload) => {
     const { data } = await api.post(`/transfers/${id}/${stage}`, payload);
     return data;
 };
+
+// ---------- Phase IV.2: Tournament Module (M2) ----------
+export const fetchTournaments = async (params = {}) => {
+    const { data } = await api.get("/tournaments", { params });
+    return data;
+};
+export const fetchTournament = async (id) => {
+    const { data } = await api.get(`/tournaments/${id}`);
+    return data;
+};
+export const createTournament = async (payload) => {
+    const { data } = await api.post("/tournaments", payload);
+    return data;
+};
+export const setTournamentStatus = async (id, status) => {
+    const { data } = await api.post(`/tournaments/${id}/status/${status}`);
+    return data;
+};
+export const fetchSquads = async (tid) => {
+    const { data } = await api.get(`/tournaments/${tid}/squads`);
+    return data;
+};
+export const createSquad = async (payload) => {
+    const { data } = await api.post("/squads", payload);
+    return data;
+};
+export const addPlayerToSquad = async (squadId, payload) => {
+    const { data } = await api.post(`/squads/${squadId}/players`, payload);
+    return data;
+};
+export const removePlayerFromSquad = async (squadId, playerId) => {
+    const { data } = await api.delete(`/squads/${squadId}/players/${playerId}`);
+    return data;
+};
+export const fetchTournamentStats = async () => {
+    const { data } = await api.get("/tournaments-stats/summary");
+    return data;
+};

@@ -6,7 +6,7 @@ import {
     Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle,
 } from "lucide-react";
 import { MpcaEmblem, MpcaLogoMark } from "@/components/MpcaEmblem";
-import CricketLoader from "@/components/CricketLoader";
+import CoinTossLoader from "@/components/CoinTossLoader";
 
 const TIER_ICONS = {
     State: Landmark,
@@ -82,7 +82,7 @@ const Login = () => {
 
     const proceedWith = (persona) => {
         setSubmitting(true);
-        // Mimic a real sign-in handshake — gives the loader a beat to breathe.
+        // Mimic a real sign-in handshake — gives the coin a beat to settle.
         setTimeout(() => {
             login(persona);
             if (persona.id === "public") {
@@ -90,7 +90,7 @@ const Login = () => {
             } else {
                 navigate("/dashboard");
             }
-        }, 650);
+        }, 1400);
     };
 
     const handleSubmit = (e) => {
@@ -123,16 +123,13 @@ const Login = () => {
 
     if (submitting) {
         return (
-            <div className="min-h-screen bg-mpca-green-dark text-mpca-ivory flex items-center justify-center" data-testid="login-loading">
-                <div className="text-center">
-                    <CricketLoader
-                        size="lg"
+            <div className="min-h-screen cricket-pitch-bg text-mpca-ivory flex items-center justify-center" data-testid="login-loading">
+                <div className="text-center max-w-md px-6">
+                    <CoinTossLoader
                         label={`Signing you in as ${selectedPersona.honorific} ${selectedPersona.name}…`}
-                        testId="login-cricket-loader"
+                        sublabel="Verifying with the MPCA registrar"
+                        testId="login-coin-toss-loader"
                     />
-                    <div className="overline mt-4 !text-mpca-gold-light/70">
-                        Verifying with the MPCA registrar
-                    </div>
                 </div>
             </div>
         );

@@ -314,43 +314,71 @@
     }
 }
 
-/* ===== Cricket Loader =====
-   A bouncing cricket ball — vertical bounce only (no rotation) so the seam
-   stays horizontal and instantly readable as a cricket ball. Slight squash
-   on impact + lift on top for weight. */
-@keyframes ball-bounce {
-    0%   { transform: translateY(0)     scaleX(1.06) scaleY(0.92); }   /* impact */
-    20%  { transform: translateY(-6px)  scaleX(0.98) scaleY(1.03); }
-    50%  { transform: translateY(-22px) scaleX(0.96) scaleY(1.05); }   /* apex */
-    80%  { transform: translateY(-6px)  scaleX(0.98) scaleY(1.03); }
-    100% { transform: translateY(0)     scaleX(1.06) scaleY(0.92); }   /* impact */
+/* ===== Cricket Loader — Stumps + Bails =====
+   A cricket ball whizzes right→left, knocking the bails in sequence
+   (right bail at ~41% of the cycle, left bail at ~59%), then settles.
+   Bail timings match the ball animation (1.7s total) defined in
+   `CricketLoader.jsx`. */
+@keyframes bail-knock-right {
+    0%, 38%   { transform: translate(0, 0) rotate(0deg); }
+    44%       { transform: translate(4px, -10px) rotate(28deg); }
+    52%       { transform: translate(7px, -6px)  rotate(18deg); }
+    62%       { transform: translate(8px, -2px)  rotate(8deg);  }
+    72%       { transform: translate(6px, 0px)   rotate(2deg);  }
+    82%, 100% { transform: translate(0, 0) rotate(0deg); }
 }
-@keyframes ball-shadow {
-    0%, 100% { transform: scaleX(1.05); opacity: 0.55; filter: blur(0.6px); }
-    50%      { transform: scaleX(0.45); opacity: 0.15; filter: blur(2.2px); }
+@keyframes bail-knock-left {
+    0%, 54%   { transform: translate(0, 0) rotate(0deg); }
+    60%       { transform: translate(-4px, -11px) rotate(-30deg); }
+    68%       { transform: translate(-7px, -7px)  rotate(-20deg); }
+    78%       { transform: translate(-9px, -2px)  rotate(-10deg); }
+    88%       { transform: translate(-5px, 0px)   rotate(-3deg);  }
+    96%, 100% { transform: translate(0, 0) rotate(0deg); }
 }
-.cricket-loader-shell {
-    display: inline-block;
-}
-.cricket-loader-ball {
-    display: block;
-    animation: ball-bounce 1.05s cubic-bezier(0.5, 0, 0.4, 1) infinite;
-    transform-origin: 50% 100%;
-    filter: drop-shadow(0 4px 3px rgba(10, 31, 61, 0.30));
-}
-.cricket-loader-shadow {
-    position: absolute;
-    bottom: -8px;
-    left: 8%;
-    right: 8%;
-    height: 7px;
-    border-radius: 50%;
-    background: radial-gradient(ellipse at center,
-        rgba(10, 31, 61, 0.55) 0%,
-        rgba(10, 31, 61, 0) 70%);
-    animation: ball-shadow 1.05s cubic-bezier(0.5, 0, 0.4, 1) infinite;
+.stumps-svg .bail {
+    transform-box: fill-box;
     transform-origin: center;
-    z-index: -1;
+}
+.stumps-svg .bail-right {
+    animation: bail-knock-right 1.7s cubic-bezier(0.4, 0.1, 0.5, 1) infinite;
+}
+.stumps-svg .bail-left {
+    animation: bail-knock-left  1.7s cubic-bezier(0.4, 0.1, 0.5, 1) infinite;
+}
+
+/* ===== Coin Toss Loader =====
+   Continuous 3D Y-axis flip with a vertical "toss" arc. Heads ↔ tails reveal
+   naturally via backface-visibility. Used on the sign-in transition. */
+.coin-toss-stage {
+    perspective: 900px;
+    width: 96px;
+    height: 96px;
+}
+.coin-toss-coin {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    animation: coin-flip 1.4s cubic-bezier(0.45, 0.05, 0.5, 0.95) infinite;
+    filter: drop-shadow(0 14px 14px rgba(0,0,0,0.45));
+}
+.coin-toss-coin .coin-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.coin-toss-coin .coin-face-tails {
+    transform: rotateY(180deg);
+}
+@keyframes coin-flip {
+    0%   { transform: translateY(0)     rotateY(0deg)    rotateZ(-3deg); }
+    25%  { transform: translateY(-32px) rotateY(360deg)  rotateZ(0deg);  }
+    50%  { transform: translateY(-52px) rotateY(720deg)  rotateZ(3deg);  }
+    75%  { transform: translateY(-32px) rotateY(1080deg) rotateZ(0deg);  }
+    100% { transform: translateY(0)     rotateY(1440deg) rotateZ(-3deg); }
 }
 
 /* ===== Landing emblem: one-shot saffron pulse on first render ===== */

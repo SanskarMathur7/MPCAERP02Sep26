@@ -314,36 +314,41 @@
     }
 }
 
-/* ===== Cricket Loader ===== */
-@keyframes ball-spin {
-    0%   { transform: translateY(0) rotate(0deg); }
-    50%  { transform: translateY(-14px) rotate(180deg); }
-    100% { transform: translateY(0) rotate(360deg); }
+/* ===== Cricket Loader =====
+   A bouncing cricket ball — vertical bounce only (no rotation) so the seam
+   stays horizontal and instantly readable as a cricket ball. Slight squash
+   on impact + lift on top for weight. */
+@keyframes ball-bounce {
+    0%   { transform: translateY(0)     scaleX(1.06) scaleY(0.92); }   /* impact */
+    20%  { transform: translateY(-6px)  scaleX(0.98) scaleY(1.03); }
+    50%  { transform: translateY(-22px) scaleX(0.96) scaleY(1.05); }   /* apex */
+    80%  { transform: translateY(-6px)  scaleX(0.98) scaleY(1.03); }
+    100% { transform: translateY(0)     scaleX(1.06) scaleY(0.92); }   /* impact */
 }
 @keyframes ball-shadow {
-    0%, 100% { transform: scaleX(1);   opacity: 0.45; }
-    50%      { transform: scaleX(0.55); opacity: 0.18; }
+    0%, 100% { transform: scaleX(1.05); opacity: 0.55; filter: blur(0.6px); }
+    50%      { transform: scaleX(0.45); opacity: 0.15; filter: blur(2.2px); }
 }
 .cricket-loader-shell {
     display: inline-block;
 }
 .cricket-loader-ball {
     display: block;
-    animation: ball-spin 1.1s cubic-bezier(0.6, 0, 0.4, 1) infinite;
-    transform-origin: 50% 50%;
-    filter: drop-shadow(0 6px 4px rgba(10, 31, 61, 0.25));
+    animation: ball-bounce 1.05s cubic-bezier(0.5, 0, 0.4, 1) infinite;
+    transform-origin: 50% 100%;
+    filter: drop-shadow(0 4px 3px rgba(10, 31, 61, 0.30));
 }
 .cricket-loader-shadow {
     position: absolute;
-    bottom: -10px;
-    left: 12%;
-    right: 12%;
-    height: 6px;
+    bottom: -8px;
+    left: 8%;
+    right: 8%;
+    height: 7px;
     border-radius: 50%;
     background: radial-gradient(ellipse at center,
         rgba(10, 31, 61, 0.55) 0%,
         rgba(10, 31, 61, 0) 70%);
-    animation: ball-shadow 1.1s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+    animation: ball-shadow 1.05s cubic-bezier(0.5, 0, 0.4, 1) infinite;
     transform-origin: center;
     z-index: -1;
 }

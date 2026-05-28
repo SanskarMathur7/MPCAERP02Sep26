@@ -1,126 +1,159 @@
-// CricketLoader — Stumps + Bails + Whizzing Ball
-// Three navy stumps with two marigold bails on top. A small red cricket ball
-// whizzes in from the right and clatters past the wicket, knocking the bails
-// in sequence (right bail at ~41 %, left bail at ~59 %), then resets.
-// Pure SVG + CSS — animations defined in /app/frontend/src/index.css.
+// CricketLoader — single MPCA coin loader, used everywhere in the app.
+// A spinning gold coin (heads = MPCA wordmark, tails = Est. 1957) with a
+// continuous toss-and-flip animation. Three sizes (sm/md/lg) and a
+// light-or-dark variant so it reads on both ivory pages and the navy
+// sign-in pane.
 
 const SIZE_MAP = {
-    sm: { w: 70, h: 56 },
-    md: { w: 120, h: 96 },
-    lg: { w: 170, h: 136 },
+    sm: 60,
+    md: 88,
+    lg: 112,
 };
 
-const Stumps = ({ width, height }) => (
-    <svg
-        viewBox="0 0 120 96"
-        width={width}
-        height={height}
-        className="stumps-svg"
-        aria-hidden="true"
-    >
+const CoinFaceHeads = () => (
+    <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">
         <defs>
-            {/* Subtle leather gradient for the ball */}
-            <radialGradient id="sl-ball" cx="35%" cy="30%" r="65%">
-                <stop offset="0%"   stopColor="#d44141" />
-                <stop offset="55%"  stopColor="#9a1818" />
-                <stop offset="100%" stopColor="#4d0606" />
+            <radialGradient id="coin-h" cx="35%" cy="28%" r="70%">
+                <stop offset="0%"   stopColor="#fff4cf" />
+                <stop offset="45%"  stopColor="#e9b949" />
+                <stop offset="85%"  stopColor="#a8800f" />
+                <stop offset="100%" stopColor="#5c3f00" />
             </radialGradient>
-            {/* Wood-grain gradient for the bails */}
-            <linearGradient id="sl-bail" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#f7d57a" />
-                <stop offset="55%"  stopColor="#e9b949" />
-                <stop offset="100%" stopColor="#a8800f" />
-            </linearGradient>
-            {/* Wood gradient for the stumps */}
-            <linearGradient id="sl-stump" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%"   stopColor="#0a1f3d" />
-                <stop offset="50%"  stopColor="#1a3866" />
-                <stop offset="100%" stopColor="#0a1f3d" />
-            </linearGradient>
         </defs>
-
-        {/* Ground line — dashed crease */}
-        <line
-            x1="6" y1="88" x2="114" y2="88"
-            stroke="#0a1f3d" strokeOpacity="0.30"
-            strokeWidth="1" strokeDasharray="3 3"
-        />
-        {/* Shadow below stumps */}
-        <ellipse
-            cx="60" cy="89" rx="32" ry="1.6"
-            fill="#0a1f3d" fillOpacity="0.18"
-        />
-
-        {/* Stumps — three vertical bars with tapered tops */}
-        <g>
-            <path d="M 39 28 L 41 28 L 42 88 L 38 88 Z" fill="url(#sl-stump)" />
-            <path d="M 59 28 L 61 28 L 62 88 L 58 88 Z" fill="url(#sl-stump)" />
-            <path d="M 79 28 L 81 28 L 82 88 L 78 88 Z" fill="url(#sl-stump)" />
-            {/* Stump tops — small caps */}
-            <circle cx="40" cy="28" r="2" fill="#0a1f3d" />
-            <circle cx="60" cy="28" r="2" fill="#0a1f3d" />
-            <circle cx="80" cy="28" r="2" fill="#0a1f3d" />
+        <circle cx="40" cy="40" r="38" fill="url(#coin-h)" stroke="#3d2800" strokeWidth="0.8" />
+        {/* Reeded edge */}
+        <g stroke="#5c3f00" strokeOpacity="0.55" strokeWidth="0.6">
+            {Array.from({ length: 36 }).map((_, i) => {
+                const a = (i * Math.PI * 2) / 36;
+                const r1 = 33.5, r2 = 36.5;
+                return (
+                    <line
+                        key={i}
+                        x1={40 + Math.cos(a) * r1}
+                        y1={40 + Math.sin(a) * r1}
+                        x2={40 + Math.cos(a) * r2}
+                        y2={40 + Math.sin(a) * r2}
+                    />
+                );
+            })}
         </g>
-
-        {/* Bails — two short wood pegs resting across the stump tops */}
-        <g>
-            <rect
-                className="bail bail-left"
-                x="38" y="23" width="22" height="3.2" rx="1.6"
-                fill="url(#sl-bail)"
-                stroke="#7a5a08" strokeWidth="0.4"
-            />
-            <rect
-                className="bail bail-right"
-                x="60" y="23" width="22" height="3.2" rx="1.6"
-                fill="url(#sl-bail)"
-                stroke="#7a5a08" strokeWidth="0.4"
-            />
-        </g>
-
-        {/* Cricket ball — whizzes right→left and back via SMIL */}
-        <circle
-            r="3.6"
-            fill="url(#sl-ball)"
-            stroke="#3d0606" strokeWidth="0.4"
+        <circle cx="40" cy="40" r="31" fill="none" stroke="#5c3f00" strokeOpacity="0.4" strokeWidth="0.5" />
+        <text
+            x="40" y="38" textAnchor="middle"
+            fontFamily="Cormorant Garamond, serif"
+            fontSize="15"
+            fontWeight="700"
+            fill="#3d2800"
+            letterSpacing="1"
         >
-            <animate
-                attributeName="cx"
-                values="130; -12; 130"
-                keyTimes="0; 0.70; 1"
-                dur="1.7s"
-                repeatCount="indefinite"
-            />
-            <animate
-                attributeName="cy"
-                values="60; 58; 60; 62; 60"
-                keyTimes="0; 0.3; 0.5; 0.7; 1"
-                dur="1.7s"
-                repeatCount="indefinite"
-            />
-            {/* Tiny seam stitch — appears as the ball passes the stumps */}
-        </circle>
+            MPCA
+        </text>
+        <text
+            x="40" y="50" textAnchor="middle"
+            fontFamily="Cormorant Garamond, serif"
+            fontSize="5"
+            letterSpacing="2"
+            fill="#5c3f00"
+        >
+            CRICKET ASSOCIATION
+        </text>
+        <path d="M 22 56 Q 28 60 34 56" stroke="#5c3f00" strokeWidth="0.7" fill="none" />
+        <path d="M 46 56 Q 52 60 58 56" stroke="#5c3f00" strokeWidth="0.7" fill="none" />
+    </svg>
+);
+
+const CoinFaceTails = () => (
+    <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">
+        <defs>
+            <radialGradient id="coin-t" cx="35%" cy="28%" r="70%">
+                <stop offset="0%"   stopColor="#fff4cf" />
+                <stop offset="45%"  stopColor="#d4a338" />
+                <stop offset="85%"  stopColor="#8a6209" />
+                <stop offset="100%" stopColor="#4a2f00" />
+            </radialGradient>
+        </defs>
+        <circle cx="40" cy="40" r="38" fill="url(#coin-t)" stroke="#3d2800" strokeWidth="0.8" />
+        <g stroke="#5c3f00" strokeOpacity="0.55" strokeWidth="0.6">
+            {Array.from({ length: 36 }).map((_, i) => {
+                const a = (i * Math.PI * 2) / 36;
+                const r1 = 33.5, r2 = 36.5;
+                return (
+                    <line
+                        key={i}
+                        x1={40 + Math.cos(a) * r1}
+                        y1={40 + Math.sin(a) * r1}
+                        x2={40 + Math.cos(a) * r2}
+                        y2={40 + Math.sin(a) * r2}
+                    />
+                );
+            })}
+        </g>
+        <circle cx="40" cy="40" r="31" fill="none" stroke="#5c3f00" strokeOpacity="0.4" strokeWidth="0.5" />
+        <text
+            x="40" y="30" textAnchor="middle"
+            fontFamily="Cormorant Garamond, serif"
+            fontSize="5"
+            letterSpacing="3"
+            fill="#5c3f00"
+        >
+            EST
+        </text>
+        <text
+            x="40" y="50" textAnchor="middle"
+            fontFamily="Cormorant Garamond, serif"
+            fontSize="18"
+            fontWeight="700"
+            fill="#3d2800"
+        >
+            1957
+        </text>
+        <g stroke="#5c3f00" strokeWidth="1" strokeLinecap="round" fill="none">
+            <path d="M 25 60 L 40 70" />
+            <path d="M 55 60 L 40 70" />
+        </g>
     </svg>
 );
 
 const CricketLoader = ({
     label = "Loading…",
+    sublabel = null,
     size = "md",
+    onDark = false,
     className = "",
     testId = "cricket-loader",
 }) => {
-    const { w, h } = SIZE_MAP[size] || SIZE_MAP.md;
+    const px = SIZE_MAP[size] || SIZE_MAP.md;
+    const labelClass = onDark ? "text-mpca-ivory/95" : "text-mpca-gray-dark";
+    const sublabelClass = onDark ? "text-mpca-gold-light/75" : "text-mpca-gray";
+
     return (
         <div
-            className={`flex flex-col items-center justify-center gap-4 py-12 ${className}`}
+            className={`flex flex-col items-center justify-center gap-5 py-8 ${className}`}
             data-testid={testId}
             role="status"
             aria-live="polite"
         >
-            <Stumps width={w} height={h} />
+            <div className="coin-toss-stage" style={{ width: px, height: px }}>
+                <div className="coin-toss-coin">
+                    <div className="coin-face coin-face-heads">
+                        <CoinFaceHeads />
+                    </div>
+                    <div className="coin-face coin-face-tails">
+                        <CoinFaceTails />
+                    </div>
+                </div>
+            </div>
+
             {label && (
-                <div className="font-serif text-mpca-gray-dark text-sm md:text-base tracking-wide italic">
-                    {label}
+                <div className="text-center space-y-1">
+                    <div className={`font-serif text-base md:text-lg tracking-wide italic ${labelClass}`}>
+                        {label}
+                    </div>
+                    {sublabel && (
+                        <div className={`text-[11px] uppercase tracking-[0.22em] not-italic ${sublabelClass}`}>
+                            {sublabel}
+                        </div>
+                    )}
                 </div>
             )}
             <span className="sr-only">{label}</span>
@@ -129,4 +162,3 @@ const CricketLoader = ({
 };
 
 export default CricketLoader;
-export { Stumps };

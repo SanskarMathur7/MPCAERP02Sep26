@@ -6,7 +6,7 @@ import {
     Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle,
 } from "lucide-react";
 import { MpcaEmblem, MpcaLogoMark } from "@/components/MpcaEmblem";
-import CoinTossLoader from "@/components/CoinTossLoader";
+import CricketLoader from "@/components/CricketLoader";
 
 const TIER_ICONS = {
     State: Landmark,
@@ -125,10 +125,12 @@ const Login = () => {
         return (
             <div className="min-h-screen cricket-pitch-bg text-mpca-ivory flex items-center justify-center" data-testid="login-loading">
                 <div className="text-center max-w-md px-6">
-                    <CoinTossLoader
+                    <CricketLoader
+                        size="lg"
+                        onDark
                         label={`Signing you in as ${selectedPersona.honorific} ${selectedPersona.name}…`}
                         sublabel="Verifying with the MPCA registrar"
-                        testId="login-coin-toss-loader"
+                        testId="login-coin-loader"
                     />
                 </div>
             </div>

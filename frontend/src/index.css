@@ -314,45 +314,12 @@
     }
 }
 
-/* ===== Cricket Loader — Stumps + Bails =====
-   A cricket ball whizzes right→left, knocking the bails in sequence
-   (right bail at ~41% of the cycle, left bail at ~59%), then settles.
-   Bail timings match the ball animation (1.7s total) defined in
-   `CricketLoader.jsx`. */
-@keyframes bail-knock-right {
-    0%, 38%   { transform: translate(0, 0) rotate(0deg); }
-    44%       { transform: translate(4px, -10px) rotate(28deg); }
-    52%       { transform: translate(7px, -6px)  rotate(18deg); }
-    62%       { transform: translate(8px, -2px)  rotate(8deg);  }
-    72%       { transform: translate(6px, 0px)   rotate(2deg);  }
-    82%, 100% { transform: translate(0, 0) rotate(0deg); }
-}
-@keyframes bail-knock-left {
-    0%, 54%   { transform: translate(0, 0) rotate(0deg); }
-    60%       { transform: translate(-4px, -11px) rotate(-30deg); }
-    68%       { transform: translate(-7px, -7px)  rotate(-20deg); }
-    78%       { transform: translate(-9px, -2px)  rotate(-10deg); }
-    88%       { transform: translate(-5px, 0px)   rotate(-3deg);  }
-    96%, 100% { transform: translate(0, 0) rotate(0deg); }
-}
-.stumps-svg .bail {
-    transform-box: fill-box;
-    transform-origin: center;
-}
-.stumps-svg .bail-right {
-    animation: bail-knock-right 1.7s cubic-bezier(0.4, 0.1, 0.5, 1) infinite;
-}
-.stumps-svg .bail-left {
-    animation: bail-knock-left  1.7s cubic-bezier(0.4, 0.1, 0.5, 1) infinite;
-}
-
 /* ===== Coin Toss Loader =====
-   Continuous 3D Y-axis flip with a vertical "toss" arc. Heads ↔ tails reveal
-   naturally via backface-visibility. Used on the sign-in transition. */
+   Continuous 3D Y-axis flip with a vertical "toss" arc. Used as the single
+   loading indicator across the entire app — heads side reveals the MPCA
+   wordmark, tails side reveals "EST 1957". */
 .coin-toss-stage {
     perspective: 900px;
-    width: 96px;
-    height: 96px;
 }
 .coin-toss-coin {
     position: relative;
@@ -375,9 +342,9 @@
 }
 @keyframes coin-flip {
     0%   { transform: translateY(0)     rotateY(0deg)    rotateZ(-3deg); }
-    25%  { transform: translateY(-32px) rotateY(360deg)  rotateZ(0deg);  }
-    50%  { transform: translateY(-52px) rotateY(720deg)  rotateZ(3deg);  }
-    75%  { transform: translateY(-32px) rotateY(1080deg) rotateZ(0deg);  }
+    25%  { transform: translateY(-28px) rotateY(360deg)  rotateZ(0deg);  }
+    50%  { transform: translateY(-44px) rotateY(720deg)  rotateZ(3deg);  }
+    75%  { transform: translateY(-28px) rotateY(1080deg) rotateZ(0deg);  }
     100% { transform: translateY(0)     rotateY(1440deg) rotateZ(-3deg); }
 }
 

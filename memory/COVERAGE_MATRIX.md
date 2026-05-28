@@ -166,4 +166,64 @@
 
 1. **Information Architecture** — sidebar is flat; doc mandates 3 domains (Secretarial / Financial / Operations). → *Layer 1 fix.*
 2. **AI-gated grant validation** — Tab 5 + Tab 6 requirement. District uploads docs → Claude Sonnet validates against Approval Matrix → auto-route. → *Layer 2 build.*
-3. **M3 / M4 / M6 / M8 modules** — Tab 3 squares still empty.
+3. **M3 / M4 / M6 / M8 modules** — Tab 3 squares still empty. **Priority bumped to HIGH per ERP POINTS.pdf (G6).**
+
+---
+
+# ADDENDUM — Feb 2026 · ERP POINTS.pdf
+> Source: user-uploaded `ERP POINTS.pdf` (Feb 2026). 22 new requirements layered on top of the original plan. Status of each tracked below; nothing in this addendum is built yet unless explicitly marked ✅.
+
+## Tab-2 Clarification
+Org Structure is **not** a user-facing screen — it is the **segmentation matrix for logins / views / access**. It tells the system how many distinct authority scopes need their own login (1 BCCI + 1 MPCA HQ + 10 Divisions + 54 Districts + sub-roles per scope). The `/org` page must stay hidden from end-users; the hierarchy data continues to drive backend `body_id` scoping and sidebar visibility rules per persona.
+
+## Bucket A · Cross-cutting platform features
+
+| Ref | Requirement | Status | Notes |
+|---|---|---|---|
+| G1 | Real-time output at frontend (live DB state) | ✅ | Already satisfied — no mocks in DB layer |
+| G2 | Turnaround time (SLA / due dates) on every workflow step | 🔴 | Adds `due_date` + `sla_hours` to `ApprovalStep` |
+| G3 | Real-time notifications | 🔴 | Channel TBD (in-app vs email vs SMS) |
+| G4 | Red flag / anomaly on overdue tasks | 🔴 | Derived once G2 lands |
+| G5 | Present setup first, historical later | 📘 | Policy constraint, not a feature |
+| G7 | Allow incomplete uploads / finalise later | 🟡 | Draft state exists on claims; extend to procurement + transfers |
+| G9 | Customised MIS / Interactive Reports | 🔴 | New `/reports` module |
+
+## Bucket B · New modules
+
+| Ref | Module | Status | Notes |
+|---|---|---|---|
+| G6 | M3 Match Officials + M4 Team Officials | 🔴 | **Priority bumped to HIGH** |
+| G8 | Online Scoring Tool integration | 🔴 | Depth TBD (result form vs scorecard vs ball-by-ball) |
+| G10 | Academy Module (Camps · Coaching · Practice Matches) | 🔴 | New module |
+| G11 | Museum Module | 🔴 | Scope TBD |
+| F6e | Investment Module (FDs · MFs · ROI) | 🔴 | Sub-module of M5 Finance |
+
+## Bucket C · M5 Finance deepening
+
+| Ref | Requirement | Status |
+|---|---|---|
+| F1 | `approved_amount` + `difference` + `difference_reason` on claims | 🔴 |
+| F2 | Claim-type dropdown linked to scheme docs / budget heads | 🔴 |
+| F3 | Flags: `accounted_in_tally`, `claimable_from_bcci` | 🔴 |
+| PF1 | Annual Grant — approve district + division share individually AND combined | 🔴 |
+| PF2 | Multi-stage send-back with reason + notification (Div→Dist, MPCA→Div, CAO→Auditor, Treas/Sec→CAO/Auditor/Accounts) | 🔴 |
+| PF4 | Journal Voucher + Payment Voucher flow | 🔴 | Coupled-or-separate rule TBD |
+| PF5 | Surplus distribution flow (Match Financials → AGM approval → Division intimation) | 🔴 |
+| F6a | Vendor Bills module (Hotels · Infra · Travel · Material) + vendor master | 🔴 |
+| F6b | Tally integration | 🔴 | Credentials/format TBD |
+| F6c | BCCI Claims dashboard (per BCCI tournament: due / submitted / processed / received) | 🔴 |
+| F6d | Vendor bill → BCCI-eligible flag → auto-attach to BCCI claim | 🔴 |
+
+## Bucket D · RBAC
+
+| Ref | Requirement | Status |
+|---|---|---|
+| R1 | Add Hon. Treasurer role | ✅ | Persona exists (Smt. Meera Verma); awaiting explicit matrix row |
+| R2 | Updated RBAC sheet from MPCA | ⏳ | Pending user upload |
+
+## Open Clarifications
+
+1. **G3** — Notification channels (in-app · email · SMS · WhatsApp)?
+2. **G8** — Online Scoring depth (result form · scorecard · ball-by-ball)?
+3. **PF4** — Journal Voucher vs Payment Voucher coupling rule?
+4. **G11** — Museum Module scope (exhibits · visitor log · memorabilia · donor wall)?

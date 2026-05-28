@@ -443,7 +443,19 @@ const Claims = () => {
                                 {c.claim_no}
                             </div>
                             <div className="flex-1 min-w-[280px]">
-                                <div className="font-serif text-lg text-mpca-green-dark leading-tight">{c.title}</div>
+                                <div className="font-serif text-lg text-mpca-green-dark leading-tight flex items-center gap-2">
+                                    {c.title}
+                                    {c.is_overdue && (
+                                        <span
+                                            data-testid={"claim-overdue-flag-" + c.claim_no}
+                                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-mpca-oxblood text-white text-[9px] tracking-wider uppercase font-semibold"
+                                            title={c.due_at ? `SLA due ${new Date(c.due_at).toLocaleString()}` : "Overdue"}
+                                        >
+                                            <AlertTriangle size={9} strokeWidth={2} />
+                                            Overdue
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="text-[11px] text-mpca-gray-dark mt-1 flex items-center gap-2">
                                     {c.body_id.startsWith("DIV") ? <Building2 size={11} /> : c.body_id.startsWith("DIST") ? <MapPin size={11} /> : <Landmark size={11} />}
                                     {c.body_id}

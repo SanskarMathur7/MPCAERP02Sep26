@@ -62,6 +62,7 @@ const COMING_SOON = [
 ];
 
 import { MpcaEmblem as MPCACrest } from "@/components/MpcaEmblem";
+import NotificationBell from "@/components/NotificationBell";
 
 const AppLayout = ({ children }) => {
     const { persona, logout } = useAuth();
@@ -105,14 +106,17 @@ const AppLayout = ({ children }) => {
                             <div className="overline text-[9px] !text-mpca-gold-light/70 mb-2">
                                 Signed In As
                             </div>
-                            <button
-                                onClick={() => navigate("/login")}
-                                data-testid="switch-persona-btn"
-                                className="text-[9px] tracking-[0.2em] uppercase text-mpca-gold-light/70 hover:text-mpca-gold-light border border-mpca-brass/40 hover:border-mpca-brass px-2 py-1 transition-colors"
-                                title="Switch persona"
-                            >
-                                Switch
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <NotificationBell />
+                                <button
+                                    onClick={() => navigate("/login")}
+                                    data-testid="switch-persona-btn"
+                                    className="text-[9px] tracking-[0.2em] uppercase text-mpca-gold-light/70 hover:text-mpca-gold-light border border-mpca-brass/40 hover:border-mpca-brass px-2 py-1 transition-colors"
+                                    title="Switch persona"
+                                >
+                                    Switch
+                                </button>
+                            </div>
                         </div>
                         <div className="font-serif text-lg text-mpca-ivory leading-tight">
                             {persona.honorific} {persona.name}

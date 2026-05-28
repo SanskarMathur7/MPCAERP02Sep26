@@ -399,6 +399,9 @@ class Claim(ClaimBase):
     disbursement_account_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # Step 2 · derived fields (computed on read, never persisted by the workflow itself)
+    due_at: Optional[str] = None
+    is_overdue: bool = False
 
 
 class ClaimCreate(ClaimBase):
@@ -1362,7 +1365,7 @@ async def list_claims(
     if fiscal_cycle:
         query["fiscal_cycle"] = fiscal_cycle
     docs = await db.claims.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return docs
+    return [_decorate_claim(d) for d in docs]
 
 
 @api_router.get("/claims/{claim_id}", response_model=Claim)
@@ -1370,7 +1373,7 @@ async def get_claim(claim_id: str):
     doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
-    return doc
+    return _decorate_claim(doc)
 
 
 @api_router.post("/claims", response_model=Claim)
@@ -1439,6 +1442,145 @@ def _append_step(claim_doc: dict, step: ApprovalStep, new_status: ClaimStatus) -
     }
 
 
+# ============================================================
+# Step 2 · Notification Spine + SLA / Due-dates / Red-flag
+# Feb 2026 — G2 / G3 / G4 from ERP POINTS.pdf
+# In-app bell only (per user choice). Email/SMS deferred.
+# ============================================================
+
+from datetime import timedelta as _td  # local alias to avoid clobbering anywhere else
+
+# How many hours the holder of each queue has to act before a claim is "overdue".
+SLA_HOURS_BY_STATUS: dict = {
+    "Draft": 14 * 24,                  # District: 14 days to submit
+    "Submitted": 7 * 24,               # Division: 7 days to recommend
+    "Division_Recommended": 5 * 24,    # MPCA Treasurer: 5 days to sanction
+    "MPCA_Sanctioned": 3 * 24,         # MPCA Treasurer: 3 days to disburse
+    "Returned": 5 * 24,                # Originator: 5 days to act
+}
+
+
+class Notification(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    recipient_role_id: str               # "division-secretary" / "treasurer" / etc.
+    recipient_body_id: str               # body the recipient operates at
+    kind: Literal["claim_event", "sla_breach", "info"] = "claim_event"
+    title: str
+    message: str
+    link: Optional[str] = None           # e.g. "/claims"
+    related_type: Optional[str] = None   # "claim" / "procurement" / "transfer"
+    related_id: Optional[str] = None
+    severity: Literal["info", "warning", "critical"] = "info"
+    read: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+async def _create_notification(
+    recipient_role_id: str,
+    recipient_body_id: str,
+    title: str,
+    message: str,
+    *,
+    link: Optional[str] = None,
+    related_type: Optional[str] = None,
+    related_id: Optional[str] = None,
+    severity: str = "info",
+    kind: str = "claim_event",
+) -> None:
+    n = Notification(
+        recipient_role_id=recipient_role_id,
+        recipient_body_id=recipient_body_id,
+        title=title,
+        message=message,
+        link=link,
+        related_type=related_type,
+        related_id=related_id,
+        severity=severity,
+        kind=kind,
+    )
+    await db.notifications.insert_one(n.model_dump())
+
+
+def _recipient_for_new_status(claim_doc: dict, new_status: str):
+    """Maps a claim transition to (recipient_role_id, recipient_body_id)."""
+    body_id = claim_doc.get("body_id")
+    parent_id = claim_doc.get("parent_body_id")
+    if new_status == "Submitted":
+        # If the submitter is a District, the parent (Division) sees it.
+        # If the submitter is the State itself, treasurer at MPCA sees it.
+        if parent_id and parent_id != "MPCA":
+            return ("division-secretary", parent_id)
+        return ("treasurer", "MPCA")
+    if new_status == "Division_Recommended":
+        return ("treasurer", "MPCA")
+    if new_status == "MPCA_Sanctioned":
+        return ("treasurer", "MPCA")     # self-reminder to disburse
+    if new_status in ("Disbursed", "Rejected", "Returned"):
+        return ("district-secretary", body_id)
+    return None
+
+
+async def _notify_for_claim(claim_doc: dict, new_status: str, actor_name: Optional[str]) -> None:
+    target = _recipient_for_new_status(claim_doc, new_status)
+    if not target:
+        return
+    role_id, body_id = target
+    title_map = {
+        "Submitted": f"New claim from {claim_doc.get('body_id')} awaits your recommendation",
+        "Division_Recommended": "Claim recommended by Division — awaits MPCA sanction",
+        "MPCA_Sanctioned": "Claim sanctioned — pending disbursement",
+        "Disbursed": "Your claim has been disbursed",
+        "Rejected": "Your claim was rejected",
+        "Returned": "Your claim was returned for clarification",
+    }
+    severity_map = {"Rejected": "critical", "Returned": "warning"}
+    msg = (
+        f"{claim_doc.get('claim_no')} · {claim_doc.get('title')} · "
+        f"₹{(claim_doc.get('amount_inr') or 0):,.0f}"
+    )
+    if actor_name:
+        msg += f" · by {actor_name}"
+    await _create_notification(
+        recipient_role_id=role_id,
+        recipient_body_id=body_id,
+        title=title_map.get(new_status, new_status),
+        message=msg,
+        link="/claims",
+        related_type="claim",
+        related_id=claim_doc.get("id"),
+        severity=severity_map.get(new_status, "info"),
+    )
+
+
+def _decorate_claim(doc: dict) -> dict:
+    """Add derived `due_at` and `is_overdue` based on SLA + last action timestamp."""
+    if not doc:
+        return doc
+    status = doc.get("status")
+    sla_h = SLA_HOURS_BY_STATUS.get(status)
+    if not sla_h or status in ("Disbursed", "Rejected"):
+        doc["due_at"] = None
+        doc["is_overdue"] = False
+        return doc
+    chain = doc.get("approval_chain") or []
+    anchor = chain[-1].get("timestamp") if chain else doc.get("created_at")
+    anchor_dt = None
+    if anchor:
+        try:
+            anchor_dt = datetime.fromisoformat(anchor.replace("Z", "+00:00"))
+        except Exception:
+            anchor_dt = None
+    if not anchor_dt:
+        doc["due_at"] = None
+        doc["is_overdue"] = False
+        return doc
+    due_dt = anchor_dt + _td(hours=sla_h)
+    doc["due_at"] = due_dt.isoformat()
+    doc["is_overdue"] = datetime.now(timezone.utc) > due_dt
+    return doc
+
+
 @api_router.post("/claims/{claim_id}/submit", response_model=Claim)
 async def submit_claim(claim_id: str, action: ClaimAction):
     """District submits Draft claim → Division (Submitted)."""
@@ -1457,7 +1599,9 @@ async def submit_claim(claim_id: str, action: ClaimAction):
     )
     update = _append_step(doc, step, "Submitted")
     await db.claims.update_one({"id": claim_id}, {"$set": update})
-    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    updated = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    await _notify_for_claim(updated, "Submitted", action.actor_name)
+    return _decorate_claim(updated)
 
 
 @api_router.post("/claims/{claim_id}/recommend", response_model=Claim)
@@ -1480,7 +1624,9 @@ async def recommend_claim(claim_id: str, action: ClaimAction):
     # Once a Division has recommended, the parent for the MPCA queue is MPCA itself.
     update["parent_body_id"] = "MPCA"
     await db.claims.update_one({"id": claim_id}, {"$set": update})
-    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    updated = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    await _notify_for_claim(updated, "Division_Recommended", action.actor_name)
+    return _decorate_claim(updated)
 
 
 @api_router.post("/claims/{claim_id}/sanction", response_model=Claim)
@@ -1501,7 +1647,9 @@ async def sanction_claim(claim_id: str, action: ClaimAction):
     )
     update = _append_step(doc, step, "MPCA_Sanctioned")
     await db.claims.update_one({"id": claim_id}, {"$set": update})
-    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    updated = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    await _notify_for_claim(updated, "MPCA_Sanctioned", action.actor_name)
+    return _decorate_claim(updated)
 
 
 @api_router.post("/claims/{claim_id}/disburse", response_model=Claim)
@@ -1604,7 +1752,9 @@ async def reject_claim(claim_id: str, action: ClaimAction):
     )
     update = _append_step(doc, step, "Rejected")
     await db.claims.update_one({"id": claim_id}, {"$set": update})
-    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    updated = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    await _notify_for_claim(updated, "Rejected", action.actor_name)
+    return _decorate_claim(updated)
 
 
 @api_router.post("/claims/{claim_id}/return", response_model=Claim)
@@ -1627,7 +1777,9 @@ async def return_claim(claim_id: str, action: ClaimAction):
     # When returned, the parent becomes the originating body so it shows in their queue
     update["parent_body_id"] = await _resolve_parent_body(doc["body_id"])
     await db.claims.update_one({"id": claim_id}, {"$set": update})
-    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    updated = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    await _notify_for_claim(updated, "Returned", action.actor_name)
+    return _decorate_claim(updated)
 
 
 @api_router.get("/claims-stats/summary")
@@ -2505,6 +2657,58 @@ async def root():
     return {"app": "MPCA ERP", "version": "4.1.0", "status": "ok"}
 
 
+# ============================================================
+# Step 2 · Notification endpoints (G3-a · in-app bell)
+# ============================================================
+
+@api_router.get("/notifications", response_model=List[Notification])
+async def list_notifications(
+    recipient_role_id: str,
+    recipient_body_id: Optional[str] = None,
+    unread_only: bool = False,
+    limit: int = 100,
+):
+    q: dict = {"recipient_role_id": recipient_role_id}
+    if recipient_body_id:
+        q["recipient_body_id"] = recipient_body_id
+    if unread_only:
+        q["read"] = False
+    docs = await db.notifications.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return docs
+
+
+@api_router.get("/notifications/stats")
+async def notifications_stats(
+    recipient_role_id: str,
+    recipient_body_id: Optional[str] = None,
+):
+    q: dict = {"recipient_role_id": recipient_role_id, "read": False}
+    if recipient_body_id:
+        q["recipient_body_id"] = recipient_body_id
+    unread = await db.notifications.count_documents(q)
+    return {"unread": unread}
+
+
+@api_router.post("/notifications/{nid}/read")
+async def mark_notification_read(nid: str):
+    result = await db.notifications.update_one({"id": nid}, {"$set": {"read": True}})
+    if result.matched_count == 0:
+        raise HTTPException(404, "Notification not found")
+    return {"ok": True}
+
+
+@api_router.post("/notifications/mark-all-read")
+async def mark_all_notifications_read(
+    recipient_role_id: str,
+    recipient_body_id: Optional[str] = None,
+):
+    q: dict = {"recipient_role_id": recipient_role_id, "read": False}
+    if recipient_body_id:
+        q["recipient_body_id"] = recipient_body_id
+    result = await db.notifications.update_many(q, {"$set": {"read": True}})
+    return {"ok": True, "updated": result.modified_count}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -3365,3 +3569,4 @@ async def on_startup():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+

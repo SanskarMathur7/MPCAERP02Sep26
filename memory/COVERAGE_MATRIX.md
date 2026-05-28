@@ -181,9 +181,9 @@ Org Structure is **not** a user-facing screen — it is the **segmentation matri
 | Ref | Requirement | Status | Notes |
 |---|---|---|---|
 | G1 | Real-time output at frontend (live DB state) | ✅ | Already satisfied — no mocks in DB layer |
-| G2 | Turnaround time (SLA / due dates) on every workflow step | 🔴 | Adds `due_date` + `sla_hours` to `ApprovalStep` |
-| G3 | Real-time notifications | 🔴 | Channel TBD (in-app vs email vs SMS) |
-| G4 | Red flag / anomaly on overdue tasks | 🔴 | Derived once G2 lands |
+| G2 | Turnaround time (SLA / due dates) on every workflow step | ✅ | `SLA_HOURS_BY_STATUS` table + `due_at`/`is_overdue` on Claim reads (Feb 2026) |
+| G3 | Real-time notifications (in-app bell, G3-a) | ✅ | `notifications` collection + 4 endpoints + `NotificationBell.jsx` polling every 20s |
+| G4 | Red flag / anomaly on overdue tasks | ✅ | Maroon "OVERDUE" pill on Claims rows when `is_overdue=true` |
 | G5 | Present setup first, historical later | 📘 | Policy constraint, not a feature |
 | G7 | Allow incomplete uploads / finalise later | 🟡 | Draft state exists on claims; extend to procurement + transfers |
 | G9 | Customised MIS / Interactive Reports | 🔴 | New `/reports` module |

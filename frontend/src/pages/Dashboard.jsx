@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { fetchDashboardStats, fetchMembers, fetchDisclosures, fetchBodiesTree, fetchClaimsStats } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Users, FileText, Calendar, Receipt, AlertTriangle, TrendingUp, ChevronRight, Trophy, Landmark, Building2, HandCoins } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const StatTile = ({ label, value, sub, icon: Icon, accent = "green", phase = "Live" }) => {
     const colorMap = {
@@ -67,8 +68,8 @@ const Dashboard = () => {
 
     if (loading) {
         return (
-            <div className="p-16 text-center text-mpca-gray-dark font-serif text-lg" data-testid="dashboard-loading">
-                Reading the ledger…
+            <div className="p-16" data-testid="dashboard-loading">
+                <CricketLoader size="lg" label="Reading the ledger…" />
             </div>
         );
     }

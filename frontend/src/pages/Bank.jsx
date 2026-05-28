@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchBankAccounts, fetchTransactions } from "@/lib/api";
 import { Landmark, ChevronRight, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const inr = (n) => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n || 0);
 
@@ -25,7 +26,7 @@ const Bank = () => {
     const totalBalance = accounts.reduce((acc, a) => acc + (a.current_balance || 0), 0);
 
     if (loading) {
-        return <div className="p-16 text-center font-serif text-mpca-gray-dark">Loading the banker's ledger…</div>;
+        return <div className="p-16" data-testid="bank-loading"><CricketLoader size="lg" label="Loading the banker's ledger…" /></div>;
     }
 
     return (

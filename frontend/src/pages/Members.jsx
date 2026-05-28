@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchMembers } from "@/lib/api";
 import { Plus, Search, ChevronRight, Users } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const CATEGORIES = ["All", "Individual", "Institutional", "Honorary", "Patron"];
 
@@ -91,7 +92,7 @@ const Members = () => {
 
             {/* Ledger */}
             {loading ? (
-                <div className="text-center py-16 font-serif text-mpca-gray-dark">Reading the register…</div>
+                <CricketLoader label="Reading the register…" />
             ) : filtered.length === 0 ? (
                 <div className="text-center py-20 bulletin-card" data-testid="empty-state">
                     <Users className="mx-auto text-mpca-brass mb-4" size={36} strokeWidth={1} />

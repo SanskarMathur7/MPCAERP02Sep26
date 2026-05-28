@@ -5,6 +5,7 @@ import {
     fetchClaims, fetchClaimsStats,
     submitClaim, recommendClaim, sanctionClaim, disburseClaim, rejectClaim, returnClaim,
 } from "@/lib/api";
+import CricketLoader from "@/components/CricketLoader";
 import {
     HandCoins, Plus, ChevronRight, Coins, CheckCircle2, Clock, XCircle, AlertTriangle,
     ArrowUpRight, Building2, Landmark, MapPin,
@@ -354,7 +355,7 @@ const Claims = () => {
     };
 
     if (loading) {
-        return <div className="p-16 text-center text-mpca-gray-dark font-serif text-lg" data-testid="claims-loading">Loading the claims register…</div>;
+        return <div className="p-16" data-testid="claims-loading"><CricketLoader size="lg" label="Loading the claims register…" /></div>;
     }
 
     const canCreate = persona && (persona.body_type === "District" || persona.body_type === "State");

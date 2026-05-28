@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchBodiesTree } from "@/lib/api";
 import { Building2, MapPin, Landmark, ChevronRight, ChevronDown, Users, Coins } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const fmtINR = (n) =>
     new Intl.NumberFormat("en-IN", {
@@ -95,8 +96,8 @@ const OrgStructure = () => {
 
     if (loading) {
         return (
-            <div className="p-16 text-center text-mpca-gray-dark font-serif text-lg" data-testid="org-loading">
-                Loading the hierarchy…
+            <div className="p-16" data-testid="org-loading">
+                <CricketLoader size="lg" label="Loading the hierarchy…" />
             </div>
         );
     }

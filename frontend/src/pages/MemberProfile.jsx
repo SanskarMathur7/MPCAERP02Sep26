@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { fetchMemberProfile, payInvoice } from "@/lib/api";
 import { CheckCircle2, IndianRupee, Receipt, Download, ShieldCheck, User } from "lucide-react";
 import { MpcaEmblem as MPCAEmblem, MpcaLogoMark } from "@/components/MpcaEmblem";
+import CricketLoader from "@/components/CricketLoader";
 
 const inr = (n) => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n || 0);
 
@@ -104,7 +105,7 @@ const MemberProfile = () => {
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-mpca-ivory">
-                <div className="font-serif text-mpca-gray-dark">Loading your profile…</div>
+                <CricketLoader size="lg" label="Loading your profile…" />
             </div>
         );
     }

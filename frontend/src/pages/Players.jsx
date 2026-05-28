@@ -6,6 +6,7 @@ import {
 import {
     User as UserIcon, Plus, Trophy, ShieldAlert, ShieldCheck, ChevronRight, Filter, X, Award, CheckCircle2, AlertTriangle, BadgeCheck, Ban,
 } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ageYears = (dob) => {
@@ -462,7 +463,7 @@ const Players = () => {
 
     const canCreate = persona && (persona.body_type === "District" || persona.body_type === "State");
 
-    if (loading) return <div className="p-16 text-center text-mpca-gray-dark font-serif text-lg" data-testid="players-loading">Loading the player register…</div>;
+    if (loading) return <div className="p-16" data-testid="players-loading"><CricketLoader size="lg" label="Loading the player register…" /></div>;
 
     return (
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="players-page">

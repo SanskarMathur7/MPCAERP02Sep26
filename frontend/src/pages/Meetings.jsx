@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchMeetings } from "@/lib/api";
 import { Plus, Calendar, ChevronRight, MapPin, Clock } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const TYPE_LABELS = {
     All: "All",
@@ -79,7 +80,7 @@ const Meetings = () => {
             </div>
 
             {loading ? (
-                <div className="text-center py-16 font-serif text-mpca-gray-dark">Reading the proceedings…</div>
+                <CricketLoader label="Reading the proceedings…" />
             ) : filtered.length === 0 ? (
                 <div className="text-center py-20 bulletin-card" data-testid="meetings-empty">
                     <Calendar className="mx-auto text-mpca-brass mb-4" size={36} strokeWidth={1} />

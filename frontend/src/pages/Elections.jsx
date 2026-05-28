@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchElections } from "@/lib/api";
 import { Vote, Plus, ChevronRight, Calendar, User as UserIcon } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const STATUS_PILL = {
     Announced: "pill-pending",
@@ -49,7 +50,7 @@ const Elections = () => {
             <div className="crest-divider mb-10" />
 
             {loading ? (
-                <div className="text-center py-16 font-serif text-mpca-gray-dark">Loading the rolls…</div>
+                <CricketLoader label="Loading the rolls…" />
             ) : elections.length === 0 ? (
                 <div className="text-center py-20 bulletin-card" data-testid="elections-empty">
                     <Vote className="mx-auto text-mpca-brass mb-4" size={36} strokeWidth={1} />

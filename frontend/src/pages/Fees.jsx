@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchFees, generateInvoices, payInvoice } from "@/lib/api";
 import { Receipt, Plus, CheckCircle2, AlertCircle, IndianRupee } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const STATUS_PILL = {
     Pending: "pill-pending",
@@ -167,7 +168,7 @@ const Fees = () => {
 
             {/* Ledger */}
             {loading ? (
-                <div className="text-center py-16 font-serif text-mpca-gray-dark">Reading the ledger…</div>
+                <CricketLoader label="Reading the ledger…" />
             ) : filtered.length === 0 ? (
                 <div className="text-center py-20 bulletin-card" data-testid="fees-empty">
                     <Receipt className="mx-auto text-mpca-brass mb-4" size={36} strokeWidth={1} />

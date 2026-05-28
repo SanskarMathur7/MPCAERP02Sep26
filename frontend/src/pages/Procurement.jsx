@@ -6,6 +6,7 @@ import {
 import {
     ShoppingCart, Plus, ChevronRight, Building2, MapPin, Landmark, FileText, Trophy, X, CheckCircle2,
 } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const fmtINR = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n || 0);
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
@@ -369,7 +370,7 @@ const Procurement = () => {
         if (updatedPr) setSelected(updatedPr);
     };
 
-    if (loading) return <div className="p-16 text-center text-mpca-gray-dark font-serif text-lg" data-testid="proc-loading">Loading procurement register…</div>;
+    if (loading) return <div className="p-16" data-testid="proc-loading"><CricketLoader size="lg" label="Loading procurement register…" /></div>;
 
     return (
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="procurement-page">

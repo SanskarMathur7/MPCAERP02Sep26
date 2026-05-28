@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchMeeting, fetchResolutions, addResolution, updateMeeting } from "@/lib/api";
 import { ArrowLeft, Calendar, MapPin, Clock, Users, CheckCircle2, XCircle, Plus, Gavel } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const STATUS_PILL = {
     Scheduled: "pill-pending",
@@ -107,7 +108,7 @@ const MeetingDetail = () => {
         setMeeting(updated);
     };
 
-    if (loading) return <div className="p-16 text-center font-serif text-mpca-gray-dark">Fetching proceedings…</div>;
+    if (loading) return <div className="p-16"><CricketLoader size="lg" label="Fetching proceedings…" /></div>;
     if (!meeting) return <div className="p-16 text-center font-serif text-2xl">Meeting not found.</div>;
 
     const quorumMet = meeting.quorum_present >= meeting.quorum_required && meeting.quorum_required > 0;

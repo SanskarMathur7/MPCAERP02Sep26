@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchElection, fetchCandidates, castVote, concludeElection, addCandidate, fetchMembers, updateElection } from "@/lib/api";
 import { ArrowLeft, Vote as VoteIcon, Calendar, User, Trophy, CheckCircle2, Award } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const STATUS_PILL = {
     Announced: "pill-pending",
@@ -95,7 +96,7 @@ const ElectionDetail = () => {
         setElection(updated);
     };
 
-    if (loading) return <div className="p-16 text-center font-serif text-mpca-gray-dark">Loading…</div>;
+    if (loading) return <div className="p-16"><CricketLoader size="lg" label="Loading…" /></div>;
     if (!election) return <div className="p-16 text-center font-serif text-2xl">Election not found.</div>;
 
     const isVotingOpen = election.status === "Voting_Open";

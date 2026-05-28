@@ -48,6 +48,7 @@ User preferences (locked):
 | **IV.1**  | **Player Module (M1)** — Player Register with Local-MP / Born-Outside / Guest categories · Eligibility validator (MP domicile, TW3 for Guest, age) · Auto Player ID (MPCA/YYYY/NNNNNN) · Disqualification flags (Two-Year/Lifetime/Division-Penalty/Age-Misrep) · Reinstate · **Transfer NOC workflow** (Draft → From-Body → To-Body → MPCA → Completed with body_id move) reusing III.6 ApprovalStep | ✅ **Complete (May 2026)** — 45/45 backend tests pass |
 | **IV.2**  | Tournament Module (M2) — seed 10 inter-divisional tournaments · Squad assignment · Fixtures · Results | ✅ **Complete (May 2026)** |
 | **IV.2.1**| Official MPCA emblem integration (Wikipedia source — royal-blue chhatra + sunburst) · `MpcaEmblem` SVG component (themable) + `MpcaLogoMark` (official PNG) for public surfaces · Refreshed office-bearers to 2025 (Mahanaryaman Scindia / Sanjeev Rao / Meera Verma) · Founding year corrected to 1957 | ✅ **Complete (May 2026)** |
+| **IV.2.2**| Login page rebuilt as proper sign-in screen (2-column: navy brand pane + clean form with email/password + persona quick-pick) · `CricketLoader` component (animated leather ball + white seam, bouncing with shadow) wired across 19 pages · Saffron-marigold pulse around Landing emblem on first load · Cricket-themed sign-in transition | ✅ **Complete (May 2026)** |
 | IV | Player Registration · Grievance Redressal workflow | Backlog |
 | V | Constitution Library (full searchable) · AI Assistant (constitution Q&A, draft notices, summarise minutes) · Analytics | Backlog |
 

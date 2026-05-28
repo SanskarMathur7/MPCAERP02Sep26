@@ -8,6 +8,7 @@ import {
 import {
     Trophy, Calendar, MapPin, Users, ChevronLeft, Plus, X, ShieldCheck, AlertTriangle, Crown, BadgeCheck,
 } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
@@ -84,7 +85,7 @@ const TournamentDetail = () => {
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
 
-    if (loading) return <div className="p-16 text-center text-mpca-gray-dark font-serif text-lg" data-testid="trn-detail-loading">Loading tournament…</div>;
+    if (loading) return <div className="p-16" data-testid="trn-detail-loading"><CricketLoader size="lg" label="Loading tournament…" /></div>;
     if (!t) return <div className="p-16 text-center">Not found.</div>;
 
     const canEdit = persona && persona.body_type === "State";

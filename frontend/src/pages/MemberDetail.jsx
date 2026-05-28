@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { fetchMember, deleteMember } from "@/lib/api";
 import { ArrowLeft, Trash2, Mail, Phone, MapPin, Calendar, ShieldCheck, FileSignature, User, IdCard, Wallet } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const Field = ({ label, value, mono }) => (
     <div className="py-3 border-b border-mpca-brass/15">
@@ -39,8 +40,8 @@ const MemberDetail = () => {
 
     if (loading) {
         return (
-            <div className="p-16 text-center text-mpca-gray-dark font-serif text-lg" data-testid="member-detail-loading">
-                Fetching the member entry…
+            <div className="p-16" data-testid="member-detail-loading">
+                <CricketLoader size="lg" label="Fetching the member entry…" />
             </div>
         );
     }

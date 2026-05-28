@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchBudgets, fetchSanctionThresholds, fetchABCAnalysis } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Coins, AlertTriangle, ShieldCheck, TrendingUp, Filter, Building2, MapPin, Landmark, BarChart3 } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const fmtINR = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n || 0);
 
@@ -67,7 +68,7 @@ const Budgets = () => {
     }, [rows]);
 
     if (loading) {
-        return <div className="p-16 text-center text-mpca-gray-dark font-serif text-lg" data-testid="budgets-loading">Reconciling the budget ledger…</div>;
+        return <div className="p-16" data-testid="budgets-loading"><CricketLoader size="lg" label="Reconciling the budget ledger…" /></div>;
     }
 
     return (

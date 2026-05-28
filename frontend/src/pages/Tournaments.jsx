@@ -5,6 +5,7 @@ import { fetchTournaments, fetchTournamentStats } from "@/lib/api";
 import {
     Trophy, Calendar, MapPin, Users, ChevronRight, Filter, ShieldCheck,
 } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -89,7 +90,7 @@ const Tournaments = () => {
         return r;
     }, [list, filter]);
 
-    if (loading) return <div className="p-16 text-center text-mpca-gray-dark font-serif text-lg" data-testid="trn-loading">Loading tournament catalogue…</div>;
+    if (loading) return <div className="p-16" data-testid="trn-loading"><CricketLoader size="lg" label="Loading tournament catalogue…" /></div>;
 
     return (
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="tournaments-page">

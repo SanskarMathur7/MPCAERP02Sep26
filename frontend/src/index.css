@@ -313,3 +313,74 @@
         opacity: 0.85;
     }
 }
+
+/* ===== Cricket Loader ===== */
+@keyframes ball-spin {
+    0%   { transform: translateY(0) rotate(0deg); }
+    50%  { transform: translateY(-14px) rotate(180deg); }
+    100% { transform: translateY(0) rotate(360deg); }
+}
+@keyframes ball-shadow {
+    0%, 100% { transform: scaleX(1);   opacity: 0.45; }
+    50%      { transform: scaleX(0.55); opacity: 0.18; }
+}
+.cricket-loader-shell {
+    display: inline-block;
+}
+.cricket-loader-ball {
+    display: block;
+    animation: ball-spin 1.1s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+    transform-origin: 50% 50%;
+    filter: drop-shadow(0 6px 4px rgba(10, 31, 61, 0.25));
+}
+.cricket-loader-shadow {
+    position: absolute;
+    bottom: -10px;
+    left: 12%;
+    right: 12%;
+    height: 6px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center,
+        rgba(10, 31, 61, 0.55) 0%,
+        rgba(10, 31, 61, 0) 70%);
+    animation: ball-shadow 1.1s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+    transform-origin: center;
+    z-index: -1;
+}
+
+/* ===== Landing emblem: one-shot saffron pulse on first render ===== */
+@keyframes emblem-pulse {
+    0%   { box-shadow: 0 0 0 0   rgba(255, 106, 19, 0.6),
+                       0 0 0 0   rgba(233, 185, 73, 0.45); }
+    60%  { box-shadow: 0 0 0 24px rgba(255, 106, 19, 0),
+                       0 0 0 14px rgba(233, 185, 73, 0); }
+    100% { box-shadow: 0 0 0 0   rgba(255, 106, 19, 0),
+                       0 0 0 0   rgba(233, 185, 73, 0); }
+}
+.emblem-pulse {
+    border-radius: 9999px;
+    animation: emblem-pulse 1.8s ease-out 0.4s 2;
+}
+
+/* ===== Cricket pitch — texture for login brand pane ===== */
+.cricket-pitch-bg {
+    background:
+        radial-gradient(ellipse at center, rgba(233,185,73,0.10) 0%, transparent 60%),
+        linear-gradient(180deg, var(--mpca-green-dark) 0%, #061634 100%);
+    position: relative;
+    overflow: hidden;
+}
+.cricket-pitch-bg::before {
+    /* Crease lines — top & bottom popping crease + bowling crease */
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(180deg, transparent 0%, transparent calc(50% - 60px),
+            rgba(251,247,237,0.10) calc(50% - 60px), rgba(251,247,237,0.10) calc(50% - 59px), transparent calc(50% - 59px),
+            transparent calc(50% + 60px),
+            rgba(251,247,237,0.10) calc(50% + 60px), rgba(251,247,237,0.10) calc(50% + 61px), transparent calc(50% + 61px)),
+        repeating-linear-gradient(90deg, rgba(233,185,73,0.04) 0px, rgba(233,185,73,0.04) 2px, transparent 2px, transparent 6px);
+    pointer-events: none;
+}
+

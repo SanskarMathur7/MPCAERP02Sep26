@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchFinancialPowers } from "@/lib/api";
 import { Scale, ShieldCheck } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const inr = (n) =>
     n == null ? "Unlimited" : "₹" + new Intl.NumberFormat("en-IN").format(n);
@@ -36,7 +37,7 @@ const FinancialPowers = () => {
             </div>
 
             {loading ? (
-                <div className="text-center py-16 font-serif text-mpca-gray-dark">Reading the schedule…</div>
+                <CricketLoader label="Reading the schedule…" />
             ) : (
                 <div className="space-y-4">
                     {powers.map((p, idx) => (

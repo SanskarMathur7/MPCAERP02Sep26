@@ -106,7 +106,7 @@ const Landing = () => {
                         >
                             <div className="absolute inset-0 bg-mpca-green-dark/70" />
                             <div className="relative flex flex-col items-center text-mpca-ivory">
-                                <div className="w-32 h-32 bg-mpca-ivory rounded-full flex items-center justify-center p-3 shadow-2xl ring-1 ring-mpca-brass/40">
+                                <div className="w-32 h-32 bg-mpca-ivory rounded-full flex items-center justify-center p-3 shadow-2xl ring-1 ring-mpca-brass/40 emblem-pulse">
                                     <MpcaLogoMark className="w-full h-full object-contain" alt="MPCA Official Emblem" />
                                 </div>
                                 <div className="mt-6 overline !text-mpca-gold-light">

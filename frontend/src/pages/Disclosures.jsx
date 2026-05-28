@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchDisclosures } from "@/lib/api";
 import { FileText, Download, Calendar } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
+import { MpcaLogoMark } from "@/components/MpcaEmblem";
 
 const TYPE_LABELS = {
     All: "All Categories",
@@ -49,15 +51,9 @@ const Disclosures = ({ publicView = false }) => {
                 <header className="bg-mpca-green-dark text-mpca-ivory px-8 md:px-16 py-6 border-b border-mpca-brass/30">
                     <div className="max-w-6xl mx-auto flex items-center justify-between">
                         <Link to="/" className="flex items-center gap-3">
-                            <svg viewBox="0 0 64 64" className="w-9 h-9 text-mpca-brass" fill="none" strokeWidth={1.25}>
-                                <circle cx="32" cy="32" r="30" stroke="currentColor" />
-                                <line x1="26" y1="22" x2="26" y2="42" stroke="currentColor" />
-                                <line x1="32" y1="22" x2="32" y2="42" stroke="currentColor" />
-                                <line x1="38" y1="22" x2="38" y2="42" stroke="currentColor" />
-                                <line x1="24" y1="22" x2="34" y2="22" stroke="currentColor" />
-                                <line x1="30" y1="22" x2="40" y2="22" stroke="currentColor" />
-                                <circle cx="46" cy="38" r="3" stroke="currentColor" fill="currentColor" fillOpacity="0.4" />
-                            </svg>
+                            <div className="w-10 h-10 rounded-full bg-mpca-ivory flex items-center justify-center p-1">
+                                <MpcaLogoMark className="w-full h-full object-contain" />
+                            </div>
                             <div>
                                 <div className="font-serif text-lg">MPCA</div>
                                 <div className="overline text-[9px] text-mpca-gold-light/70">Public Disclosures</div>
@@ -109,7 +105,7 @@ const Disclosures = ({ publicView = false }) => {
                 </div>
 
                 {loading ? (
-                    <div className="text-center py-16 font-serif text-mpca-gray-dark">Reading the bulletin…</div>
+                    <CricketLoader label="Reading the bulletin…" />
                 ) : groups.length === 0 ? (
                     <div className="text-center py-20 bulletin-card" data-testid="disc-empty">
                         <FileText className="mx-auto text-mpca-brass mb-4" size={36} strokeWidth={1} />

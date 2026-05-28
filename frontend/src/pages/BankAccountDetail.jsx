@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchBankAccount, fetchTransactions, addTransaction } from "@/lib/api";
 import { ArrowLeft, Plus, ArrowDownLeft, ArrowUpRight, Landmark } from "lucide-react";
+import CricketLoader from "@/components/CricketLoader";
 
 const inr = (n) => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n || 0);
 
@@ -53,7 +54,7 @@ const BankAccountDetail = () => {
         }
     };
 
-    if (loading) return <div className="p-16 text-center font-serif text-mpca-gray-dark">Loading account…</div>;
+    if (loading) return <div className="p-16"><CricketLoader size="lg" label="Loading account…" /></div>;
     if (!account) return <div className="p-16 text-center font-serif text-2xl">Account not found.</div>;
 
     return (

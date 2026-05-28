@@ -9,11 +9,18 @@ const SIZE_MAP = {
 };
 
 const CricketBall = ({ px = 52 }) => {
-    const stroke = Math.max(1, px / 26);
-    const stitchLen = px / 11;
-    const stitchGap = px / 8.5;
-    // 5 stitches above seam + 5 below seam
-    const stitches = Array.from({ length: 5 });
+    // Cricket ball anatomy:
+    //   • Cherry-red leather (4 quarters → here rendered as a sphere with a clear equator)
+    //   • One prominent horizontal seam at the equator
+    //   • TWO parallel dense rows of white V-shaped stitches along the seam (~20 each)
+    // SVG uses a 100×100 viewBox with the ball circle r=46 at (50,50).
+    const STITCH_COUNT = 20;
+    const stitches = Array.from({ length: STITCH_COUNT });
+    // Stitches span horizontally from x≈10 to x≈90 (clipped by the sphere)
+    const startX = 12;
+    const endX = 88;
+    const step = (endX - startX) / (STITCH_COUNT - 1);
+
     return (
         <svg
             viewBox="0 0 100 100"
@@ -22,65 +29,105 @@ const CricketBall = ({ px = 52 }) => {
             className="cricket-loader-ball"
             aria-hidden="true"
         >
-            {/* Leather body — radial gradient for sphere illusion */}
             <defs>
-                <radialGradient id="leather" cx="38%" cy="34%" r="70%">
-                    <stop offset="0%" stopColor="#c43a3a" />
-                    <stop offset="55%" stopColor="#8b1a1a" />
-                    <stop offset="100%" stopColor="#4d0d0d" />
+                {/* Cherry-red leather — radial gradient for sphere illusion */}
+                <radialGradient id="cb-leather" cx="38%" cy="32%" r="72%">
+                    <stop offset="0%"  stopColor="#d44141" />
+                    <stop offset="40%" stopColor="#a51d1d" />
+                    <stop offset="80%" stopColor="#6a0e0e" />
+                    <stop offset="100%" stopColor="#3d0606" />
                 </radialGradient>
-                <radialGradient id="hilite" cx="32%" cy="28%" r="22%">
-                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
+                {/* Specular highlight */}
+                <radialGradient id="cb-hilite" cx="32%" cy="26%" r="20%">
+                    <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.55" />
+                    <stop offset="60%"  stopColor="#ffffff" stopOpacity="0.10" />
                     <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
                 </radialGradient>
+                {/* Lower rim shading — keeps the bottom feeling weighty */}
+                <radialGradient id="cb-rim" cx="50%" cy="60%" r="55%">
+                    <stop offset="70%"  stopColor="#000" stopOpacity="0" />
+                    <stop offset="100%" stopColor="#000" stopOpacity="0.45" />
+                </radialGradient>
+                {/* Clip path = ball circle, so stitches don't poke outside */}
+                <clipPath id="cb-clip">
+                    <circle cx="50" cy="50" r="46" />
+                </clipPath>
             </defs>
-            <circle cx="50" cy="50" r="46" fill="url(#leather)" />
-            <circle cx="50" cy="50" r="46" fill="url(#hilite)" />
 
-            {/* Seam — single curving line + parallel stitches */}
-            <path
-                d="M 8 50 Q 50 30, 92 50"
-                stroke="#fdf6e3"
-                strokeWidth={stroke * 0.55}
+            {/* Ball body */}
+            <circle cx="50" cy="50" r="46" fill="url(#cb-leather)" />
+            <circle cx="50" cy="50" r="46" fill="url(#cb-hilite)" />
+            <circle cx="50" cy="50" r="46" fill="url(#cb-rim)" />
+
+            {/* SEAM + STITCHES — clipped to the sphere */}
+            <g clipPath="url(#cb-clip)">
+                {/* The seam itself — slim ridge across the equator */}
+                <line
+                    x1="4" y1="50" x2="96" y2="50"
+                    stroke="#3d0606"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                />
+                <line
+                    x1="4" y1="49.4" x2="96" y2="49.4"
+                    stroke="#ffd9b8"
+                    strokeWidth="0.4"
+                    strokeLinecap="round"
+                    opacity="0.55"
+                />
+
+                {/* Upper stitch row — short diagonal V's leaning right */}
+                {stitches.map((_, i) => {
+                    const cx = startX + i * step;
+                    return (
+                        <line
+                            key={`u-${i}`}
+                            x1={cx - 1.4}
+                            y1="46.4"
+                            x2={cx + 1.4}
+                            y2="49.4"
+                            stroke="#f5f1e4"
+                            strokeWidth="0.95"
+                            strokeLinecap="round"
+                        />
+                    );
+                })}
+
+                {/* Lower stitch row — mirror diagonal V's leaning left */}
+                {stitches.map((_, i) => {
+                    const cx = startX + i * step;
+                    return (
+                        <line
+                            key={`l-${i}`}
+                            x1={cx - 1.4}
+                            y1="53.6"
+                            x2={cx + 1.4}
+                            y2="50.6"
+                            stroke="#f5f1e4"
+                            strokeWidth="0.95"
+                            strokeLinecap="round"
+                        />
+                    );
+                })}
+
+                {/* Tiny shadow under the seam to make it feel raised */}
+                <line
+                    x1="4" y1="51.2" x2="96" y2="51.2"
+                    stroke="#000"
+                    strokeWidth="0.4"
+                    strokeLinecap="round"
+                    opacity="0.35"
+                />
+            </g>
+
+            {/* Outer rim outline */}
+            <circle
+                cx="50" cy="50" r="46"
                 fill="none"
-                opacity="0.9"
+                stroke="#1a0303"
+                strokeOpacity="0.55"
+                strokeWidth="0.6"
             />
-            {/* Top stitches */}
-            {stitches.map((_, i) => {
-                const x = 22 + i * 14;
-                const y = 50 - 13 + Math.sin((i + 1) * 0.6) * 1.2;
-                return (
-                    <line
-                        key={`t-${i}`}
-                        x1={x - stitchLen / 2}
-                        y1={y}
-                        x2={x + stitchLen / 2}
-                        y2={y - 3}
-                        stroke="#fdf6e3"
-                        strokeWidth={stroke * 0.7}
-                        strokeLinecap="round"
-                    />
-                );
-            })}
-            {/* Bottom stitches */}
-            {stitches.map((_, i) => {
-                const x = 22 + i * 14;
-                const y = 50 + 8 + Math.cos((i + 1) * 0.6) * 1.2;
-                return (
-                    <line
-                        key={`b-${i}`}
-                        x1={x - stitchLen / 2}
-                        y1={y}
-                        x2={x + stitchLen / 2}
-                        y2={y + 3}
-                        stroke="#fdf6e3"
-                        strokeWidth={stroke * 0.7}
-                        strokeLinecap="round"
-                    />
-                );
-            })}
-            {/* Subtle rim shadow */}
-            <circle cx="50" cy="50" r="46" fill="none" stroke="#000" strokeOpacity="0.25" strokeWidth="1" />
         </svg>
     );
 };

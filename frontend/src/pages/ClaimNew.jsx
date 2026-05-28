@@ -68,7 +68,7 @@ const ClaimNew = () => {
                 <ChevronLeft size={14} strokeWidth={2} /> Back to Claims
             </button>
 
-            <div className="overline">Phase III.6 · Raise a Claim</div>
+            <div className="overline">Article XIV · Raise a Claim</div>
             <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
                 A new entry in the grant ledger.
             </h1>

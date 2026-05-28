@@ -119,6 +119,7 @@ const CricketLoader = ({
     sublabel = null,
     size = "md",
     onDark = false,
+    mode = "spin",        // "spin" → steady rotation (default), "toss" → ceremonial arc
     className = "",
     testId = "cricket-loader",
 }) => {
@@ -134,7 +135,7 @@ const CricketLoader = ({
             aria-live="polite"
         >
             <div className="coin-toss-stage" style={{ width: px, height: px }}>
-                <div className="coin-toss-coin">
+                <div className={`coin-toss-coin coin-mode-${mode === "toss" ? "toss" : "spin"}`}>
                     <div className="coin-face coin-face-heads">
                         <CoinFaceHeads />
                     </div>

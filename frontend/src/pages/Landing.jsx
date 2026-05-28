@@ -7,7 +7,7 @@ const PILLARS = [
     { icon: ScrollText, label: "Constitution & Disclosures", note: "Article-wise · Auditable" },
     { icon: Vote, label: "AGM · Committee · Elections", note: "Quorum · Tenure · Cooling Period" },
     { icon: Landmark, label: "Finance & Grants", note: "District → Division → MPCA flow" },
-    { icon: Sparkles, label: "Player Module & AI (Roadmap)", note: "Eligibility · OCR · Compliance" },
+    { icon: Sparkles, label: "Player & Tournament Registry", note: "Eligibility · Squads · Sanctions" },
 ];
 
 const Landing = () => {
@@ -190,7 +190,7 @@ const Landing = () => {
                         <div>
                             <div className="font-serif text-mpca-ivory">MPCA · ERP System</div>
                             <div className="overline text-[9px] mt-1 !text-mpca-gold-light/60">
-                                Version 1.0 · Phase I of V
+                                Established 1957 · BCCI Affiliated
                             </div>
                         </div>
                     </div>

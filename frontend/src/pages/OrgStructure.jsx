@@ -106,13 +106,13 @@ const OrgStructure = () => {
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="org-page">
             <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
                 <div>
-                    <div className="overline">Phase III.5 · Multi-Tenant Hierarchy</div>
+                    <div className="overline">Article II · Affiliated Bodies</div>
                     <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
                         Organisational Structure
                     </h1>
                     <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        The complete BCCI to MPCA to Divisions to Districts tree. Every record
-                        in the ERP — members, fees, meetings, grants — is scoped to a body
+                        BCCI → MPCA → Divisions → Districts. Every record in the
+                        ERP — members, fees, meetings, grants — is scoped to a body
                         within this tree.
                     </p>
                 </div>
@@ -208,11 +208,10 @@ const OrgStructure = () => {
             </div>
 
             <div className="mt-10 text-center">
-                <div className="overline">Roadmap · Phase III.5</div>
-                <p className="mt-3 text-sm text-mpca-gray-dark italic font-serif max-w-3xl mx-auto">
-                    Body-scoped logins, the District to Division to MPCA grant approval
-                    workflow, and per-body budget ledgers will populate against this
-                    structure as the rebase advances.
+                <p className="text-sm text-mpca-gray-dark italic font-serif max-w-3xl mx-auto">
+                    Body-scoped logins, the District → Division → MPCA grant approval
+                    workflow and per-body budget ledgers all operate against this
+                    structure.
                 </p>
             </div>
         </div>

@@ -274,10 +274,10 @@ const Dashboard = () => {
                     </div>
                     <p className="text-xs text-mpca-gray-dark mt-3 leading-relaxed">
                         Pending submissions awaiting Committee review. Full grievance
-                        workflow opens in Phase 4 of the rollout.
+                        workflow opens later this season.
                     </p>
                     <div className="mt-6 pt-6 border-t border-mpca-brass/20">
-                        <div className="overline text-[9px]">Roadmap</div>
+                        <div className="overline text-[9px]">Coming Soon</div>
                         <p className="text-[11px] text-mpca-gray-dark mt-1">
                             Submission · Escalation · Resolution Tracking
                         </p>
@@ -370,8 +370,8 @@ const Dashboard = () => {
 
             <div className="crest-divider my-16" />
 
-            {/* Roadmap teaser */}
-            <div className="bulletin-card p-10 bg-mpca-green-dark text-mpca-ivory relative overflow-hidden" data-testid="roadmap-teaser">
+            {/* Cricket season teaser */}
+            <div className="bulletin-card p-10 bg-mpca-green-dark text-mpca-ivory relative overflow-hidden" data-testid="season-teaser">
                 <div
                     className="absolute inset-0 opacity-15"
                     style={{
@@ -383,15 +383,15 @@ const Dashboard = () => {
                 <div className="relative grid md:grid-cols-3 gap-8 items-center">
                     <div className="md:col-span-2">
                         <Trophy className="text-mpca-gold-light mb-4" size={28} strokeWidth={1.25} />
-                        <div className="overline !text-mpca-gold-light">Roadmap · Phases IV — V</div>
+                        <div className="overline !text-mpca-gold-light">Season 2025-26</div>
                         <h3 className="font-serif text-3xl md:text-4xl mt-3 leading-tight text-mpca-ivory">
-                            Player Module · Tournament Calendar · Grant Workflow · AI Assistant —
-                            <em className="text-mpca-gold-light not-italic"> all forthcoming.</em>
+                            The Player Register, the Cricket Calendar and the Grant Ledger —
+                            <em className="text-mpca-gold-light not-italic"> all in session.</em>
                         </h3>
                     </div>
                     <div className="md:text-right">
-                        <Link to="/members/new" data-testid="cta-add-member" className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark">
-                            Enrol a Member <ChevronRight size={14} />
+                        <Link to="/players" data-testid="cta-players" className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark">
+                            Open Player Register <ChevronRight size={14} />
                         </Link>
                     </div>
                 </div>

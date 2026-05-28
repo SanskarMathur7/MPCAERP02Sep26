@@ -39,12 +39,12 @@ const PRIMARY_NAV = [
     { to: "/disclosures", label: "Disclosures", icon: FileText },
 ];
 
-const FUTURE_NAV = [
-    { label: "Match Officials (M3)", icon: Trophy, phase: "IV" },
-    { label: "Team Officials (M4)", icon: Trophy, phase: "IV" },
-    { label: "Grievance Redressal", icon: AlertTriangle, phase: "IV" },
-    { label: "Constitution Library", icon: BookOpen, phase: "V" },
-    { label: "AI Assistant", icon: Sparkles, phase: "V" },
+const COMING_SOON = [
+    { label: "Match Officials", icon: Trophy },
+    { label: "Team Officials", icon: Trophy },
+    { label: "Grievance Redressal", icon: AlertTriangle },
+    { label: "Constitution Library", icon: BookOpen },
+    { label: "Registrar Assistant", icon: Sparkles },
 ];
 
 import { MpcaEmblem as MPCACrest } from "@/components/MpcaEmblem";
@@ -87,8 +87,18 @@ const AppLayout = ({ children }) => {
                 {/* Persona / Tenant card */}
                 {persona && (
                     <div className="px-6 py-5 border-b border-mpca-brass/20 bg-black/30">
-                        <div className="overline text-[9px] !text-mpca-gold-light/70 mb-2">
-                            Signed In As
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="overline text-[9px] !text-mpca-gold-light/70 mb-2">
+                                Signed In As
+                            </div>
+                            <button
+                                onClick={() => navigate("/login")}
+                                data-testid="switch-persona-btn"
+                                className="text-[9px] tracking-[0.2em] uppercase text-mpca-gold-light/70 hover:text-mpca-gold-light border border-mpca-brass/40 hover:border-mpca-brass px-2 py-1 transition-colors"
+                                title="Switch persona"
+                            >
+                                Switch
+                            </button>
                         </div>
                         <div className="font-serif text-lg text-mpca-ivory leading-tight">
                             {persona.honorific} {persona.name}
@@ -110,7 +120,7 @@ const AppLayout = ({ children }) => {
                 {/* Primary nav */}
                 <nav className="flex-1 px-4 py-6 overflow-y-auto">
                     <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
-                        Live Modules
+                        Modules
                     </div>
                     <ul className="space-y-0.5 mb-8">
                         {PRIMARY_NAV.map((item) => (
@@ -134,10 +144,10 @@ const AppLayout = ({ children }) => {
                     </ul>
 
                     <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
-                        Roadmap
+                        Coming Soon
                     </div>
                     <ul className="space-y-0.5">
-                        {FUTURE_NAV.map((item) => (
+                        {COMING_SOON.map((item) => (
                             <li key={item.label}>
                                 <div
                                     className="flex items-center gap-3 px-3 py-2.5 text-sm text-mpca-ivory/45 cursor-not-allowed select-none"
@@ -145,9 +155,6 @@ const AppLayout = ({ children }) => {
                                 >
                                     <item.icon size={16} strokeWidth={1.5} />
                                     <span className="tracking-wide flex-1">{item.label}</span>
-                                    <span className="text-[9px] tracking-[0.2em] uppercase text-mpca-brass/60 font-semibold">
-                                        P{item.phase}
-                                    </span>
                                 </div>
                             </li>
                         ))}

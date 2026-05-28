@@ -376,12 +376,13 @@ const Procurement = () => {
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="procurement-page">
             <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
                 <div>
-                    <div className="overline">Phase III.8 · Procurement Protocol</div>
+                    <div className="overline">Article XIV(d) · Procurement</div>
                     <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
                         Procurement Register
                     </h1>
                     <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        3-quote for ₹1L–₹75L · QCBS for &gt;₹75L · L1-or-justify · EMD &amp; Security tracked.
+                        Three-quote rule for ₹1L–₹75L, QCBS above ₹75L, L1-or-justify
+                        award norms with EMD &amp; Security Deposits on the record.
                     </p>
                 </div>
                 {canCreate && (

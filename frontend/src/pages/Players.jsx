@@ -102,7 +102,7 @@ const NewPlayerDialog = ({ open, persona, bodies, onClose, onCreated }) => {
             <form onSubmit={submit} className="bg-mpca-ivory border-2 border-mpca-brass max-w-2xl w-full my-8">
                 <div className="bg-mpca-green-dark text-mpca-ivory px-6 py-4 border-b-4 border-mpca-oxblood flex items-center justify-between">
                     <div>
-                        <div className="overline !text-mpca-gold-light">Player Module · Registration</div>
+                        <div className="overline !text-mpca-gold-light">New Registration</div>
                         <div className="font-serif text-2xl mt-1">New Player Entry</div>
                     </div>
                     <button type="button" onClick={onClose} className="text-mpca-gold-light text-2xl"><X /></button>
@@ -469,13 +469,13 @@ const Players = () => {
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="players-page">
             <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
                 <div>
-                    <div className="overline">Phase IV · M1 Player Management</div>
+                    <div className="overline">Article VI · Players</div>
                     <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
                         Player Register
                     </h1>
                     <p className="text-mpca-gray-dark mt-2 max-w-2xl">
                         The single source of truth for every cricketer playing under the MPCA flag —
-                        Local-MP · Born-Outside · Guest. Eligibility validated at the point of entry.
+                        Local-MP, Born-Outside and Guest. Eligibility is validated at the point of entry.
                     </p>
                 </div>
                 {canCreate && (

@@ -96,14 +96,14 @@ const Tournaments = () => {
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="tournaments-page">
             <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
                 <div>
-                    <div className="overline">Phase IV.2 · M2 Tournament Management</div>
+                    <div className="overline">Article VII · Cricket Calendar</div>
                     <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
                         The MPCA Cricket Calendar
                     </h1>
                     <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        15 tournaments — 10 inter-divisional trophies + 5 championship cups —
-                        spanning Multi-Day, One-Day, T20 and Pink-Ball formats. Squads pull from
-                        the Player Register; age-cap and Guest-allowance enforced at selection.
+                        Inter-divisional trophies and championship cups spanning Multi-Day,
+                        One-Day, T20 and Pink-Ball formats. Squads pull from the Player
+                        Register; age-cap and Guest allowance are enforced at selection.
                     </p>
                 </div>
             </div>

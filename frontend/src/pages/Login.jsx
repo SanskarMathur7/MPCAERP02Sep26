@@ -128,6 +128,7 @@ const Login = () => {
                     <CricketLoader
                         size="lg"
                         onDark
+                        mode="toss"
                         label={`Signing you in as ${selectedPersona.honorific} ${selectedPersona.name}…`}
                         sublabel="Verifying with the MPCA registrar"
                         testId="login-coin-loader"

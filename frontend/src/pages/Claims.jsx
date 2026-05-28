@@ -364,7 +364,7 @@ const Claims = () => {
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="claims-page">
             <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
                 <div>
-                    <div className="overline">Phase III.6 · Maker-Checker Workflow</div>
+                    <div className="overline">Article XIV · Grant Claims</div>
                     <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
                         Grant Claims Register
                     </h1>
@@ -393,7 +393,7 @@ const Claims = () => {
                     <StatTile icon={HandCoins}   label="Total Claims"      value={stats.total_claims}                  sub="All cycles · all stages"                          accent="navy" />
                     <StatTile icon={Clock}        label="Pending Approval"  value={stats.pending_claims}                sub={fmtINR(stats.amount_in_flight_inr) + " in-flight"} accent="saffron" />
                     <StatTile icon={CheckCircle2} label="Disbursed"         value={stats.disbursed_claims}              sub={fmtINR(stats.amount_disbursed_inr) + " released"}  accent="marigold" />
-                    <StatTile icon={XCircle}      label="Rejected"          value={stats.rejected_claims}               sub="Per maker-checker rules"                          accent="maroon" />
+                    <StatTile icon={XCircle}      label="Rejected"          value={stats.rejected_claims}               sub="Returned without disbursal"                          accent="maroon" />
                 </div>
             )}
 

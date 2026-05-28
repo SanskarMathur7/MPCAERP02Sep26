@@ -75,7 +75,7 @@ const Budgets = () => {
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="budgets-page">
             <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
                 <div>
-                    <div className="overline">Phase III.7 · Per-Body Budget Ledger</div>
+                    <div className="overline">Article XIV · Annual Budget</div>
                     <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
                         The Budget, Reconciled.
                     </h1>

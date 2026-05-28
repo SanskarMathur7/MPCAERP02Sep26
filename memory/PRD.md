@@ -2,7 +2,13 @@
 
 > **Madhya Pradesh Cricket Association — Enterprise Resource Planning System**
 > Reference plan: https://mpca-plan-updated.netlify.app/
-> Started: Jan 2026 · Currently on Phase III.5 (re-architecture) · Version 3.5.0
+> Started: Jan 2026 · Last update: Feb 2026 — UI Content Audit + Switch Persona pill + dual-mode coin loader
+
+## Recent Changelog
+- **Feb 2026 — UI Content Audit (P0)**: Stripped all PRD/blueprint terminology that had leaked into rendered UI. Replaced "Phase III.5/6/7/8" and "Phase IV/V", "M1/M2/M3/M4" module IDs, "Roadmap" headings, and "forthcoming" copy with constitutional Article references (Article II / VI / VII / XIV) and clean professional copy. Sidebar "Roadmap" group renamed to "Coming Soon" with no phase badges.
+- **Feb 2026 — Switch Persona pill**: Added a discrete "SWITCH" button inside the persona card in the sidebar. Returns user to `/login` so they can pick another demo persona (highly requested for demos).
+- **Feb 2026 — Coin Loader dual-mode**: `CricketLoader` now supports `mode="spin"` (default — steady continuous Y-axis rotation for ordinary page loads) and `mode="toss"` (ceremonial arc + multi-flip — used only on the Login sign-in transition).
+
 
 ## Original Problem Statement
 

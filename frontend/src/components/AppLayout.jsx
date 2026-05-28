@@ -15,28 +15,42 @@ import {
     ChevronRight,
     BookOpen,
     Scale,
-    Building2,
     HandCoins,
     Coins,
     ShoppingCart,
     Trophy as TrophyIcon,
 } from "lucide-react";
 
-const PRIMARY_NAV = [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/org", label: "Org Structure", icon: Building2 },
-    { to: "/players", label: "Player Register", icon: TrophyIcon },
-    { to: "/tournaments", label: "Tournaments", icon: TrophyIcon },
-    { to: "/claims", label: "Grant Claims", icon: HandCoins },
-    { to: "/budgets", label: "Budget Ledger", icon: Coins },
-    { to: "/procurement", label: "Procurement", icon: ShoppingCart },
-    { to: "/members", label: "Membership Register", icon: Users },
-    { to: "/meetings", label: "AGM & Meetings", icon: Calendar },
-    { to: "/elections", label: "Elections", icon: Vote },
-    { to: "/fees", label: "Fees & Subscriptions", icon: Receipt },
-    { to: "/bank", label: "Bank Operations", icon: Landmark },
-    { to: "/financial-powers", label: "Financial Powers", icon: Scale },
-    { to: "/disclosures", label: "Disclosures", icon: FileText },
+const DASHBOARD_LINK = { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
+
+const NAV_DOMAINS = [
+    {
+        domain: "Secretarial",
+        items: [
+            { to: "/members", label: "Membership Register", icon: Users },
+            { to: "/meetings", label: "AGM & Meetings", icon: Calendar },
+            { to: "/elections", label: "Elections", icon: Vote },
+            { to: "/disclosures", label: "Disclosures", icon: FileText },
+        ],
+    },
+    {
+        domain: "Financial",
+        items: [
+            { to: "/budgets", label: "Budget Ledger", icon: Coins },
+            { to: "/claims", label: "Grant Claims", icon: HandCoins },
+            { to: "/procurement", label: "Procurement", icon: ShoppingCart },
+            { to: "/fees", label: "Fees & Subscriptions", icon: Receipt },
+            { to: "/bank", label: "Bank Operations", icon: Landmark },
+            { to: "/financial-powers", label: "Financial Powers", icon: Scale },
+        ],
+    },
+    {
+        domain: "Operations",
+        items: [
+            { to: "/players", label: "Player Register", icon: TrophyIcon },
+            { to: "/tournaments", label: "Tournaments", icon: TrophyIcon },
+        ],
+    },
 ];
 
 const COMING_SOON = [
@@ -119,29 +133,55 @@ const AppLayout = ({ children }) => {
 
                 {/* Primary nav */}
                 <nav className="flex-1 px-4 py-6 overflow-y-auto">
-                    <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
-                        Modules
-                    </div>
-                    <ul className="space-y-0.5 mb-8">
-                        {PRIMARY_NAV.map((item) => (
-                            <li key={item.to}>
-                                <NavLink
-                                    to={item.to}
-                                    data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
-                                    className={({ isActive }) =>
-                                        `group flex items-center gap-3 px-3 py-2.5 text-sm transition-all duration-300 border-l-2 ${
-                                            isActive
-                                                ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
-                                                : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
-                                        }`
-                                    }
-                                >
-                                    <item.icon size={16} strokeWidth={1.5} />
-                                    <span className="tracking-wide">{item.label}</span>
-                                </NavLink>
-                            </li>
-                        ))}
+                    <ul className="space-y-0.5 mb-6">
+                        <li>
+                            <NavLink
+                                to={DASHBOARD_LINK.to}
+                                data-testid="nav-dashboard"
+                                className={({ isActive }) =>
+                                    `group flex items-center gap-3 px-3 py-2.5 text-sm transition-all duration-300 border-l-2 ${
+                                        isActive
+                                            ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
+                                            : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
+                                    }`
+                                }
+                            >
+                                <DASHBOARD_LINK.icon size={16} strokeWidth={1.5} />
+                                <span className="tracking-wide">{DASHBOARD_LINK.label}</span>
+                            </NavLink>
+                        </li>
                     </ul>
+
+                    {NAV_DOMAINS.map((group) => (
+                        <div key={group.domain} className="mb-6">
+                            <div
+                                className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2"
+                                data-testid={`nav-domain-${group.domain.toLowerCase()}`}
+                            >
+                                {group.domain}
+                            </div>
+                            <ul className="space-y-0.5">
+                                {group.items.map((item) => (
+                                    <li key={item.to}>
+                                        <NavLink
+                                            to={item.to}
+                                            data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
+                                            className={({ isActive }) =>
+                                                `group flex items-center gap-3 px-3 py-2.5 text-sm transition-all duration-300 border-l-2 ${
+                                                    isActive
+                                                        ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
+                                                        : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
+                                                }`
+                                            }
+                                        >
+                                            <item.icon size={16} strokeWidth={1.5} />
+                                            <span className="tracking-wide">{item.label}</span>
+                                        </NavLink>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ))}
 
                     <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
                         Coming Soon

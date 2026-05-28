@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ChevronRight, ScrollText, Users, Vote, Landmark, Sparkles } from "lucide-react";
+import { MpcaEmblem as MPCAEmblem, MpcaLogoMark } from "@/components/MpcaEmblem";
 
 const PILLARS = [
     { icon: Users, label: "Membership & Players", note: "Register · Eligibility · BCCI sync" },
@@ -8,29 +9,6 @@ const PILLARS = [
     { icon: Landmark, label: "Finance & Grants", note: "District → Division → MPCA flow" },
     { icon: Sparkles, label: "Player Module & AI (Roadmap)", note: "Eligibility · OCR · Compliance" },
 ];
-
-const MPCAEmblem = ({ className = "" }) => (
-    <svg viewBox="0 0 120 120" className={className} fill="none">
-        <circle cx="60" cy="60" r="56" stroke="currentColor" strokeWidth="1" />
-        <circle cx="60" cy="60" r="48" stroke="currentColor" strokeWidth="0.5" strokeOpacity="0.5" />
-        {/* Stumps */}
-        <line x1="48" y1="38" x2="48" y2="82" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="60" y1="38" x2="60" y2="82" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="72" y1="38" x2="72" y2="82" stroke="currentColor" strokeWidth="1.5" />
-        {/* Bails */}
-        <line x1="44" y1="38" x2="54" y2="38" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="58" y1="38" x2="68" y2="38" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="66" y1="38" x2="76" y2="38" stroke="currentColor" strokeWidth="1.5" />
-        {/* Ball + seam */}
-        <circle cx="86" cy="74" r="6" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2" />
-        <path d="M 80 74 Q 86 70 92 74" stroke="currentColor" strokeWidth="1" fill="none" />
-        {/* Banner ribbon (top) */}
-        <path d="M 30 20 L 90 20" stroke="currentColor" strokeWidth="0.5" />
-        <text x="60" y="105" textAnchor="middle" fill="currentColor" fontFamily="Cormorant Garamond" fontSize="9" letterSpacing="2">
-            EST · MCMLVI
-        </text>
-    </svg>
-);
 
 const Landing = () => {
     return (
@@ -76,7 +54,7 @@ const Landing = () => {
                 <div className="relative z-10 max-w-7xl mx-auto px-8 md:px-16 py-32 grid lg:grid-cols-12 gap-12 items-center w-full">
                     <div className="lg:col-span-7 stately-reveal text-mpca-ivory">
                         <div className="overline mb-6 !text-mpca-gold-light">
-                            BCCI Affiliated · Est. 1956
+                            BCCI Affiliated · Est. 1957
                         </div>
                         <h1 className="font-serif text-5xl md:text-6xl lg:text-7xl leading-[1.05] text-mpca-ivory">
                             From <em className="text-mpca-oxblood not-italic font-medium">Holkar</em><br />
@@ -128,7 +106,9 @@ const Landing = () => {
                         >
                             <div className="absolute inset-0 bg-mpca-green-dark/70" />
                             <div className="relative flex flex-col items-center text-mpca-ivory">
-                                <MPCAEmblem className="w-32 h-32 text-mpca-gold-light" />
+                                <div className="w-32 h-32 bg-mpca-ivory rounded-full flex items-center justify-center p-3 shadow-2xl ring-1 ring-mpca-brass/40">
+                                    <MpcaLogoMark className="w-full h-full object-contain" alt="MPCA Official Emblem" />
+                                </div>
                                 <div className="mt-6 overline !text-mpca-gold-light">
                                     Madhya Pradesh
                                 </div>

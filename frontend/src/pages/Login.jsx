@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { PERSONAS, useAuth } from "@/context/AuthContext";
 import { ChevronRight, ShieldCheck, Building2, MapPin, Landmark } from "lucide-react";
+import { MpcaEmblem } from "@/components/MpcaEmblem";
 
 // Indian cricket palette per accent
 const ACCENT_STYLES = {
@@ -170,15 +171,7 @@ const Login = () => {
             <header className="bg-mpca-green-dark text-mpca-ivory px-8 md:px-16 py-6 border-b-4 border-mpca-oxblood">
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
                     <a href="/" className="flex items-center gap-3 group">
-                        <svg viewBox="0 0 64 64" className="w-9 h-9 text-mpca-brass" fill="none" strokeWidth={1.5}>
-                            <circle cx="32" cy="32" r="30" stroke="currentColor" />
-                            <line x1="26" y1="22" x2="26" y2="42" stroke="currentColor" />
-                            <line x1="32" y1="22" x2="32" y2="42" stroke="currentColor" />
-                            <line x1="38" y1="22" x2="38" y2="42" stroke="currentColor" />
-                            <line x1="24" y1="22" x2="34" y2="22" stroke="currentColor" />
-                            <line x1="30" y1="22" x2="40" y2="22" stroke="currentColor" />
-                            <circle cx="46" cy="38" r="3" stroke="currentColor" fill="currentColor" fillOpacity="0.5" />
-                        </svg>
+                        <MpcaEmblem className="w-10 h-12 text-mpca-brass" />
                         <div>
                             <div className="font-serif text-lg">MPCA</div>
                             <div className="overline text-[9px] !text-mpca-gold-light/80">

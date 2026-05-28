@@ -27,8 +27,8 @@ User preferences (locked):
 
 | ID | Role | Persona | Body Tier | Body |
 |---|---|---|---|---|
-| president | President | Shri Abhilash Khandekar | State | MPCA HQ |
-| secretary | Hon. Secretary | Shri Sanjay Jagdale | State | MPCA HQ |
+| president | President | Shri Mahanaryaman Scindia | State | MPCA HQ |
+| secretary | Hon. Secretary | Shri Sanjeev Rao | State | MPCA HQ |
 | treasurer | Hon. Treasurer | Smt. Meera Verma | State | MPCA HQ |
 | division-secretary | Hon. Secretary | Shri Vikram Patil | Division | Indore Division |
 | district-secretary | Hon. Secretary | Shri Anil Sharma | District | Ujjain District |
@@ -46,7 +46,8 @@ User preferences (locked):
 | **III.7** | Per-body Budget Ledger (reconciled live vs claims) · Auto bank-debit on Disburse · 2-signatory enforcement >₹50k · Anti-fragmentation rule per Art. 28(v) · Sanctioning matrix reference | ✅ **Complete (May 2026)** — 28/28 backend tests pass |
 | **III.8** | Procurement Protocol (3-quote / QCBS / L1-or-justify) · EMD + Security Deposit tracking · ABC Expenditure Analysis (Pareto bucketing) · Status guards on close/cancel | ✅ **Complete (May 2026)** — 40/40 backend tests pass |
 | **IV.1**  | **Player Module (M1)** — Player Register with Local-MP / Born-Outside / Guest categories · Eligibility validator (MP domicile, TW3 for Guest, age) · Auto Player ID (MPCA/YYYY/NNNNNN) · Disqualification flags (Two-Year/Lifetime/Division-Penalty/Age-Misrep) · Reinstate · **Transfer NOC workflow** (Draft → From-Body → To-Body → MPCA → Completed with body_id move) reusing III.6 ApprovalStep | ✅ **Complete (May 2026)** — 45/45 backend tests pass |
-| **IV.2**  | Tournament Module (M2) — seed 10 inter-divisional tournaments · Squad assignment · Fixtures · Results | 🔴 P1 NEXT |
+| **IV.2**  | Tournament Module (M2) — seed 10 inter-divisional tournaments · Squad assignment · Fixtures · Results | ✅ **Complete (May 2026)** |
+| **IV.2.1**| Official MPCA emblem integration (Wikipedia source — royal-blue chhatra + sunburst) · `MpcaEmblem` SVG component (themable) + `MpcaLogoMark` (official PNG) for public surfaces · Refreshed office-bearers to 2025 (Mahanaryaman Scindia / Sanjeev Rao / Meera Verma) · Founding year corrected to 1957 | ✅ **Complete (May 2026)** |
 | IV | Player Registration · Grievance Redressal workflow | Backlog |
 | V | Constitution Library (full searchable) · AI Assistant (constitution Q&A, draft notices, summarise minutes) · Analytics | Backlog |
 

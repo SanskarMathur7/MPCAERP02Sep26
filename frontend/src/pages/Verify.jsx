@@ -2,21 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { verifyMember } from "@/lib/api";
 import { CheckCircle2, XCircle, ShieldCheck, ArrowLeft } from "lucide-react";
-
-const MPCAEmblem = ({ className = "" }) => (
-    <svg viewBox="0 0 120 120" className={className} fill="none">
-        <circle cx="60" cy="60" r="56" stroke="currentColor" strokeWidth="1.5" />
-        <circle cx="60" cy="60" r="48" stroke="currentColor" strokeWidth="0.5" strokeOpacity="0.5" />
-        <line x1="48" y1="38" x2="48" y2="82" stroke="currentColor" strokeWidth="2" />
-        <line x1="60" y1="38" x2="60" y2="82" stroke="currentColor" strokeWidth="2" />
-        <line x1="72" y1="38" x2="72" y2="82" stroke="currentColor" strokeWidth="2" />
-        <line x1="44" y1="38" x2="54" y2="38" stroke="currentColor" strokeWidth="2" />
-        <line x1="58" y1="38" x2="68" y2="38" stroke="currentColor" strokeWidth="2" />
-        <line x1="66" y1="38" x2="76" y2="38" stroke="currentColor" strokeWidth="2" />
-        <circle cx="86" cy="74" r="6" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.25" />
-        <path d="M 80 74 Q 86 70 92 74" stroke="currentColor" strokeWidth="1" fill="none" />
-    </svg>
-);
+import { MpcaLogoMark } from "@/components/MpcaEmblem";
 
 const Verify = () => {
     const { uid } = useParams();
@@ -50,7 +36,9 @@ const Verify = () => {
             <header className="bg-mpca-green-dark text-mpca-ivory px-8 md:px-16 py-6 border-b border-mpca-brass/30">
                 <div className="max-w-3xl mx-auto flex items-center justify-between">
                     <Link to="/" className="flex items-center gap-3">
-                        <MPCAEmblem className="w-9 h-9 text-mpca-brass" />
+                        <div className="w-10 h-10 rounded-full bg-mpca-ivory flex items-center justify-center p-1">
+                            <MpcaLogoMark className="w-full h-full object-contain" />
+                        </div>
                         <div>
                             <div className="font-serif text-lg">MPCA</div>
                             <div className="overline text-[9px] text-mpca-gold-light/70">Public Verification</div>

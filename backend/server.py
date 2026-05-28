@@ -2684,7 +2684,7 @@ SEED_MEETINGS = [
         "notice_date": "2025-08-20",
         "quorum_required": 35,
         "quorum_present": 0,
-        "chairperson": "Shri Abhilash Khandekar",
+        "chairperson": "Shri Mahanaryaman Scindia",
         "convened_by": "Hon. Secretary",
         "status": "Notice_Issued",
         "agenda": [
@@ -2706,7 +2706,7 @@ SEED_MEETINGS = [
         "notice_date": "2025-07-25",
         "quorum_required": 9,
         "quorum_present": 11,
-        "chairperson": "Shri Abhilash Khandekar",
+        "chairperson": "Shri Mahanaryaman Scindia",
         "convened_by": "Hon. Joint Secretary",
         "status": "Concluded",
         "agenda": [
@@ -2803,9 +2803,9 @@ async def seed_bodies():
          "parent_code": None, "state": "All India", "seat": "Mumbai", "founded_year": 1928,
          "annual_grant_inr": 0.0},
         {"code": "MPCA", "name": "Madhya Pradesh Cricket Association",
-         "body_type": "State", "parent_code": "BCCI", "seat": "Indore", "founded_year": 1956,
+         "body_type": "State", "parent_code": "BCCI", "seat": "Indore", "founded_year": 1957,
          "annual_grant_inr": 0.0,
-         "secretary_name": "Shri Sanjay Jagdale", "treasurer_name": "Smt. Meera Verma"},
+         "secretary_name": "Shri Sanjeev Rao", "treasurer_name": "Smt. Meera Verma"},
 
         # ─── 10 Divisions (per MPCA setup diagram) ───
         # Each Division gets an annual grant of ₹30,000 from MPCA.
@@ -3264,6 +3264,21 @@ async def seed_tournaments():
 async def seed_data():
     await seed_bodies()
     await migrate_body_ids()
+    # One-shot migration: refresh MPCA HQ office-bearers & founding year
+    # to reflect the 2025 office-bearers (per official MPCA records).
+    await db.bodies.update_one(
+        {"code": "MPCA"},
+        {"$set": {
+            "founded_year": 1957,
+            "secretary_name": "Shri Sanjeev Rao",
+            "treasurer_name": "Smt. Meera Verma",
+        }},
+    )
+    # Refresh chairperson on seeded meetings (idempotent).
+    await db.meetings.update_many(
+        {"chairperson": "Shri Abhilash Khandekar"},
+        {"$set": {"chairperson": "Shri Mahanaryaman Scindia"}},
+    )
     await seed_claims()
     await seed_procurement()
     await seed_players()

@@ -2,24 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchMember } from "@/lib/api";
 import { Printer, ArrowLeft, ShieldCheck, User } from "lucide-react";
-
-const MPCAEmblem = ({ className = "" }) => (
-    <svg viewBox="0 0 120 120" className={className} fill="none">
-        <circle cx="60" cy="60" r="56" stroke="currentColor" strokeWidth="1.5" />
-        <circle cx="60" cy="60" r="48" stroke="currentColor" strokeWidth="0.5" strokeOpacity="0.5" />
-        <line x1="48" y1="38" x2="48" y2="82" stroke="currentColor" strokeWidth="2" />
-        <line x1="60" y1="38" x2="60" y2="82" stroke="currentColor" strokeWidth="2" />
-        <line x1="72" y1="38" x2="72" y2="82" stroke="currentColor" strokeWidth="2" />
-        <line x1="44" y1="38" x2="54" y2="38" stroke="currentColor" strokeWidth="2" />
-        <line x1="58" y1="38" x2="68" y2="38" stroke="currentColor" strokeWidth="2" />
-        <line x1="66" y1="38" x2="76" y2="38" stroke="currentColor" strokeWidth="2" />
-        <circle cx="86" cy="74" r="6" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.25" />
-        <path d="M 80 74 Q 86 70 92 74" stroke="currentColor" strokeWidth="1" fill="none" />
-        <text x="60" y="105" textAnchor="middle" fill="currentColor" fontFamily="Cormorant Garamond" fontSize="9" letterSpacing="2">
-            EST · MCMLVI
-        </text>
-    </svg>
-);
+import { MpcaEmblem as MPCAEmblem } from "@/components/MpcaEmblem";
 
 /* Simple barcode-like watermark from UID */
 const BarcodeStrip = ({ uid }) => {

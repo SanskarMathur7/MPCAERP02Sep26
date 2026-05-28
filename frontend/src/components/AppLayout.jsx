@@ -47,23 +47,7 @@ const FUTURE_NAV = [
     { label: "AI Assistant", icon: Sparkles, phase: "V" },
 ];
 
-const MPCACrest = ({ className = "" }) => (
-    <svg viewBox="0 0 64 64" className={className} fill="none" strokeWidth={1.25}>
-        <circle cx="32" cy="32" r="30" stroke="currentColor" />
-        <circle cx="32" cy="32" r="24" stroke="currentColor" strokeOpacity="0.5" />
-        {/* Stumps */}
-        <line x1="26" y1="22" x2="26" y2="42" stroke="currentColor" />
-        <line x1="32" y1="22" x2="32" y2="42" stroke="currentColor" />
-        <line x1="38" y1="22" x2="38" y2="42" stroke="currentColor" />
-        {/* Bails */}
-        <line x1="24" y1="22" x2="34" y2="22" stroke="currentColor" />
-        <line x1="30" y1="22" x2="40" y2="22" stroke="currentColor" />
-        {/* Ball */}
-        <circle cx="46" cy="38" r="3" stroke="currentColor" fill="currentColor" fillOpacity="0.4" />
-        {/* Seam */}
-        <path d="M 43 38 Q 46 36 49 38" stroke="currentColor" fill="none" />
-    </svg>
-);
+import { MpcaEmblem as MPCACrest } from "@/components/MpcaEmblem";
 
 const AppLayout = ({ children }) => {
     const { persona, logout } = useAuth();
@@ -94,7 +78,7 @@ const AppLayout = ({ children }) => {
                                 MPCA · ERP
                             </div>
                             <div className="overline text-[9px] mt-1.5 !text-mpca-gold-light/80">
-                                BCCI Affiliated · Est. 1956
+                                BCCI Affiliated · Est. 1957
                             </div>
                         </div>
                     </div>

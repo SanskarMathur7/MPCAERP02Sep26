@@ -198,6 +198,14 @@ Org Structure is **not** a user-facing screen — it is the **segmentation matri
 | G11 | Museum Module | 🔴 | Scope TBD |
 | F6e | Investment Module (FDs · MFs · ROI) | 🔴 | Sub-module of M5 Finance |
 
+## Tab 5 · AI Assistant
+
+| Requirement | Status | Where |
+|---|---|---|
+| Document validation gate for grant claims | ✅ | Step 4 (Feb 2026) — `gemini-3-flash-preview` reads `APPROVAL_MATRIX.md` + uploaded files, auto-routes claims, full audit chain |
+| Constitution Q&A (text generation) | 🔴 | Phase V backlog |
+| Draft notices / summarise minutes / compliance reminders | 🔴 | Phase V backlog |
+
 ## Bucket C · M5 Finance deepening
 
 | Ref | Requirement | Status |

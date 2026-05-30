@@ -8,8 +8,55 @@ import {
 import CricketLoader from "@/components/CricketLoader";
 import {
     HandCoins, Plus, ChevronRight, Coins, CheckCircle2, Clock, XCircle, AlertTriangle,
-    ArrowUpRight, Building2, Landmark, MapPin,
+    ArrowUpRight, Building2, Landmark, MapPin, Sparkles,
 } from "lucide-react";
+
+const AI_VERDICT_META = {
+    APPROVE_FAST_TRACK:   { label: "AI · Fast-track approve",  bg: "bg-mpca-green-deep/10",  border: "border-mpca-green-deep/40",  text: "text-mpca-green-deep" },
+    APPROVE_STANDARD:     { label: "AI · Approve",              bg: "bg-mpca-green-deep/10",  border: "border-mpca-green-deep/40",  text: "text-mpca-green-deep" },
+    HOLD_FOR_HUMAN:       { label: "AI · Hold for review",      bg: "bg-mpca-brass/10",        border: "border-mpca-brass/40",        text: "text-mpca-brass" },
+    RETURN_TO_ORIGINATOR: { label: "AI · Returned · docs missing", bg: "bg-mpca-oxblood/10",  border: "border-mpca-oxblood/40",      text: "text-mpca-oxblood" },
+    AUTO_REJECT:          { label: "AI · Auto-rejected",        bg: "bg-mpca-oxblood/15",      border: "border-mpca-oxblood/60",      text: "text-mpca-oxblood" },
+};
+
+const AIVerdictCard = ({ decision, reasoning, missingDocs, validatedAt }) => {
+    const meta = AI_VERDICT_META[decision] || AI_VERDICT_META.HOLD_FOR_HUMAN;
+    return (
+        <div className={`mb-7 border ${meta.border} ${meta.bg}`} data-testid="ai-verdict-card">
+            <div className={`flex items-center gap-2 px-4 py-2 border-b ${meta.border}`}>
+                <Sparkles size={13} strokeWidth={1.5} className={meta.text} />
+                <div className={`text-[11px] tracking-widest uppercase font-semibold ${meta.text}`}>
+                    {meta.label}
+                </div>
+                {validatedAt && (
+                    <div className="ml-auto text-[10px] text-mpca-gray-dark">
+                        {fmtDate(validatedAt)}
+                    </div>
+                )}
+            </div>
+            <div className="px-4 py-3 text-xs text-mpca-charcoal leading-relaxed">
+                {reasoning || "(no reasoning provided)"}
+            </div>
+            {Array.isArray(missingDocs) && missingDocs.length > 0 && (
+                <div className="px-4 pb-3">
+                    <div className="overline text-[9px] mb-1.5 !text-mpca-oxblood">Missing documents</div>
+                    <ul className="space-y-1">
+                        {missingDocs.map((d, i) => (
+                            <li
+                                key={i}
+                                data-testid={`ai-missing-doc-${i}`}
+                                className="text-[11px] text-mpca-oxblood flex items-start gap-2"
+                            >
+                                <span className="mt-1.5 w-1 h-1 rounded-full bg-mpca-oxblood flex-shrink-0" />
+                                <span>{d}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const fmtINR = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n || 0);
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
@@ -258,6 +305,15 @@ const DetailDrawer = ({ claim, persona, onClose, onAction }) => {
                         </div>
                     )}
 
+                    {claim.ai_decision && (
+                        <AIVerdictCard
+                            decision={claim.ai_decision}
+                            reasoning={claim.ai_reasoning}
+                            missingDocs={claim.ai_missing_docs}
+                            validatedAt={claim.ai_validated_at}
+                        />
+                    )}
+
                     <div className="overline mb-3">Approval Trail · Maker-Checker</div>
                     {claim.approval_chain.length === 0 ? (
                         <div className="text-sm italic text-mpca-gray-dark border border-dashed border-mpca-brass/40 p-4">
@@ -470,7 +526,7 @@ const Claims = () => {
                                 {c.claim_no}
                             </div>
                             <div className="flex-1 min-w-[280px]">
-                                <div className="font-serif text-lg text-mpca-green-dark leading-tight flex items-center gap-2">
+                                <div className="font-serif text-lg text-mpca-green-dark leading-tight flex items-center gap-2 flex-wrap">
                                     {c.title}
                                     {c.is_overdue && (
                                         <span
@@ -482,6 +538,20 @@ const Claims = () => {
                                             Overdue
                                         </span>
                                     )}
+                                    {c.ai_decision && (() => {
+                                        const m = AI_VERDICT_META[c.ai_decision];
+                                        if (!m) return null;
+                                        return (
+                                            <span
+                                                data-testid={"claim-ai-pill-" + c.claim_no}
+                                                className={`inline-flex items-center gap-1 px-2 py-0.5 text-[9px] tracking-wider uppercase font-semibold border ${m.border} ${m.bg} ${m.text}`}
+                                                title={c.ai_reasoning || ""}
+                                            >
+                                                <Sparkles size={9} strokeWidth={2} />
+                                                {m.label.replace("AI · ", "")}
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                                 <div className="text-[11px] text-mpca-gray-dark mt-1 flex items-center gap-2">
                                     {c.body_id.startsWith("DIV") ? <Building2 size={11} /> : c.body_id.startsWith("DIST") ? <MapPin size={11} /> : <Landmark size={11} />}

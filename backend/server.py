@@ -408,6 +408,9 @@ class Claim(ClaimBase):
     ai_reasoning: Optional[str] = None       # human-readable verdict
     ai_validated_at: Optional[str] = None    # ISO timestamp
     ai_missing_docs: List[str] = []          # convenience extract for the UI
+    # PF3 (Feb 2026) · Approved amount differential
+    approved_amount_inr: Optional[float] = None    # set by Treasurer at sanction; defaults to amount_inr on disburse
+    approved_amount_reason: Optional[str] = None   # mandatory when approved != claimed
 
 
 class ClaimCreate(ClaimBase):
@@ -426,6 +429,9 @@ class ClaimAction(BaseModel):
     co_signatory_name: Optional[str] = None
     # Optional override of the source bank account on Disburse
     source_account_id: Optional[str] = None
+    # PF3 (Feb 2026) · Approved amount differential — used on Sanction
+    approved_amount_inr: Optional[float] = None
+    approved_amount_reason: Optional[str] = None
 
 
 # ---------------- Phase III.7: Body Budget Ledger ----------------
@@ -1755,21 +1761,47 @@ async def recommend_claim(claim_id: str, action: ClaimAction):
 
 @api_router.post("/claims/{claim_id}/sanction", response_model=Claim)
 async def sanction_claim(claim_id: str, action: ClaimAction):
-    """MPCA Hon. Treasurer sanctions a Division-recommended claim."""
+    """MPCA Hon. Treasurer sanctions a Division-recommended claim.
+    PF3: Treasurer may sanction a different (usually lower) amount than claimed;
+    when so, a reason is mandatory and stamped into the approval chain note."""
     doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
     if doc["status"] != "Division_Recommended":
         raise HTTPException(400, f"Cannot sanction a claim in status {doc['status']}")
+
+    claimed = float(doc.get("amount_inr") or 0)
+    approved = action.approved_amount_inr if action.approved_amount_inr is not None else claimed
+    if approved < 0:
+        raise HTTPException(400, "Approved amount cannot be negative.")
+    if approved > claimed:
+        raise HTTPException(400, f"Approved amount (₹{approved:,.0f}) cannot exceed the claimed amount (₹{claimed:,.0f}).")
+    if abs(approved - claimed) > 0.5 and not (action.approved_amount_reason and action.approved_amount_reason.strip()):
+        raise HTTPException(400, "A reason is required when the approved amount differs from the claimed amount.")
+
+    delta = round(claimed - approved, 2)
+    note_extras = []
+    if delta > 0.5:
+        note_extras.append(
+            f"Approved ₹{approved:,.0f} (claimed ₹{claimed:,.0f}, reduction ₹{delta:,.0f}). Reason: "
+            f"{action.approved_amount_reason.strip()}"
+        )
+    composed_notes = (action.notes or "").strip()
+    if note_extras:
+        composed_notes = (composed_notes + " · " if composed_notes else "") + " · ".join(note_extras)
+
     step = ApprovalStep(
         stage="MPCA_Sanctioned",
         actor_post=action.actor_post,
         actor_name=action.actor_name,
         actor_body_id=action.actor_body_id,
         decision="Sanctioned",
-        notes=action.notes,
+        notes=composed_notes or None,
     )
     update = _append_step(doc, step, "MPCA_Sanctioned")
+    update["approved_amount_inr"] = approved
+    if action.approved_amount_reason:
+        update["approved_amount_reason"] = action.approved_amount_reason.strip()
     await db.claims.update_one({"id": claim_id}, {"$set": update})
     updated = await db.claims.find_one({"id": claim_id}, {"_id": 0})
     await _notify_for_claim(updated, "MPCA_Sanctioned", action.actor_name)
@@ -1787,7 +1819,8 @@ async def disburse_claim(claim_id: str, action: ClaimAction):
     if doc["status"] != "MPCA_Sanctioned":
         raise HTTPException(400, f"Cannot disburse a claim in status {doc['status']}")
 
-    amount = doc.get("amount_inr") or 0
+    # PF3: disburse the approved amount if Treasurer reduced it; else the full claim amount
+    amount = float(doc.get("approved_amount_inr") if doc.get("approved_amount_inr") is not None else doc.get("amount_inr") or 0)
     # Two-signatory rule
     if amount > TWO_SIGNATORY_THRESHOLD_INR and not (action.co_signatory_post and action.co_signatory_name):
         raise HTTPException(
@@ -1855,7 +1888,9 @@ async def disburse_claim(claim_id: str, action: ClaimAction):
     update["disbursement_account_id"] = source_account["id"]
 
     await db.claims.update_one({"id": claim_id}, {"$set": update})
-    return await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    updated = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    await _notify_for_claim(updated, "Disbursed", action.actor_name)
+    return _decorate_claim(updated)
 
 
 @api_router.post("/claims/{claim_id}/reject", response_model=Claim)

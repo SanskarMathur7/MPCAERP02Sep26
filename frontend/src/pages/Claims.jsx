@@ -158,16 +158,26 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
     const [notes, setNotes] = useState("");
     const [coPost, setCoPost] = useState("");
     const [coName, setCoName] = useState("");
+    const [approvedAmt, setApprovedAmt] = useState("");
+    const [approvedReason, setApprovedReason] = useState("");
     const [busy, setBusy] = useState(false);
     if (!open || !action) return null;
     const meta = ACTION_META[action];
 
     // 2-signatory needed only on Disburse > ₹50,000
     const needsCoSig = action === "disburse" && (claim?.amount_inr || 0) > 50000;
+    // PF3 · Sanction action gets approved-amount controls
+    const isSanction = action === "sanction";
+    const parsedApproved = parseFloat(approvedAmt);
+    const showReason = isSanction && !isNaN(parsedApproved) && claim && Math.abs(parsedApproved - (claim.amount_inr || 0)) > 0.5;
 
     const handleConfirm = async () => {
         if (needsCoSig && (!coPost.trim() || !coName.trim())) {
             alert("Disbursement above ₹50,000 requires both co-signatory post and name.");
+            return;
+        }
+        if (isSanction && showReason && !approvedReason.trim()) {
+            alert("Please record a reason — the approved amount differs from the claimed amount.");
             return;
         }
         setBusy(true);
@@ -179,6 +189,8 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
                 notes: notes.trim() || null,
                 co_signatory_post: needsCoSig ? coPost.trim() : null,
                 co_signatory_name: needsCoSig ? coName.trim() : null,
+                approved_amount_inr: isSanction && !isNaN(parsedApproved) ? parsedApproved : null,
+                approved_amount_reason: isSanction && showReason ? approvedReason.trim() : null,
             });
             onDone();
         } catch (e) {
@@ -188,6 +200,8 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
             setNotes("");
             setCoPost("");
             setCoName("");
+            setApprovedAmt("");
+            setApprovedReason("");
         }
     };
 
@@ -203,6 +217,51 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
                         <div className="text-sm text-mpca-charcoal mb-1">{claim.claim_no} · {claim.title}</div>
                         <div className="font-serif text-xl text-mpca-green-dark">{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(claim.amount_inr || 0)}</div>
                     </div>
+
+                    {isSanction && (
+                        <div className="border border-mpca-brass/40 bg-mpca-parchment/40 p-3" data-testid="approved-amount-section">
+                            <div className="overline mb-2">Approved Amount · PF3</div>
+                            <p className="text-[11px] text-mpca-gray-dark mb-3 leading-relaxed">
+                                Sanction the full claimed amount or reduce it. The disbursement bank debit will use the approved amount. Leave blank to approve in full.
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="label-heritage">Approved Amount (INR)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max={claim.amount_inr}
+                                        step="1"
+                                        value={approvedAmt}
+                                        onChange={(e) => setApprovedAmt(e.target.value)}
+                                        placeholder={String(claim.amount_inr || 0)}
+                                        className="input-heritage"
+                                        data-testid="approved-amount-input"
+                                    />
+                                </div>
+                                <div className="flex flex-col justify-end">
+                                    {showReason && (
+                                        <div className="text-[11px] text-mpca-oxblood font-semibold">
+                                            Reduction of ₹{((claim.amount_inr || 0) - parsedApproved).toLocaleString("en-IN")} — reason required
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            {showReason && (
+                                <div className="mt-3">
+                                    <label className="label-heritage">Reason for reduction</label>
+                                    <textarea
+                                        rows={2}
+                                        value={approvedReason}
+                                        onChange={(e) => setApprovedReason(e.target.value)}
+                                        placeholder="e.g. Travel itinerary partially supported; lodging excluded per BCCI norms."
+                                        className="input-heritage !border-mpca-oxblood/40 !p-2"
+                                        data-testid="approved-amount-reason"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {needsCoSig && (
                         <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/5 p-3" data-testid="co-signatory-section">
@@ -292,11 +351,46 @@ const DetailDrawer = ({ claim, persona, onClose, onAction, onClaimUpdated }) => 
                     <div className="overline !text-mpca-gold-light">{claim.claim_no} · {claim.fiscal_cycle}</div>
                     <div className="font-serif text-3xl mt-2 leading-tight">{claim.title}</div>
                     <div className="text-sm text-mpca-gold-light/85 mt-3">{CATEGORY_LABEL[claim.category]} · From <strong>{claim.body_id}</strong></div>
-                    <div className="font-serif text-4xl text-mpca-gold-light mt-4">{fmtINR(claim.amount_inr)}</div>
-                    <div className="mt-4"><Pill status={claim.status} /></div>
+                    <div className="mt-4 flex items-end gap-5 flex-wrap">
+                        <div>
+                            {claim.approved_amount_inr != null && Math.abs(claim.approved_amount_inr - (claim.amount_inr || 0)) > 0.5 ? (
+                                <>
+                                    <div className="text-[10px] uppercase tracking-widest text-mpca-gold-light/70">Approved</div>
+                                    <div className="font-serif text-4xl text-mpca-gold-light leading-none">{fmtINR(claim.approved_amount_inr)}</div>
+                                    <div className="text-[11px] text-mpca-gold-light/60 mt-1 line-through">claimed {fmtINR(claim.amount_inr)}</div>
+                                </>
+                            ) : (
+                                <div className="font-serif text-4xl text-mpca-gold-light leading-none">{fmtINR(claim.amount_inr)}</div>
+                            )}
+                        </div>
+                        <Pill status={claim.status} />
+                    </div>
                 </div>
 
                 <div className="p-7">
+                    {claim.approved_amount_reason && claim.approved_amount_inr != null && Math.abs(claim.approved_amount_inr - (claim.amount_inr || 0)) > 0.5 && (
+                        <div className="mb-7 border border-mpca-brass/40 bg-mpca-parchment/40 p-4" data-testid="claim-approved-amount-card">
+                            <div className="overline mb-2 !text-mpca-oxblood">Approved Amount · PF3</div>
+                            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-3">
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">Claimed</div>
+                                    <div className="font-serif text-xl text-mpca-charcoal line-through">{fmtINR(claim.amount_inr)}</div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">Approved</div>
+                                    <div className="font-serif text-xl text-mpca-green-dark">{fmtINR(claim.approved_amount_inr)}</div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">Reduction</div>
+                                    <div className="font-serif text-xl text-mpca-oxblood">−{fmtINR((claim.amount_inr || 0) - claim.approved_amount_inr)}</div>
+                                </div>
+                            </div>
+                            <div className="text-xs italic text-mpca-charcoal bg-mpca-ivory border-l-2 border-mpca-oxblood/60 px-3 py-2">
+                                "{claim.approved_amount_reason}"
+                            </div>
+                        </div>
+                    )}
+
                     {claim.description && (
                         <div className="mb-7">
                             <div className="overline mb-2">Description</div>
@@ -626,8 +720,15 @@ const Claims = () => {
                                     {CATEGORY_LABEL[c.category]}
                                 </div>
                             </div>
-                            <div className="font-serif text-xl text-mpca-green-dark whitespace-nowrap">
-                                {fmtINR(c.amount_inr)}
+                            <div className="text-right whitespace-nowrap">
+                                {c.approved_amount_inr != null && Math.abs(c.approved_amount_inr - (c.amount_inr || 0)) > 0.5 ? (
+                                    <>
+                                        <div className="font-serif text-xl text-mpca-green-dark">{fmtINR(c.approved_amount_inr)}</div>
+                                        <div className="text-[10px] text-mpca-gray-dark line-through">{fmtINR(c.amount_inr)}</div>
+                                    </>
+                                ) : (
+                                    <div className="font-serif text-xl text-mpca-green-dark">{fmtINR(c.amount_inr)}</div>
+                                )}
                             </div>
                             <Pill status={c.status} />
                             <ChevronRight size={14} className="text-mpca-gray" />

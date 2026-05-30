@@ -210,7 +210,7 @@ Org Structure is **not** a user-facing screen — it is the **segmentation matri
 
 | Ref | Requirement | Status |
 |---|---|---|
-| F1 | `approved_amount` + `difference` + `difference_reason` on claims | 🔴 |
+| F1 | `approved_amount` + `difference` + `difference_reason` on claims | ✅ | PF3 (Feb 2026) — backend validates, frontend renders 3-column reduction card + struck-claim chrome |
 | F2 | Claim-type dropdown linked to scheme docs / budget heads | 🔴 |
 | F3 | Flags: `accounted_in_tally`, `claimable_from_bcci` | 🔴 |
 | PF1 | Annual Grant — approve district + division share individually AND combined | 🔴 |

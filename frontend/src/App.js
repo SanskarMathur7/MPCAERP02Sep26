@@ -30,6 +30,7 @@ import Procurement from "@/pages/Procurement";
 import Players from "@/pages/Players";
 import Tournaments from "@/pages/Tournaments";
 import TournamentDetail from "@/pages/TournamentDetail";
+import Rulebook from "@/pages/Rulebook";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -57,6 +58,7 @@ function App() {
                         {/* Protected — Phase 1 */}
                         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
                         <Route path="/org" element={<Protected><OrgStructure /></Protected>} />
+                        <Route path="/rulebook" element={<Protected><Rulebook /></Protected>} />
                         <Route path="/members" element={<Protected><Members /></Protected>} />
                         <Route path="/members/new" element={<Protected><MemberNew /></Protected>} />
                         <Route path="/members/:id" element={<Protected><MemberDetail /></Protected>} />

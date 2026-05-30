@@ -38,6 +38,7 @@ const NAV_DOMAINS = [
         items: [
             { to: "/budgets", label: "Budget Ledger", icon: Coins },
             { to: "/claims", label: "Grant Claims", icon: HandCoins },
+            { to: "/rulebook", label: "AI Rulebook", icon: BookOpen },
             { to: "/procurement", label: "Procurement", icon: ShoppingCart },
             { to: "/fees", label: "Fees & Subscriptions", icon: Receipt },
             { to: "/bank", label: "Bank Operations", icon: Landmark },

@@ -109,6 +109,54 @@
 }
 
 @layer components {
+    /* Markdown prose styling for the AI Rulebook viewer */
+    .rulebook-prose h1 {
+        @apply font-serif text-4xl text-mpca-green-dark mt-2 mb-5 leading-tight;
+    }
+    .rulebook-prose h2 {
+        @apply font-serif text-2xl text-mpca-oxblood mt-10 mb-3 pb-2 border-b border-mpca-brass/30;
+    }
+    .rulebook-prose h3 {
+        @apply font-serif text-xl text-mpca-green-dark mt-7 mb-2;
+    }
+    .rulebook-prose p {
+        @apply text-sm text-mpca-charcoal leading-relaxed mb-3;
+    }
+    .rulebook-prose ul, .rulebook-prose ol {
+        @apply text-sm text-mpca-charcoal leading-relaxed mb-4 ml-6 space-y-1;
+    }
+    .rulebook-prose ul { list-style: disc; }
+    .rulebook-prose ol { list-style: decimal; }
+    .rulebook-prose li { @apply pl-1; }
+    .rulebook-prose strong { @apply text-mpca-green-dark font-semibold; }
+    .rulebook-prose code {
+        @apply font-mono text-[12px] bg-mpca-parchment/70 border border-mpca-brass/30 px-1.5 py-0.5 text-mpca-oxblood;
+    }
+    .rulebook-prose blockquote {
+        @apply border-l-4 border-mpca-brass bg-mpca-parchment/40 pl-4 py-3 my-4 italic text-sm text-mpca-charcoal;
+    }
+    .rulebook-prose hr {
+        @apply border-mpca-brass/30 my-8;
+    }
+    .rulebook-prose a {
+        @apply text-mpca-oxblood underline hover:no-underline;
+    }
+    .rulebook-prose table {
+        @apply w-full text-sm my-5 border border-mpca-brass/30;
+    }
+    .rulebook-prose thead {
+        @apply bg-mpca-green-dark text-mpca-ivory;
+    }
+    .rulebook-prose th, .rulebook-prose td {
+        @apply px-3 py-2 text-left border border-mpca-brass/20 align-top;
+    }
+    .rulebook-prose th {
+        @apply text-[10px] tracking-[0.15em] uppercase font-semibold;
+    }
+    .rulebook-prose tbody tr:nth-child(even) {
+        @apply bg-mpca-parchment/30;
+    }
+
     /* Primary button — Saffron pop on navy */
     .btn-heritage-primary {
         @apply inline-flex items-center justify-center gap-2 bg-mpca-oxblood text-mpca-ivory border border-transparent hover:bg-mpca-burgundy-dark transition-all duration-300 font-sans tracking-[0.15em] uppercase text-xs px-6 py-3 font-semibold;

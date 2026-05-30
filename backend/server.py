@@ -6,7 +6,7 @@ Modules implemented:
 - Dashboard stats
 """
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -3262,6 +3262,130 @@ async def ai_validate_claim(claim_id: str):
     verdict = await _run_ai_validation(doc)
     updated = await _apply_ai_verdict(doc, verdict, None)
     return _decorate_claim(updated)
+
+
+# ============================================================
+# Approval Matrix (AI Rulebook) — view + download (.md / .pdf)
+# ============================================================
+
+@api_router.get("/rulebook")
+async def get_rulebook():
+    """Returns the markdown rulebook text + metadata for in-app rendering."""
+    try:
+        text = APPROVAL_MATRIX_PATH.read_text(encoding="utf-8")
+        stat = APPROVAL_MATRIX_PATH.stat()
+    except FileNotFoundError:
+        raise HTTPException(404, "Rulebook file not found")
+    return {
+        "version": "0.1 (strawman)",
+        "path": str(APPROVAL_MATRIX_PATH),
+        "size_bytes": stat.st_size,
+        "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+        "markdown": text,
+    }
+
+
+@api_router.get("/rulebook/download.md")
+async def download_rulebook_md():
+    if not APPROVAL_MATRIX_PATH.exists():
+        raise HTTPException(404, "Rulebook file not found")
+    return FileResponse(
+        str(APPROVAL_MATRIX_PATH),
+        media_type="text/markdown",
+        filename="MPCA_Approval_Matrix_v0.1.md",
+    )
+
+
+@api_router.get("/rulebook/download.pdf")
+async def download_rulebook_pdf():
+    if not APPROVAL_MATRIX_PATH.exists():
+        raise HTTPException(404, "Rulebook file not found")
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+    import io
+    import re as _re
+
+    text = APPROVAL_MATRIX_PATH.read_text(encoding="utf-8")
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=2 * cm, rightMargin=2 * cm,
+        topMargin=2 * cm, bottomMargin=2 * cm,
+        title="MPCA Approval Matrix v0.1",
+        author="Madhya Pradesh Cricket Association",
+    )
+
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("H1", parent=styles["Heading1"], textColor=colors.HexColor("#10342B"), spaceAfter=10)
+    h2 = ParagraphStyle("H2", parent=styles["Heading2"], textColor=colors.HexColor("#7A2E1F"), spaceAfter=8)
+    h3 = ParagraphStyle("H3", parent=styles["Heading3"], textColor=colors.HexColor("#10342B"), spaceAfter=6)
+    body = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10, leading=14, spaceAfter=6)
+    blockquote = ParagraphStyle("Quote", parent=body, leftIndent=18, textColor=colors.HexColor("#555"), fontName="Helvetica-Oblique")
+    bullet = ParagraphStyle("Bullet", parent=body, leftIndent=14, bulletIndent=2)
+    code = ParagraphStyle("Code", parent=body, fontName="Courier", fontSize=9, textColor=colors.HexColor("#333"))
+
+    def _escape(s: str) -> str:
+        s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        # bold **x**
+        s = _re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)
+        # italics _x_ / *x*
+        s = _re.sub(r"(?<![*\w])\*(?!\*)(.+?)\*(?!\*)", r"<i>\1</i>", s)
+        # inline code `x`
+        s = _re.sub(r"`([^`]+)`", r'<font face="Courier" color="#7A2E1F">\1</font>', s)
+        return s
+
+    story: list = []
+    in_table = False
+    table_buffer: list = []
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        # very-light table flush: render as monospace lines (good-enough for export)
+        if line.startswith("|"):
+            in_table = True
+            table_buffer.append(line)
+            continue
+        else:
+            if in_table:
+                for row in table_buffer:
+                    story.append(Paragraph(_escape(row), code))
+                story.append(Spacer(1, 6))
+                table_buffer = []
+                in_table = False
+
+        if not line.strip():
+            story.append(Spacer(1, 4))
+            continue
+        if line.startswith("# "):
+            story.append(Paragraph(_escape(line[2:]), h1))
+        elif line.startswith("## "):
+            story.append(Paragraph(_escape(line[3:]), h2))
+        elif line.startswith("### "):
+            story.append(Paragraph(_escape(line[4:]), h3))
+        elif line.startswith("> "):
+            story.append(Paragraph(_escape(line[2:]), blockquote))
+        elif line.startswith("- ") or line.startswith("* "):
+            story.append(Paragraph(_escape(line[2:]), bullet, bulletText="•"))
+        elif line.startswith("---"):
+            story.append(Spacer(1, 6))
+            story.append(Paragraph("<para alignment='center'>· · ·</para>", body))
+            story.append(Spacer(1, 6))
+        else:
+            story.append(Paragraph(_escape(line), body))
+
+    if in_table:
+        for row in table_buffer:
+            story.append(Paragraph(_escape(row), code))
+
+    doc.build(story)
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="MPCA_Approval_Matrix_v0.1.pdf"'},
+    )
 
 
 app.include_router(api_router)

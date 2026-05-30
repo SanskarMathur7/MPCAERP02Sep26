@@ -185,7 +185,7 @@ Org Structure is **not** a user-facing screen — it is the **segmentation matri
 | G3 | Real-time notifications (in-app bell, G3-a) | ✅ | `notifications` collection + 4 endpoints + `NotificationBell.jsx` polling every 20s |
 | G4 | Red flag / anomaly on overdue tasks | ✅ | Maroon "OVERDUE" pill on Claims rows when `is_overdue=true` |
 | G5 | Present setup first, historical later | 📘 | Policy constraint, not a feature |
-| G7 | Allow incomplete uploads / finalise later | 🟡 | Draft state exists on claims; extend to procurement + transfers |
+| G7 | Allow incomplete uploads / finalise later | ✅ | Draft state + real file uploads (Step 3, Feb 2026) — multipart endpoints serve PDFs/images/DOCX/XLSX up to 20MB |
 | G9 | Customised MIS / Interactive Reports | 🔴 | New `/reports` module |
 
 ## Bucket B · New modules

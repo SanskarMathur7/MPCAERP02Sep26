@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { createClaim } from "@/lib/api";
 import { HandCoins, ChevronLeft, CheckCircle2 } from "lucide-react";
+import FileUpload from "@/components/FileUpload";
 
 const CATEGORIES = [
     { value: "Annual_Grant",       label: "Annual Grant",        hint: "District statutory grant per Art. 28(v)" },
@@ -22,6 +23,7 @@ const ClaimNew = () => {
         amount_inr: "",
         fiscal_cycle: "2025-26",
     });
+    const [attachments, setAttachments] = useState([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
 
@@ -49,6 +51,7 @@ const ClaimNew = () => {
                 amount_inr: parseFloat(form.amount_inr),
                 fiscal_cycle: form.fiscal_cycle,
                 created_by: persona.name,
+                supporting_doc_urls: attachments.map((a) => a.url),
             });
             navigate("/claims", { state: { highlight: created.id } });
         } catch (e) {
@@ -177,6 +180,19 @@ const ClaimNew = () => {
                         {error}
                     </div>
                 )}
+
+                <div className="pt-2 border-t border-mpca-brass/20">
+                    <FileUpload
+                        value={attachments}
+                        onChange={setAttachments}
+                        metadata={{
+                            body_id: persona.body_code,
+                            uploaded_by: persona.name,
+                            related_type: "claim",
+                        }}
+                        label="Supporting Documents (bills · resolutions · sanctions · scheme docs)"
+                    />
+                </div>
 
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-mpca-brass/20">
                     <button type="button" onClick={() => navigate("/claims")} className="btn-heritage-ghost" data-testid="claim-new-cancel">

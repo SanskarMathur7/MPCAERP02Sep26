@@ -231,6 +231,33 @@ const DetailDrawer = ({ claim, persona, onClose, onAction }) => {
                         </div>
                     )}
 
+                    {Array.isArray(claim.supporting_doc_urls) && claim.supporting_doc_urls.length > 0 && (
+                        <div className="mb-7" data-testid="claim-attachments">
+                            <div className="overline mb-3">Attachments · {claim.supporting_doc_urls.length}</div>
+                            <ul className="space-y-1.5">
+                                {claim.supporting_doc_urls.map((u, idx) => {
+                                    const base = process.env.REACT_APP_BACKEND_URL;
+                                    const href = u.startsWith("http") ? u : `${base}${u}`;
+                                    const name = (u.split("/").pop() || `Document ${idx + 1}`).slice(0, 60);
+                                    return (
+                                        <li key={u}>
+                                            <a
+                                                href={href}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                data-testid={"claim-attachment-" + idx}
+                                                className="flex items-center gap-2 text-xs text-mpca-oxblood hover:underline border border-mpca-brass/30 px-3 py-2"
+                                            >
+                                                <span className="font-mono text-[10px] text-mpca-brass">DOC-{String(idx + 1).padStart(2, "0")}</span>
+                                                <span className="truncate">{name}</span>
+                                            </a>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </div>
+                    )}
+
                     <div className="overline mb-3">Approval Trail · Maker-Checker</div>
                     {claim.approval_chain.length === 0 ? (
                         <div className="text-sm italic text-mpca-gray-dark border border-dashed border-mpca-brass/40 p-4">

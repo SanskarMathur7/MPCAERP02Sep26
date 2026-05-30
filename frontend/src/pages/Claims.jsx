@@ -4,8 +4,10 @@ import { useAuth } from "@/context/AuthContext";
 import {
     fetchClaims, fetchClaimsStats,
     submitClaim, recommendClaim, sanctionClaim, disburseClaim, rejectClaim, returnClaim,
+    aiValidateClaim, api,
 } from "@/lib/api";
 import CricketLoader from "@/components/CricketLoader";
+import FileUpload from "@/components/FileUpload";
 import {
     HandCoins, Plus, ChevronRight, Coins, CheckCircle2, Clock, XCircle, AlertTriangle,
     ArrowUpRight, Building2, Landmark, MapPin, Sparkles,
@@ -255,9 +257,33 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
     );
 };
 
-const DetailDrawer = ({ claim, persona, onClose, onAction }) => {
+const DetailDrawer = ({ claim, persona, onClose, onAction, onClaimUpdated }) => {
+    const [revalidating, setRevalidating] = useState(false);
+    const [extraDocs, setExtraDocs] = useState([]);
     if (!claim) return null;
     const acts = allowedActions(persona, claim);
+
+    const isOriginator = persona && persona.body_code === claim.body_id;
+    const canRevalidate =
+        isOriginator &&
+        (claim.status === "Returned" || claim.ai_decision === "RETURN_TO_ORIGINATOR" || claim.ai_decision === "HOLD_FOR_HUMAN");
+
+    const runRevalidate = async () => {
+        setRevalidating(true);
+        try {
+            if (extraDocs.length > 0) {
+                const newUrls = extraDocs.map((d) => d.url);
+                await api.post(`/claims/${claim.id}/attach-docs`, { urls: newUrls });
+            }
+            const updated = await aiValidateClaim(claim.id);
+            if (onClaimUpdated) onClaimUpdated(updated);
+            setExtraDocs([]);
+        } catch (e) {
+            alert("Re-validation failed: " + (e?.response?.data?.detail || e.message));
+        } finally {
+            setRevalidating(false);
+        }
+    };
     return (
         <div className="fixed inset-0 bg-black/60 z-40 flex justify-end" data-testid="claim-detail-drawer">
             <div className="bg-mpca-ivory w-full max-w-2xl h-full overflow-y-auto border-l-2 border-mpca-brass">
@@ -312,6 +338,46 @@ const DetailDrawer = ({ claim, persona, onClose, onAction }) => {
                             missingDocs={claim.ai_missing_docs}
                             validatedAt={claim.ai_validated_at}
                         />
+                    )}
+
+                    {canRevalidate && (
+                        <div className="mb-7 border border-mpca-brass/40 bg-mpca-parchment/40" data-testid="ai-revalidate-block">
+                            <div className="px-4 py-2 border-b border-mpca-brass/30 bg-mpca-green-dark/95 text-mpca-ivory">
+                                <div className="overline text-[10px] !text-mpca-gold-light/90">
+                                    Upload missing documents · Re-run AI
+                                </div>
+                            </div>
+                            <div className="p-4 space-y-3">
+                                <FileUpload
+                                    value={extraDocs}
+                                    onChange={setExtraDocs}
+                                    metadata={{
+                                        body_id: claim.body_id,
+                                        uploaded_by: persona?.name,
+                                        related_type: "claim",
+                                        related_id: claim.id,
+                                    }}
+                                    label={null}
+                                    testidPrefix="claim-revalidate-upload"
+                                />
+                                <button
+                                    onClick={runRevalidate}
+                                    disabled={revalidating}
+                                    data-testid="claim-revalidate-btn"
+                                    className="btn-heritage-primary inline-flex items-center gap-2"
+                                >
+                                    <Sparkles size={13} strokeWidth={1.75} />
+                                    {revalidating
+                                        ? "AI re-validating…"
+                                        : extraDocs.length > 0
+                                            ? `Attach ${extraDocs.length} doc${extraDocs.length === 1 ? "" : "s"} & re-validate`
+                                            : "Re-validate with AI"}
+                                </button>
+                                <p className="text-[10px] text-mpca-gray-dark leading-relaxed">
+                                    The AI gatekeeper will re-read all attached documents against the rulebook and update its verdict. If accepted, the claim returns to its proper workflow stage.
+                                </p>
+                            </div>
+                        </div>
                     )}
 
                     <div className="overline mb-3">Approval Trail · Maker-Checker</div>
@@ -575,6 +641,10 @@ const Claims = () => {
                 persona={persona}
                 onClose={() => setSelected(null)}
                 onAction={(a) => setActionOpen(a)}
+                onClaimUpdated={async (updated) => {
+                    setSelected(updated);
+                    await load();
+                }}
             />
             <ActionDialog
                 open={!!actionOpen}

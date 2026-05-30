@@ -221,6 +221,10 @@ export const returnClaim = async (id, action) => {
     const { data } = await api.post(`/claims/${id}/return`, action);
     return data;
 };
+export const aiValidateClaim = async (id) => {
+    const { data } = await api.post(`/claims/${id}/ai-validate`);
+    return data;
+};
 export const fetchClaimsStats = async () => {
     const { data } = await api.get("/claims-stats/summary");
     return data;

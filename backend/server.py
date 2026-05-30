@@ -1559,6 +1559,115 @@ async def _notify_for_claim(claim_doc: dict, new_status: str, actor_name: Option
     )
 
 
+# ---- Step 2b · Notifications for Procurement (Phase III.8 module)
+def _recipient_for_procurement(pr_doc: dict, new_status: str):
+    body_id = pr_doc.get("body_id") or "MPCA"
+    if new_status == "Awarded":
+        # Vendor selected — notify Treasurer (so they expect a claim shortly)
+        return ("treasurer", "MPCA")
+    if new_status == "Linked_To_Claim":
+        return ("treasurer", "MPCA")
+    if new_status in ("Closed", "Cancelled"):
+        # Originator (Secretary at the procuring body) hears the outcome
+        prefix = body_id.split("-", 1)[0]
+        if prefix == "DIST":
+            return ("district-secretary", body_id)
+        if prefix == "DIV":
+            return ("division-secretary", body_id)
+        return ("secretary", "MPCA")
+    return None
+
+
+async def _notify_for_procurement(pr_doc: dict, new_status: str, actor_name: Optional[str]) -> None:
+    target = _recipient_for_procurement(pr_doc, new_status)
+    if not target:
+        return
+    role_id, target_body = target
+    title_map = {
+        "Awarded": f"Procurement awarded by {pr_doc.get('body_id')} — claim expected",
+        "Linked_To_Claim": "Procurement linked to a Grant Claim",
+        "Closed": "Procurement closed",
+        "Cancelled": "Procurement cancelled",
+    }
+    severity_map = {"Cancelled": "warning"}
+    msg = (
+        f"{pr_doc.get('pr_no')} · {pr_doc.get('title')} · "
+        f"₹{(pr_doc.get('awarded_amount_inr') or pr_doc.get('estimated_amount_inr') or 0):,.0f}"
+    )
+    if actor_name:
+        msg += f" · by {actor_name}"
+    await _create_notification(
+        recipient_role_id=role_id,
+        recipient_body_id=target_body,
+        title=title_map.get(new_status, f"Procurement: {new_status}"),
+        message=msg,
+        link="/procurement",
+        related_type="procurement",
+        related_id=pr_doc.get("id"),
+        severity=severity_map.get(new_status, "info"),
+    )
+
+
+# ---- Step 2b · Notifications for Player Transfer NOC
+def _recipient_for_transfer(tr_doc: dict, new_status: str):
+    """Each NOC stage hands off to a different body's secretary."""
+    from_body = tr_doc.get("from_body_id")
+    to_body = tr_doc.get("to_body_id")
+
+    def _role(body_id: Optional[str]):
+        if not body_id:
+            return None
+        prefix = body_id.split("-", 1)[0]
+        if prefix == "DIST":
+            return ("district-secretary", body_id)
+        if prefix == "DIV":
+            return ("division-secretary", body_id)
+        return ("secretary", body_id)
+
+    if new_status == "From_Body_Approved":
+        # Releasing body signed → notify receiving body
+        return _role(to_body)
+    if new_status == "To_Body_Approved":
+        # Receiving body signed → notify MPCA secretary for final
+        return ("secretary", "MPCA")
+    if new_status == "MPCA_Approved":
+        # MPCA signed → notify both bodies (we'll send 1 — to receiving body)
+        return _role(to_body)
+    if new_status == "Completed":
+        return _role(from_body)
+    if new_status == "Rejected":
+        return _role(from_body)
+    return None
+
+
+async def _notify_for_transfer(tr_doc: dict, new_status: str, actor_name: Optional[str]) -> None:
+    target = _recipient_for_transfer(tr_doc, new_status)
+    if not target:
+        return
+    role_id, target_body = target
+    title_map = {
+        "From_Body_Approved": f"Player NOC released by {tr_doc.get('from_body_id')} — awaits your acceptance",
+        "To_Body_Approved": "Player NOC accepted by receiving body — awaits MPCA approval",
+        "MPCA_Approved": "Player NOC approved by MPCA — pending completion",
+        "Completed": f"Player transfer to {tr_doc.get('to_body_id')} is complete",
+        "Rejected": "Player NOC was rejected",
+    }
+    severity_map = {"Rejected": "critical"}
+    msg = f"{tr_doc.get('noc_no')} · Reason: {(tr_doc.get('reason') or '')[:60]}"
+    if actor_name:
+        msg += f" · by {actor_name}"
+    await _create_notification(
+        recipient_role_id=role_id,
+        recipient_body_id=target_body,
+        title=title_map.get(new_status, new_status),
+        message=msg,
+        link="/players",
+        related_type="transfer",
+        related_id=tr_doc.get("id"),
+        severity=severity_map.get(new_status, "info"),
+    )
+
+
 def _decorate_claim(doc: dict) -> dict:
     """Add derived `due_at` and `is_overdue` based on SLA + last action timestamp."""
     if not doc:
@@ -2058,7 +2167,9 @@ async def award_procurement(pr_id: str, payload: AwardPayload):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.procurement_requests.update_one({"id": pr_id}, {"$set": update})
-    return await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    updated = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    await _notify_for_procurement(updated, "Awarded", None)
+    return updated
 
 
 @api_router.post("/procurement/{pr_id}/link-claim/{claim_id}", response_model=ProcurementRequest)
@@ -2077,7 +2188,9 @@ async def link_procurement_claim(pr_id: str, claim_id: str):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.procurement_requests.update_one({"id": pr_id}, {"$set": update})
-    return await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    updated = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    await _notify_for_procurement(updated, "Linked_To_Claim", None)
+    return updated
 
 
 @api_router.post("/procurement/{pr_id}/close", response_model=ProcurementRequest)
@@ -2092,7 +2205,9 @@ async def close_procurement(pr_id: str):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.procurement_requests.update_one({"id": pr_id}, {"$set": update})
-    return await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    updated = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    await _notify_for_procurement(updated, "Closed", None)
+    return updated
 
 
 @api_router.post("/procurement/{pr_id}/cancel", response_model=ProcurementRequest)
@@ -2107,7 +2222,9 @@ async def cancel_procurement(pr_id: str):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.procurement_requests.update_one({"id": pr_id}, {"$set": update})
-    return await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    updated = await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
+    await _notify_for_procurement(updated, "Cancelled", None)
+    return updated
 
 
 # ---------------- Routes: ABC Expenditure Analysis (Phase III.8) ----------------
@@ -2409,7 +2526,9 @@ async def _transfer_action(tr_id: str, new_status: TransferStatus, allowed_from:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.transfer_requests.update_one({"id": tr_id}, {"$set": update})
-    return await db.transfer_requests.find_one({"id": tr_id}, {"_id": 0})
+    updated = await db.transfer_requests.find_one({"id": tr_id}, {"_id": 0})
+    await _notify_for_transfer(updated, new_status, step.actor_name)
+    return updated
 
 
 @api_router.post("/transfers/{tr_id}/approve-from", response_model=TransferRequest)
@@ -3109,6 +3228,29 @@ async def _apply_ai_verdict(claim_doc: dict, verdict: dict, actor_name: Optional
             )
 
     return updated
+
+
+@api_router.post("/claims/{claim_id}/attach-docs", response_model=Claim)
+async def attach_docs(claim_id: str, payload: dict):
+    """Append additional supporting-doc URLs to an existing claim (typically before AI re-validation)."""
+    doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if doc.get("status") in ("Disbursed", "Rejected"):
+        raise HTTPException(409, "Cannot attach documents to a terminal claim.")
+    new_urls = payload.get("urls") or []
+    if not isinstance(new_urls, list) or not all(isinstance(u, str) for u in new_urls):
+        raise HTTPException(400, "Body must be {urls: string[]}.")
+    merged = list((doc.get("supporting_doc_urls") or [])) + [u for u in new_urls if u]
+    await db.claims.update_one(
+        {"id": claim_id},
+        {"$set": {
+            "supporting_doc_urls": merged,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    updated = await db.claims.find_one({"id": claim_id}, {"_id": 0})
+    return _decorate_claim(updated)
 
 
 @api_router.post("/claims/{claim_id}/ai-validate", response_model=Claim)

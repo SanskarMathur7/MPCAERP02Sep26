@@ -182,7 +182,7 @@ Org Structure is **not** a user-facing screen — it is the **segmentation matri
 |---|---|---|---|
 | G1 | Real-time output at frontend (live DB state) | ✅ | Already satisfied — no mocks in DB layer |
 | G2 | Turnaround time (SLA / due dates) on every workflow step | ✅ | `SLA_HOURS_BY_STATUS` table + `due_at`/`is_overdue` on Claim reads (Feb 2026) |
-| G3 | Real-time notifications (in-app bell, G3-a) | ✅ | `notifications` collection + 4 endpoints + `NotificationBell.jsx` polling every 20s |
+| G3 | Real-time notifications (in-app bell, G3-a) | ✅ | `notifications` collection + 4 endpoints + `NotificationBell.jsx` polling every 20s. **Extended Feb 2026 (Step 2b)** to Procurement (Award/Link/Close/Cancel) + Transfer NOC (5 stages). |
 | G4 | Red flag / anomaly on overdue tasks | ✅ | Maroon "OVERDUE" pill on Claims rows when `is_overdue=true` |
 | G5 | Present setup first, historical later | 📘 | Policy constraint, not a feature |
 | G7 | Allow incomplete uploads / finalise later | ✅ | Draft state + real file uploads (Step 3, Feb 2026) — multipart endpoints serve PDFs/images/DOCX/XLSX up to 20MB |

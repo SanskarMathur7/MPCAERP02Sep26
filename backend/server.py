@@ -3728,28 +3728,37 @@ def _markdown_to_colored_pdf(md_path: Path, *, title: str, filename: str) -> Res
         author="Madhya Pradesh Cricket Association",
     )
     styles = getSampleStyleSheet()
-    h1 = ParagraphStyle("H1", parent=styles["Heading1"], textColor=colors.HexColor("#10342B"), spaceAfter=10, fontSize=20)
-    h2 = ParagraphStyle("H2", parent=styles["Heading2"], textColor=colors.HexColor("#7A2E1F"), spaceAfter=8, fontSize=14)
-    h3 = ParagraphStyle("H3", parent=styles["Heading3"], textColor=colors.HexColor("#10342B"), spaceAfter=6, fontSize=12)
+    h1 = ParagraphStyle("H1", parent=styles["Heading1"], textColor=colors.HexColor("#10342B"), spaceAfter=14, spaceBefore=6, fontSize=24, leading=28)
+    h2 = ParagraphStyle("H2", parent=styles["Heading2"], textColor=colors.HexColor("#7A2E1F"), spaceAfter=10, spaceBefore=18, fontSize=18, leading=22)
+    h3 = ParagraphStyle("H3", parent=styles["Heading3"], textColor=colors.HexColor("#10342B"), spaceAfter=8, spaceBefore=12, fontSize=14, leading=18)
     body_style = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=9.5, leading=13, spaceAfter=4)
     quote_style = ParagraphStyle("Quote", parent=body_style, leftIndent=14, textColor=colors.HexColor("#555"), fontName="Helvetica-Oblique")
     bullet_style = ParagraphStyle("Bullet", parent=body_style, leftIndent=14, bulletIndent=2)
     cell_style = ParagraphStyle("Cell", parent=body_style, fontSize=9, leading=12, spaceAfter=0)
 
-    def _esc(s: str) -> str:
+    def _esc(s: str, *, in_table_cell: bool = False) -> str:
         s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         s = _re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)
         s = _re.sub(r"(?<![*\w])\*(?!\*)(.+?)\*(?!\*)", r"<i>\1</i>", s)
         s = _re.sub(r"`([^`]+)`", r'<font face="Courier" color="#7A2E1F">\1</font>', s)
-        # Status emoji → colored text chips (reportlab Helvetica can't render color emoji)
-        s = s.replace("🟢", '<font color="#1F7A4D"><b>●</b></font>')
-        s = s.replace("🟡", '<font color="#B07A12"><b>●</b></font>')
-        s = s.replace("🔴", '<font color="#A2392B"><b>●</b></font>')
-        s = s.replace("🔥", '<font color="#A2392B"><b>!</b></font>')
-        s = s.replace("🟣", '<font color="#6B3FA0"><b>●</b></font>')
-        # Strip other unrenderable emoji we use for section headers
-        for ch in ("📊", "📑", "🆕", "🎯", "🟠", "🔵", "🟣", "📦", "✅", "🗣️"):
-            s = s.replace(ch, "")
+        if in_table_cell:
+            # In tables, status emoji carry meaning — render as colored dots.
+            s = s.replace("🟢", '<font color="#1F7A4D"><b>●</b></font>')
+            s = s.replace("🟡", '<font color="#B07A12"><b>●</b></font>')
+            s = s.replace("🔴", '<font color="#A2392B"><b>●</b></font>')
+            s = s.replace("🟣", '<font color="#6B3FA0"><b>●</b></font>')
+            s = s.replace("🔥", '<font color="#A2392B"><b>!</b></font>')
+            s = s.replace("🟠", '<font color="#C9711F"><b>●</b></font>')
+            s = s.replace("🔵", '<font color="#2A5BB0"><b>●</b></font>')
+        # Strip ALL decorative emoji (in both contexts to be safe).
+        # Decorative status pips not in table cells, and section-header emoji, are removed.
+        s = _re.sub(
+            r"[\U0001F300-\U0001FAFF\U00002600-\U000027BF\u2022\u25A0-\u25FF]",
+            "",
+            s,
+        )
+        # Clean up leading whitespace left after stripping
+        s = _re.sub(r"^\s+", "", s)
         return s
 
     GREEN = colors.HexColor("#D0E6D8")
@@ -3779,9 +3788,9 @@ def _markdown_to_colored_pdf(md_path: Path, *, title: str, filename: str) -> Res
             cells = [c.strip() for c in raw_row.strip("|").split("|")]
             data_rows.append(cells)
         # Wrap each cell in Paragraph for word-wrap
-        flowable = [[Paragraph(_esc(c), cell_style) for c in header]]
+        flowable = [[Paragraph(_esc(c, in_table_cell=True), cell_style) for c in header]]
         for cells in data_rows:
-            flowable.append([Paragraph(_esc(c), cell_style) for c in cells])
+            flowable.append([Paragraph(_esc(c, in_table_cell=True), cell_style) for c in cells])
 
         ncols = len(header)
         avail = A4[0] - 2 * 1.6 * cm

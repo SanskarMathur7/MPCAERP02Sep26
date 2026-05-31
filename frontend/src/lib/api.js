@@ -369,3 +369,76 @@ export const fetchTournamentStats = async () => {
     const { data } = await api.get("/tournaments-stats/summary");
     return data;
 };
+
+
+
+// ---------- F6a: Vendors + Vendor Bills ----------
+export const fetchVendors = async (params = {}) => {
+    const { data } = await api.get("/vendors", { params });
+    return data;
+};
+export const createVendor = async (payload) => {
+    const { data } = await api.post("/vendors", payload);
+    return data;
+};
+export const updateVendor = async (id, payload) => {
+    const { data } = await api.patch(`/vendors/${id}`, payload);
+    return data;
+};
+export const blacklistVendor = async (id, reason) => {
+    const { data } = await api.post(`/vendors/${id}/blacklist`, { reason });
+    return data;
+};
+export const unblacklistVendor = async (id) => {
+    const { data } = await api.post(`/vendors/${id}/un-blacklist`);
+    return data;
+};
+export const deleteVendor = async (id) => {
+    const { data } = await api.delete(`/vendors/${id}`);
+    return data;
+};
+
+export const fetchVendorBills = async (params = {}) => {
+    const { data } = await api.get("/vendor-bills", { params });
+    return data;
+};
+export const fetchVendorBill = async (id) => {
+    const { data } = await api.get(`/vendor-bills/${id}`);
+    return data;
+};
+export const createVendorBill = async (payload) => {
+    const { data } = await api.post("/vendor-bills", payload);
+    return data;
+};
+export const submitVendorBill = async (id, action) => {
+    const { data } = await api.post(`/vendor-bills/${id}/submit`, action);
+    return data;
+};
+export const verifyVendorBill = async (id, action) => {
+    const { data } = await api.post(`/vendor-bills/${id}/verify`, action);
+    return data;
+};
+export const sanctionVendorBill = async (id, action) => {
+    const { data } = await api.post(`/vendor-bills/${id}/sanction`, action);
+    return data;
+};
+export const payVendorBill = async (id, action) => {
+    const { data } = await api.post(`/vendor-bills/${id}/pay`, action);
+    return data;
+};
+export const rejectVendorBill = async (id, action) => {
+    const { data } = await api.post(`/vendor-bills/${id}/reject`, action);
+    return data;
+};
+export const returnVendorBill = async (id, action) => {
+    const { data } = await api.post(`/vendor-bills/${id}/return`, action);
+    return data;
+};
+export const deleteVendorBill = async (id) => {
+    const { data } = await api.delete(`/vendor-bills/${id}`);
+    return data;
+};
+export const fetchVendorBillStats = async (params = {}) => {
+    const { data } = await api.get("/vendor-bills-stats/summary", { params });
+    return data;
+};

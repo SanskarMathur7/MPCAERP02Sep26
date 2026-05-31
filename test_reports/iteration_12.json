@@ -1,0 +1,34 @@
+{
+  "summary": "Phase F6a (Vendor Master + Vendor Bills) backend testing post monolith refactor. 44/44 pytest cases pass against the public REACT_APP_BACKEND_URL. Coverage: Vendor CRUD + filters + blacklist/un-blacklist, Vendor Bill 4-stage workflow (submit/verify/sanction/pay) with bank-debit side-effect verification, all workflow guards (blacklisted vendor 409, non-Draft submit 409, non-Submitted verify 409, non-Verified sanction 409, non-Sanctioned pay 409, delete-vendor-with-bills 409, delete-non-Draft-bill 409), return/resubmit flow, notifications routing per stage, vendor-bills-stats summary shape + filters, and regression of 22+ pre-existing GET endpoints (bodies/tree, members, disclosures, meetings, elections, fees, bank, financial-powers, dashboard stats + fairplay, claims, budgets, procurement, ABC analysis, players/transfers/tournaments). Also verified notifications list/stats/mark-read, rulebook .md/.pdf, meeting-agenda .md/.pdf, AI re-validate, attach-docs, multipart /uploads.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase6a_vendor_bills.py",
+    "/app/test_reports/pytest/phase6a_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "vendor_bills.py is ~443 lines and mixes vendor CRUD + bill CRUD + 6 transition handlers + recipient-mapping helper. Consider splitting into routes/vendors.py + routes/vendor_bills.py + a workflow service for readability and easier future role-mapping changes.",
+    "The 'Paid' transition recipient is hard-coded to 'district-secretary' at the bill's body_id. For state-level (MPCA) bills the originator is typically the secretary; for sub-bodies this is fine, but worth confirming with stakeholders that MPCA-level paid bills should also alert district-secretary or treasurer.",
+    "Pay endpoint defaults to a bank account whose name contains 'General'. If a body has no such account the bill payment will fail silently or 500. Suggest making this default explicit per-body and validating with a 422 if no eligible account is found.",
+    "Bank balance arithmetic is done in Python floats; financial code should ideally use Decimal / NumberDecimal to avoid INR rounding drift across many transactions.",
+    "No idempotency key on /vendor-bills/{id}/pay — a network retry could double-debit. Consider an idempotency_key arg or a unique constraint on (bill_id, action='Paid')."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase6a_vendor_bills.py"
+  ],
+  "success_rate": {"backend": "100% (44/44)", "frontend": "N/A — backend-only run"},
+  "test_credentials": "None required — backend endpoints are open per problem statement.",
+  "seed_data_creation": "Tests create transient TEST_<uuid> prefixed vendors + bills and clean up after themselves. Existing seed (8 vendors, 5 bills, 2 bank accounts) is untouched. One end-to-end happy-path test pays an additional bill, which permanently reduces the MPCA General Account balance by ₹11,800 per run — expected and matches production behaviour.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Use /app/backend/tests/test_phase6a_vendor_bills.py as the regression suite for both pre-existing endpoints and F6a. Real endpoint paths to remember: /notifications requires recipient_role_id query param; mark-read is POST /notifications/{id}/read; rulebook is /rulebook/download.md and .pdf; meeting agenda is /meeting-agenda/download.{md,pdf}?meeting_id=X; multipart upload endpoint is /uploads (NOT /upload) and rejects text/plain; attach-docs payload field is 'urls' (NOT 'doc_urls'); /bodies/tree (NOT /bodies/hierarchy). Run with: REACT_APP_BACKEND_URL=<url> pytest backend/tests/test_phase6a_vendor_bills.py -v.",
+  "rca of the issue": "N/A — no defects found. Initial test failures were caused by my own incorrect endpoint assumptions (wrong paths, missing query params, unsupported MIME type, and incorrect expectation that all 4 workflow transitions notify the same role). All resolved by aligning tests with the actual route definitions in /app/backend/routes/*.py."
+}

@@ -70,7 +70,7 @@
 | 0–05 | 1 | Welcome · Framing · Working principle | Convener |
 | 05–20 | 2 | Tab-by-Tab Coverage Walkthrough _(table above)_ | Project lead |
 | 20–45 | 3 | Live Demo · 9 features in order | Project lead |
-| 45–65 | 4 | MPCA Decisions · 8 rulebook red-lines + RBAC sheet | All |
+| 45–65 | 4 | MPCA Decisions · 8 rulebook red-lines + RBAC sheet + Info-required list (4C) | All |
 | 65–80 | 5 | Next-phase build sequence + approval | Project lead |
 | 80–87 | 6 | Production readiness · domain · pilot · sign-off | All |
 | 87–90 | 7 | Open floor · AOB | Convener |
@@ -113,6 +113,36 @@
 | Item | Today | Ask |
 |---|---|---|
 | Current model | 6-persona (President · Secretary · Treasurer · Div Sec · Dist Sec · Public) | MPCA to share official 5-tier × 3-domain matrix **or** confirm interim is OK for Phase I–IV |
+
+### 4C · Information Required from MPCA Team (1st June)
+
+The following inputs are required from MPCA to unblock the next phase of development. Each item is mapped to the module / feature it feeds.
+
+| # | Information / Artefact Required | Feeds Into | Owner (MPCA) | Status |
+|---|---|---|---|---|
+| a | **Player selection process** — to be implemented in tool | M2 Players · Selection workflow | Selection Committee | 🔴 Pending |
+| b | **Excel pointers shared for comments** — required for development | All modules (data structures) | Project Lead | 🔴 Pending |
+| c | **Manual functions in place + samples of registers / documents** maintained today — to map the plan with actual ground process across departments | Process mapping · All modules | Secretariat | 🔴 Pending |
+| d | **Members directory with designation** + module-level access (RBAC) | Tab 4 · RBAC matrix | Secretariat / HR | 🔴 Pending |
+| e | **Updated scheme document** for grants Divisions and Districts can raise | M5 Finance · Grant schemes | Treasurer | 🔴 Pending |
+| f | **Existing Player Database** — to be incorporated into ERP | M2 Players · Data migration | Cricket Ops | 🔴 Pending |
+| g | **Concept note on Academy Module** | Academy Module (Bucket B) | Cricket Ops / Coaching | 🔴 Pending |
+| h | **Scoring tool API** for Tournament and Match Scores | M3/M4 + BCCI-level Scoring (Phase VI) | IT / Vendor | 🔴 Pending |
+| i | **Turn Around Times (TAT)** for all functions — Grant approval, Payment approval, etc. (for ERP timeline display) | SLA engine · Notification spine | Secretariat + Treasurer | 🔴 Pending |
+| j | **Techno-Commercial Process** (Quality-based + Hierarchy) for various Purchase categories + Existing Vendor Directory | F6a Vendor Bills + Procurement | Secretariat + Procurement | 🔴 Pending |
+| k | **Grant submission — Minimum requirements** for Divisions / Districts | AI Approval Matrix v1.0 (Section 2) | Treasurer | 🔴 Pending |
+| l | **Daily dashboard requirements per member role** for better communication and information | Dashboard personalization | All Office Bearers | 🔴 Pending |
+| m | **List of expenses eligible for BCCI claim** — so ERP can flag claimable expenses | F6c BCCI Claims Dashboard | Treasurer + Accounts | 🔴 Pending |
+
+> Each row above will become a sub-task in the project tracker the moment MPCA names an owner with a target date.
+
+---
+
+## 📋 Documentation to be Prepared
+
+| # | Document | Owner | Target | Status |
+|---|---|---|---|---|
+| 1 | **NDA** to be prepared and signed with MPCA | Project Lead + MPCA Secretariat | Before next development sprint | 🔴 Pending |
 
 ---
 
@@ -169,6 +199,8 @@
 - [ ] Circulate minutes
 - [ ] Update `APPROVAL_MATRIX.md` to v1.0 with red-lines → AI uses new rules from next claim
 - [ ] Receive official RBAC sheet
+- [ ] **Receive 13 information artefacts (4C · a–m)** with named owner + target date per row
+- [ ] **Sign NDA** with MPCA
 - [ ] Confirm subdomain + DNS plan
 - [ ] Confirm pilot scope + seed-data export
 - [ ] Schedule next review in 4 weeks

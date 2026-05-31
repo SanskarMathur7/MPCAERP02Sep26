@@ -1541,7 +1541,10 @@ async def _division_score(division: dict) -> dict:
         "active_members": active_members,
         "financial_score": round(financial_score, 1),
         "governance_score": round(governance_score, 1),
-        "total_score": total_score,
+        # Player performance — reserved for future axis (M3/M4/Players will populate this).
+        "player_performance_score": None,
+        "fairplay_score": total_score,
+        "total_score": total_score,   # alias, kept for backwards-compat with older clients
         "components": {
             "utilization": round(util_score, 1),
             "overdue_penalty": overdue_penalty,
@@ -1554,26 +1557,35 @@ async def _division_score(division: dict) -> dict:
     }
 
 
-@api_router.get("/dashboard/division-performance")
-async def dashboard_division_performance():
-    """Returns a ranked list of all 10 Divisions scored on Financial + Governance dimensions.
-    Used by the State-persona dashboard for top/bottom rankings."""
+@api_router.get("/dashboard/fairplay-rankings")
+async def dashboard_fairplay_rankings():
+    """Returns a ranked list of all 10 Divisions scored on the Fairplay Index.
+    Today's axes: Financial + Corporate Governance.
+    Future axis (M3/M4/Players): Player Performance & selection integrity.
+    Used by the State-persona dashboard."""
     divisions = await db.bodies.find(
         {"body_type": "Division"}, {"_id": 0}
     ).to_list(50)
     scored = []
     for d in divisions:
         scored.append(await _division_score(d))
-    scored.sort(key=lambda x: x["total_score"], reverse=True)
-    # Tag each with rank for easy frontend rendering
+    scored.sort(key=lambda x: x["fairplay_score"], reverse=True)
     for i, s in enumerate(scored):
         s["rank"] = i + 1
     return {
         "fiscal_cycle": "2025-26",
+        "axes_today": ["financial", "governance"],
+        "axes_planned": ["player_performance"],
         "divisions": scored,
         "top": scored[:3],
-        "bottom": scored[-3:][::-1],   # worst first
+        "bottom": scored[-3:][::-1],
     }
+
+
+# Backward-compat alias — old endpoint name still works
+@api_router.get("/dashboard/division-performance")
+async def dashboard_division_performance_legacy():
+    return await dashboard_fairplay_rankings()
 
 
 @api_router.post("/bodies", response_model=Body)

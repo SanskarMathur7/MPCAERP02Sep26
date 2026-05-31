@@ -76,7 +76,7 @@ const LeaderboardRow = ({ d, rank, variant }) => {
             <div className="flex-1 min-w-0">
                 <div className="text-[11px] font-mono text-mpca-brass tracking-wider mb-0.5">{d.code}</div>
                 <div className="text-sm font-semibold text-mpca-green-dark leading-tight mb-1 truncate">{d.name}</div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+                <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-[10px]">
                     <div>
                         <div className="flex items-center justify-between mb-0.5">
                             <span className="tracking-widest uppercase text-mpca-gray-dark">Financial</span>
@@ -91,11 +91,18 @@ const LeaderboardRow = ({ d, rank, variant }) => {
                         </div>
                         <ScoreBar score={d.governance_score} color={d.governance_score >= 60 ? "green" : "oxblood"} />
                     </div>
+                    <div>
+                        <div className="flex items-center justify-between mb-0.5">
+                            <span className="tracking-widest uppercase text-mpca-gray-dark/60">Player</span>
+                            <span className="font-mono text-mpca-gray-dark/60">—</span>
+                        </div>
+                        <div className="h-1.5 bg-mpca-brass/10 rounded-full" title="Player performance axis — activates with M3/M4/Players modules" />
+                    </div>
                 </div>
             </div>
             <div className="flex flex-col items-end justify-center flex-shrink-0 min-w-[60px]">
-                <div className="overline text-[8px]">Total</div>
-                <div className={`font-serif text-2xl ${rankColor}`}>{d.total_score}</div>
+                <div className="overline text-[8px]">Fairplay</div>
+                <div className={`font-serif text-2xl ${rankColor}`}>{d.fairplay_score ?? d.total_score}</div>
             </div>
         </div>
     );
@@ -181,7 +188,7 @@ const Dashboard = () => {
                     // Division performance leaderboard — only relevant at State level
                     if (persona.body_type === "State") {
                         try {
-                            const { data: p } = await api.get("/dashboard/division-performance");
+                            const { data: p } = await api.get("/dashboard/fairplay-rankings");
                             setPerformance(p);
                         } catch (_) { /* swallow */ }
                     }
@@ -282,12 +289,12 @@ const Dashboard = () => {
                 <section className="mb-12" data-testid="performance-leaderboard">
                     <div className="flex items-end justify-between mb-5">
                         <div>
-                            <div className="overline">Division Performance · Fiscal {performance.fiscal_cycle}</div>
+                            <div className="overline">Fairplay Index · Fiscal {performance.fiscal_cycle}</div>
                             <h2 className="font-serif text-2xl text-mpca-green-dark mt-1">
-                                Top & Bottom Performers
+                                Fairplay Rankings
                             </h2>
                             <p className="text-[11px] text-mpca-gray-dark mt-1 max-w-2xl">
-                                Combined score from <strong className="text-mpca-charcoal">Financial</strong> (grant utilization · overdue penalty · AI reject rate) and <strong className="text-mpca-charcoal">Corporate Governance</strong> (AGM cadence · elections · disclosures · active members).
+                                Composite score across <strong className="text-mpca-charcoal">Financial</strong> (grant utilization · overdue · AI reject rate), <strong className="text-mpca-charcoal">Corporate Governance</strong> (AGM · elections · disclosures · active members), and a forthcoming <strong className="text-mpca-charcoal">Player Performance</strong> axis (lights up when M3, M4 and Player modules go live).
                             </p>
                         </div>
                     </div>
@@ -296,7 +303,7 @@ const Dashboard = () => {
                         <div className="bulletin-card p-6" data-testid="leaderboard-top">
                             <div className="flex items-center gap-2 mb-3 pb-3 border-b border-mpca-brass/30">
                                 <Trophy size={16} strokeWidth={1.75} className="text-mpca-green-deep" />
-                                <div className="overline !text-mpca-green-deep">Top 3 · Best Performing</div>
+                                <div className="overline !text-mpca-green-deep">Fairplay Top 3</div>
                             </div>
                             {performance.top.map((d) => (
                                 <LeaderboardRow key={d.code} d={d} rank={d.rank} variant="top" />
@@ -306,7 +313,7 @@ const Dashboard = () => {
                         <div className="bulletin-card p-6" data-testid="leaderboard-bottom">
                             <div className="flex items-center gap-2 mb-3 pb-3 border-b border-mpca-brass/30">
                                 <TrendingDown size={16} strokeWidth={1.75} className="text-mpca-oxblood" />
-                                <div className="overline !text-mpca-oxblood">Needs Attention · Bottom 3</div>
+                                <div className="overline !text-mpca-oxblood">Fairplay · Needs Attention</div>
                             </div>
                             {performance.bottom.map((d) => (
                                 <LeaderboardRow key={d.code} d={d} rank={d.rank} variant="bottom" />

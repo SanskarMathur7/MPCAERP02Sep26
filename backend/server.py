@@ -1430,6 +1430,152 @@ async def body_children_activity(code: str):
     return {"parent": parent, "children": cards}
 
 
+# ============================================================
+# Division Performance Leaderboard (Feb 2026)
+# Scores each Division on Financial + Corporate Governance axes.
+# Used by the State-persona dashboard for top/bottom rankings.
+# ============================================================
+
+def _utilization_score(disbursed: float, allocation: float) -> float:
+    """0–100. Sweet spot is 60–90 % utilization.
+    Below 60 → linear penalty (0 % → 0 score).
+    Above 90 → linear penalty (110 %+ → 0 score)."""
+    if not allocation or allocation <= 0:
+        return 0.0
+    ratio = (disbursed / allocation) * 100
+    if 60 <= ratio <= 90:
+        return 100.0
+    if ratio < 60:
+        return max(0.0, (ratio / 60.0) * 100.0)
+    # ratio > 90
+    if ratio >= 110:
+        return 0.0
+    return max(0.0, ((110 - ratio) / 20.0) * 100.0)
+
+
+async def _division_score(division: dict) -> dict:
+    div_code = division["code"]
+
+    # ---- Scope = the division itself + all its child districts ----
+    descendant_dists = await db.bodies.find(
+        {"parent_code": div_code, "body_type": "District"},
+        {"_id": 0, "code": 1},
+    ).to_list(200)
+    scope_codes = [div_code] + [d["code"] for d in descendant_dists]
+    claim_q = {"body_id": {"$in": scope_codes}}
+
+    # ---- Financial signals ----
+    all_claims = await db.claims.find(claim_q, {"_id": 0}).to_list(1000)
+    disbursed_total = 0.0
+    overdue_count = 0
+    ai_rejected = 0
+    ai_evaluated = 0
+    now = datetime.now(timezone.utc)
+    from datetime import timedelta as _td
+    for c in all_claims:
+        if c.get("status") == "Disbursed":
+            disbursed_total += float(c.get("approved_amount_inr") if c.get("approved_amount_inr") is not None else c.get("amount_inr") or 0)
+        if c.get("ai_decision"):
+            ai_evaluated += 1
+            if c["ai_decision"] == "AUTO_REJECT":
+                ai_rejected += 1
+        sla_h = SLA_HOURS_BY_STATUS.get(c.get("status"))
+        if sla_h:
+            chain = c.get("approval_chain") or []
+            anchor = chain[-1].get("timestamp") if chain else c.get("created_at")
+            if anchor:
+                try:
+                    anchor_dt = datetime.fromisoformat(anchor.replace("Z", "+00:00"))
+                    if now > anchor_dt + _td(hours=sla_h):
+                        overdue_count += 1
+                except Exception:
+                    pass
+
+    allocation = float(division.get("annual_grant_inr") or 0)
+    util_score = _utilization_score(disbursed_total, allocation)
+    overdue_penalty = min(45, overdue_count * 15)
+    reject_rate = (ai_rejected / ai_evaluated * 100) if ai_evaluated > 0 else 0
+    reject_penalty = 20 if reject_rate > 30 else 0
+    financial_score = max(0.0, util_score - overdue_penalty - reject_penalty)
+
+    # ---- Governance signals (scope = division-level meetings/elections/disclosures only) ----
+    eighteen_months_ago = (now - _td(days=18 * 30)).isoformat()
+    five_years_ago = (now - _td(days=5 * 365)).isoformat()
+    cycle_start = "2025-04-01T00:00:00+00:00"
+
+    agm_recent = await db.meetings.count_documents({
+        "body_id": div_code,
+        "meeting_type": {"$in": ["AGM", "Annual_General_Meeting"]},
+        "scheduled_at": {"$gte": eighteen_months_ago},
+    })
+    election_recent = await db.elections.count_documents({
+        "body_id": div_code,
+        "concluded_at": {"$gte": five_years_ago},
+    })
+    disclosures_this_cycle = await db.disclosures.count_documents({
+        "body_id": div_code,
+        "created_at": {"$gte": cycle_start},
+    })
+    active_members = await db.members.count_documents({"body_id": div_code, "status": "Active"})
+
+    agm_score = 35 if agm_recent > 0 else 0
+    election_score = 25 if election_recent > 0 else 0
+    disclosure_score = min(20, disclosures_this_cycle * 7)
+    member_score = 20 if active_members >= 25 else int((active_members / 25) * 20)
+    governance_score = float(agm_score + election_score + disclosure_score + member_score)
+
+    total_score = round((financial_score + governance_score) / 2, 1)
+
+    return {
+        "code": div_code,
+        "name": division.get("name"),
+        "annual_grant_inr": allocation,
+        "disbursed_ytd_inr": round(disbursed_total, 2),
+        "utilization_pct": round((disbursed_total / allocation * 100) if allocation else 0, 1),
+        "overdue_count": overdue_count,
+        "ai_evaluated": ai_evaluated,
+        "ai_rejected": ai_rejected,
+        "agm_recent": agm_recent,
+        "election_recent": election_recent,
+        "disclosures_this_cycle": disclosures_this_cycle,
+        "active_members": active_members,
+        "financial_score": round(financial_score, 1),
+        "governance_score": round(governance_score, 1),
+        "total_score": total_score,
+        "components": {
+            "utilization": round(util_score, 1),
+            "overdue_penalty": overdue_penalty,
+            "reject_penalty": reject_penalty,
+            "agm": agm_score,
+            "election": election_score,
+            "disclosure": disclosure_score,
+            "members": member_score,
+        },
+    }
+
+
+@api_router.get("/dashboard/division-performance")
+async def dashboard_division_performance():
+    """Returns a ranked list of all 10 Divisions scored on Financial + Governance dimensions.
+    Used by the State-persona dashboard for top/bottom rankings."""
+    divisions = await db.bodies.find(
+        {"body_type": "Division"}, {"_id": 0}
+    ).to_list(50)
+    scored = []
+    for d in divisions:
+        scored.append(await _division_score(d))
+    scored.sort(key=lambda x: x["total_score"], reverse=True)
+    # Tag each with rank for easy frontend rendering
+    for i, s in enumerate(scored):
+        s["rank"] = i + 1
+    return {
+        "fiscal_cycle": "2025-26",
+        "divisions": scored,
+        "top": scored[:3],
+        "bottom": scored[-3:][::-1],   # worst first
+    }
+
+
 @api_router.post("/bodies", response_model=Body)
 async def create_body(payload: BodyCreate):
     if await db.bodies.find_one({"code": payload.code}):

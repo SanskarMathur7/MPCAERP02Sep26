@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import {
     Users, Calendar, HandCoins, AlertTriangle, ChevronRight,
     Building2, MapPin, Landmark, TrendingUp, Inbox, Sparkles, ArrowUpRight,
+    Trophy, TrendingDown,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 
@@ -47,6 +48,55 @@ const KpiTile = ({ label, value, sub, icon: Icon, accent = "green", testid }) =>
             <div className="font-serif text-4xl text-mpca-green-dark leading-none">{value}</div>
             <div className="mt-2 text-sm text-mpca-charcoal">{label}</div>
             {sub && <div className="text-[11px] mt-1 text-mpca-gray-dark">{sub}</div>}
+        </div>
+    );
+};
+
+const ScoreBar = ({ score, color = "green" }) => {
+    const colorMap = { green: "bg-mpca-green-deep", oxblood: "bg-mpca-oxblood", brass: "bg-mpca-brass" };
+    return (
+        <div className="h-1.5 bg-mpca-brass/20 rounded-full overflow-hidden">
+            <div
+                className={`h-full ${colorMap[color]} transition-all duration-500`}
+                style={{ width: `${Math.max(2, Math.min(100, score))}%` }}
+            />
+        </div>
+    );
+};
+
+const LeaderboardRow = ({ d, rank, variant }) => {
+    const isTop = variant === "top";
+    const rankColor = isTop ? "text-mpca-green-deep" : "text-mpca-oxblood";
+    const rankBg = isTop ? "bg-mpca-green-deep/10" : "bg-mpca-oxblood/10";
+    return (
+        <div className="flex items-stretch gap-3 py-2.5 border-t border-mpca-brass/20 first:border-t-0" data-testid={`leaderboard-row-${d.code}`}>
+            <div className={`flex items-center justify-center w-9 h-9 font-serif text-lg ${rankColor} ${rankBg} flex-shrink-0`}>
+                #{rank}
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-mono text-mpca-brass tracking-wider mb-0.5">{d.code}</div>
+                <div className="text-sm font-semibold text-mpca-green-dark leading-tight mb-1 truncate">{d.name}</div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+                    <div>
+                        <div className="flex items-center justify-between mb-0.5">
+                            <span className="tracking-widest uppercase text-mpca-gray-dark">Financial</span>
+                            <span className="font-mono text-mpca-charcoal">{d.financial_score}</span>
+                        </div>
+                        <ScoreBar score={d.financial_score} color={d.financial_score >= 60 ? "green" : "oxblood"} />
+                    </div>
+                    <div>
+                        <div className="flex items-center justify-between mb-0.5">
+                            <span className="tracking-widest uppercase text-mpca-gray-dark">Governance</span>
+                            <span className="font-mono text-mpca-charcoal">{d.governance_score}</span>
+                        </div>
+                        <ScoreBar score={d.governance_score} color={d.governance_score >= 60 ? "green" : "oxblood"} />
+                    </div>
+                </div>
+            </div>
+            <div className="flex flex-col items-end justify-center flex-shrink-0 min-w-[60px]">
+                <div className="overline text-[8px]">Total</div>
+                <div className={`font-serif text-2xl ${rankColor}`}>{d.total_score}</div>
+            </div>
         </div>
     );
 };
@@ -116,6 +166,7 @@ const Dashboard = () => {
     const [activity, setActivity] = useState(null);   // children-activity result
     const [stateStats, setStateStats] = useState(null); // for District-only persona
     const [claimsStats, setClaimsStats] = useState(null);
+    const [performance, setPerformance] = useState(null); // division leaderboard (State persona only)
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -127,6 +178,13 @@ const Dashboard = () => {
                     // State or Division persona — load children grid
                     const { data: a } = await api.get(`/bodies/${rootCode}/children-activity`);
                     setActivity(a);
+                    // Division performance leaderboard — only relevant at State level
+                    if (persona.body_type === "State") {
+                        try {
+                            const { data: p } = await api.get("/dashboard/division-performance");
+                            setPerformance(p);
+                        } catch (_) { /* swallow */ }
+                    }
                 } else {
                     // District persona — load own KPIs only
                     const { data: s } = await api.get(`/bodies/${rootCode}/summary`);
@@ -218,6 +276,45 @@ const Dashboard = () => {
                     </div>
                 );
             })()}
+
+            {/* Division Performance Leaderboard — State persona only */}
+            {performance && performance.divisions.length > 0 && (
+                <section className="mb-12" data-testid="performance-leaderboard">
+                    <div className="flex items-end justify-between mb-5">
+                        <div>
+                            <div className="overline">Division Performance · Fiscal {performance.fiscal_cycle}</div>
+                            <h2 className="font-serif text-2xl text-mpca-green-dark mt-1">
+                                Top & Bottom Performers
+                            </h2>
+                            <p className="text-[11px] text-mpca-gray-dark mt-1 max-w-2xl">
+                                Combined score from <strong className="text-mpca-charcoal">Financial</strong> (grant utilization · overdue penalty · AI reject rate) and <strong className="text-mpca-charcoal">Corporate Governance</strong> (AGM cadence · elections · disclosures · active members).
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="grid lg:grid-cols-2 gap-6">
+                        <div className="bulletin-card p-6" data-testid="leaderboard-top">
+                            <div className="flex items-center gap-2 mb-3 pb-3 border-b border-mpca-brass/30">
+                                <Trophy size={16} strokeWidth={1.75} className="text-mpca-green-deep" />
+                                <div className="overline !text-mpca-green-deep">Top 3 · Best Performing</div>
+                            </div>
+                            {performance.top.map((d) => (
+                                <LeaderboardRow key={d.code} d={d} rank={d.rank} variant="top" />
+                            ))}
+                        </div>
+
+                        <div className="bulletin-card p-6" data-testid="leaderboard-bottom">
+                            <div className="flex items-center gap-2 mb-3 pb-3 border-b border-mpca-brass/30">
+                                <TrendingDown size={16} strokeWidth={1.75} className="text-mpca-oxblood" />
+                                <div className="overline !text-mpca-oxblood">Needs Attention · Bottom 3</div>
+                            </div>
+                            {performance.bottom.map((d) => (
+                                <LeaderboardRow key={d.code} d={d} rank={d.rank} variant="bottom" />
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            )}
 
             {/* Children grid (Division cards for State persona; District cards for Division persona) */}
             {activity && activity.children.length > 0 && (

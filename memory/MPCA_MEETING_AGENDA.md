@@ -116,25 +116,48 @@
 
 ### 4C · Information Required from MPCA Team (1st June)
 
-The following inputs are required from MPCA to unblock the next phase of development. Each item is mapped to the module / feature it feeds.
+The following inputs are required from MPCA to unblock the next phase of development. Each item is mapped to the module / feature it feeds, plus our current coverage status.
 
-| # | Information / Artefact Required | Feeds Into | Owner (MPCA) | Status |
+> **Legend** — 🟢 In ERP today · 🟡 Partially in ERP (waiting on MPCA confirmation/data) · 🔴 Not in ERP yet — needs new module/scope
+
+| # | Information / Artefact Required | Feeds Into | Our Coverage | Owner (MPCA) |
 |---|---|---|---|---|
-| a | **Player selection process** — to be implemented in tool | M2 Players · Selection workflow | Selection Committee | 🔴 Pending |
-| b | **Excel pointers shared for comments** — required for development | All modules (data structures) | Project Lead | 🔴 Pending |
-| c | **Manual functions in place + samples of registers / documents** maintained today — to map the plan with actual ground process across departments | Process mapping · All modules | Secretariat | 🔴 Pending |
-| d | **Members directory with designation** + module-level access (RBAC) | Tab 4 · RBAC matrix | Secretariat / HR | 🔴 Pending |
-| e | **Updated scheme document** for grants Divisions and Districts can raise | M5 Finance · Grant schemes | Treasurer | 🔴 Pending |
-| f | **Existing Player Database** — to be incorporated into ERP | M2 Players · Data migration | Cricket Ops | 🔴 Pending |
-| g | **Concept note on Academy Module** | Academy Module (Bucket B) | Cricket Ops / Coaching | 🔴 Pending |
-| h | **Scoring tool API** for Tournament and Match Scores | M3/M4 + BCCI-level Scoring (Phase VI) | IT / Vendor | 🔴 Pending |
-| i | **Turn Around Times (TAT)** for all functions — Grant approval, Payment approval, etc. (for ERP timeline display) | SLA engine · Notification spine | Secretariat + Treasurer | 🔴 Pending |
-| j | **Techno-Commercial Process** (Quality-based + Hierarchy) for various Purchase categories + Existing Vendor Directory | F6a Vendor Bills + Procurement | Secretariat + Procurement | 🔴 Pending |
-| k | **Grant submission — Minimum requirements** for Divisions / Districts | AI Approval Matrix v1.0 (Section 2) | Treasurer | 🔴 Pending |
-| l | **Daily dashboard requirements per member role** for better communication and information | Dashboard personalization | All Office Bearers | 🔴 Pending |
-| m | **List of expenses eligible for BCCI claim** — so ERP can flag claimable expenses | F6c BCCI Claims Dashboard | Treasurer + Accounts | 🔴 Pending |
+| a | **Player selection process** — to be implemented in tool | M2 Players · Selection workflow | 🔴 Need MPCA process | Selection Committee |
+| b | **Excel pointers shared for comments** — required for development | All modules (data structures) | 🔴 Awaiting Excel | Project Lead |
+| c | **Manual functions in place + samples of registers / documents** — map plan to ground process | Process mapping · All modules | 🔴 Awaiting samples | Secretariat |
+| d | **Members directory with designation** + module-level access (RBAC) | Tab 4 · RBAC matrix | 🟡 Demo personas only — need official sheet | Secretariat / HR |
+| e | **Updated scheme document** for grants Divisions and Districts can raise | M5 Finance · Grant schemes | 🔴 Awaiting scheme | Treasurer |
+| f | **Existing Player Database** — to be incorporated into ERP | M2 Players · Data migration | 🟡 Module ready; awaiting data export | Cricket Ops |
+| g | **Concept note on Academy Module** | Academy Module (Bucket B · P2) | 🔴 Awaiting concept | Cricket Ops / Coaching |
+| h | **Scoring tool API** for Tournament and Match Scores | M3/M4 + BCCI-level Scoring (Phase VI) | 🔴 Blocked on vendor | IT / Vendor |
+| i | **Turn Around Times (TAT)** for all functions — Grant approval, Payment approval, etc. (for ERP timeline display) | SLA engine · Notification spine | 🟢 Provisional set (14d/7d/5d/3d) — needs MPCA confirmation | Secretariat + Treasurer |
+| j | **Techno-Commercial Process** (Quality + Hierarchy) for Purchase categories + Existing Vendor Directory | F6a Vendor Bills + Procurement | 🟡 Vendor Master + Bills module live; awaiting MPCA's process doc + vendor data | Secretariat + Procurement |
+| **k** | **Fixed Assets / Immovable property — tagging, accounting, repair & maintenance** | New module — **Asset Register (proposed)** | 🔴 **No module yet — to be planned** | Secretariat + Treasurer |
+| l | **Grant submission · Minimum requirements** for Divisions / Districts | AI Approval Matrix v1.0 (Section 2) | 🟡 Rulebook v0.1 has provisional rules — needs MPCA red-line | Treasurer |
+| m | **Daily dashboard requirements per member role** for better communication and information | Dashboard personalization | 🟡 Persona-aware dashboards live; needs MPCA preference per role | All Office Bearers |
+| n | **List of expenses eligible for BCCI claim** — so ERP can flag claimable expenses | F6c BCCI Claims Dashboard | 🔴 Awaiting list | Treasurer + Accounts |
+| **o** | **Communication channel preference** — email only vs. shift entire communication to ERP | Notification spine + Email integration | 🟢 In-app bell live; email integration pending MPCA decision + SMTP creds | All Office Bearers |
+| **p** | **List of transactions MPCA does with BCCI + Divisions + Districts** — Financial (grants, surplus), Decision, Audits, Reporting & Communications, Membership rules | Process mapping · Multiple modules | 🟡 Claims + Grants modelled; Audits/Reporting/Membership rules need MPCA mapping | Secretariat + Treasurer |
+| **q** | **List of tournaments — MPCA / Divisions / Districts per year** + can MPCA pre-budget lower bodies (expense-head-wise policy is in place) | Tournament module + Budget Ledger | 🟢 Tournament + Budget modules exist; need actual calendar + per-tournament budget grid | Cricket Ops + Treasurer |
+| **r** | **Surplus distribution rules from International Matches** to Division → District | F6 · **PF5** Surplus Distribution (already P1 in our roadmap) | 🟡 Already in P1 roadmap — rules engine pending MPCA input | Treasurer + AGM |
+| **s** | **Year-long tournament schedule** — to plan funds disbursement + advance sanctioning to lower bodies | Tournament Calendar + Advance module | 🟡 Tournaments module supports it; needs MPCA's annual calendar dataset | Cricket Ops |
+| **t** | **Match officials allotment** — who is the final authority to decide | M3 Match Officials (P2 backlog) | 🔴 Module not built; awaiting MPCA's final-authority designation | Cricket Ops |
+| **u** | **Match results + player performance tracking** + current selection committee process | M2/M3 + Player Performance scoring axis | 🟡 Tournaments has results structure; Player Performance is the planned 3rd Fairplay axis (dimmed today) | Selection Committee + Cricket Ops |
+| **v** | **Current accounting process** | F6 · JV/PV split + Tally integration (F6b) | 🟡 Bank + Claims approval-chain live; Tally blocked on creds | Accounts + Treasurer |
+| **w** | **Payroll Register + HR policy** — linked with the Deed of MPCA | New module — **HR / Payroll (proposed)** | 🔴 **No module yet — to be planned** | HR / Secretariat |
 
 > Each row above will become a sub-task in the project tracker the moment MPCA names an owner with a target date.
+
+---
+
+## 🆕 New Modules to be Scoped Post-Meeting
+
+Based on points **k** and **w** above, two new modules will need to be added to the build plan once MPCA confirms scope:
+
+| Module | Triggered By | Estimated Scope | Priority |
+|---|---|---|---|
+| **Asset Register** | Point (k) — Fixed Assets / Immovable property tagging + repair/maintenance | Asset master · location · acquisition value · depreciation schedule · maintenance log · QR-tag printing | P2 (after F6 finance deepening) |
+| **HR / Payroll Register** | Point (w) — Payroll + HR policy linked to MPCA Deed | Employee master · pay structure · monthly payroll run · TDS register · leave/attendance · constitutional officer honoraria | P2 (after Asset Register) |
 
 ---
 
@@ -199,7 +222,8 @@ The following inputs are required from MPCA to unblock the next phase of develop
 - [ ] Circulate minutes
 - [ ] Update `APPROVAL_MATRIX.md` to v1.0 with red-lines → AI uses new rules from next claim
 - [ ] Receive official RBAC sheet
-- [ ] **Receive 13 information artefacts (4C · a–m)** with named owner + target date per row
+- [ ] **Receive 23 information artefacts (4C · a–w)** with named owner + target date per row
+- [ ] **Sign-off on scope for 2 new modules** — Asset Register (k) + HR/Payroll (w)
 - [ ] **Sign NDA** with MPCA
 - [ ] Confirm subdomain + DNS plan
 - [ ] Confirm pilot scope + seed-data export

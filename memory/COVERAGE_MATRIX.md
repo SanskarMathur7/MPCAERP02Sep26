@@ -214,7 +214,7 @@ Org Structure is **not** a user-facing screen — it is the **segmentation matri
 | F2 | Claim-type dropdown linked to scheme docs / budget heads | 🔴 |
 | F3 | Flags: `accounted_in_tally`, `claimable_from_bcci` | 🔴 |
 | PF1 | Annual Grant — approve district + division share individually AND combined | 🔴 |
-| PF2 | Multi-stage send-back with reason + notification (Div→Dist, MPCA→Div, CAO→Auditor, Treas/Sec→CAO/Auditor/Accounts) | 🔴 |
+| PF2 | Multi-stage send-back with reason + notification (Div→Dist, MPCA→Div, CAO→Auditor, Treas/Sec→CAO/Auditor/Accounts) | ✅ | Feb 2026 — structured 9-code taxonomy via `GET /api/return-reasons`, oxblood-themed Return dialog, code persisted + auto-stamped into approval chain note |
 | PF4 | Journal Voucher + Payment Voucher flow | 🔴 | Coupled-or-separate rule TBD |
 | PF5 | Surplus distribution flow (Match Financials → AGM approval → Division intimation) | 🔴 |
 | F6a | Vendor Bills module (Hotels · Infra · Travel · Material) + vendor master | 🔴 |

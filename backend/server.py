@@ -411,6 +411,8 @@ class Claim(ClaimBase):
     # PF3 (Feb 2026) · Approved amount differential
     approved_amount_inr: Optional[float] = None    # set by Treasurer at sanction; defaults to amount_inr on disburse
     approved_amount_reason: Optional[str] = None   # mandatory when approved != claimed
+    # PF2 (Feb 2026) · Last structured return reason code (for analytics + UI)
+    return_reason_code: Optional[str] = None
 
 
 class ClaimCreate(ClaimBase):
@@ -432,6 +434,9 @@ class ClaimAction(BaseModel):
     # PF3 (Feb 2026) · Approved amount differential — used on Sanction
     approved_amount_inr: Optional[float] = None
     approved_amount_reason: Optional[str] = None
+    # PF2 (Feb 2026) · Structured send-back reason — used on Return
+    return_reason_code: Optional[str] = None       # e.g. "DOCS_MISSING" / "AMOUNT_MISMATCH" / "BUDGET_HEAD_INVALID"
+    return_reason_detail: Optional[str] = None     # free-text to add specifics
 
 
 # ---------------- Phase III.7: Body Budget Ledger ----------------
@@ -1918,27 +1923,121 @@ async def reject_claim(claim_id: str, action: ClaimAction):
 
 @api_router.post("/claims/{claim_id}/return", response_model=Claim)
 async def return_claim(claim_id: str, action: ClaimAction):
-    """Send the claim back to the originator for clarification."""
+    """Send the claim back to the originator for clarification.
+    PF2 · A structured reason code is required, with optional free-text detail.
+    The combined reason is stamped into the approval-chain note for audit + analytics.
+    """
     doc = await db.claims.find_one({"id": claim_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
     if doc["status"] not in ("Submitted", "Division_Recommended"):
         raise HTTPException(400, f"Cannot return a claim in status {doc['status']}")
+
+    if not action.return_reason_code:
+        raise HTTPException(400, "A return reason code is required (see GET /api/return-reasons for allowed codes).")
+    reason_info = RETURN_REASONS.get(action.return_reason_code)
+    if not reason_info:
+        raise HTTPException(
+            400,
+            f"Unknown return reason code '{action.return_reason_code}'. "
+            f"Allowed codes: {sorted(RETURN_REASONS.keys())}.",
+        )
+
+    composed = f"[{action.return_reason_code}] {reason_info['label']}"
+    if action.return_reason_detail and action.return_reason_detail.strip():
+        composed += f" — {action.return_reason_detail.strip()}"
+    if action.notes and action.notes.strip():
+        composed += f" · {action.notes.strip()}"
+
     step = ApprovalStep(
         stage="Returned",
         actor_post=action.actor_post,
         actor_name=action.actor_name,
         actor_body_id=action.actor_body_id,
         decision="Returned",
-        notes=action.notes,
+        notes=composed,
     )
     update = _append_step(doc, step, "Returned")
-    # When returned, the parent becomes the originating body so it shows in their queue
     update["parent_body_id"] = await _resolve_parent_body(doc["body_id"])
+    update["return_reason_code"] = action.return_reason_code
     await db.claims.update_one({"id": claim_id}, {"$set": update})
     updated = await db.claims.find_one({"id": claim_id}, {"_id": 0})
     await _notify_for_claim(updated, "Returned", action.actor_name)
     return _decorate_claim(updated)
+
+
+# PF2 · Structured return-reason taxonomy (Feb 2026)
+RETURN_REASONS: dict = {
+    "DOCS_MISSING": {
+        "label": "Required documents missing",
+        "applies_to": ["Submitted", "Division_Recommended"],
+        "severity": "warning",
+        "hint": "List which mandatory supporting documents are absent.",
+    },
+    "AMOUNT_MISMATCH": {
+        "label": "Amount on bills does not match claim",
+        "applies_to": ["Submitted", "Division_Recommended"],
+        "severity": "warning",
+        "hint": "Provide the discrepancy between claim amount and bill totals.",
+    },
+    "BUDGET_HEAD_INVALID": {
+        "label": "Wrong / missing budget head",
+        "applies_to": ["Submitted", "Division_Recommended"],
+        "severity": "warning",
+        "hint": "Identify the correct head from the body's budget ledger.",
+    },
+    "AGM_RESOLUTION_REQUIRED": {
+        "label": "Requires AGM / MC resolution citation",
+        "applies_to": ["Division_Recommended"],
+        "severity": "warning",
+        "hint": "Cite the resolution number and date.",
+    },
+    "VENDOR_GSTIN_INVALID": {
+        "label": "Vendor GSTIN missing or invalid",
+        "applies_to": ["Submitted", "Division_Recommended"],
+        "severity": "warning",
+        "hint": "Re-attach vendor bills with valid GSTIN.",
+    },
+    "SANCTION_LETTER_REQUIRED": {
+        "label": "Pre-sanction letter required for this category",
+        "applies_to": ["Submitted", "Division_Recommended"],
+        "severity": "warning",
+        "hint": "Attach the prior sanction reference from MPCA/Division.",
+    },
+    "DUPLICATE_CLAIM": {
+        "label": "Possible duplicate of another claim",
+        "applies_to": ["Submitted", "Division_Recommended"],
+        "severity": "critical",
+        "hint": "Specify the claim_no of the suspected duplicate.",
+    },
+    "CAO_REVIEW_NEEDED": {
+        "label": "Needs CAO / Auditor review before sanction",
+        "applies_to": ["Division_Recommended"],
+        "severity": "warning",
+        "hint": "Identify which audit aspect requires clarification.",
+    },
+    "OTHER": {
+        "label": "Other — see free-text detail",
+        "applies_to": ["Submitted", "Division_Recommended"],
+        "severity": "warning",
+        "hint": "Describe the reason in the detail field.",
+    },
+}
+
+
+@api_router.get("/return-reasons")
+async def list_return_reasons():
+    """Exposes the structured taxonomy of return-reason codes for the frontend dropdown."""
+    return {
+        code: {
+            "code": code,
+            "label": info["label"],
+            "applies_to": info["applies_to"],
+            "severity": info["severity"],
+            "hint": info["hint"],
+        }
+        for code, info in RETURN_REASONS.items()
+    }
 
 
 @api_router.get("/claims-stats/summary")
@@ -3335,40 +3434,65 @@ async def download_rulebook_md():
 async def download_rulebook_pdf():
     if not APPROVAL_MATRIX_PATH.exists():
         raise HTTPException(404, "Rulebook file not found")
+    return _markdown_to_pdf_response(
+        APPROVAL_MATRIX_PATH,
+        title="MPCA Approval Matrix v0.1",
+        filename="MPCA_Approval_Matrix_v0.1.pdf",
+    )
+
+
+@api_router.get("/meeting-agenda/download.md")
+async def download_agenda_md():
+    path = Path("/app/memory/MPCA_MEETING_AGENDA.md")
+    if not path.exists():
+        raise HTTPException(404, "Agenda file not found")
+    return FileResponse(str(path), media_type="text/markdown", filename="MPCA_Meeting_Agenda.md")
+
+
+@api_router.get("/meeting-agenda/download.pdf")
+async def download_agenda_pdf():
+    path = Path("/app/memory/MPCA_MEETING_AGENDA.md")
+    if not path.exists():
+        raise HTTPException(404, "Agenda file not found")
+    return _markdown_to_pdf_response(
+        path,
+        title="MPCA ERP · Stakeholder Review Meeting",
+        filename="MPCA_Meeting_Agenda.pdf",
+    )
+
+
+def _markdown_to_pdf_response(md_path: Path, *, title: str, filename: str) -> Response:
+    """Reusable MD → PDF renderer (used by both rulebook and agenda)."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm
     from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
     import io
     import re as _re
 
-    text = APPROVAL_MATRIX_PATH.read_text(encoding="utf-8")
+    text = md_path.read_text(encoding="utf-8")
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
         leftMargin=2 * cm, rightMargin=2 * cm,
         topMargin=2 * cm, bottomMargin=2 * cm,
-        title="MPCA Approval Matrix v0.1",
+        title=title,
         author="Madhya Pradesh Cricket Association",
     )
-
     styles = getSampleStyleSheet()
     h1 = ParagraphStyle("H1", parent=styles["Heading1"], textColor=colors.HexColor("#10342B"), spaceAfter=10)
     h2 = ParagraphStyle("H2", parent=styles["Heading2"], textColor=colors.HexColor("#7A2E1F"), spaceAfter=8)
     h3 = ParagraphStyle("H3", parent=styles["Heading3"], textColor=colors.HexColor("#10342B"), spaceAfter=6)
-    body = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10, leading=14, spaceAfter=6)
-    blockquote = ParagraphStyle("Quote", parent=body, leftIndent=18, textColor=colors.HexColor("#555"), fontName="Helvetica-Oblique")
-    bullet = ParagraphStyle("Bullet", parent=body, leftIndent=14, bulletIndent=2)
-    code = ParagraphStyle("Code", parent=body, fontName="Courier", fontSize=9, textColor=colors.HexColor("#333"))
+    body_style = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10, leading=14, spaceAfter=6)
+    quote_style = ParagraphStyle("Quote", parent=body_style, leftIndent=18, textColor=colors.HexColor("#555"), fontName="Helvetica-Oblique")
+    bullet_style = ParagraphStyle("Bullet", parent=body_style, leftIndent=14, bulletIndent=2)
+    code_style = ParagraphStyle("Code", parent=body_style, fontName="Courier", fontSize=9, textColor=colors.HexColor("#333"))
 
-    def _escape(s: str) -> str:
+    def _esc(s: str) -> str:
         s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        # bold **x**
         s = _re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)
-        # italics _x_ / *x*
         s = _re.sub(r"(?<![*\w])\*(?!\*)(.+?)\*(?!\*)", r"<i>\1</i>", s)
-        # inline code `x`
         s = _re.sub(r"`([^`]+)`", r'<font face="Courier" color="#7A2E1F">\1</font>', s)
         return s
 
@@ -3377,49 +3501,45 @@ async def download_rulebook_pdf():
     table_buffer: list = []
     for raw in text.splitlines():
         line = raw.rstrip()
-        # very-light table flush: render as monospace lines (good-enough for export)
         if line.startswith("|"):
             in_table = True
             table_buffer.append(line)
             continue
-        else:
-            if in_table:
-                for row in table_buffer:
-                    story.append(Paragraph(_escape(row), code))
-                story.append(Spacer(1, 6))
-                table_buffer = []
-                in_table = False
-
+        if in_table:
+            for row in table_buffer:
+                story.append(Paragraph(_esc(row), code_style))
+            story.append(Spacer(1, 6))
+            table_buffer = []
+            in_table = False
         if not line.strip():
             story.append(Spacer(1, 4))
             continue
         if line.startswith("# "):
-            story.append(Paragraph(_escape(line[2:]), h1))
+            story.append(Paragraph(_esc(line[2:]), h1))
         elif line.startswith("## "):
-            story.append(Paragraph(_escape(line[3:]), h2))
+            story.append(Paragraph(_esc(line[3:]), h2))
         elif line.startswith("### "):
-            story.append(Paragraph(_escape(line[4:]), h3))
+            story.append(Paragraph(_esc(line[4:]), h3))
         elif line.startswith("> "):
-            story.append(Paragraph(_escape(line[2:]), blockquote))
+            story.append(Paragraph(_esc(line[2:]), quote_style))
         elif line.startswith("- ") or line.startswith("* "):
-            story.append(Paragraph(_escape(line[2:]), bullet, bulletText="•"))
+            story.append(Paragraph(_esc(line[2:]), bullet_style, bulletText="•"))
         elif line.startswith("---"):
             story.append(Spacer(1, 6))
-            story.append(Paragraph("<para alignment='center'>· · ·</para>", body))
+            story.append(Paragraph("<para alignment='center'>· · ·</para>", body_style))
             story.append(Spacer(1, 6))
         else:
-            story.append(Paragraph(_escape(line), body))
-
+            story.append(Paragraph(_esc(line), body_style))
     if in_table:
         for row in table_buffer:
-            story.append(Paragraph(_escape(row), code))
+            story.append(Paragraph(_esc(row), code_style))
 
     doc.build(story)
     buf.seek(0)
     return Response(
         content=buf.read(),
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="MPCA_Approval_Matrix_v0.1.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

@@ -225,6 +225,10 @@ export const aiValidateClaim = async (id) => {
     const { data } = await api.post(`/claims/${id}/ai-validate`);
     return data;
 };
+export const fetchReturnReasons = async () => {
+    const { data } = await api.get("/return-reasons");
+    return data;
+};
 export const fetchClaimsStats = async () => {
     const { data } = await api.get("/claims-stats/summary");
     return data;

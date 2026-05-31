@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
     fetchClaims, fetchClaimsStats,
     submitClaim, recommendClaim, sanctionClaim, disburseClaim, rejectClaim, returnClaim,
-    aiValidateClaim, api,
+    aiValidateClaim, fetchReturnReasons, api,
 } from "@/lib/api";
 import CricketLoader from "@/components/CricketLoader";
 import FileUpload from "@/components/FileUpload";
@@ -160,7 +160,17 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
     const [coName, setCoName] = useState("");
     const [approvedAmt, setApprovedAmt] = useState("");
     const [approvedReason, setApprovedReason] = useState("");
+    const [returnReasons, setReturnReasons] = useState({});
+    const [returnCode, setReturnCode] = useState("");
+    const [returnDetail, setReturnDetail] = useState("");
     const [busy, setBusy] = useState(false);
+
+    useEffect(() => {
+        if (open && action === "return" && Object.keys(returnReasons).length === 0) {
+            fetchReturnReasons().then(setReturnReasons).catch(() => {});
+        }
+    }, [open, action, returnReasons]);
+
     if (!open || !action) return null;
     const meta = ACTION_META[action];
 
@@ -170,6 +180,9 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
     const isSanction = action === "sanction";
     const parsedApproved = parseFloat(approvedAmt);
     const showReason = isSanction && !isNaN(parsedApproved) && claim && Math.abs(parsedApproved - (claim.amount_inr || 0)) > 0.5;
+    // PF2 · Return action gets structured reason dropdown
+    const isReturn = action === "return";
+    const reasonInfo = isReturn && returnCode ? returnReasons[returnCode] : null;
 
     const handleConfirm = async () => {
         if (needsCoSig && (!coPost.trim() || !coName.trim())) {
@@ -178,6 +191,10 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
         }
         if (isSanction && showReason && !approvedReason.trim()) {
             alert("Please record a reason — the approved amount differs from the claimed amount.");
+            return;
+        }
+        if (isReturn && !returnCode) {
+            alert("Please choose a return reason from the list.");
             return;
         }
         setBusy(true);
@@ -191,6 +208,8 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
                 co_signatory_name: needsCoSig ? coName.trim() : null,
                 approved_amount_inr: isSanction && !isNaN(parsedApproved) ? parsedApproved : null,
                 approved_amount_reason: isSanction && showReason ? approvedReason.trim() : null,
+                return_reason_code: isReturn ? returnCode : null,
+                return_reason_detail: isReturn ? (returnDetail.trim() || null) : null,
             });
             onDone();
         } catch (e) {
@@ -202,6 +221,8 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
             setCoName("");
             setApprovedAmt("");
             setApprovedReason("");
+            setReturnCode("");
+            setReturnDetail("");
         }
     };
 
@@ -217,6 +238,47 @@ const ActionDialog = ({ open, action, claim, persona, onClose, onDone }) => {
                         <div className="text-sm text-mpca-charcoal mb-1">{claim.claim_no} · {claim.title}</div>
                         <div className="font-serif text-xl text-mpca-green-dark">{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(claim.amount_inr || 0)}</div>
                     </div>
+
+                    {isReturn && (
+                        <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/5 p-3" data-testid="return-reason-section">
+                            <div className="overline !text-mpca-oxblood mb-2">Return Reason · PF2</div>
+                            <p className="text-[11px] text-mpca-gray-dark mb-3 leading-relaxed">
+                                Pick a structured reason. The originator sees exactly why the claim was sent back, and the code is stamped into the audit chain for reporting.
+                            </p>
+                            <div>
+                                <label className="label-heritage">Reason category</label>
+                                <select
+                                    value={returnCode}
+                                    onChange={(e) => setReturnCode(e.target.value)}
+                                    data-testid="return-reason-code"
+                                    className="input-heritage"
+                                >
+                                    <option value="">— Select a reason —</option>
+                                    {Object.values(returnReasons)
+                                        .filter((r) => !claim || r.applies_to.includes(claim.status))
+                                        .map((r) => (
+                                            <option key={r.code} value={r.code}>{r.label}</option>
+                                        ))}
+                                </select>
+                            </div>
+                            {reasonInfo && (
+                                <div className="mt-3 text-[11px] text-mpca-gray-dark italic">
+                                    Hint: {reasonInfo.hint}
+                                </div>
+                            )}
+                            <div className="mt-3">
+                                <label className="label-heritage">Detail (optional)</label>
+                                <textarea
+                                    rows={2}
+                                    value={returnDetail}
+                                    onChange={(e) => setReturnDetail(e.target.value)}
+                                    placeholder={reasonInfo ? reasonInfo.hint : "Add specifics — bill numbers, missing docs, etc."}
+                                    className="input-heritage !border-mpca-oxblood/40 !p-2"
+                                    data-testid="return-reason-detail"
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {isSanction && (
                         <div className="border border-mpca-brass/40 bg-mpca-parchment/40 p-3" data-testid="approved-amount-section">

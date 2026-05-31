@@ -3867,7 +3867,7 @@ def _markdown_to_colored_pdf(md_path: Path, *, title: str, filename: str) -> Res
     return Response(
         content=buf.read(),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
 
 
@@ -3949,7 +3949,7 @@ def _markdown_to_pdf_response(md_path: Path, *, title: str, filename: str) -> Re
     return Response(
         content=buf.read(),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
 
 

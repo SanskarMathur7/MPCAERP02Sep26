@@ -3767,6 +3767,7 @@ def _markdown_to_colored_pdf(md_path: Path, *, title: str, filename: str) -> Res
     NAVY  = colors.HexColor("#10342B")
     BRASS = colors.HexColor("#C9A55C")
     IVORY = colors.HexColor("#F8EFD8")
+    SAFFRON = colors.HexColor("#F58220")    # bright table-header background
 
     def _row_color(cells: list):
         joined = " ".join(cells)
@@ -3799,17 +3800,20 @@ def _markdown_to_colored_pdf(md_path: Path, *, title: str, filename: str) -> Res
 
         tbl = Table(flowable, colWidths=col_widths, repeatRows=1)
         ts = [
-            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-            ("TEXTCOLOR", (0, 0), (-1, 0), IVORY),
+            ("BACKGROUND", (0, 0), (-1, 0), SAFFRON),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, 0), 8.5),
+            ("FONTSIZE", (0, 0), (-1, 0), 9.5),
             ("ALIGN", (0, 0), (-1, 0), "LEFT"),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("GRID", (0, 0), (-1, -1), 0.4, BRASS),
+            ("LINEBELOW", (0, 0), (-1, 0), 1.5, NAVY),
             ("LEFTPADDING", (0, 0), (-1, -1), 5),
             ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, 0), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
+            ("TOPPADDING", (0, 1), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
         ]
         # Per-row color hints
         for r_idx, cells in enumerate(data_rows, start=1):
@@ -4804,6 +4808,12 @@ async def seed_data():
 @app.on_event("startup")
 async def on_startup():
     await seed_data()
+
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
+
 
 
 @app.on_event("shutdown")

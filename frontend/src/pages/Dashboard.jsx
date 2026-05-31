@@ -1,70 +1,161 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { fetchDashboardStats, fetchMembers, fetchDisclosures, fetchBodiesTree, fetchClaimsStats } from "@/lib/api";
+import { useEffect, useState, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { Users, FileText, Calendar, Receipt, AlertTriangle, TrendingUp, ChevronRight, Trophy, Landmark, Building2, HandCoins } from "lucide-react";
+import { api } from "@/lib/api";
+import {
+    Users, Calendar, HandCoins, AlertTriangle, ChevronRight,
+    Building2, MapPin, Landmark, TrendingUp, Inbox, Sparkles, ArrowUpRight,
+} from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 
-const StatTile = ({ label, value, sub, icon: Icon, accent = "green", phase = "Live" }) => {
+const fmtINR = (n) => {
+    if (n == null) return "—";
+    const v = Number(n);
+    if (Math.abs(v) >= 1e7) return `₹${(v / 1e7).toFixed(2)} Cr`;
+    if (Math.abs(v) >= 1e5) return `₹${(v / 1e5).toFixed(2)} L`;
+    return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(v).startsWith("₹")
+        ? new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(v)
+        : `₹${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(v)}`;
+};
+
+const personaScope = (persona) => {
+    // Returns { rootCode, rootLabel, childLabel } telling us which level the dashboard is anchored at.
+    if (!persona) return { rootCode: null, rootLabel: "", childLabel: "" };
+    if (persona.body_type === "State") {
+        return { rootCode: "MPCA", rootLabel: "Madhya Pradesh Cricket Association", childLabel: "Divisions" };
+    }
+    if (persona.body_type === "Division") {
+        return { rootCode: persona.body_code, rootLabel: persona.body_name || persona.body_code, childLabel: "Districts" };
+    }
+    if (persona.body_type === "District") {
+        return { rootCode: persona.body_code, rootLabel: persona.body_name || persona.body_code, childLabel: null };
+    }
+    return { rootCode: "MPCA", rootLabel: "MPCA", childLabel: "Divisions" };
+};
+
+const KpiTile = ({ label, value, sub, icon: Icon, accent = "green", testid }) => {
     const colorMap = {
         green: "text-mpca-green-dark",
         oxblood: "text-mpca-oxblood",
         brass: "text-mpca-brass",
-        wood: "text-mpca-wood-dark",
     };
     return (
-        <div className="bulletin-card p-7 relative" data-testid={`stat-${label.toLowerCase().replace(/\s+/g, "-")}`}>
-            <div className="flex items-start justify-between mb-6">
-                <Icon className={colorMap[accent]} size={22} strokeWidth={1.25} />
-                <div className="overline">{phase}</div>
+        <div className="bulletin-card p-6 relative" data-testid={testid}>
+            <div className="flex items-start justify-between mb-4">
+                <Icon className={colorMap[accent]} size={18} strokeWidth={1.5} />
             </div>
-            <div className="font-serif text-5xl text-mpca-green-dark leading-none">{value}</div>
-            <div className="mt-3 text-sm tracking-wide text-mpca-charcoal">{label}</div>
+            <div className="font-serif text-4xl text-mpca-green-dark leading-none">{value}</div>
+            <div className="mt-2 text-sm text-mpca-charcoal">{label}</div>
             {sub && <div className="text-[11px] mt-1 text-mpca-gray-dark">{sub}</div>}
         </div>
     );
 };
 
+const ChildCard = ({ child, onOpen }) => {
+    const Icon = child.body_type === "Division" ? Building2 : MapPin;
+    const urgent = child.claims_overdue > 0;
+    return (
+        <button
+            onClick={() => onOpen(child)}
+            data-testid={`child-card-${child.code}`}
+            className={
+                "group relative bg-mpca-ivory border text-left p-5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 " +
+                (urgent ? "border-mpca-oxblood/60" : "border-mpca-brass/30 hover:border-mpca-brass")
+            }
+        >
+            <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                    <Icon size={14} strokeWidth={1.5} className="text-mpca-brass" />
+                    <span className="font-mono text-[10px] tracking-wider text-mpca-brass">{child.code}</span>
+                </div>
+                <ChevronRight size={14} strokeWidth={1.5} className="text-mpca-gray-dark group-hover:text-mpca-oxblood transition-colors" />
+            </div>
+
+            <div className="font-serif text-lg text-mpca-green-dark leading-tight mb-4 min-h-[2.5rem]">
+                {child.name}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-3">
+                <div>
+                    <div className="text-[9px] tracking-widest uppercase text-mpca-gray-dark">Members</div>
+                    <div className="font-serif text-xl text-mpca-green-dark">{child.members_count}</div>
+                </div>
+                <div>
+                    <div className="text-[9px] tracking-widest uppercase text-mpca-gray-dark">Pending</div>
+                    <div className="font-serif text-xl text-mpca-green-dark">{child.claims_pending}</div>
+                </div>
+                <div>
+                    <div className="text-[9px] tracking-widest uppercase text-mpca-gray-dark">Overdue</div>
+                    <div className={"font-serif text-xl " + (urgent ? "text-mpca-oxblood" : "text-mpca-green-dark")}>
+                        {child.claims_overdue}
+                    </div>
+                </div>
+            </div>
+
+            <div className="pt-3 border-t border-mpca-brass/20 flex items-center justify-between">
+                <div>
+                    <div className="text-[9px] tracking-widest uppercase text-mpca-gray-dark">Disbursed YTD</div>
+                    <div className="font-serif text-sm text-mpca-green-dark">{fmtINR(child.disbursed_ytd_inr)}</div>
+                </div>
+                {urgent && (
+                    <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-mpca-oxblood text-white text-[9px] tracking-wider uppercase">
+                        <AlertTriangle size={9} strokeWidth={2} />
+                        {child.claims_overdue} overdue
+                    </div>
+                )}
+            </div>
+        </button>
+    );
+};
+
 const Dashboard = () => {
     const { persona } = useAuth();
-    const [stats, setStats] = useState(null);
-    const [recentMembers, setRecentMembers] = useState([]);
-    const [recentDisclosures, setRecentDisclosures] = useState([]);
-    const [orgCounts, setOrgCounts] = useState({ divisions: 0, districts: 0 });
+    const navigate = useNavigate();
+    const { rootCode, rootLabel, childLabel } = useMemo(() => personaScope(persona), [persona]);
+
+    const [activity, setActivity] = useState(null);   // children-activity result
+    const [stateStats, setStateStats] = useState(null); // for District-only persona
     const [claimsStats, setClaimsStats] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!persona || !rootCode) return;
         (async () => {
+            setLoading(true);
             try {
-                const [s, m, d, tree, cs] = await Promise.all([
-                    fetchDashboardStats(),
-                    fetchMembers(),
-                    fetchDisclosures(),
-                    fetchBodiesTree(),
-                    fetchClaimsStats(),
-                ]);
-                setStats(s);
-                setRecentMembers(m.slice(0, 5));
-                setRecentDisclosures(d.slice(0, 4));
-                setClaimsStats(cs);
-                let divisions = 0, districts = 0;
-                const walk = (nodes) => {
-                    for (const n of nodes) {
-                        if (n.body_type === "Division") divisions += 1;
-                        if (n.body_type === "District") districts += 1;
-                        if (n.children) walk(n.children);
-                    }
-                };
-                walk(tree);
-                setOrgCounts({ divisions, districts });
+                if (childLabel) {
+                    // State or Division persona — load children grid
+                    const { data: a } = await api.get(`/bodies/${rootCode}/children-activity`);
+                    setActivity(a);
+                } else {
+                    // District persona — load own KPIs only
+                    const { data: s } = await api.get(`/bodies/${rootCode}/summary`);
+                    setStateStats(s);
+                    // Pull this district's claims with explicit body filter
+                    const { data: claims } = await api.get(`/claims?body_id=${rootCode}`);
+                    setClaimsStats(claims);
+                }
             } catch (e) {
-                console.error(e);
+                console.error("dashboard load failed", e);
             } finally {
                 setLoading(false);
             }
         })();
-    }, []);
+    }, [persona, rootCode, childLabel]);
+
+    // Roll up totals across child cards for the KPI band — declared BEFORE any early return.
+    const totals = useMemo(() => {
+        if (!activity) return null;
+        return activity.children.reduce(
+            (acc, c) => ({
+                members: acc.members + (c.active_members || c.members_count || 0),
+                pending: acc.pending + (c.claims_pending || 0),
+                overdue: acc.overdue + (c.claims_overdue || 0),
+                disbursed: acc.disbursed + (c.disbursed_ytd_inr || 0),
+            }),
+            { members: 0, pending: 0, overdue: 0, disbursed: 0 },
+        );
+    }, [activity]);
 
     if (loading) {
         return (
@@ -77,325 +168,128 @@ const Dashboard = () => {
     return (
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="dashboard-page">
             {/* Header */}
-            <div className="flex flex-wrap items-end justify-between gap-6 mb-12">
+            <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
                 <div>
-                    <div className="overline">Command Centre · Dashboard</div>
+                    <div className="overline">{persona?.body_type} · Command Centre</div>
                     <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
                         Good day, {persona?.honorific} {persona?.name?.split(" ").slice(-1)}.
                     </h1>
-                    <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        A glance across the MPCA hierarchy — the register, the meetings,
-                        the obligations, and the divisional footprint. The full ledger awaits below.
+                    <p className="text-mpca-gray-dark mt-2 max-w-2xl text-sm">
+                        Scope · <strong className="text-mpca-charcoal">{rootLabel}</strong>
+                        {persona?.post && <> · {persona.post}</>}
                     </p>
-                    {persona?.body_name && persona?.body_type !== "State" && (
-                        <div className="mt-4 inline-flex items-center gap-2 text-[10px] tracking-[0.2em] uppercase px-3 py-1.5 border border-mpca-oxblood/40 bg-mpca-oxblood/10 text-mpca-oxblood">
-                            <span className="w-1.5 h-1.5 rounded-full bg-mpca-oxblood" />
-                            Viewing as · {persona.body_type} · {persona.body_name}
-                        </div>
-                    )}
                 </div>
                 <div className="text-right">
                     <div className="overline">As On</div>
-                    <div className="font-serif text-xl text-mpca-green-dark mt-1">
-                        {new Date().toLocaleDateString("en-IN", {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                        })}
+                    <div className="font-serif text-lg text-mpca-green-dark mt-1">
+                        {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
                     </div>
                 </div>
             </div>
 
-            <div className="crest-divider mb-12" />
+            <div className="crest-divider mb-10" />
 
-            {/* Stats grid */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-16">
-                <StatTile
-                    label="Total Members"
-                    value={stats.total_members}
-                    sub={`Active: ${stats.active_members} · Pending: ${stats.pending_members}`}
-                    icon={Users}
-                    accent="green"
-                    phase="Register · Live"
-                />
-                <StatTile
-                    label="Upcoming Meetings"
-                    value={stats.upcoming_meetings}
-                    sub="AGM · Committee · Sub-Committee"
-                    icon={Calendar}
-                    accent="oxblood"
-                    phase="Meetings · Live"
-                />
-                <StatTile
-                    label="Public Disclosures"
-                    value={stats.total_disclosures}
-                    sub="AGM notices · Minutes · Audits"
-                    icon={FileText}
-                    accent="brass"
-                    phase="Disclosures · Live"
-                />
-                <StatTile
-                    label="Fee Collection"
-                    value={`${stats.fee_collection_pct}%`}
-                    sub={`${stats.paid_invoices ?? 0}/${stats.total_invoices ?? 0} invoices paid`}
-                    icon={Receipt}
-                    accent="wood"
-                    phase="Finance · Live"
-                />
-            </div>
-
-            {/* Hierarchy band — Phase III.5 */}
-            <div className="bulletin-card p-8 mb-8 bg-gradient-to-br from-mpca-burgundy-dark to-mpca-wood-dark text-mpca-ivory relative overflow-hidden" data-testid="org-band">
-                <div className="grid md:grid-cols-3 gap-8 items-center relative">
-                    <div className="md:col-span-2">
-                        <Building2 className="text-mpca-gold-light mb-3" size={28} strokeWidth={1.25} />
-                        <div className="overline !text-mpca-gold-light">Organisational Footprint</div>
-                        <div className="font-serif text-4xl md:text-5xl text-mpca-ivory mt-3 leading-tight">
-                            <span className="text-mpca-gold-light">{orgCounts.divisions}</span> Divisions ·
-                            <span className="text-mpca-gold-light"> {orgCounts.districts}</span> Districts
-                        </div>
-                        <p className="text-mpca-ivory/85 mt-3 text-sm">
-                            From Jabalpur to Indore — every district association onboarded into the
-                            MPCA register, ready for grant routing, AGM quorum, and tournament selection.
-                        </p>
-                    </div>
-                    <div className="md:text-right">
-                        <Link to="/org" className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark" data-testid="goto-org">
-                            View Hierarchy <ChevronRight size={14} />
-                        </Link>
-                    </div>
-                </div>
-            </div>
-
-            {/* Claims band — Phase III.6 */}
-            {claimsStats && (
-                <div className="bulletin-card p-8 mb-16 bg-mpca-ivory border-2 border-mpca-oxblood/50 relative overflow-hidden" data-testid="claims-band">
-                    <div className="grid md:grid-cols-4 gap-6 items-center">
-                        <div className="md:col-span-1">
-                            <HandCoins className="text-mpca-oxblood mb-3" size={28} strokeWidth={1.25} />
-                            <div className="overline">Grant Workflow</div>
-                            <h3 className="font-serif text-2xl text-mpca-green-dark mt-2 leading-tight">
-                                District → Division → MPCA
-                            </h3>
-                        </div>
-                        <div className="md:col-span-2 grid grid-cols-3 gap-4">
-                            <div>
-                                <div className="overline text-[9px]">Total</div>
-                                <div className="font-serif text-3xl text-mpca-green-dark mt-1 leading-none">{claimsStats.total_claims}</div>
-                            </div>
-                            <div>
-                                <div className="overline text-[9px]">In-Flight</div>
-                                <div className="font-serif text-3xl text-mpca-oxblood mt-1 leading-none">{claimsStats.pending_claims}</div>
-                                <div className="text-[10px] text-mpca-gray-dark mt-1">{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(claimsStats.amount_in_flight_inr)}</div>
-                            </div>
-                            <div>
-                                <div className="overline text-[9px]">Disbursed</div>
-                                <div className="font-serif text-3xl text-mpca-gold mt-1 leading-none">{claimsStats.disbursed_claims}</div>
-                                <div className="text-[10px] text-mpca-gray-dark mt-1">{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(claimsStats.amount_disbursed_inr)}</div>
-                            </div>
-                        </div>
-                        <div className="md:text-right">
-                            <Link to="/claims" className="btn-heritage-primary" data-testid="goto-claims">
-                                Grant Register <ChevronRight size={14} />
-                            </Link>
-                        </div>
-                    </div>
+            {/* Roll-up KPI band */}
+            {totals && (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10">
+                    <KpiTile label="Active Members" value={totals.members} sub={`Across ${activity.children.length} ${childLabel}`} icon={Users} accent="green" testid="kpi-members" />
+                    <KpiTile label="Pending Claims" value={totals.pending} sub="Awaiting decision" icon={Inbox} accent="brass" testid="kpi-pending" />
+                    <KpiTile label="Overdue Tasks" value={totals.overdue} sub="SLA breached" icon={AlertTriangle} accent={totals.overdue > 0 ? "oxblood" : "green"} testid="kpi-overdue" />
+                    <KpiTile label="Disbursed YTD" value={fmtINR(totals.disbursed)} sub="Fiscal cycle 2025-26" icon={HandCoins} accent="green" testid="kpi-disbursed" />
                 </div>
             )}
 
-            {/* Phase III tile band — Bank balance */}
-            <div className="bulletin-card p-8 mb-16 bg-gradient-to-br from-mpca-green-dark to-mpca-wood-dark text-mpca-ivory relative overflow-hidden" data-testid="bank-balance-card">
-                <div className="grid md:grid-cols-3 gap-8 items-center relative">
-                    <div className="md:col-span-2">
-                        <Landmark className="text-mpca-gold-light mb-3" size={28} strokeWidth={1.25} />
-                        <div className="overline !text-mpca-gold-light">Consolidated Bank Position</div>
-                        <div className="font-serif text-5xl md:text-6xl text-mpca-gold-light mt-3 leading-none">
-                            ₹{new Intl.NumberFormat("en-IN").format(stats.total_bank_balance ?? 0)}
-                        </div>
-                        <p className="text-mpca-ivory/70 mt-3 text-sm">
-                            Across all Association accounts · Live balance from the banker's ledger.
-                        </p>
+            {/* District-only persona — show own claim queue stats */}
+            {!childLabel && Array.isArray(claimsStats) && stateStats && (() => {
+                const by = {};
+                let disbursedTotal = 0;
+                for (const c of claimsStats) {
+                    by[c.status] = (by[c.status] || 0) + 1;
+                    if (c.status === "Disbursed") {
+                        disbursedTotal += Number(c.approved_amount_inr ?? c.amount_inr ?? 0);
+                    }
+                }
+                return (
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10">
+                        <KpiTile label="My Claims · Draft" value={by.Draft || 0} icon={Inbox} testid="kpi-my-draft" />
+                        <KpiTile label="In Progress" value={(by.Submitted || 0) + (by.Division_Recommended || 0) + (by.MPCA_Sanctioned || 0)} sub="In approval chain" icon={TrendingUp} accent="brass" testid="kpi-my-inprogress" />
+                        <KpiTile label="Returned" value={by.Returned || 0} sub="Needs my attention" icon={AlertTriangle} accent={(by.Returned || 0) > 0 ? "oxblood" : "green"} testid="kpi-my-returned" />
+                        <KpiTile label="Disbursed YTD" value={fmtINR(disbursedTotal)} sub={`${by.Disbursed || 0} claims paid`} icon={HandCoins} testid="kpi-my-disbursed" />
                     </div>
-                    <div className="md:text-right">
-                        <Link to="/bank" className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark" data-testid="goto-bank">
-                            View Accounts <ChevronRight size={14} />
-                        </Link>
-                    </div>
-                </div>
-            </div>
+                );
+            })()}
 
-            {/* Two-column: category breakdown + grievances */}
-            <div className="grid lg:grid-cols-3 gap-8 mb-16">
-                <div className="lg:col-span-2 bulletin-card p-8" data-testid="category-breakdown">
-                    <div className="flex items-center justify-between mb-6">
+            {/* Children grid (Division cards for State persona; District cards for Division persona) */}
+            {activity && activity.children.length > 0 && (
+                <section className="mb-12">
+                    <div className="flex items-end justify-between mb-5">
                         <div>
-                            <div className="overline">Composition</div>
-                            <h3 className="font-serif text-2xl text-mpca-green-dark mt-2">
-                                Membership by Category
-                            </h3>
+                            <div className="overline">{childLabel} · Drill down</div>
+                            <h2 className="font-serif text-2xl text-mpca-green-dark mt-1">
+                                {activity.children.length} {childLabel} reporting to {rootLabel}
+                            </h2>
                         </div>
-                        <TrendingUp className="text-mpca-brass" size={20} strokeWidth={1.25} />
-                    </div>
-
-                    <div className="space-y-4 mt-8">
-                        {Object.entries(stats.by_category).map(([cat, count]) => {
-                            const pct = stats.total_members ? (count / stats.total_members) * 100 : 0;
-                            return (
-                                <div key={cat} data-testid={`cat-${cat.toLowerCase()}`}>
-                                    <div className="flex items-baseline justify-between mb-1.5">
-                                        <span className="font-serif text-lg text-mpca-green-dark">{cat}</span>
-                                        <span className="font-mono text-sm text-mpca-charcoal">
-                                            {count}{" "}
-                                            <span className="text-mpca-gray text-xs">
-                                                ({pct.toFixed(0)}%)
-                                            </span>
-                                        </span>
-                                    </div>
-                                    <div className="h-[3px] bg-mpca-brass/15 relative">
-                                        <div
-                                            className="absolute inset-y-0 left-0 bg-mpca-green-dark transition-all duration-1000"
-                                            style={{ width: `${pct}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                <div className="bulletin-card p-8 bg-mpca-parchment/50" data-testid="grievances-card">
-                    <AlertTriangle className="text-mpca-oxblood mb-5" size={22} strokeWidth={1.25} />
-                    <div className="overline">Open Matters</div>
-                    <h3 className="font-serif text-2xl text-mpca-green-dark mt-2">
-                        Grievance Redressal
-                    </h3>
-                    <div className="font-serif text-5xl text-mpca-oxblood mt-6 leading-none">
-                        {stats.pending_grievances}
-                    </div>
-                    <p className="text-xs text-mpca-gray-dark mt-3 leading-relaxed">
-                        Pending submissions awaiting Committee review. Full grievance
-                        workflow opens later this season.
-                    </p>
-                    <div className="mt-6 pt-6 border-t border-mpca-brass/20">
-                        <div className="overline text-[9px]">Coming Soon</div>
-                        <p className="text-[11px] text-mpca-gray-dark mt-1">
-                            Submission · Escalation · Resolution Tracking
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Recent rows */}
-            <div className="grid lg:grid-cols-2 gap-8">
-                {/* Recent members */}
-                <div className="bulletin-card overflow-hidden" data-testid="recent-members">
-                    <div className="px-7 py-5 border-b border-mpca-brass/20 flex items-center justify-between">
-                        <div>
-                            <div className="overline">From the Register</div>
-                            <h3 className="font-serif text-xl text-mpca-green-dark mt-1">
-                                Recent Members
-                            </h3>
-                        </div>
-                        <Link to="/members" className="btn-heritage-ghost" data-testid="view-all-members">
-                            View All <ChevronRight size={12} />
-                        </Link>
-                    </div>
-                    <div>
-                        {recentMembers.map((m) => (
+                        {totals?.overdue > 0 && (
                             <Link
-                                to={`/members/${m.id}`}
-                                key={m.id}
-                                className="ledger-row flex items-center gap-4 px-7 py-4"
-                                data-testid={`recent-member-${m.uid}`}
+                                to="/claims"
+                                className="inline-flex items-center gap-1 text-xs tracking-wider uppercase text-mpca-oxblood hover:underline"
+                                data-testid="dashboard-overdue-link"
                             >
-                                <div className="font-mono text-[10px] text-mpca-brass tracking-wider w-28">
-                                    {m.uid}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="font-serif text-base text-mpca-green-dark leading-tight">
-                                        {m.name}
-                                    </div>
-                                    <div className="text-[11px] text-mpca-gray-dark mt-0.5">
-                                        {m.category} · {m.sub_category}
-                                    </div>
-                                </div>
-                                <span className={`pill ${m.status === "Active" ? "pill-active" : m.status === "Pending" ? "pill-pending" : "pill-lapsed"}`}>
-                                    {m.status}
-                                </span>
+                                <AlertTriangle size={11} strokeWidth={1.75} />
+                                Review {totals.overdue} overdue
+                                <ArrowUpRight size={11} strokeWidth={1.75} />
                             </Link>
+                        )}
+                    </div>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" data-testid="children-grid">
+                        {activity.children.map((c) => (
+                            <ChildCard
+                                key={c.code}
+                                child={c}
+                                onOpen={() => {
+                                    // Drill down by URL filter on the Claims page (the most actionable view)
+                                    navigate(`/claims?body_id=${c.code}`);
+                                }}
+                            />
                         ))}
                     </div>
-                </div>
+                </section>
+            )}
 
-                {/* Recent disclosures */}
-                <div className="bulletin-card overflow-hidden" data-testid="recent-disclosures">
-                    <div className="px-7 py-5 border-b border-mpca-brass/20 flex items-center justify-between">
-                        <div>
-                            <div className="overline">From the Bulletin</div>
-                            <h3 className="font-serif text-xl text-mpca-green-dark mt-1">
-                                Latest Disclosures
-                            </h3>
+            {/* Quick-jump grid — universal */}
+            <section>
+                <div className="overline mb-4">Quick Actions</div>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <Link to="/claims" className="bulletin-card p-4 hover:border-mpca-oxblood transition-colors flex items-center justify-between" data-testid="quick-claims">
+                        <div className="flex items-center gap-3">
+                            <HandCoins size={16} strokeWidth={1.5} className="text-mpca-oxblood" />
+                            <span className="text-sm">Grant Claims</span>
                         </div>
-                        <Link to="/disclosures" className="btn-heritage-ghost" data-testid="view-all-disclosures">
-                            View All <ChevronRight size={12} />
-                        </Link>
-                    </div>
-                    <div>
-                        {recentDisclosures.map((d) => (
-                            <div
-                                key={d.id}
-                                className="ledger-row px-7 py-4"
-                                data-testid={`recent-disclosure-${d.id}`}
-                            >
-                                <div className="flex items-baseline justify-between gap-3">
-                                    <div className="font-serif text-base text-mpca-green-dark leading-tight">
-                                        {d.title}
-                                    </div>
-                                    <span className="font-mono text-[10px] text-mpca-brass whitespace-nowrap">
-                                        {new Date(d.issued_date).toLocaleDateString("en-IN", {
-                                            day: "2-digit",
-                                            month: "short",
-                                            year: "numeric",
-                                        })}
-                                    </span>
-                                </div>
-                                <div className="text-[11px] uppercase tracking-wider text-mpca-gray-dark mt-1.5">
-                                    {d.disclosure_type.replace(/_/g, " ")}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                        <ChevronRight size={14} strokeWidth={1.5} className="text-mpca-gray-dark" />
+                    </Link>
+                    <Link to="/members" className="bulletin-card p-4 hover:border-mpca-oxblood transition-colors flex items-center justify-between" data-testid="quick-members">
+                        <div className="flex items-center gap-3">
+                            <Users size={16} strokeWidth={1.5} className="text-mpca-oxblood" />
+                            <span className="text-sm">Membership Register</span>
+                        </div>
+                        <ChevronRight size={14} strokeWidth={1.5} className="text-mpca-gray-dark" />
+                    </Link>
+                    <Link to="/meetings" className="bulletin-card p-4 hover:border-mpca-oxblood transition-colors flex items-center justify-between" data-testid="quick-meetings">
+                        <div className="flex items-center gap-3">
+                            <Calendar size={16} strokeWidth={1.5} className="text-mpca-oxblood" />
+                            <span className="text-sm">AGM & Meetings</span>
+                        </div>
+                        <ChevronRight size={14} strokeWidth={1.5} className="text-mpca-gray-dark" />
+                    </Link>
+                    <Link to="/rulebook" className="bulletin-card p-4 hover:border-mpca-oxblood transition-colors flex items-center justify-between" data-testid="quick-rulebook">
+                        <div className="flex items-center gap-3">
+                            <Sparkles size={16} strokeWidth={1.5} className="text-mpca-oxblood" />
+                            <span className="text-sm">AI Rulebook</span>
+                        </div>
+                        <ChevronRight size={14} strokeWidth={1.5} className="text-mpca-gray-dark" />
+                    </Link>
                 </div>
-            </div>
-
-            <div className="crest-divider my-16" />
-
-            {/* Cricket season teaser */}
-            <div className="bulletin-card p-10 bg-mpca-green-dark text-mpca-ivory relative overflow-hidden" data-testid="season-teaser">
-                <div
-                    className="absolute inset-0 opacity-15"
-                    style={{
-                        backgroundImage:
-                            "url('https://static.prod-images.emergentagent.com/jobs/152b2070-1a30-4f04-95c7-4d26fa8ac612/images/2064a62584872a486cf02834d876d9ef2064bc9f4cc65f6ff4cbeee51b2bcf5d.png')",
-                        backgroundSize: "cover",
-                    }}
-                />
-                <div className="relative grid md:grid-cols-3 gap-8 items-center">
-                    <div className="md:col-span-2">
-                        <Trophy className="text-mpca-gold-light mb-4" size={28} strokeWidth={1.25} />
-                        <div className="overline !text-mpca-gold-light">Season 2025-26</div>
-                        <h3 className="font-serif text-3xl md:text-4xl mt-3 leading-tight text-mpca-ivory">
-                            The Player Register, the Cricket Calendar and the Grant Ledger —
-                            <em className="text-mpca-gold-light not-italic"> all in session.</em>
-                        </h3>
-                    </div>
-                    <div className="md:text-right">
-                        <Link to="/players" data-testid="cta-players" className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark">
-                            Open Player Register <ChevronRight size={14} />
-                        </Link>
-                    </div>
-                </div>
-            </div>
+            </section>
         </div>
     );
 };

@@ -628,25 +628,37 @@ const Claims = () => {
     }, []);
 
     const filtered = useMemo(() => {
-        if (filter === "all") return claims;
+        // URL filter — Dashboard drill-down lands here with ?body_id=DIV-IND etc.
+        const params = new URLSearchParams(window.location.search);
+        const bodyFilter = params.get("body_id");
+
+        let pool = claims;
+        if (bodyFilter) {
+            // Match claims whose body_id either equals the filter or is a descendant district under a division filter
+            pool = pool.filter((c) =>
+                c.body_id === bodyFilter ||
+                c.parent_body_id === bodyFilter ||
+                (bodyFilter.startsWith("DIV-") && c.body_id?.startsWith("DIST-")) // permissive division drill-down
+                    ? (c.body_id === bodyFilter || c.parent_body_id === bodyFilter)
+                    : c.body_id === bodyFilter
+            );
+        }
+
+        if (filter === "all") return pool;
         if (filter === "my-queue") {
             if (!persona) return [];
-            // Queue logic:
-            //   District persona — claims they originated (status not yet terminal)
-            //   Division persona — claims awaiting their recommendation
-            //   State persona — claims awaiting MPCA action
             if (persona.body_type === "District") {
-                return claims.filter((c) => c.body_id === persona.body_code);
+                return pool.filter((c) => c.body_id === persona.body_code);
             }
             if (persona.body_type === "Division") {
-                return claims.filter((c) => c.parent_body_id === persona.body_code && c.status === "Submitted");
+                return pool.filter((c) => c.parent_body_id === persona.body_code && c.status === "Submitted");
             }
             if (persona.body_type === "State") {
-                return claims.filter((c) => ["Division_Recommended", "MPCA_Sanctioned"].includes(c.status));
+                return pool.filter((c) => ["Division_Recommended", "MPCA_Sanctioned"].includes(c.status));
             }
-            return claims;
+            return pool;
         }
-        return claims.filter((c) => c.status === filter);
+        return pool.filter((c) => c.status === filter);
     }, [claims, filter, persona]);
 
     const handleActionDone = async () => {

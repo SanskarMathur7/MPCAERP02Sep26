@@ -23,12 +23,14 @@ async def next_uid(category: MemberCategory) -> str:
     return f"MPCA-{prefix}-{count + 1:04d}"
 
 
+# MoM (Feb 2026) — TAT agreed at 2 days (48 hours) uniformly across stages.
+# Earlier provisional ladder (14/7/5/3/5 days) replaced.
 SLA_HOURS_BY_STATUS: dict = {
-    "Draft": 14 * 24,
-    "Submitted": 7 * 24,
-    "Division_Recommended": 5 * 24,
-    "MPCA_Sanctioned": 3 * 24,
-    "Returned": 5 * 24,
+    "Draft": 2 * 24,
+    "Submitted": 2 * 24,
+    "Division_Recommended": 2 * 24,
+    "MPCA_Sanctioned": 2 * 24,
+    "Returned": 2 * 24,
 }
 
 

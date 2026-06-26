@@ -327,7 +327,19 @@ class BodyCreate(BodyBase):
 # Models a grant claim that flows District → Division → MPCA per Art. 28(v).
 # `approval_chain` is the maker-checker audit trail — append-only.
 
-ClaimCategory = Literal["Annual_Grant", "Tournament_Expense", "Infrastructure", "Honorarium", "Special_Sanction"]
+ClaimCategory = Literal[
+    "Annual_Grant", "Tournament_Expense", "Infrastructure", "Honorarium", "Special_Sanction",
+    # Phase B (MoM Feb 2026) — new grant categories
+    "Admin_Grant",          # MPCA Admin Grant to Divisions / Districts
+    "Coaching_Grant",       # Coaching Grant
+    "Tournament_Funding",   # 1:1 matched tournament funding
+    "District_Travel",      # District-level travel funding
+    "MRA_Management",       # Match Referee / MRA management amount
+]
+ClaimPath = Literal[
+    "As_per_Budget",   # claim is filed against an approved tournament budget envelope
+    "Bulk_Budget",     # bulk / un-itemised claim (excess sanctions / ad-hoc)
+]
 ClaimStatus = Literal[
     "Draft",                    # district sec is preparing
     "Submitted",                # forwarded to Division
@@ -350,6 +362,20 @@ class ApprovalStep(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+class ClaimSubBill(BaseModel):
+    """A single line item inside a Summary-Form claim (Travel/Hotel/Road/TA-DA breakdown)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    head: Literal[
+        "Travel", "Hotel", "Road_BLP_Lunch_Rain", "TA_DA",
+        "Match_Officials", "Equipment", "Ground_Expenses", "Miscellaneous",
+    ]
+    description: str
+    amount_inr: float
+    qty: Optional[float] = None               # e.g. 12 rooms × 3 nights → qty=36
+    unit_note: Optional[str] = None           # e.g. "₹3,500 × 36 nights"
+
+
 class ClaimBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     body_id: str                            # submitting body (district / division)
@@ -360,6 +386,13 @@ class ClaimBase(BaseModel):
     fiscal_cycle: str = "2025-26"           # e.g. "2025-26"
     supporting_doc_url: Optional[str] = None
     supporting_doc_urls: List[str] = []     # multi-attachment (Phase III.7)
+    # Phase B (MoM · Feb 2026) — claim path + summary-form structure
+    claim_path: ClaimPath = "Bulk_Budget"
+    tournament_budget_id: Optional[str] = None   # required when claim_path = "As_per_Budget"
+    tournament_id: Optional[str] = None          # snapshot for convenience
+    sub_bills: List[ClaimSubBill] = []           # Travel/Hotel/Road/TA-DA breakdown
+    is_excess: bool = False                       # set True when sub_bills exceed an approved head limit
+    excess_heads: List[dict] = []                 # [{head, claimed_inr, limit_inr, excess_inr}]
 
 
 class Claim(ClaimBase):

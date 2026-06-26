@@ -68,6 +68,48 @@ async def create_claim(payload: ClaimCreate, force: bool = False):
     if not body:
         raise HTTPException(400, f"Body {payload.body_id} does not exist")
 
+    # Phase B (MoM Feb 2026) — As-per-Budget path requires an Approved tournament budget.
+    # Excess over an approved head limit is allowed but flagged for the Excess Sanction
+    # workflow (set automatically as `is_excess` on the claim).
+    is_excess = False
+    if payload.claim_path == "As_per_Budget":
+        if not payload.tournament_budget_id:
+            raise HTTPException(
+                422,
+                "claim_path='As_per_Budget' requires a tournament_budget_id pointing to an Approved tournament budget.",
+            )
+        tb = await db.tournament_budgets.find_one({"id": payload.tournament_budget_id}, {"_id": 0})
+        if not tb:
+            raise HTTPException(404, f"Tournament budget {payload.tournament_budget_id} not found.")
+        if tb["status"] != "Approved":
+            raise HTTPException(
+                409,
+                f"Tournament budget {tb.get('budget_no')} is in status '{tb['status']}' — only Approved budgets accept As-per-Budget claims.",
+            )
+        if tb.get("body_id") != payload.body_id:
+            raise HTTPException(
+                409,
+                f"Tournament budget belongs to {tb.get('body_name')} ({tb.get('body_id')}); cannot raise claim from {payload.body_id}.",
+            )
+        # Validate per-head allocations on the claim against approved head limits.
+        approved_heads = {h["head"]: float(h["limit_inr"]) for h in (tb.get("approved_head_allocations") or [])}
+        sub_by_head: dict = {}
+        for sb in payload.sub_bills:
+            sub_by_head[sb.head] = sub_by_head.get(sb.head, 0.0) + float(sb.amount_inr)
+        excess_heads: list = []
+        for head, claimed in sub_by_head.items():
+            limit = approved_heads.get(head, 0.0)
+            if claimed > limit:
+                excess_heads.append({"head": head, "claimed_inr": claimed, "limit_inr": limit, "excess_inr": claimed - limit})
+        if excess_heads:
+            is_excess = True
+
+    # Bulk_Budget path validation
+    if payload.claim_path == "Bulk_Budget" and payload.tournament_budget_id:
+        # Allowed (informational link only); but warn if budget isn't approved.
+        tb = await db.tournament_budgets.find_one({"id": payload.tournament_budget_id}, {"_id": 0})
+        # snapshot ok even if not approved — Bulk path is for off-envelope spend
+
     if not force and payload.amount_inr > 0:
         cumulative = payload.amount_inr
         cursor = db.claims.find(
@@ -103,10 +145,25 @@ async def create_claim(payload: ClaimCreate, force: bool = False):
     cycle = payload.fiscal_cycle
     claim_no = await _next_claim_no(cycle)
     parent_id = await _resolve_parent_body(payload.body_id)
+    claim_data = payload.model_dump()
+    # Inject Phase B excess flags computed above (overrides any client-sent value)
+    claim_data["is_excess"] = is_excess
+    if payload.claim_path == "As_per_Budget" and is_excess:
+        # excess_heads was computed earlier inside the As-per-Budget branch
+        # Re-derive cheaply to attach (small inputs)
+        tb = await db.tournament_budgets.find_one({"id": payload.tournament_budget_id}, {"_id": 0}) or {}
+        approved_heads = {h["head"]: float(h["limit_inr"]) for h in (tb.get("approved_head_allocations") or [])}
+        sub_by_head: dict = {}
+        for sb in payload.sub_bills:
+            sub_by_head[sb.head] = sub_by_head.get(sb.head, 0.0) + float(sb.amount_inr)
+        claim_data["excess_heads"] = [
+            {"head": h, "claimed_inr": v, "limit_inr": approved_heads.get(h, 0.0), "excess_inr": v - approved_heads.get(h, 0.0)}
+            for h, v in sub_by_head.items() if v > approved_heads.get(h, 0.0)
+        ]
     claim = Claim(
         claim_no=claim_no,
         parent_body_id=parent_id,
-        **payload.model_dump(),
+        **claim_data,
     )
     await db.claims.insert_one(claim.model_dump())
     return claim

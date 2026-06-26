@@ -76,6 +76,11 @@ const STATUS_META = {
 const CATEGORY_LABEL = {
     Annual_Grant: "Annual Grant",
     Tournament_Expense: "Tournament Expense",
+    Tournament_Funding: "Tournament Funding (1:1)",
+    Admin_Grant: "Admin Grant",
+    Coaching_Grant: "Coaching Grant",
+    District_Travel: "District Travel",
+    MRA_Management: "MRA Management",
     Infrastructure: "Infrastructure",
     Honorarium: "Honorarium",
     Special_Sanction: "Special Sanction",
@@ -536,6 +541,47 @@ const DetailDrawer = ({ claim, persona, onClose, onAction, onClaimUpdated }) => 
                         </div>
                     )}
 
+                    {/* Phase B · Sub-bills (Summary Form) + Excess flag */}
+                    {(claim.sub_bills?.length > 0 || claim.is_excess) && (
+                        <div className="mb-6">
+                            <div className="overline mb-2">Summary Form · Sub-bills</div>
+                            {claim.is_excess && (
+                                <div className="bg-mpca-oxblood/10 border border-mpca-oxblood/40 text-mpca-oxblood p-3 text-xs mb-3" data-testid="excess-banner">
+                                    <strong>⚠ Excess Sanction Required</strong> — this claim exceeds the approved tournament budget on {claim.excess_heads?.length || 0} head(s). MPCA Treasurer must approve the overage separately.
+                                    {claim.excess_heads?.length > 0 && (
+                                        <ul className="mt-2 ml-4 list-disc">
+                                            {claim.excess_heads.map((h, i) => (
+                                                <li key={i}>
+                                                    {h.head}: claimed {fmtINR(h.claimed_inr)} vs limit {fmtINR(h.limit_inr)} → excess <strong>{fmtINR(h.excess_inr)}</strong>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            )}
+                            {claim.sub_bills?.length > 0 && (
+                                <table className="w-full text-xs border border-mpca-brass/30 bg-mpca-cream/30" data-testid="sub-bills-table">
+                                    <thead className="bg-mpca-navy text-mpca-ivory">
+                                        <tr>
+                                            <th className="text-left px-2 py-1">Head</th>
+                                            <th className="text-left px-2 py-1">Description</th>
+                                            <th className="text-right px-2 py-1">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {claim.sub_bills.map((sb, i) => (
+                                            <tr key={i} className="border-t border-mpca-brass/20">
+                                                <td className="px-2 py-1 text-mpca-gray-dark">{sb.head.replace(/_/g, " ")}</td>
+                                                <td className="px-2 py-1">{sb.description}</td>
+                                                <td className="px-2 py-1 text-right font-mono">{fmtINR(sb.amount_inr)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    )}
+
                     <div className="overline mb-3">Approval Trail · Maker-Checker</div>
                     {claim.approval_chain.length === 0 ? (
                         <div className="text-sm italic text-mpca-gray-dark border border-dashed border-mpca-brass/40 p-4">
@@ -787,11 +833,26 @@ const Claims = () => {
                                         );
                                     })()}
                                 </div>
-                                <div className="text-[11px] text-mpca-gray-dark mt-1 flex items-center gap-2">
+                                <div className="text-[11px] text-mpca-gray-dark mt-1 flex flex-wrap items-center gap-2">
                                     {c.body_id.startsWith("DIV") ? <Building2 size={11} /> : c.body_id.startsWith("DIST") ? <MapPin size={11} /> : <Landmark size={11} />}
                                     {c.body_id}
                                     <span>·</span>
                                     {CATEGORY_LABEL[c.category]}
+                                    {c.claim_path === "As_per_Budget" && (
+                                        <span className="px-1.5 py-0.5 bg-mpca-navy/10 text-mpca-navy text-[9px] uppercase tracking-wider font-semibold" data-testid={"claim-path-pill-" + c.claim_no}>
+                                            As-per-Budget
+                                        </span>
+                                    )}
+                                    {c.claim_path === "Bulk_Budget" && (
+                                        <span className="px-1.5 py-0.5 bg-mpca-saffron/10 text-mpca-saffron text-[9px] uppercase tracking-wider font-semibold" data-testid={"claim-path-pill-" + c.claim_no}>
+                                            Bulk
+                                        </span>
+                                    )}
+                                    {c.is_excess && (
+                                        <span className="px-1.5 py-0.5 bg-mpca-oxblood/10 text-mpca-oxblood text-[9px] uppercase tracking-wider font-semibold" data-testid={"claim-excess-pill-" + c.claim_no}>
+                                            ⚠ Excess
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             <div className="text-right whitespace-nowrap">

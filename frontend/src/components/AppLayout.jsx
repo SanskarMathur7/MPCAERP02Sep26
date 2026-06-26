@@ -21,6 +21,7 @@ import {
     Trophy as TrophyIcon,
     FileCheck,
     Wallet,
+    MapPin as MapPinIcon,
 } from "lucide-react";
 
 const DASHBOARD_LINK = { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
@@ -55,6 +56,7 @@ const NAV_DOMAINS = [
         items: [
             { to: "/players", label: "Player Register", icon: TrophyIcon },
             { to: "/tournaments", label: "Tournaments", icon: TrophyIcon },
+            { to: "/venues", label: "Venues & Grounds", icon: MapPinIcon },
         ],
     },
 ];

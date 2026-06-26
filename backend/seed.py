@@ -849,6 +849,7 @@ async def seed_data():
             await db.fee_invoices.insert_one(inv.model_dump())
     await seed_vendors()
     await seed_tournament_budgets()
+    await seed_venues_grounds()
 
 
 SEED_VENDORS = [
@@ -1132,4 +1133,153 @@ async def seed_tournament_budgets():
             notes=s.get("notes"),
             created_by=f"Division Sec · {s['body_name']}",
         )
-        await db.tournament_budgets.insert_one(budget.model_dump())
+
+
+async def seed_venues_grounds():
+    """Seed BCCI-categorised venues, grounds, ground staff, and ground expenses.
+
+    Each sub-collection is independently idempotent so partial-seed crashes recover.
+    """
+    from models import (
+        Venue, Ground, GroundStaffMember, GroundExpense,
+    )
+
+    if await db.venues.count_documents({}) > 0 and await db.grounds.count_documents({}) > 0 and await db.ground_expenses.count_documents({}) >= 4:
+        return
+    logger.info("Seeding venues, grounds & expenses…")
+
+    venues_data = [
+        {"name": "Holkar Cricket Stadium", "category": "BCCI_International", "body_id": "DIV-IND",
+         "city": "Indore", "address_line": "Race Course Road", "pincode": "452003",
+         "capacity_seats": 30000, "floodlights": True, "bcci_calendar_eligible": True,
+         "notes": "Test/ODI/T20I venue. Renovated 2022."},
+        {"name": "Captain Roop Singh Stadium", "category": "BCCI_International", "body_id": "DIV-GWL",
+         "city": "Gwalior", "address_line": "Race Course Road, Gwalior", "pincode": "474002",
+         "capacity_seats": 45000, "floodlights": True, "bcci_calendar_eligible": True,
+         "notes": "Highest ODI score ever scored here (Sehwag-Tendulkar 2010)."},
+        {"name": "Aishbagh Stadium", "category": "BCCI_Domestic_A", "body_id": "DIV-BPL",
+         "city": "Bhopal", "address_line": "Aishbagh, Bhopal", "pincode": "462001",
+         "capacity_seats": 18000, "floodlights": True, "bcci_calendar_eligible": True,
+         "notes": "Ranji Trophy host venue."},
+        {"name": "MPCA Indore Academy Ground", "category": "MPCA_State", "body_id": "MPCA",
+         "city": "Indore", "address_line": "MPCA Sports Complex, Vijay Nagar", "pincode": "452010",
+         "capacity_seats": 2000, "floodlights": False, "bcci_calendar_eligible": False},
+        {"name": "Jabalpur Division Ground", "category": "Divisional", "body_id": "DIV-JBP",
+         "city": "Jabalpur", "address_line": "Wright Town Stadium Road", "pincode": "482001",
+         "capacity_seats": 5000, "floodlights": False, "bcci_calendar_eligible": False},
+    ]
+
+    venue_records = []
+    year = datetime.now(timezone.utc).year
+    for i, v in enumerate(venues_data, start=1):
+        venue = Venue(venue_no=f"VEN-{year}-{i:03d}", **v)
+        await db.venues.insert_one(venue.model_dump())
+        venue_records.append(venue)
+
+    # Helper: build grounds + their staff
+    def _ground(venue, name, type, pitch, suitable, staff):
+        return {"venue": venue, "name": name, "type": type, "pitch_type": pitch,
+                "suitable_formats": suitable, "staff": staff}
+
+    grounds_data = [
+        _ground(venue_records[0], "Main Ground", "Main", "Red Soil",
+                ["FourDay_Senior", "OneDay_Senior", "T20_Senior", "FourDay_U23"],
+                [("Ramesh Solanki", "Head Groundsman", 35000),
+                 ("Vijay Patil", "Pitch Curator", 28000),
+                 ("Ashok Yadav", "Helper", 14000),
+                 ("Mohan Verma", "Helper", 14000)]),
+        _ground(venue_records[0], "Practice A", "Practice_A", "Red Soil",
+                ["OneDay_Senior", "T20_Senior", "FourDay_U23", "OneDay_U23"],
+                [("Suresh Bansal", "Junior Curator", 18000),
+                 ("Pintu Lal", "Helper", 12000)]),
+        _ground(venue_records[0], "Practice B + Nets", "Practice_B", "Turf",
+                ["OneDay_U19", "T20_U19", "U16_League"],
+                [("Babu Khan", "Net Bowler Coach", 22000)]),
+        _ground(venue_records[1], "Main Ground", "Main", "Black Soil",
+                ["FourDay_Senior", "OneDay_Senior", "T20_Senior"],
+                [("Ravi Tomar", "Head Groundsman", 30000),
+                 ("Lakhan Singh", "Pitch Curator", 24000)]),
+        _ground(venue_records[2], "Main Ground", "Main", "Red Soil",
+                ["FourDay_Senior", "OneDay_Senior", "T20_Senior", "OneDay_Womens"],
+                [("Anil Pawar", "Head Groundsman", 28000),
+                 ("Pradeep Joshi", "Helper", 13000)]),
+        _ground(venue_records[3], "Academy Net Practice", "Net_Practice", "Matting",
+                ["OneDay_U19", "T20_U19", "U16_League"],
+                [("Coach Sharma", "Head Coach (Ground)", 40000)]),
+        _ground(venue_records[4], "Main Field", "Main", "Red Soil",
+                ["OneDay_U23", "T20_U23", "U16_League"],
+                [("Devraj Singh", "Head Groundsman", 22000)]),
+    ]
+
+    ground_records = []
+    for i, g in enumerate(grounds_data, start=1):
+        staff = [GroundStaffMember(name=n, role=r, monthly_salary_inr=s,
+                                    joined_date="2024-04-01").model_dump()
+                 for (n, r, s) in g["staff"]]
+        venue = g["venue"]
+        ground = Ground(
+            ground_no=f"GRD-{(venue.city or 'GEN')[:3].upper()}-{i:03d}",
+            venue_id=venue.id,
+            venue_name=venue.name,
+            name=g["name"],
+            type=g["type"],
+            pitch_type=g["pitch_type"],
+            suitable_formats=g["suitable_formats"],
+            is_active=True,
+            ground_staff=staff,
+        )
+        await db.grounds.insert_one(ground.model_dump())
+        ground_records.append(ground)
+
+    # Seed 4 representative ground expenses across statuses
+    expense_samples = [
+        {"ground": ground_records[0], "type": "Pitch_Maintenance",
+         "date": "2025-10-15", "desc": "Pre-Ranji pitch rolling + rear-cover tarpaulin",
+         "amount": 45000, "status": "Paid"},
+        {"ground": ground_records[0], "type": "Staff_Salary",
+         "date": "2025-10-31", "desc": "October ground-staff payroll (4 heads)",
+         "amount": 91000, "status": "Approved"},
+        {"ground": ground_records[1], "type": "Equipment_Repair",
+         "date": "2025-11-05", "desc": "Practice nets repair + new net cones",
+         "amount": 8500, "status": "Submitted"},
+        {"ground": ground_records[2], "type": "Water_Electricity",
+         "date": "2025-11-10", "desc": "Practice B October utility bill",
+         "amount": 12300, "status": "Draft"},
+    ]
+
+    actor_map = {
+        "Submitted": ("Hon. Secretary", "Shri Sanjeev Rao", "Submitted"),
+        "Approved": ("Hon. Treasurer", "Smt. Meera Verma", "Sanctioned"),
+        "Paid": ("Hon. Treasurer", "Smt. Meera Verma", "Disbursed"),
+    }
+    chain_for_status = {
+        "Draft": [],
+        "Submitted": ["Submitted"],
+        "Approved": ["Submitted", "Approved"],
+        "Paid": ["Submitted", "Approved", "Paid"],
+    }
+
+    for i, ex in enumerate(expense_samples, start=1):
+        chain = []
+        for stage in chain_for_status[ex["status"]]:
+            post, name, decision = actor_map[stage]
+            chain.append(ApprovalStep(
+                stage=stage, actor_post=post, actor_name=name,
+                actor_body_id="MPCA", decision=decision,
+                notes=f"{stage} via seeded workflow.",
+            ).model_dump())
+        ge = GroundExpense(
+            expense_no=f"GE-2025-26-{i:03d}",
+            ground_id=ex["ground"].id,
+            venue_name=ex["ground"].venue_name,
+            ground_name=ex["ground"].name,
+            body_id="MPCA",
+            expense_type=ex["type"],
+            expense_date=ex["date"],
+            description=ex["desc"],
+            amount_inr=ex["amount"],
+            status=ex["status"],
+            approval_chain=chain,
+            created_by="Ground Manager",
+        )
+        await db.ground_expenses.insert_one(ge.model_dump())

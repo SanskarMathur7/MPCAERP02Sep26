@@ -645,7 +645,15 @@ class TransferCreate(TransferRequestBase):
 # ---------------- Phase IV.2: Tournament Module (M2) ----------------
 # Plan tabs: Modules (M2) + Player Rules (age caps + guest allowance per tournament).
 
-TournamentFormat = Literal["Multi_Day", "One_Day", "T20", "Pink_Ball"]
+TournamentFormat = Literal[
+    # Legacy generic formats (kept for backward compat with existing seeded data)
+    "Multi_Day", "One_Day", "T20", "Pink_Ball",
+    # Phase C · MoM 12-format taxonomy (4-Day · 1-Day · T20 variants)
+    "FourDay_Senior", "FourDay_U23", "FourDay_U19",                    # 4-day formats
+    "OneDay_Senior", "OneDay_U23", "OneDay_U19", "OneDay_Womens",      # 1-day formats
+    "T20_Senior", "T20_U23", "T20_U19", "T20_Womens",                  # T20 formats
+    "U16_League",                                                       # additional youth
+]
 TournamentStatus = Literal["Upcoming", "Squad_Selection", "In_Progress", "Completed", "Cancelled"]
 TournamentScope = Literal["Inter_Divisional", "Inter_District", "Championship", "Invitational"]
 
@@ -938,3 +946,127 @@ class VariableItemDecision(BaseModel):
     approved_amount_inr: Optional[float] = None    # may approve a lower amount
     decided_by: str
     decision_notes: Optional[str] = None
+
+
+# ---------------- Phase C · Venue + Ground Master (MoM 3+4 · Feb 2026) ----------------
+# A Venue is a stadium / sports complex (e.g., Holkar Stadium). A Ground is a playable
+# field inside a venue (Stadium has Main Ground + Practice Grounds A/B). Tournaments map
+# to Ground (not just Venue). Ground Expenses track salaries + maintenance per ground.
+
+VenueCategory = Literal[
+    "BCCI_International",   # Test/ODI/T20I venues e.g. Holkar Stadium
+    "BCCI_Domestic_A",      # Ranji Trophy / first-class hosts
+    "BCCI_Domestic_B",      # List-A approved
+    "MPCA_State",           # MPCA-managed state-level grounds
+    "Divisional",           # division-owned grounds
+    "District",             # district-owned grounds
+    "Private",              # private grounds hired on need basis
+]
+
+GroundType = Literal["Main", "Practice_A", "Practice_B", "Net_Practice", "Other"]
+
+
+class VenueBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: str
+    category: VenueCategory
+    body_id: str = "MPCA"                  # owning body
+    address_line: Optional[str] = None
+    city: str
+    pincode: Optional[str] = None
+    capacity_seats: Optional[int] = None
+    floodlights: bool = False
+    bcci_calendar_eligible: bool = False   # tagged from BCCI norms
+    notes: Optional[str] = None
+
+
+class Venue(VenueBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    venue_no: str                          # "VEN-2025-001"
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class VenueCreate(VenueBase):
+    pass
+
+
+class GroundStaffMember(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    role: str                              # "Head Groundsman", "Pitch Curator", "Helper" etc.
+    monthly_salary_inr: float = 0.0
+    phone: Optional[str] = None
+    joined_date: Optional[str] = None       # ISO date
+
+
+class GroundBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    venue_id: str
+    name: str                              # "Main Ground", "Practice A"
+    type: GroundType = "Main"
+    pitch_type: Optional[str] = None       # "Red Soil", "Black Soil", "Turf", "Matting"
+    boundaries_metres: Optional[int] = None
+    suitable_formats: List[TournamentFormat] = []  # which formats this ground supports
+    is_active: bool = True
+    notes: Optional[str] = None
+
+
+class Ground(GroundBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    ground_no: str                         # "GRD-VEN-IND-MAIN-001"
+    venue_name: Optional[str] = None       # snapshot
+    ground_staff: List[GroundStaffMember] = []
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class GroundCreate(GroundBase):
+    ground_staff: List[GroundStaffMember] = []
+
+
+GroundExpenseType = Literal[
+    "Staff_Salary", "Pitch_Maintenance", "Equipment_Repair",
+    "Water_Electricity", "Cleaning", "Security", "Miscellaneous",
+]
+
+GroundExpenseStatus = Literal[
+    "Draft", "Submitted", "Approved", "Rejected", "Paid",
+]
+
+
+class GroundExpenseBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    ground_id: str
+    body_id: str = "MPCA"
+    fiscal_cycle: str = "2025-26"
+    expense_type: GroundExpenseType
+    expense_date: str                      # ISO YYYY-MM-DD
+    description: str
+    amount_inr: float
+    tournament_id: Optional[str] = None    # if tied to a specific tournament
+    tournament_format: Optional[TournamentFormat] = None
+    supporting_doc_urls: List[str] = []
+
+
+class GroundExpense(GroundExpenseBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    expense_no: str                        # "GE-2025-26-001"
+    venue_name: Optional[str] = None       # snapshot
+    ground_name: Optional[str] = None      # snapshot
+    status: GroundExpenseStatus = "Draft"
+    approval_chain: List[ApprovalStep] = []
+    created_by: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class GroundExpenseCreate(GroundExpenseBase):
+    created_by: Optional[str] = None
+
+
+class GroundExpenseAction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    actor_post: str
+    actor_name: Optional[str] = None
+    actor_body_id: str
+    notes: Optional[str] = None
+

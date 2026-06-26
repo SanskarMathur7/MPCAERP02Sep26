@@ -494,3 +494,79 @@ export const fetchTournamentBudgetStats = async (params = {}) => {
     return data;
 };
 
+
+
+// ---------- Phase C: Venues + Grounds + Ground Expenses ----------
+export const fetchVenues = async (params = {}) => {
+    const { data } = await api.get("/venues", { params });
+    return data;
+};
+export const createVenue = async (payload) => {
+    const { data } = await api.post("/venues", payload);
+    return data;
+};
+export const updateVenue = async (id, payload) => {
+    const { data } = await api.patch(`/venues/${id}`, payload);
+    return data;
+};
+export const deleteVenue = async (id) => {
+    const { data } = await api.delete(`/venues/${id}`);
+    return data;
+};
+export const fetchGrounds = async (params = {}) => {
+    const { data } = await api.get("/grounds", { params });
+    return data;
+};
+export const createGround = async (payload) => {
+    const { data } = await api.post("/grounds", payload);
+    return data;
+};
+export const updateGround = async (id, payload) => {
+    const { data } = await api.patch(`/grounds/${id}`, payload);
+    return data;
+};
+export const deleteGround = async (id) => {
+    const { data } = await api.delete(`/grounds/${id}`);
+    return data;
+};
+export const addGroundStaff = async (gid, staff) => {
+    const { data } = await api.post(`/grounds/${gid}/staff`, staff);
+    return data;
+};
+export const removeGroundStaff = async (gid, sid) => {
+    const { data } = await api.delete(`/grounds/${gid}/staff/${sid}`);
+    return data;
+};
+export const fetchGroundPayroll = async (gid) => {
+    const { data } = await api.get(`/grounds/${gid}/payroll-summary`);
+    return data;
+};
+export const fetchGroundExpenses = async (params = {}) => {
+    const { data } = await api.get("/ground-expenses", { params });
+    return data;
+};
+export const createGroundExpense = async (payload) => {
+    const { data } = await api.post("/ground-expenses", payload);
+    return data;
+};
+export const submitGroundExpense = async (id, action) => {
+    const { data } = await api.post(`/ground-expenses/${id}/submit`, action);
+    return data;
+};
+export const approveGroundExpense = async (id, action) => {
+    const { data } = await api.post(`/ground-expenses/${id}/approve`, action);
+    return data;
+};
+export const rejectGroundExpense = async (id, action) => {
+    const { data } = await api.post(`/ground-expenses/${id}/reject`, action);
+    return data;
+};
+export const deleteGroundExpense = async (id) => {
+    const { data } = await api.delete(`/ground-expenses/${id}`);
+    return data;
+};
+export const fetchGroundExpenseStats = async (params = {}) => {
+    const { data } = await api.get("/ground-expenses-stats/summary", { params });
+    return data;
+};
+

@@ -850,6 +850,7 @@ async def seed_data():
     await seed_vendors()
     await seed_tournament_budgets()
     await seed_venues_grounds()
+    await seed_selection_funnels()
 
 
 SEED_VENDORS = [
@@ -1282,4 +1283,105 @@ async def seed_venues_grounds():
             approval_chain=chain,
             created_by="Ground Manager",
         )
+
+
+async def seed_selection_funnels():
+    """Seed:
+    - SeasonRegistrations for all existing seeded players in 2025-26 (Approved)
+    - 2 selection funnels: a domestic one at Pool(20) stage and an international one at Squad(12) ready for BCCI submission.
+    """
+    from models import (
+        SeasonRegistration, SelectionFunnel, SelectionEntry, STAGE_LIMITS,
+    )
+
+    players = await db.players.find({}, {"_id": 0}).to_list(500)
+    if not players:
+        return
+
+    if await db.season_registrations.count_documents({}) == 0:
+        logger.info("Seeding season registrations…")
+        for i, p in enumerate(players, start=1):
+            reg = SeasonRegistration(
+                registration_no=f"SR-2025-26-{p.get('body_id','MPCA')}-{i:05d}",
+                player_id=p["id"],
+                player_name=p.get("name"),
+                season_year="2025-26",
+                body_id=p.get("body_id") or "MPCA",
+                fees_paid_inr=500.0,
+                status="Approved",
+            )
+            await db.season_registrations.insert_one(reg.model_dump())
+
+    if await db.selection_funnels.count_documents({}) > 0:
+        return
+    logger.info("Seeding selection funnels…")
+
+    tournaments = await db.tournaments.find({}, {"_id": 0}).sort("created_at", 1).to_list(4)
+    if not tournaments:
+        return
+
+    # Funnel A — domestic, at Pool stage with 20 players
+    pool_players = players[:20]
+    pool_entries = [SelectionEntry(
+        player_id=p["id"], player_name=p.get("name"),
+        age=p.get("age"), role=p.get("role"),
+        stage="Pool", added_by="Selection Committee Chair",
+    ).model_dump() for p in pool_players]
+    # Also seed the prior-stage entries for trail visualization
+    long_list_entries = [SelectionEntry(
+        player_id=p["id"], player_name=p.get("name"),
+        age=p.get("age"), role=p.get("role"),
+        stage="LongList", added_by="Selection Committee Chair",
+    ).model_dump() for p in players[:min(150, len(players))]]
+    short_list_entries = [SelectionEntry(
+        player_id=p["id"], player_name=p.get("name"),
+        age=p.get("age"), role=p.get("role"),
+        stage="ShortList", added_by="Selection Committee Chair",
+    ).model_dump() for p in players[:30] if p in players[:30]]
+
+    funnel_a = SelectionFunnel(
+        funnel_no="SF-2025-26-001",
+        tournament_id=tournaments[0]["id"],
+        tournament_name=tournaments[0].get("name"),
+        format=tournaments[0].get("format") or "OneDay_Senior",
+        season_year="2025-26",
+        is_international=False,
+        current_stage="Pool",
+        entries=long_list_entries + short_list_entries + pool_entries,
+        created_by="Selection Committee Chair",
+        notes="Domestic selection — currently shortlisting Pool of 20 from 30.",
+    )
+    await db.selection_funnels.insert_one(funnel_a.model_dump())
+
+    # Funnel B — international, at Squad stage with 12 players, awaiting Division→MPCA→BCCI flow
+    squad_players = players[:12] if len(players) >= 12 else players
+    if len(squad_players) == 12 and len(tournaments) > 1:
+        squad_entries = [SelectionEntry(
+            player_id=p["id"], player_name=p.get("name"),
+            age=p.get("age"), role=p.get("role"),
+            stage="Squad", added_by="Selection Committee Chair",
+        ).model_dump() for p in squad_players]
+        prior_intl = [SelectionEntry(
+            player_id=p["id"], player_name=p.get("name"),
+            age=p.get("age"), role=p.get("role"),
+            stage=stg, added_by="Selection Committee Chair",
+        ).model_dump() for stg, group in [
+            ("LongList", players[:min(150, len(players))]),
+            ("ShortList", players[:30]),
+            ("Pool", players[:20]),
+        ] for p in group]
+        funnel_b = SelectionFunnel(
+            funnel_no="SF-2025-26-002",
+            tournament_id=tournaments[1]["id"],
+            tournament_name=tournaments[1].get("name"),
+            format=tournaments[1].get("format") or "T20_Senior",
+            season_year="2025-26",
+            is_international=True,
+            division_body_id="DIV-IND",
+            current_stage="Squad",
+            entries=prior_intl + squad_entries,
+            created_by="Selection Committee Chair",
+            notes="International tournament — awaiting Division recommendation then MPCA validation before BCCI submission.",
+        )
+        await db.selection_funnels.insert_one(funnel_b.model_dump())
         await db.ground_expenses.insert_one(ge.model_dump())

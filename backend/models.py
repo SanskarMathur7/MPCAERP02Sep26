@@ -1070,3 +1070,115 @@ class GroundExpenseAction(BaseModel):
     actor_body_id: str
     notes: Optional[str] = None
 
+
+
+# ---------------- Phase D · Player Selection Funnel (MoM 6 · Feb 2026) ----------------
+# Annual seasonal re-registration + a 4-stage selection funnel per (tournament × format).
+# Funnel: LongList(≤150) → ShortList(≤30) → Pool(≤20) → Squad(≤12)
+# Each stage has a cap. Selectors can include/exclude players. Final squad is "Submitted
+# to BCCI App" (placeholder marker until BCCI integration ships).
+
+SeasonRegStatus = Literal["Pending", "Approved", "Lapsed", "Rejected"]
+
+
+class SeasonRegistrationBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    player_id: str
+    season_year: str                       # e.g. "2025-26"
+    body_id: str                           # registering body (district / division)
+    fees_paid_inr: float = 0.0
+    notes: Optional[str] = None
+
+
+class SeasonRegistration(SeasonRegistrationBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    registration_no: str                   # "SR-2025-26-DIV-IND-00012"
+    player_name: Optional[str] = None      # snapshot
+    status: SeasonRegStatus = "Pending"
+    registered_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class SeasonRegistrationCreate(SeasonRegistrationBase):
+    pass
+
+
+SelectionStage = Literal["LongList", "ShortList", "Pool", "Squad", "Submitted"]
+STAGE_LIMITS = {"LongList": 150, "ShortList": 30, "Pool": 20, "Squad": 12}
+STAGE_NEXT = {"LongList": "ShortList", "ShortList": "Pool", "Pool": "Squad", "Squad": "Submitted"}
+
+
+class SelectionEntry(BaseModel):
+    """A player at a specific stage of the funnel."""
+    model_config = ConfigDict(extra="ignore")
+    player_id: str
+    player_name: Optional[str] = None
+    age: Optional[int] = None
+    role: Optional[str] = None             # batsman / bowler / etc. (snapshot from Player)
+    stage: SelectionStage
+    notes: Optional[str] = None
+    added_by: Optional[str] = None
+    added_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class SelectionFunnelBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    tournament_id: str
+    format: TournamentFormat               # which format the funnel is for
+    season_year: str = "2025-26"
+    is_international: bool = False         # MoM: Division→MPCA validation for international
+    division_body_id: Optional[str] = None # the division proposing (for international flow)
+    notes: Optional[str] = None
+
+
+class SelectionFunnel(SelectionFunnelBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    funnel_no: str                         # "SF-2025-26-001"
+    tournament_name: Optional[str] = None  # snapshot
+    current_stage: SelectionStage = "LongList"
+    entries: List[SelectionEntry] = []
+    # Phase D · MoM Division→MPCA validation for international tournaments
+    division_recommended_at: Optional[str] = None
+    division_recommended_by: Optional[str] = None
+    mpca_validated_at: Optional[str] = None
+    mpca_validated_by: Optional[str] = None
+    bcci_submission_ref: Optional[str] = None    # set when squad is "submitted to BCCI App"
+    bcci_submitted_at: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class SelectionFunnelCreate(SelectionFunnelBase):
+    created_by: Optional[str] = None
+
+
+class SelectionAddPlayers(BaseModel):
+    """Bulk add players to the current stage of the funnel."""
+    model_config = ConfigDict(extra="ignore")
+    player_ids: List[str]
+    added_by: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SelectionAdvance(BaseModel):
+    """Advance a subset of players from current_stage to the next stage."""
+    model_config = ConfigDict(extra="ignore")
+    player_ids: List[str]                  # which players advance to next stage
+    actor_name: str
+    actor_post: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SelectionRemovePlayer(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    player_id: str
+    actor_name: str
+    notes: Optional[str] = None
+
+
+class SelectionBCCISubmit(BaseModel):
+    """Submit the final squad to BCCI App (placeholder)."""
+    model_config = ConfigDict(extra="ignore")
+    actor_name: str
+    bcci_submission_ref: Optional[str] = None   # external ref if provided manually
+

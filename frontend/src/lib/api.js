@@ -570,3 +570,67 @@ export const fetchGroundExpenseStats = async (params = {}) => {
     return data;
 };
 
+
+// ---------- Phase D: Player Selection Funnel ----------
+export const fetchSeasonRegistrations = async (params = {}) => {
+    const { data } = await api.get("/season-registrations", { params });
+    return data;
+};
+export const createSeasonRegistration = async (payload) => {
+    const { data } = await api.post("/season-registrations", payload);
+    return data;
+};
+export const approveSeasonRegistration = async (id) => {
+    const { data } = await api.post(`/season-registrations/${id}/approve`);
+    return data;
+};
+export const rejectSeasonRegistration = async (id, notes) => {
+    const { data } = await api.post(`/season-registrations/${id}/reject`, { notes });
+    return data;
+};
+export const fetchSelectionFunnels = async (params = {}) => {
+    const { data } = await api.get("/selection-funnels", { params });
+    return data;
+};
+export const fetchSelectionFunnel = async (id) => {
+    const { data } = await api.get(`/selection-funnels/${id}`);
+    return data;
+};
+export const createSelectionFunnel = async (payload) => {
+    const { data } = await api.post("/selection-funnels", payload);
+    return data;
+};
+export const addPlayersToFunnel = async (id, payload) => {
+    const { data } = await api.post(`/selection-funnels/${id}/add-players`, payload);
+    return data;
+};
+export const removePlayerFromFunnel = async (id, payload) => {
+    const { data } = await api.post(`/selection-funnels/${id}/remove-player`, payload);
+    return data;
+};
+export const advanceFunnelStage = async (id, payload) => {
+    const { data } = await api.post(`/selection-funnels/${id}/advance`, payload);
+    return data;
+};
+export const divisionRecommendFunnel = async (id, payload) => {
+    const { data } = await api.post(`/selection-funnels/${id}/division-recommend`, payload);
+    return data;
+};
+export const mpcaValidateFunnel = async (id, payload) => {
+    const { data } = await api.post(`/selection-funnels/${id}/mpca-validate`, payload);
+    return data;
+};
+export const submitFunnelToBCCI = async (id, payload) => {
+    const { data } = await api.post(`/selection-funnels/${id}/submit-to-bcci`, payload);
+    return data;
+};
+export const deleteSelectionFunnel = async (id) => {
+    const { data } = await api.delete(`/selection-funnels/${id}`);
+    return data;
+};
+export const fetchFunnelStats = async (params = {}) => {
+    const { data } = await api.get("/selection-funnels-stats/summary", { params });
+    return data;
+};
+
+

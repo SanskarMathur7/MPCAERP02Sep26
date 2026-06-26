@@ -31,6 +31,7 @@ import Vendors from "@/pages/Vendors";
 import VendorBills from "@/pages/VendorBills";
 import TournamentBudgets from "@/pages/TournamentBudgets";
 import VenuesGrounds from "@/pages/VenuesGrounds";
+import SelectionFunnel from "@/pages/SelectionFunnel";
 import Players from "@/pages/Players";
 import Tournaments from "@/pages/Tournaments";
 import TournamentDetail from "@/pages/TournamentDetail";
@@ -98,6 +99,7 @@ function App() {
                         <Route path="/vendor-bills" element={<Protected><VendorBills /></Protected>} />
                         <Route path="/tournament-budgets" element={<Protected><TournamentBudgets /></Protected>} />
                         <Route path="/venues" element={<Protected><VenuesGrounds /></Protected>} />
+                        <Route path="/selection" element={<Protected><SelectionFunnel /></Protected>} />
 
                         {/* Protected — Phase IV: Player Module */}
                         <Route path="/players" element={<Protected><Players /></Protected>} />

@@ -848,6 +848,7 @@ async def seed_data():
             )
             await db.fee_invoices.insert_one(inv.model_dump())
     await seed_vendors()
+    await seed_tournament_budgets()
 
 
 SEED_VENDORS = [
@@ -964,3 +965,171 @@ async def seed_vendors():
         )
         await db.vendor_bills.insert_one(bill.model_dump())
 
+
+
+
+async def seed_tournament_budgets():
+    """Seed 4 representative tournament budgets covering Draft / Submitted / Approved / Returned."""
+    if await db.tournament_budgets.count_documents({}) > 0:
+        return
+    logger.info("Seeding tournament budgets…")
+    from models import TournamentBudget, BudgetHeadAllocation, VariableBudgetItem
+
+    # Pick 2 tournaments from existing seed
+    tournaments = await db.tournaments.find({}, {"_id": 0}).sort("created_at", 1).to_list(4)
+    if not tournaments:
+        return
+
+    # Map of (tournament_idx, body_code, body_name, status) → budget shape
+    samples = [
+        # 1. Approved — Indore Division for the first tournament
+        {
+            "tournament": tournaments[0],
+            "body_code": "DIV-IND",
+            "body_name": "Indore Division",
+            "total": 850000.0,
+            "heads": [
+                ("Travel", 150000), ("Hotel", 220000), ("TA_DA", 90000),
+                ("Match_Officials", 180000), ("Equipment", 120000),
+                ("Road_BLP_Lunch_Rain", 50000), ("Ground_Expenses", 30000),
+                ("Miscellaneous", 10000),
+            ],
+            "approved_total": 800000.0,
+            "approved_heads": [
+                ("Travel", 140000), ("Hotel", 210000), ("TA_DA", 90000),
+                ("Match_Officials", 180000), ("Equipment", 110000),
+                ("Road_BLP_Lunch_Rain", 45000), ("Ground_Expenses", 20000),
+                ("Miscellaneous", 5000),
+            ],
+            "variables": [
+                {"description": "Replacement umpire insurance (last-minute)", "amount": 18000, "head": "Match_Officials", "status": "Approved"},
+                {"description": "Extra physio for U-19 day-1 injury", "amount": 12000, "head": "Miscellaneous", "status": "Pending"},
+            ],
+            "status": "Approved",
+            "notes": "Pilot Auto Budget for MY Memorial Trophy — Indore Division.",
+        },
+        # 2. Submitted — Bhopal Division for the second tournament
+        {
+            "tournament": tournaments[1] if len(tournaments) > 1 else tournaments[0],
+            "body_code": "DIV-BPL",
+            "body_name": "Bhopal Division",
+            "total": 620000.0,
+            "heads": [
+                ("Travel", 110000), ("Hotel", 170000), ("TA_DA", 70000),
+                ("Match_Officials", 130000), ("Equipment", 95000),
+                ("Road_BLP_Lunch_Rain", 30000), ("Ground_Expenses", 10000),
+                ("Miscellaneous", 5000),
+            ],
+            "variables": [
+                {"description": "Pitch covers hire (rain forecast)", "amount": 22000, "head": "Ground_Expenses", "status": "Pending"},
+            ],
+            "status": "Submitted",
+            "notes": "Senior inter-divisional fixtures — Bhopal Division proposal.",
+        },
+        # 3. Returned — Jabalpur Division (over-allocated heads scenario)
+        {
+            "tournament": tournaments[2] if len(tournaments) > 2 else tournaments[0],
+            "body_code": "DIV-JBP",
+            "body_name": "Jabalpur Division",
+            "total": 480000.0,
+            "heads": [
+                ("Travel", 90000), ("Hotel", 130000), ("TA_DA", 60000),
+                ("Match_Officials", 110000), ("Equipment", 60000),
+                ("Road_BLP_Lunch_Rain", 20000), ("Ground_Expenses", 8000),
+                ("Miscellaneous", 2000),
+            ],
+            "variables": [],
+            "status": "Returned",
+            "notes": "Ranji Trophy training-camp tournament.",
+            "return_reason_code": "DOCS_MISSING",
+            "return_reason_detail": "Please attach the venue rate-card and the scheme reference document.",
+        },
+        # 4. Draft — Gwalior Division
+        {
+            "tournament": tournaments[3] if len(tournaments) > 3 else tournaments[0],
+            "body_code": "DIV-GWL",
+            "body_name": "Gwalior Division",
+            "total": 360000.0,
+            "heads": [
+                ("Travel", 60000), ("Hotel", 100000), ("TA_DA", 50000),
+                ("Match_Officials", 85000), ("Equipment", 45000),
+                ("Road_BLP_Lunch_Rain", 15000), ("Ground_Expenses", 5000),
+            ],
+            "variables": [],
+            "status": "Draft",
+            "notes": "Gwalior U-16 League — draft pending Division Sec review.",
+        },
+    ]
+
+    actor_map = {
+        "Submitted": ("Division Secretary", "Recommended"),
+        "Approved": ("Hon. Treasurer", "Sanctioned"),
+        "Returned": ("Hon. Treasurer", "Returned"),
+        "Rejected": ("Hon. Treasurer", "Rejected"),
+    }
+
+    for i, s in enumerate(samples, start=1):
+        budget_no = f"TB-2025-26-{i:03d}"
+        heads = [BudgetHeadAllocation(head=h, limit_inr=lim).model_dump() for h, lim in s["heads"]]
+        variables = []
+        for v in s.get("variables") or []:
+            item = VariableBudgetItem(
+                description=v["description"],
+                proposed_amount_inr=v["amount"],
+                head=v.get("head"),
+                status=v.get("status", "Pending"),
+            )
+            it = item.model_dump()
+            if v.get("status") == "Approved":
+                it["approved_amount_inr"] = v["amount"]
+                it["decided_by"] = "Smt. Meera Verma"
+                it["decided_at"] = datetime.now(timezone.utc).isoformat()
+            variables.append(it)
+
+        chain = []
+        if s["status"] in ("Submitted", "Approved", "Returned"):
+            chain.append(ApprovalStep(
+                stage="Submitted", actor_post="Division Secretary",
+                actor_name=f"Division Sec · {s['body_name']}",
+                actor_body_id=s["body_code"], decision="Submitted",
+                notes="Initial proposal submitted to MPCA.",
+            ).model_dump())
+        if s["status"] == "Approved":
+            chain.append(ApprovalStep(
+                stage="Approved", actor_post="Hon. Treasurer",
+                actor_name="Smt. Meera Verma", actor_body_id="MPCA",
+                decision="Sanctioned",
+                notes=f"[Approved ₹{s['approved_total']:,.0f} of ₹{s['total']:,.0f} proposed]",
+            ).model_dump())
+        if s["status"] == "Returned":
+            chain.append(ApprovalStep(
+                stage="Returned", actor_post="Hon. Treasurer",
+                actor_name="Smt. Meera Verma", actor_body_id="MPCA",
+                decision="Returned",
+                notes=f"[{s.get('return_reason_code')}] {s.get('return_reason_detail')}",
+            ).model_dump())
+
+        approved_heads = []
+        if s["status"] == "Approved" and s.get("approved_heads"):
+            approved_heads = [BudgetHeadAllocation(head=h, limit_inr=lim).model_dump() for h, lim in s["approved_heads"]]
+
+        budget = TournamentBudget(
+            budget_no=budget_no,
+            tournament_id=s["tournament"]["id"],
+            tournament_name=s["tournament"].get("name"),
+            body_id=s["body_code"],
+            body_name=s["body_name"],
+            fiscal_cycle="2025-26",
+            total_ceiling_inr=s["total"],
+            head_allocations=heads,
+            variable_items=variables,
+            status=s["status"],
+            approved_total_inr=s.get("approved_total"),
+            approved_head_allocations=approved_heads,
+            approval_chain=chain,
+            return_reason_code=s.get("return_reason_code"),
+            return_reason_detail=s.get("return_reason_detail"),
+            notes=s.get("notes"),
+            created_by=f"Division Sec · {s['body_name']}",
+        )
+        await db.tournament_budgets.insert_one(budget.model_dump())

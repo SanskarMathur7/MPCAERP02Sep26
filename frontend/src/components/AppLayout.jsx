@@ -20,6 +20,7 @@ import {
     ShoppingCart,
     Trophy as TrophyIcon,
     FileCheck,
+    Wallet,
 } from "lucide-react";
 
 const DASHBOARD_LINK = { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
@@ -38,6 +39,7 @@ const NAV_DOMAINS = [
         domain: "Financial",
         items: [
             { to: "/budgets", label: "Budget Ledger", icon: Coins },
+            { to: "/tournament-budgets", label: "Tournament Budgets", icon: Wallet },
             { to: "/claims", label: "Grant Claims", icon: HandCoins },
             { to: "/rulebook", label: "AI Rulebook", icon: BookOpen },
             { to: "/procurement", label: "Procurement", icon: ShoppingCart },

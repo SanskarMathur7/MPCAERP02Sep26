@@ -442,3 +442,55 @@ export const fetchVendorBillStats = async (params = {}) => {
     const { data } = await api.get("/vendor-bills-stats/summary", { params });
     return data;
 };
+
+
+// ---------- Phase A: Tournament Auto-Budgets ----------
+export const fetchTournamentBudgets = async (params = {}) => {
+    const { data } = await api.get("/tournament-budgets", { params });
+    return data;
+};
+export const fetchTournamentBudget = async (id) => {
+    const { data } = await api.get(`/tournament-budgets/${id}`);
+    return data;
+};
+export const createTournamentBudget = async (payload) => {
+    const { data } = await api.post("/tournament-budgets", payload);
+    return data;
+};
+export const updateTournamentBudget = async (id, payload) => {
+    const { data } = await api.patch(`/tournament-budgets/${id}`, payload);
+    return data;
+};
+export const submitTournamentBudget = async (id, action) => {
+    const { data } = await api.post(`/tournament-budgets/${id}/submit`, action);
+    return data;
+};
+export const approveTournamentBudget = async (id, action) => {
+    const { data } = await api.post(`/tournament-budgets/${id}/approve`, action);
+    return data;
+};
+export const returnTournamentBudget = async (id, action) => {
+    const { data } = await api.post(`/tournament-budgets/${id}/return`, action);
+    return data;
+};
+export const rejectTournamentBudget = async (id, action) => {
+    const { data } = await api.post(`/tournament-budgets/${id}/reject`, action);
+    return data;
+};
+export const deleteTournamentBudget = async (id) => {
+    const { data } = await api.delete(`/tournament-budgets/${id}`);
+    return data;
+};
+export const addVariableItem = async (id, item) => {
+    const { data } = await api.post(`/tournament-budgets/${id}/variables`, item);
+    return data;
+};
+export const decideVariableItem = async (bid, iid, payload) => {
+    const { data } = await api.post(`/tournament-budgets/${bid}/variables/${iid}/decide`, payload);
+    return data;
+};
+export const fetchTournamentBudgetStats = async (params = {}) => {
+    const { data } = await api.get("/tournament-budgets-stats/summary", { params });
+    return data;
+};
+

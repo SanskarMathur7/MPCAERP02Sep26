@@ -809,3 +809,99 @@ class VendorBillAction(BaseModel):
     source_account_id: Optional[str] = None   # used on Pay
     return_reason_code: Optional[str] = None
     return_reason_detail: Optional[str] = None
+
+
+# ---------------- Phase A · Tournament Auto-Budget (MoM 1 · Feb 2026) ----------------
+# Division proposes a per-tournament budget → MPCA reviews → approves/returns/rejects.
+# Budget has THREE strata:
+#   1) Total ceiling INR (fixed cap MPCA cannot exceed via this budget)
+#   2) Head-under sub-limits (Travel/Hotel/Road/TA-DA/Match Officials/Equipment/Ground/Misc)
+#   3) Variable items (each line item case-by-case approvable by MPCA)
+# All Phase-B claims will match against this approved budget envelope.
+
+BudgetHead = Literal[
+    "Travel", "Hotel", "Road_BLP_Lunch_Rain", "TA_DA",
+    "Match_Officials", "Equipment", "Ground_Expenses", "Miscellaneous",
+]
+
+TournamentBudgetStatus = Literal[
+    "Draft", "Submitted", "Approved", "Returned", "Rejected",
+]
+
+VariableItemStatus = Literal["Pending", "Approved", "Rejected"]
+
+
+class BudgetHeadAllocation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    head: BudgetHead
+    limit_inr: float = 0.0
+    notes: Optional[str] = None
+
+
+class VariableBudgetItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    description: str                         # e.g., "Special insurance for outstation U-19 squad"
+    proposed_amount_inr: float
+    head: Optional[BudgetHead] = None        # optional: which head it falls under (or pure variable)
+    status: VariableItemStatus = "Pending"
+    approved_amount_inr: Optional[float] = None
+    decided_by: Optional[str] = None         # actor name on approve/reject
+    decision_notes: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    decided_at: Optional[str] = None
+
+
+class TournamentBudgetBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    tournament_id: str                       # Tournament.id
+    body_id: str                             # Division (or District) raising the budget ask
+    fiscal_cycle: str = "2025-26"
+    total_ceiling_inr: float                 # fixed cap proposed by division
+    head_allocations: List[BudgetHeadAllocation] = []   # sub-limits by head
+    variable_items: List[VariableBudgetItem] = []        # case-by-case items
+    notes: Optional[str] = None
+
+
+class TournamentBudget(TournamentBudgetBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    budget_no: str                           # "TB-2025-26-001"
+    tournament_name: Optional[str] = None    # snapshot
+    body_name: Optional[str] = None          # snapshot
+    status: TournamentBudgetStatus = "Draft"
+    # MPCA-approved figures (may differ from proposed)
+    approved_total_inr: Optional[float] = None
+    approved_head_allocations: List[BudgetHeadAllocation] = []
+    approval_chain: List[ApprovalStep] = []
+    created_by: Optional[str] = None
+    return_reason_code: Optional[str] = None
+    return_reason_detail: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class TournamentBudgetCreate(TournamentBudgetBase):
+    created_by: Optional[str] = None
+
+
+class TournamentBudgetAction(BaseModel):
+    """Payload for submit/approve/reject/return on the whole budget."""
+    model_config = ConfigDict(extra="ignore")
+    actor_post: str
+    actor_name: Optional[str] = None
+    actor_body_id: str
+    notes: Optional[str] = None
+    # MPCA can approve a different total + revised head limits at sanction
+    approved_total_inr: Optional[float] = None
+    approved_head_allocations: Optional[List[BudgetHeadAllocation]] = None
+    return_reason_code: Optional[str] = None
+    return_reason_detail: Optional[str] = None
+
+
+class VariableItemDecision(BaseModel):
+    """Payload for approving/rejecting an individual variable item."""
+    model_config = ConfigDict(extra="ignore")
+    decision: Literal["Approved", "Rejected"]
+    approved_amount_inr: Optional[float] = None    # may approve a lower amount
+    decided_by: str
+    decision_notes: Optional[str] = None

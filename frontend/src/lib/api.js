@@ -413,8 +413,97 @@ export const removePlayerFromSquad = async (squadId, playerId) => {
     const { data } = await api.delete(`/squads/${squadId}/players/${playerId}`);
     return data;
 };
+// ---------- Phase T1-T4 · Tournament Plan · Grant Scheme · Invoices · DA ----------
 export const fetchTournamentStats = async () => {
     const { data } = await api.get("/tournaments-stats/summary");
+    return data;
+};
+export const fetchGrantRates = async (params = {}) => {
+    const { data } = await api.get("/grant-scheme/rates", { params });
+    return data;
+};
+export const upsertGrantRate = async (rate) => {
+    const { data } = await api.post("/grant-scheme/rates", rate);
+    return data;
+};
+export const getTournamentPlan = async (tid) => {
+    const { data } = await api.get(`/tournaments/${tid}/plan`);
+    return data;
+};
+export const saveTournamentPlan = async (tid, plan) => {
+    const { data } = await api.post(`/tournaments/${tid}/plan`, plan);
+    return data;
+};
+export const previewAutoBudget = async (tid) => {
+    const { data } = await api.post(`/tournaments/${tid}/plan/preview-budget`);
+    return data;
+};
+export const submitTournamentPlan = async (tid, action) => {
+    const { data } = await api.post(`/tournaments/${tid}/plan/submit`, action);
+    return data;
+};
+export const approveTournamentPlan = async (tid, action) => {
+    const { data } = await api.post(`/tournaments/${tid}/plan/approve`, action);
+    return data;
+};
+export const returnTournamentPlan = async (tid, action) => {
+    const { data } = await api.post(`/tournaments/${tid}/plan/return`, action);
+    return data;
+};
+export const rebuildDAForms = async (tid) => {
+    const { data } = await api.post(`/tournaments/${tid}/da-forms/rebuild`);
+    return data;
+};
+export const fetchDAForms = async (params = {}) => {
+    const { data } = await api.get("/match-official-da", { params });
+    return data;
+};
+export const updateDAForm = async (did, patch) => {
+    const { data } = await api.patch(`/match-official-da/${did}`, patch);
+    return data;
+};
+export const submitDAForm = async (did) => {
+    const { data } = await api.post(`/match-official-da/${did}/submit`);
+    return data;
+};
+export const approveDAForm = async (did, params) => {
+    const { data } = await api.post(`/match-official-da/${did}/approve`, null, { params });
+    return data;
+};
+export const rejectDAForm = async (did, params) => {
+    const { data } = await api.post(`/match-official-da/${did}/reject`, null, { params });
+    return data;
+};
+export const aiExtractInvoice = async (file_url) => {
+    const { data } = await api.post("/tournament-invoices/ai-extract", null, { params: { file_url } });
+    return data;
+};
+export const fetchTournamentInvoices = async (params = {}) => {
+    const { data } = await api.get("/tournament-invoices", { params });
+    return data;
+};
+export const createTournamentInvoice = async (payload) => {
+    const { data } = await api.post("/tournament-invoices", payload);
+    return data;
+};
+export const updateTournamentInvoice = async (iid, patch) => {
+    const { data } = await api.patch(`/tournament-invoices/${iid}`, patch);
+    return data;
+};
+export const submitTournamentInvoice = async (iid) => {
+    const { data } = await api.post(`/tournament-invoices/${iid}/submit`);
+    return data;
+};
+export const approveTournamentInvoice = async (iid) => {
+    const { data } = await api.post(`/tournament-invoices/${iid}/approve`);
+    return data;
+};
+export const rejectTournamentInvoice = async (iid, reason) => {
+    const { data } = await api.post(`/tournament-invoices/${iid}/reject`, null, { params: { reason } });
+    return data;
+};
+export const fetchBudgetTracker = async (bid) => {
+    const { data } = await api.get(`/tournament-budgets/${bid}/tracker`);
     return data;
 };
 

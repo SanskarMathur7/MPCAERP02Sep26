@@ -1,0 +1,491 @@
+"""Routes · Phase T1-T4 — Tournament Plan, Grant Scheme, Auto-Budget, Match Official DA."""
+from datetime import datetime, timezone
+from typing import List, Optional
+from fastapi import HTTPException
+
+from core.infra import db, api_router
+from core.helpers import _create_notification
+from models import (
+    Tournament, TournamentPlan, TournamentPlanAction, TournamentPlanStatus,
+    GrantSchemeRate, RateCardUnit,
+    TournamentBudget, BudgetHeadAllocation, ApprovalStep,
+    MatchOfficialDA, MatchOfficialDAUpdate, DAStatus,
+)
+
+
+# ═══════════════════ Grant Scheme Rate Card ═══════════════════
+
+
+@api_router.get("/grant-scheme/rates", response_model=List[GrantSchemeRate])
+async def list_grant_rates(fiscal_cycle: Optional[str] = None, active_only: bool = True):
+    q: dict = {}
+    if fiscal_cycle:
+        q["fiscal_cycle"] = fiscal_cycle
+    if active_only:
+        q["is_active"] = True
+    docs = await db.grant_scheme_rates.find(q, {"_id": 0}).sort("head_code", 1).to_list(200)
+    return docs
+
+
+@api_router.post("/grant-scheme/rates", response_model=GrantSchemeRate)
+async def upsert_grant_rate(rate: GrantSchemeRate):
+    """Create or update a rate card row (MPCA only). Uniqueness on head_code+fiscal_cycle."""
+    existing = await db.grant_scheme_rates.find_one({
+        "head_code": rate.head_code, "fiscal_cycle": rate.fiscal_cycle,
+    }, {"_id": 0})
+    payload = rate.model_dump()
+    payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    if existing:
+        await db.grant_scheme_rates.update_one({"id": existing["id"]}, {"$set": payload})
+        return await db.grant_scheme_rates.find_one({"id": existing["id"]}, {"_id": 0})
+    await db.grant_scheme_rates.insert_one(payload)
+    return payload
+
+
+@api_router.delete("/grant-scheme/rates/{rid}")
+async def delete_grant_rate(rid: str):
+    r = await db.grant_scheme_rates.delete_one({"id": rid})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Rate not found")
+    return {"ok": True}
+
+
+# ═══════════════════ Auto-Budget Generator ═══════════════════
+
+
+async def _compute_auto_budget(plan: TournamentPlan, fiscal_cycle: str) -> tuple[List[BudgetHeadAllocation], float, dict]:
+    """Return (head_allocations, total, breakdown_log)."""
+    rates = await db.grant_scheme_rates.find({"is_active": True, "fiscal_cycle": fiscal_cycle}, {"_id": 0}).to_list(200)
+    heads: List[BudgetHeadAllocation] = []
+    log: dict = {"lines": [], "notes": []}
+    subtotal = 0.0
+    for r in rates:
+        code = r["head_code"]
+        rate = float(r["rate_inr"] or 0)
+        unit = r["unit"]
+        qty = 0.0
+        if unit == "per_official_per_day":
+            qty = plan.num_match_officials * plan.days
+        elif unit == "per_official_per_match":
+            qty = plan.num_match_officials * max(plan.match_days, 1)
+        elif unit == "per_official_lump":
+            qty = plan.num_match_officials
+        elif unit == "per_player_per_day":
+            qty = plan.num_teams * plan.num_players_per_team * plan.days
+        elif unit == "per_player_lump":
+            qty = plan.num_teams * plan.num_players_per_team
+        elif unit == "per_player_per_match":
+            qty = plan.num_teams * plan.num_players_per_team * max(plan.match_days, 1)
+        elif unit == "per_match_day":
+            qty = max(plan.match_days, plan.days)
+        elif unit == "per_day":
+            qty = plan.days
+        elif unit == "percent_of_subtotal":
+            continue  # handled after subtotal
+        if qty <= 0:
+            continue
+        amount = round(qty * rate, 2)
+        subtotal += amount
+        heads.append(BudgetHeadAllocation(head=r["head_label"], limit_inr=amount, spent_inr=0.0))
+        log["lines"].append({"head": r["head_label"], "code": code, "qty": qty, "rate": rate, "amount": amount, "unit": unit})
+
+    # Now apply any percent_of_subtotal (contingency)
+    for r in rates:
+        if r["unit"] != "percent_of_subtotal":
+            continue
+        pct = float(r["rate_inr"] or 0)
+        amount = round(subtotal * pct / 100.0, 2)
+        if amount <= 0:
+            continue
+        subtotal += amount
+        heads.append(BudgetHeadAllocation(head=r["head_label"], limit_inr=amount, spent_inr=0.0))
+        log["lines"].append({"head": r["head_label"], "code": r["head_code"], "qty": 1, "rate": pct, "amount": amount, "unit": "percent_of_subtotal"})
+
+    if not heads:
+        log["notes"].append("No active grant-scheme rates matched the plan quantities.")
+    return heads, round(subtotal, 2), log
+
+
+async def _next_tb_no(cycle: str) -> str:
+    count = await db.tournament_budgets.count_documents({"fiscal_cycle": cycle})
+    return f"TB-{cycle}-{count + 1:03d}"
+
+
+# ═══════════════════ Tournament Plan Workflow ═══════════════════
+
+
+@api_router.get("/tournaments/{tid}/plan")
+async def get_tournament_plan(tid: str):
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    return {
+        "plan": t.get("plan"),
+        "plan_status": t.get("plan_status") or "Draft",
+        "plan_approval_chain": t.get("plan_approval_chain") or [],
+        "auto_budget_id": t.get("auto_budget_id"),
+    }
+
+
+@api_router.post("/tournaments/{tid}/plan", response_model=Tournament)
+async def upsert_tournament_plan(tid: str, plan: TournamentPlan):
+    """Division saves/updates the tournament plan while in Draft or Returned status."""
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    curr_status = t.get("plan_status") or "Draft"
+    if curr_status not in ("Draft", "Plan_Returned"):
+        raise HTTPException(409, f"Plan is locked ({curr_status}). MPCA must return it before edits.")
+    await db.tournaments.update_one(
+        {"id": tid},
+        {"$set": {"plan": plan.model_dump(), "plan_status": curr_status}},
+    )
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+
+@api_router.post("/tournaments/{tid}/plan/preview-budget")
+async def preview_auto_budget(tid: str):
+    """Compute a preview of the auto-budget without saving. Division uses this to sanity-check."""
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    plan_dict = t.get("plan")
+    if not plan_dict:
+        raise HTTPException(400, "Plan not yet set. POST /tournaments/{id}/plan first.")
+    plan = TournamentPlan(**plan_dict)
+    heads, total, log = await _compute_auto_budget(plan, t.get("fiscal_cycle") or "2025-26")
+    return {
+        "heads": [h.model_dump() for h in heads],
+        "total_inr": total,
+        "breakdown": log,
+    }
+
+
+@api_router.post("/tournaments/{tid}/plan/submit", response_model=Tournament)
+async def submit_tournament_plan(tid: str, action: TournamentPlanAction):
+    """Division submits plan → auto-generates TournamentBudget → status Plan_Submitted."""
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    curr = t.get("plan_status") or "Draft"
+    if curr not in ("Draft", "Plan_Returned"):
+        raise HTTPException(409, f"Cannot submit from status {curr}.")
+    plan_dict = t.get("plan")
+    if not plan_dict:
+        raise HTTPException(400, "Plan not set. POST /tournaments/{id}/plan first.")
+    plan = TournamentPlan(**plan_dict)
+    if plan.days <= 0 or plan.num_teams <= 0 or plan.num_match_officials < 0:
+        raise HTTPException(422, "Plan must include days > 0, num_teams > 0, non-negative num_match_officials.")
+
+    # Auto-generate budget
+    heads, total, log = await _compute_auto_budget(plan, t.get("fiscal_cycle") or "2025-26")
+    if not heads:
+        raise HTTPException(422, "Auto-budget computed zero heads — please configure the Grant Scheme rate card.")
+
+    body_id = action.actor_body_id
+    body = await db.bodies.find_one({"code": body_id}, {"_id": 0})
+
+    budget_no = await _next_tb_no(t.get("fiscal_cycle") or "2025-26")
+    tb = TournamentBudget(
+        budget_no=budget_no,
+        tournament_id=tid,
+        tournament_name=t.get("name"),
+        body_id=body_id,
+        body_name=(body or {}).get("name", body_id),
+        fiscal_cycle=t.get("fiscal_cycle") or "2025-26",
+        head_allocations=heads,
+        total_ceiling_inr=total,
+        status="Submitted",
+        notes=f"Auto-generated from Tournament Plan · {plan.days}d · {plan.num_teams} teams · {plan.num_match_officials} officials",
+    )
+    tb.approval_chain = [ApprovalStep(
+        stage="Auto_Generated", actor_post=action.actor_post or "Division Secretary",
+        actor_name=action.actor_name, actor_body_id=action.actor_body_id,
+        decision="Submitted", notes="Auto-generated from Grant Scheme rate card",
+    )]
+    await db.tournament_budgets.insert_one(tb.model_dump())
+
+    # Update tournament
+    step = ApprovalStep(
+        stage="Plan_Submitted", actor_post=action.actor_post, actor_name=action.actor_name,
+        actor_body_id=action.actor_body_id, decision="Submitted", notes=action.notes,
+    )
+    chain = (t.get("plan_approval_chain") or []) + [step.model_dump()]
+    await db.tournaments.update_one({"id": tid}, {"$set": {
+        "plan_status": "Plan_Submitted",
+        "plan_approval_chain": chain,
+        "auto_budget_id": tb.id,
+    }})
+
+    await _create_notification(
+        recipient_role_id="secretary", recipient_body_id="MPCA",
+        title=f"Tournament plan submitted · {t.get('name')}",
+        message=f"{plan.days}d · {plan.num_teams} teams · budget ₹{total:,.0f} · from {action.actor_name}",
+        link=f"/tournaments/{tid}", related_type="tournament", related_id=tid,
+        severity="info", kind="info",
+    )
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+
+@api_router.post("/tournaments/{tid}/plan/approve", response_model=Tournament)
+async def approve_tournament_plan(tid: str, action: TournamentPlanAction):
+    """MPCA approves the plan + budget → tournament status becomes Ready (Upcoming)."""
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    if (t.get("plan_status") or "Draft") != "Plan_Submitted":
+        raise HTTPException(409, f"Plan must be Plan_Submitted to approve (got {t.get('plan_status')}).")
+
+    step = ApprovalStep(
+        stage="Plan_Approved", actor_post=action.actor_post or "Hon. Secretary",
+        actor_name=action.actor_name, actor_body_id=action.actor_body_id or "MPCA",
+        decision="Sanctioned", notes=action.notes,
+    )
+    chain = (t.get("plan_approval_chain") or []) + [step.model_dump()]
+    await db.tournaments.update_one({"id": tid}, {"$set": {
+        "plan_status": "Plan_Approved",
+        "plan_approval_chain": chain,
+        "status": "Upcoming",   # ready to start
+    }})
+
+    # Auto-approve the linked budget too
+    if t.get("auto_budget_id"):
+        tb_step = ApprovalStep(
+            stage="Approved", actor_post=action.actor_post or "Hon. Secretary",
+            actor_name=action.actor_name, actor_body_id=action.actor_body_id or "MPCA",
+            decision="Sanctioned", notes=f"Auto-approved with plan: {action.notes or ''}",
+        )
+        tb = await db.tournament_budgets.find_one({"id": t["auto_budget_id"]}, {"_id": 0})
+        if tb:
+            tb_chain = (tb.get("approval_chain") or []) + [tb_step.model_dump()]
+            await db.tournament_budgets.update_one(
+                {"id": tb["id"]},
+                {"$set": {
+                    "status": "Approved",
+                    "approval_chain": tb_chain,
+                    "approved_total_inr": tb["total_ceiling_inr"],
+                    "approved_head_allocations": tb["head_allocations"],
+                }},
+            )
+
+    # Pre-build DA forms from proposed_official_ids (or from fixtures.officials)
+    await _prebuild_da_forms(t)
+
+    updated = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+    # Notify the originating division
+    body_id = (t.get("plan_approval_chain") or [{}])[0].get("actor_body_id") or "MPCA"
+    await _create_notification(
+        recipient_role_id="division-secretary", recipient_body_id=body_id,
+        title=f"Tournament plan APPROVED · {t.get('name')}",
+        message=f"Plan approved by {action.actor_name}. DA forms pre-built.",
+        link=f"/tournaments/{tid}", related_type="tournament", related_id=tid,
+        severity="info", kind="info",
+    )
+    return updated
+
+
+@api_router.post("/tournaments/{tid}/plan/return", response_model=Tournament)
+async def return_tournament_plan(tid: str, action: TournamentPlanAction):
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    if (t.get("plan_status") or "Draft") != "Plan_Submitted":
+        raise HTTPException(409, "Only submitted plans can be returned.")
+    if not action.notes:
+        raise HTTPException(400, "Return reason required in notes.")
+    step = ApprovalStep(
+        stage="Plan_Returned", actor_post=action.actor_post, actor_name=action.actor_name,
+        actor_body_id=action.actor_body_id or "MPCA", decision="Returned", notes=action.notes,
+    )
+    chain = (t.get("plan_approval_chain") or []) + [step.model_dump()]
+    await db.tournaments.update_one({"id": tid}, {"$set": {
+        "plan_status": "Plan_Returned",
+        "plan_approval_chain": chain,
+    }})
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+
+@api_router.post("/tournaments/{tid}/plan/reject", response_model=Tournament)
+async def reject_tournament_plan(tid: str, action: TournamentPlanAction):
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    if (t.get("plan_status") or "Draft") not in ("Plan_Submitted", "Plan_Returned"):
+        raise HTTPException(409, "Cannot reject from current status.")
+    step = ApprovalStep(
+        stage="Plan_Rejected", actor_post=action.actor_post, actor_name=action.actor_name,
+        actor_body_id=action.actor_body_id or "MPCA", decision="Rejected", notes=action.notes,
+    )
+    chain = (t.get("plan_approval_chain") or []) + [step.model_dump()]
+    await db.tournaments.update_one({"id": tid}, {"$set": {
+        "plan_status": "Plan_Rejected",
+        "plan_approval_chain": chain,
+    }})
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+
+# ═══════════════════ Match Official DA Forms ═══════════════════
+
+
+async def _next_da_ref(cycle: str) -> str:
+    count = await db.match_official_da.count_documents({"da_ref": {"$regex": f"^DA-{cycle}-"}})
+    return f"DA-{cycle}-{count + 1:04d}"
+
+
+async def _prebuild_da_forms(tournament: dict) -> int:
+    """Pre-build one DA form per allocated official across all fixtures of this tournament.
+    Returns number of forms created.
+    """
+    tid = tournament["id"]
+    cycle = tournament.get("fiscal_cycle") or "2025-26"
+    # Collect unique (name, role) across fixtures
+    fixtures = await db.fixtures.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
+    seen: dict = {}
+    for fx in fixtures:
+        for o in (fx.get("officials") or []):
+            key = (o.get("name") or "", o.get("role") or "")
+            if key in seen:
+                seen[key]["fixture_ids"].append(fx["id"])
+                seen[key]["days"] += float(fx.get("days") or 1)
+            else:
+                seen[key] = {"official": o, "fixture_ids": [fx["id"]], "days": float(fx.get("days") or 1)}
+
+    # Look up DA rate from grant scheme
+    da_rate_row = await db.grant_scheme_rates.find_one({
+        "head_code": "MATCH_OFFICIAL_DA", "is_active": True, "fiscal_cycle": cycle,
+    }, {"_id": 0})
+    da_rate = float((da_rate_row or {}).get("rate_inr") or 0)
+    created = 0
+    for (name, role), meta in seen.items():
+        if not name:
+            continue
+        # Skip if already exists
+        exists = await db.match_official_da.find_one({
+            "tournament_id": tid, "official_name": name, "official_role": role,
+        })
+        if exists:
+            continue
+        days = int(meta["days"] or 1)
+        o = meta["official"]
+        da = MatchOfficialDA(
+            da_ref=await _next_da_ref(cycle),
+            tournament_id=tid,
+            tournament_name=tournament.get("name"),
+            official_name=name,
+            official_role=role,
+            official_phone=o.get("phone"),
+            body_id=o.get("body_id"),
+            days=days,
+            da_rate_inr=da_rate,
+            da_amount_inr=round(days * da_rate, 2),
+            total_inr=round(days * da_rate, 2),
+        )
+        await db.match_official_da.insert_one(da.model_dump())
+        created += 1
+    return created
+
+
+@api_router.get("/match-official-da", response_model=List[MatchOfficialDA])
+async def list_da_forms(tournament_id: Optional[str] = None, status: Optional[DAStatus] = None, official_name: Optional[str] = None):
+    q: dict = {}
+    if tournament_id:
+        q["tournament_id"] = tournament_id
+    if status:
+        q["status"] = status
+    if official_name:
+        q["official_name"] = {"$regex": official_name, "$options": "i"}
+    docs = await db.match_official_da.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@api_router.get("/match-official-da/{did}", response_model=MatchOfficialDA)
+async def get_da_form(did: str):
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    return doc
+
+
+@api_router.patch("/match-official-da/{did}", response_model=MatchOfficialDA)
+async def update_da_form(did: str, patch: MatchOfficialDAUpdate):
+    """Match official fills their DA form."""
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    if doc["status"] not in ("Draft", "Rejected"):
+        raise HTTPException(409, f"Cannot edit DA in status {doc['status']}")
+    p = patch.model_dump(exclude_none=True)
+    # Re-compute totals
+    days = int(p.get("days", doc.get("days") or 0))
+    da_rate = float(doc.get("da_rate_inr") or 0)
+    da_amt = round(days * da_rate, 2)
+    travel = float(p.get("travel_amount_inr", doc.get("travel_amount_inr") or 0))
+    food = float(p.get("food_amount_inr", doc.get("food_amount_inr") or 0))
+    misc = float(p.get("misc_amount_inr", doc.get("misc_amount_inr") or 0))
+    total = round(da_amt + travel + food + misc, 2)
+    p["da_amount_inr"] = da_amt
+    p["total_inr"] = total
+    p["status"] = "Draft" if doc["status"] == "Rejected" else doc["status"]
+    await db.match_official_da.update_one({"id": did}, {"$set": p})
+    return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+@api_router.post("/match-official-da/{did}/submit", response_model=MatchOfficialDA)
+async def submit_da_form(did: str):
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    if doc["status"] not in ("Draft", "Rejected"):
+        raise HTTPException(409, f"Cannot submit from status {doc['status']}")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.match_official_da.update_one({"id": did}, {"$set": {
+        "status": "Submitted", "submitted_at": now,
+    }})
+    # Notify Division for approval
+    await _create_notification(
+        recipient_role_id="division-secretary", recipient_body_id=doc.get("body_id") or "MPCA",
+        title=f"DA form submitted · {doc.get('official_name')}",
+        message=f"{doc.get('tournament_name')} · ₹{doc.get('total_inr'):,.0f}",
+        link="/tournaments", related_type="match_official_da", related_id=did,
+        severity="info", kind="info",
+    )
+    return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+@api_router.post("/match-official-da/{did}/approve", response_model=MatchOfficialDA)
+async def approve_da_form(did: str, actor_name: str, actor_body_id: str = "MPCA"):
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    if doc["status"] != "Submitted":
+        raise HTTPException(409, "Only submitted DA forms can be approved.")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.match_official_da.update_one({"id": did}, {"$set": {
+        "status": "Approved", "approved_by": actor_name, "approved_at": now,
+    }})
+    return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+@api_router.post("/match-official-da/{did}/reject", response_model=MatchOfficialDA)
+async def reject_da_form(did: str, actor_name: str, reason: str, actor_body_id: str = "MPCA"):
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    if doc["status"] != "Submitted":
+        raise HTTPException(409, "Only submitted DA forms can be rejected.")
+    await db.match_official_da.update_one({"id": did}, {"$set": {
+        "status": "Rejected", "rejection_reason": reason,
+        "approved_by": actor_name,
+    }})
+    return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+@api_router.post("/tournaments/{tid}/da-forms/rebuild")
+async def rebuild_da_forms(tid: str):
+    """Regenerate any missing DA forms (e.g. after adding new fixture officials)."""
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    created = await _prebuild_da_forms(t)
+    return {"created": created}

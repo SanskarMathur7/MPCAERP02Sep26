@@ -902,6 +902,36 @@ async def seed_data():
     await seed_tournament_budgets()
     await seed_venues_grounds()
     await seed_selection_funnels()
+    await seed_grant_scheme_rates()
+
+
+async def seed_grant_scheme_rates():
+    """Seed placeholder Grant Scheme rates. MPCA can edit these anytime."""
+    if await db.grant_scheme_rates.count_documents({}) > 0:
+        return
+    logger.info("Seeding Grant Scheme rate card (placeholders — edit in ERP)…")
+    from models import GrantSchemeRate
+    rates = [
+        ("MATCH_OFFICIAL_DA",       "Match Official DA",         "per_official_per_day",   2500.0),
+        ("MATCH_OFFICIAL_TRAVEL",   "Match Official Travel",     "per_official_lump",      1500.0),
+        ("PLAYER_DA_FOOD",          "Player DA / Food",          "per_player_per_day",     800.0),
+        ("PLAYER_TRAVEL",           "Player Travel",             "per_player_lump",        2000.0),
+        ("PLAYER_STAY",             "Player Stay (Hotel)",       "per_player_per_day",     1200.0),
+        ("GROUND_FEES",             "Ground Fees",               "per_match_day",          15000.0),
+        ("KIT_CONSUMABLES",         "Balls / Kit Consumables",   "per_match_day",          8000.0),
+        ("UMPIRE_HONORARIUM",       "Umpire Honorarium",         "per_official_per_match", 3000.0),
+        ("SCORER_HONORARIUM",       "Scorer Honorarium",         "per_official_per_match", 1500.0),
+        ("PHYSIO_HONORARIUM",       "Physio Honorarium",         "per_day",                2000.0),
+        ("CONTINGENCY",             "Contingency",               "percent_of_subtotal",    10.0),
+    ]
+    for code, label, unit, rate in rates:
+        gsr = GrantSchemeRate(
+            head_code=code, head_label=label, unit=unit, rate_inr=rate,
+            fiscal_cycle="2025-26",
+            notes="Seeded placeholder — MPCA must set actual rates.",
+        )
+        await db.grant_scheme_rates.insert_one(gsr.model_dump())
+    logger.info(f"Seeded {len(rates)} grant-scheme rate rows.")
 
 
 SEED_VENDORS = [

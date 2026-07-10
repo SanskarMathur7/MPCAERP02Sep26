@@ -9,6 +9,7 @@ import {
     Trophy, Calendar, MapPin, Users, ChevronLeft, Plus, X, ShieldCheck, AlertTriangle, Crown, BadgeCheck,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
+import TournamentOps from "@/pages/TournamentOps";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
@@ -221,6 +222,9 @@ const TournamentDetail = () => {
                     ))}
                 </div>
             )}
+
+            {/* Phase T1-T4 · Tournament Operations */}
+            <TournamentOps tournament={t} persona={persona} onChanged={load} />
 
             {/* New squad dialog */}
             {newSquad.open && (

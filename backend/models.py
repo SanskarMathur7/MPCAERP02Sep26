@@ -800,6 +800,11 @@ class Tournament(TournamentBase):
     status: TournamentStatus = "Upcoming"
     # M2-A: approval trail
     approval_chain: List[ApprovalStep] = []
+    # T1: Tournament Plan (Division submits for MPCA approval)
+    plan: Optional["TournamentPlan"] = None
+    plan_status: "TournamentPlanStatus" = "Draft"
+    plan_approval_chain: List[ApprovalStep] = []
+    auto_budget_id: Optional[str] = None         # linked TournamentBudget auto-generated
     created_by: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -983,8 +988,15 @@ class VendorBillAction(BaseModel):
 # All Phase-B claims will match against this approved budget envelope.
 
 BudgetHead = Literal[
+    # Legacy heads (Phase A)
     "Travel", "Hotel", "Road_BLP_Lunch_Rain", "TA_DA",
     "Match_Officials", "Equipment", "Ground_Expenses", "Miscellaneous",
+    # Phase T2 · Grant Scheme heads (map 1:1 to head_code of GrantSchemeRate)
+    "Match Official DA", "Match Official Travel",
+    "Player DA / Food", "Player Travel", "Player Stay (Hotel)",
+    "Ground Fees", "Balls / Kit Consumables",
+    "Umpire Honorarium", "Scorer Honorarium", "Physio Honorarium",
+    "Contingency",
 ]
 
 TournamentBudgetStatus = Literal[
@@ -1417,3 +1429,164 @@ class MatchResult(MatchResultBase):
 
 class MatchResultCreate(MatchResultBase):
     entered_by: Optional[str] = None
+
+
+# ---------------- Phase T1-T4 · Tournament Lifecycle (Feb 2026) ----------------
+# Full flow: Plan Submission → Auto Budget → MPCA Approval → AI Invoice Entry
+# → Match-Official DA → Grant Eligibility Tracking.
+
+TournamentPlanStatus = Literal["Draft", "Plan_Submitted", "Plan_Approved", "Plan_Returned", "Plan_Rejected"]
+RateCardUnit = Literal[
+    "per_official_per_day", "per_official_per_match", "per_official_lump",
+    "per_player_per_day", "per_player_lump", "per_player_per_match",
+    "per_match_day", "per_day",
+    "percent_of_subtotal",
+]
+
+
+class GrantSchemeRate(BaseModel):
+    """Editable rate card master used to auto-generate tournament budgets."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    head_code: str                              # unique key e.g. "MATCH_OFFICIAL_DA"
+    head_label: str                             # display "Match Official DA"
+    unit: RateCardUnit
+    rate_inr: float
+    fiscal_cycle: str = "2025-26"
+    is_active: bool = True
+    notes: Optional[str] = None
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class TournamentPlan(BaseModel):
+    """Embedded on Tournament — submitted by Division for MPCA approval."""
+    model_config = ConfigDict(extra="ignore")
+    days: int = 0                                # total tournament days
+    tournament_type_note: Optional[str] = None   # "4-Day Multi-Day", etc.
+    num_teams: int = 0
+    num_players_per_team: int = 18
+    num_match_officials: int = 0                 # umpires + scorers + physio + referee
+    num_umpires: int = 0
+    num_scorers: int = 0
+    match_days: int = 0                          # actual playing days across all matches
+    venue_place: Optional[str] = None            # city / place
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
+    proposed_squad_ids: List[str] = []           # snapshot of selected player ids
+    proposed_official_ids: List[str] = []        # match_official allocations
+    remarks: Optional[str] = None
+
+
+class TournamentPlanAction(BaseModel):
+    """Actor payload for plan submit/approve/return/reject."""
+    model_config = ConfigDict(extra="ignore")
+    actor_name: str
+    actor_body_id: str
+    actor_post: Optional[str] = None
+    notes: Optional[str] = None
+    revised_days: Optional[int] = None           # MPCA may cut days
+    revised_num_officials: Optional[int] = None
+
+
+# ---------- Tournament Invoice (Phase T3) ----------
+TournamentInvoiceStatus = Literal["Draft", "Submitted", "Approved", "Rejected"]
+
+
+class AIInvoiceExtraction(BaseModel):
+    """Full AI extraction output stored for audit."""
+    model_config = ConfigDict(extra="ignore")
+    vendor_name: Optional[str] = None
+    invoice_no: Optional[str] = None
+    invoice_date: Optional[str] = None
+    amount_inr: Optional[float] = None
+    gst_inr: Optional[float] = None
+    total_inr: Optional[float] = None
+    suggested_head_code: Optional[str] = None
+    line_items: List[dict] = []
+    confidence: float = 0.0
+    raw: Optional[str] = None                    # AI raw response
+    error: Optional[str] = None
+
+
+class TournamentInvoiceBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    tournament_id: str
+    body_id: str                                 # spending body (usually a Division)
+    budget_id: Optional[str] = None              # linked TournamentBudget
+    budget_head_code: Optional[str] = None       # head from GrantSchemeRate
+    vendor_name: Optional[str] = None
+    invoice_no: Optional[str] = None
+    invoice_date: Optional[str] = None
+    amount_inr: float = 0.0
+    gst_inr: float = 0.0
+    total_inr: float = 0.0
+    file_url: Optional[str] = None               # /api/uploads/{id}
+    filename: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class TournamentInvoice(TournamentInvoiceBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    invoice_ref: str                             # "INV-2025-26-0001"
+    status: TournamentInvoiceStatus = "Draft"
+    ai_extraction: Optional[AIInvoiceExtraction] = None
+    ai_extracted: bool = False
+    manually_overridden: bool = False
+    over_budget_amount_inr: float = 0.0
+    eligible_for_grant_inr: float = 0.0
+    ineligible_for_grant_inr: float = 0.0
+    entered_by: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class TournamentInvoiceCreate(TournamentInvoiceBase):
+    entered_by: Optional[str] = None
+
+
+# ---------- Match Official DA (Phase T4) ----------
+DAStatus = Literal["Draft", "Submitted", "Approved", "Rejected", "Paid"]
+
+
+class MatchOfficialDA(BaseModel):
+    """Pre-built DA form per allocated official; official fills + submits."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    da_ref: str                                  # "DA-2025-26-0001"
+    tournament_id: str
+    tournament_name: Optional[str] = None
+    official_name: str
+    official_role: str                           # umpire/scorer/etc.
+    official_phone: Optional[str] = None
+    body_id: Optional[str] = None                # owning division/district
+    # Rate & days come pre-filled from Grant Scheme; official can edit hotel/food
+    days: int = 0
+    da_rate_inr: float = 0.0                     # per-day rate from rate card
+    da_amount_inr: float = 0.0                   # days × rate (auto)
+    travel_amount_inr: float = 0.0
+    food_amount_inr: float = 0.0
+    misc_amount_inr: float = 0.0
+    total_inr: float = 0.0                       # sum of all
+    bank_account_no: Optional[str] = None
+    bank_ifsc: Optional[str] = None
+    pan: Optional[str] = None
+    status: DAStatus = "Draft"
+    submitted_at: Optional[str] = None
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class MatchOfficialDAUpdate(BaseModel):
+    """Payload the official uses to fill their DA before submitting."""
+    model_config = ConfigDict(extra="ignore")
+    days: Optional[int] = None
+    travel_amount_inr: Optional[float] = None
+    food_amount_inr: Optional[float] = None
+    misc_amount_inr: Optional[float] = None
+    bank_account_no: Optional[str] = None
+    bank_ifsc: Optional[str] = None
+    pan: Optional[str] = None
+    notes: Optional[str] = None

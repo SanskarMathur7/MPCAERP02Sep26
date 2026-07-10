@@ -303,8 +303,40 @@ export const createPlayer = async (payload) => {
     const { data } = await api.post("/players", payload);
     return data;
 };
-export const approvePlayer = async (id) => {
-    const { data } = await api.post(`/players/${id}/approve`);
+export const updatePlayer = async (id, patch) => {
+    const { data } = await api.patch(`/players/${id}`, patch);
+    return data;
+};
+export const startPlayerReview = async (id, action) => {
+    const { data } = await api.post(`/players/${id}/start-review`, action);
+    return data;
+};
+export const raisePlayerDiscrepancy = async (id, action) => {
+    const { data } = await api.post(`/players/${id}/raise-discrepancy`, action);
+    return data;
+};
+export const resubmitPlayer = async (id, action) => {
+    const { data } = await api.post(`/players/${id}/resubmit`, action);
+    return data;
+};
+export const divisionApprovePlayer = async (id, action) => {
+    const { data } = await api.post(`/players/${id}/division-approve`, action);
+    return data;
+};
+export const approvePlayer = async (id, action) => {
+    const { data } = await api.post(`/players/${id}/approve`, action || {});
+    return data;
+};
+export const reopenPlayer = async (id, action) => {
+    const { data } = await api.post(`/players/${id}/reopen`, action);
+    return data;
+};
+export const addPlayerDocument = async (id, doc_type, url, filename) => {
+    const { data } = await api.post(`/players/${id}/documents`, null, { params: { doc_type, url, filename } });
+    return data;
+};
+export const verifyPlayerDocument = async (id, doc_type, action) => {
+    const { data } = await api.post(`/players/${id}/documents/${doc_type}/verify`, action);
     return data;
 };
 export const disqualifyPlayer = async (id, flag) => {
@@ -349,6 +381,18 @@ export const setTournamentStatus = async (id, status) => {
     const { data } = await api.post(`/tournaments/${id}/status/${status}`);
     return data;
 };
+export const submitTournamentForApproval = async (id, params) => {
+    const { data } = await api.post(`/tournaments/${id}/submit-for-approval`, null, { params });
+    return data;
+};
+export const approveTournament = async (id, params) => {
+    const { data } = await api.post(`/tournaments/${id}/approve`, null, { params });
+    return data;
+};
+export const rejectTournament = async (id, params) => {
+    const { data } = await api.post(`/tournaments/${id}/reject`, null, { params });
+    return data;
+};
 export const fetchSquads = async (tid) => {
     const { data } = await api.get(`/tournaments/${tid}/squads`);
     return data;
@@ -367,6 +411,65 @@ export const removePlayerFromSquad = async (squadId, playerId) => {
 };
 export const fetchTournamentStats = async () => {
     const { data } = await api.get("/tournaments-stats/summary");
+    return data;
+};
+
+
+// ---------- Phase M2-B/M2-C: Fixtures, Match Results, Rankings, HR ----------
+export const fetchFixtures = async (params = {}) => {
+    const { data } = await api.get("/fixtures", { params });
+    return data;
+};
+export const fetchFixture = async (id) => {
+    const { data } = await api.get(`/fixtures/${id}`);
+    return data;
+};
+export const createFixture = async (payload) => {
+    const { data } = await api.post("/fixtures", payload);
+    return data;
+};
+export const setFixtureStatus = async (id, status) => {
+    const { data } = await api.post(`/fixtures/${id}/status/${status}`);
+    return data;
+};
+export const allocateOfficial = async (id, payload) => {
+    const { data } = await api.post(`/fixtures/${id}/officials`, payload);
+    return data;
+};
+export const removeOfficial = async (fid, oid) => {
+    const { data } = await api.delete(`/fixtures/${fid}/officials/${oid}`);
+    return data;
+};
+export const logWorkHours = async (id, params) => {
+    const { data } = await api.post(`/fixtures/${id}/log-hours`, null, { params });
+    return data;
+};
+export const fetchFixtureStats = async (params = {}) => {
+    const { data } = await api.get("/fixtures-stats/summary", { params });
+    return data;
+};
+export const createMatchResult = async (payload) => {
+    const { data } = await api.post("/match-results", payload);
+    return data;
+};
+export const fetchMatchResults = async (params = {}) => {
+    const { data } = await api.get("/match-results", { params });
+    return data;
+};
+export const fetchBattingRankings = async (params = {}) => {
+    const { data } = await api.get("/rankings/batting", { params });
+    return data;
+};
+export const fetchBowlingRankings = async (params = {}) => {
+    const { data } = await api.get("/rankings/bowling", { params });
+    return data;
+};
+export const fetchSpecialPerformances = async (params = {}) => {
+    const { data } = await api.get("/rankings/special-performances", { params });
+    return data;
+};
+export const fetchHRWorkHours = async (params = {}) => {
+    const { data } = await api.get("/hr-allocations/work-hours", { params });
     return data;
 };
 

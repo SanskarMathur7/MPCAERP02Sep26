@@ -434,10 +434,42 @@ async def _next_pr_no(cycle: str) -> str:
 
 # ---- player helpers ----
 async def _next_player_id() -> str:
-    """Format: MPCA/YYYY/SERIAL (6-digit, zero-padded)."""
+    """Format: MPCA/YYYY/SERIAL (6-digit, zero-padded). Legacy internal id."""
     year = datetime.now(timezone.utc).year
     count = await db.players.count_documents({"player_id": {"$regex": f"^MPCA/{year}/"}})
     return f"MPCA/{year}/{count + 1:06d}"
+
+
+def _new_player_display_id(dob_iso: str, first_reg_year: int, serial: int) -> str:
+    """M1-A player display id — YYYY/DD-MM-YY/SERIAL.
+    YYYY = year of first registration.
+    DD-MM-YY = date-of-birth in dd-mm-yy.
+    SERIAL = zero-padded 4-digit sequence.
+    """
+    try:
+        d = datetime.strptime(dob_iso, "%Y-%m-%d")
+        dob_slug = d.strftime("%d-%m-%y")
+    except Exception:
+        dob_slug = "00-00-00"
+    return f"{first_reg_year}/{dob_slug}/{serial:04d}"
+
+
+async def _next_player_display_serial(first_reg_year: int) -> int:
+    """Serial counter within a first-registration year."""
+    count = await db.players.count_documents({"first_registration_year": first_reg_year})
+    return count + 1
+
+
+def _derive_division_folder(body_id: str) -> Optional[str]:
+    """DIST-XXX-YYY  ⇒  DIV-YYY.  For a DIV-YYY already, returns as-is."""
+    if not body_id:
+        return None
+    if body_id.startswith("DIV-"):
+        return body_id
+    if body_id.startswith("DIST-"):
+        # last 3 chars after final dash → DIV code
+        return f"DIV-{body_id.split('-')[-1]}"
+    return None
 
 
 def _age_years(dob: str) -> int:
@@ -463,6 +495,18 @@ def _validate_eligibility(p: PlayerCreate) -> tuple[bool, List[str]]:
     if age > 60:
         notes.append("Above 60 — registration permitted for veterans/coaches stream only.")
 
+    # Residency window (M1-B): 3 months if MP-local, 1 year if out-of-MP.
+    if getattr(p, "residency_since", None):
+        try:
+            since = datetime.strptime(p.residency_since, "%Y-%m-%d")
+            days = (datetime.now(timezone.utc) - since.replace(tzinfo=timezone.utc)).days
+            required = 90 if (p.domicile_state or "").lower() == "madhya pradesh" else 365
+            notes.append(f"Residency since {p.residency_since} → {days} days (min {required} required).")
+            if days < required:
+                notes.append(f"⚠ Residency below minimum ({days}/{required} days).")
+        except Exception:
+            notes.append("⚠ residency_since could not be parsed.")
+
     # Category-specific
     if p.category == "Local_MP":
         if p.domicile_state and p.domicile_state.lower() != "madhya pradesh":
@@ -481,7 +525,17 @@ def _validate_eligibility(p: PlayerCreate) -> tuple[bool, List[str]]:
                 "Guest players require TW3 maturity verification (Plan §Player Rules). "
                 "Set tw3_verified=true once the panel has cleared the player."
             ]
-        notes.append("Guest — eligible only for guest-permitting tournaments; per-tournament cap applies.")
+        # M1-C: enforce guest_subtype + disclosure
+        sub = getattr(p, "guest_subtype", None)
+        if not sub:
+            return False, notes + ["Guest category requires guest_subtype (Education / MP_Domicile_Junior / MP_Domicile_Senior / Out_Of_MP_Senior)."]
+        if not getattr(p, "guest_disclosure_signed", False):
+            return False, notes + ["Guest disclosure form must be signed before registration is accepted."]
+        notes.append(f"Guest ({sub}) — eligible only for guest-permitting tournaments; team quota applies.")
+
+    # M1-A: court order flag — advisory only
+    if getattr(p, "court_order_flag", False):
+        notes.append(f"⚑ Court-order participation flag set (ref: {p.court_order_ref or '—'}).")
 
     # Identity essentials
     if not p.contact_phone and not p.guardian_phone:
@@ -505,8 +559,19 @@ async def _next_tournament_no(cycle: str) -> str:
 
 
 # ---- _check_player_against_tournament ----
-def _check_player_against_tournament(player: dict, t: dict) -> tuple[bool, List[str]]:
-    """Returns (ok, [warnings])."""
+# M1-C guest quotas per squad:
+GUEST_QUOTA_PER_SQUAD = {
+    "Education":              {"junior": 1, "senior": 1, "total": 1},
+    "MP_Domicile_Junior":     {"junior": 3, "senior": 0, "total": 3},
+    "MP_Domicile_Senior":     {"junior": 0, "senior": 2, "total": 2},
+    "Out_Of_MP_Senior":       {"junior": 0, "senior": 1, "total": 1},
+}
+
+
+def _check_player_against_tournament(player: dict, t: dict, existing_squad_members: Optional[List[dict]] = None) -> tuple[bool, List[str]]:
+    """Returns (ok, [warnings]).
+    If `existing_squad_members` is provided, M1-C guest sub-type quotas are enforced.
+    """
     warnings: List[str] = []
     age = _age_years(player.get("date_of_birth") or "")
     if t.get("age_cap_years") and age > t["age_cap_years"]:
@@ -517,8 +582,25 @@ def _check_player_against_tournament(player: dict, t: dict) -> tuple[bool, List[
         return False, [f"Tournament '{t['name']}' does not permit Guest-category players."]
     if player.get("status") in ("Suspended", "Banned"):
         return False, [f"Player is currently {player['status']} and cannot be selected."]
-    if player.get("status") == "Pending":
-        warnings.append("Player registration is still Pending — should be approved before tournament.")
+    if player.get("status") in ("Pending", "Under_Division_Review", "Discrepancy_Raised"):
+        warnings.append(f"Player status is {player['status']} — should be Division/MPCA approved before match.")
+
+    # M1-C · Guest sub-type team quotas
+    if player.get("category") == "Guest" and existing_squad_members is not None:
+        sub = player.get("guest_subtype")
+        if not sub:
+            return False, ["Guest player is missing guest_subtype — cannot enforce quota."]
+        # count existing guests already in squad by sub-type
+        already = [m for m in existing_squad_members if m.get("guest_subtype") == sub]
+        quota = GUEST_QUOTA_PER_SQUAD.get(sub, {}).get("total", 0)
+        if len(already) >= quota:
+            return False, [f"Guest quota exceeded for '{sub}' — max {quota} per squad."]
     return True, warnings
+
+
+# ---- fixture helpers ----
+async def _next_fixture_no(cycle: str) -> str:
+    count = await db.fixtures.count_documents({})
+    return f"FX-{cycle}-{count + 1:04d}"
 
 

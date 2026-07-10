@@ -10,10 +10,26 @@ import CricketLoader from "@/components/CricketLoader";
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
 const FORMAT_META = {
-    Multi_Day:  { label: "Multi-Day",  tone: "active" },
-    One_Day:    { label: "One-Day",    tone: "pending" },
-    T20:        { label: "T20",        tone: "saffron" },
-    Pink_Ball:  { label: "Pink-Ball",  tone: "maroon" },
+    Multi_Day:      { label: "Multi-Day",  tone: "active" },
+    One_Day:        { label: "One-Day",    tone: "pending" },
+    T20:            { label: "T20",        tone: "saffron" },
+    Pink_Ball:      { label: "Pink-Ball",  tone: "maroon" },
+    FourDay_Senior: { label: "4-Day Sr",   tone: "active" },
+    FourDay_U23:    { label: "4-Day U-23", tone: "active" },
+    FourDay_U19:    { label: "4-Day U-19", tone: "active" },
+    OneDay_Senior:  { label: "1-Day Sr",   tone: "pending" },
+    OneDay_U23:     { label: "1-Day U-23", tone: "pending" },
+    OneDay_U19:     { label: "1-Day U-19", tone: "pending" },
+    OneDay_Womens:  { label: "1-Day W",    tone: "pending" },
+    T20_Senior:     { label: "T20 Sr",     tone: "saffron" },
+    T20_U23:        { label: "T20 U-23",   tone: "saffron" },
+    T20_U19:        { label: "T20 U-19",   tone: "saffron" },
+    T20_Womens:     { label: "T20 W",      tone: "saffron" },
+    U16_League:     { label: "U-16 League", tone: "lapsed" },
+    FiveDay:        { label: "5-Day",      tone: "active" },
+    ThreeDay:       { label: "3-Day",      tone: "active" },
+    FortyOver:      { label: "40-Over",    tone: "pending" },
+    ThirtyOver:     { label: "30-Over",    tone: "pending" },
 };
 const SCOPE_META = {
     Inter_Divisional: { label: "Inter-Divisional", tone: "lapsed" },
@@ -21,12 +37,23 @@ const SCOPE_META = {
     Championship:     { label: "Championship",     tone: "active" },
     Invitational:     { label: "Invitational",     tone: "pending" },
 };
+const TYPE_META = {
+    MPCA_InterDivisional: { label: "MPCA Inter-Div",    tone: "lapsed" },
+    MPCA_Championship:    { label: "MPCA Championship", tone: "active" },
+    BCCI:                 { label: "BCCI",              tone: "saffron" },
+    Invitational:         { label: "Invitational",      tone: "pending" },
+    Other:                { label: "Other",             tone: "lapsed" },
+};
 const STATUS_META = {
-    Upcoming:        { label: "Upcoming",        tone: "pending" },
-    Squad_Selection: { label: "Squad Selection", tone: "saffron" },
-    In_Progress:     { label: "In Progress",     tone: "active" },
-    Completed:       { label: "Completed",       tone: "lapsed" },
-    Cancelled:       { label: "Cancelled",       tone: "suspended" },
+    Draft:              { label: "Draft",             tone: "lapsed" },
+    Awaiting_Approval:  { label: "Awaiting Approval", tone: "pending" },
+    Approved:           { label: "Approved",          tone: "active" },
+    Upcoming:           { label: "Upcoming",          tone: "pending" },
+    Squad_Selection:    { label: "Squad Selection",   tone: "saffron" },
+    In_Progress:        { label: "In Progress",       tone: "active" },
+    Completed:          { label: "Completed",         tone: "lapsed" },
+    Cancelled:          { label: "Cancelled",         tone: "suspended" },
+    Rejected:           { label: "Rejected",          tone: "suspended" },
 };
 
 const Pill = ({ tone, label, testId }) => {
@@ -80,10 +107,16 @@ const Tournaments = () => {
 
     const filtered = useMemo(() => {
         let r = list;
-        if (["Upcoming", "Squad_Selection", "In_Progress", "Completed"].includes(filter)) {
+        if (["Draft","Awaiting_Approval","Upcoming", "Squad_Selection", "In_Progress", "Completed"].includes(filter)) {
             r = r.filter((t) => t.status === filter);
         } else if (["Inter_Divisional", "Championship", "Invitational"].includes(filter)) {
             r = r.filter((t) => t.scope === filter);
+        } else if (["MPCA_InterDivisional","MPCA_Championship","BCCI"].includes(filter)) {
+            r = r.filter((t) => t.tournament_type === filter);
+        } else if (filter === "womens") {
+            r = r.filter((t) => t.is_womens);
+        } else if (filter === "three_team") {
+            r = r.filter((t) => t.is_three_team_format);
         } else if (["Multi_Day", "One_Day", "T20", "Pink_Ball"].includes(filter)) {
             r = r.filter((t) => t.format === filter);
         }
@@ -101,9 +134,10 @@ const Tournaments = () => {
                         The MPCA Cricket Calendar
                     </h1>
                     <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        Inter-divisional trophies and championship cups spanning Multi-Day,
-                        One-Day, T20 and Pink-Ball formats. Squads pull from the Player
-                        Register; age-cap and Guest allowance are enforced at selection.
+                        The full MPCA tournament calendar — 9 men&apos;s + 3 women&apos;s Inter-Divisional trophies,
+                        5 Championship trophies (Winner + Rest of MP A + B), plus BCCI tournaments
+                        (Ranji, Vijay Hazare, U-23, U-19, U-16, U-14). Squads pull from the Player
+                        Register; age-caps, guest quotas and Women&apos;s eligibility are enforced.
                     </p>
                 </div>
             </div>
@@ -124,15 +158,18 @@ const Tournaments = () => {
             <div className="flex flex-wrap items-center gap-2 mb-6">
                 <Filter size={12} className="text-mpca-gray-dark" />
                 {[
-                    ["all",              "All"],
-                    ["Upcoming",         "Upcoming"],
-                    ["Squad_Selection",  "In Selection"],
-                    ["In_Progress",      "In Progress"],
-                    ["Completed",        "Completed"],
-                    ["Inter_Divisional", "Inter-Divisional"],
-                    ["Championship",     "Championship"],
-                    ["Multi_Day",        "Multi-Day"],
-                    ["T20",              "T20"],
+                    ["all",                  "All"],
+                    ["MPCA_InterDivisional", "MPCA Inter-Div"],
+                    ["MPCA_Championship",    "Championships"],
+                    ["BCCI",                 "BCCI"],
+                    ["womens",               "Women's"],
+                    ["three_team",           "3-Team Format"],
+                    ["Draft",                "Draft"],
+                    ["Awaiting_Approval",    "Awaiting Approval"],
+                    ["Upcoming",             "Upcoming"],
+                    ["Squad_Selection",      "In Selection"],
+                    ["In_Progress",          "In Progress"],
+                    ["Completed",            "Completed"],
                 ].map(([k, label]) => (
                     <button
                         key={k}
@@ -149,34 +186,43 @@ const Tournaments = () => {
                 {filtered.length === 0 ? (
                     <div className="p-12 text-center text-mpca-gray-dark italic font-serif">No tournaments match this filter.</div>
                 ) : (
-                    filtered.map((t) => (
-                        <button
-                            key={t.id}
-                            onClick={() => navigate(`/tournaments/${t.id}`)}
-                            data-testid={"trn-row-" + t.tournament_no}
-                            className="ledger-row w-full text-left flex flex-wrap items-center gap-4 px-6 py-4"
-                        >
-                            <div className="w-10 h-10 rounded-full bg-mpca-green-dark text-mpca-gold-light flex items-center justify-center shrink-0">
-                                <Trophy size={16} strokeWidth={1.5} />
-                            </div>
-                            <div className="font-mono text-[10px] text-mpca-brass tracking-wider w-28">{t.tournament_no}</div>
-                            <div className="flex-1 min-w-[260px]">
-                                <div className="font-serif text-lg text-mpca-green-dark leading-tight">
-                                    {t.name}{t.short_name && <span className="text-[10px] tracking-[0.2em] uppercase text-mpca-brass ml-2 font-sans">{t.short_name}</span>}
+                    filtered.map((t) => {
+                        const fm = FORMAT_META[t.format] || { label: t.format, tone: "lapsed" };
+                        const sc = SCOPE_META[t.scope] || { label: t.scope, tone: "lapsed" };
+                        const tm = TYPE_META[t.tournament_type] || { label: t.tournament_type, tone: "lapsed" };
+                        const st = STATUS_META[t.status] || { label: t.status, tone: "lapsed" };
+                        return (
+                            <button
+                                key={t.id}
+                                onClick={() => navigate(`/tournaments/${t.id}`)}
+                                data-testid={"trn-row-" + t.tournament_no}
+                                className="ledger-row w-full text-left flex flex-wrap items-center gap-4 px-6 py-4"
+                            >
+                                <div className="w-10 h-10 rounded-full bg-mpca-green-dark text-mpca-gold-light flex items-center justify-center shrink-0">
+                                    <Trophy size={16} strokeWidth={1.5} />
                                 </div>
-                                <div className="text-[11px] text-mpca-gray-dark mt-1 flex items-center gap-2">
-                                    <Calendar size={11} /> {fmtDate(t.start_date)} → {fmtDate(t.end_date)}
-                                    {t.venue && <><span>·</span><MapPin size={11} /> {t.venue}</>}
+                                <div className="font-mono text-[10px] text-mpca-brass tracking-wider w-28">{t.tournament_no}</div>
+                                <div className="flex-1 min-w-[260px]">
+                                    <div className="font-serif text-lg text-mpca-green-dark leading-tight">
+                                        {t.name}{t.short_name && <span className="text-[10px] tracking-[0.2em] uppercase text-mpca-brass ml-2 font-sans">{t.short_name}</span>}
+                                    </div>
+                                    <div className="text-[11px] text-mpca-gray-dark mt-1 flex items-center gap-2 flex-wrap">
+                                        <Calendar size={11} /> {fmtDate(t.start_date)} → {fmtDate(t.end_date)}
+                                        {t.venue && <><span>·</span><MapPin size={11} /> {t.venue}</>}
+                                        {t.trophy_name && <span className="text-mpca-oxblood">· 🏆 {t.trophy_name}</span>}
+                                    </div>
                                 </div>
-                            </div>
-                            <span className="font-mono text-[11px] text-mpca-gray-dark uppercase tracking-wider w-20 text-right">{ageLabel(t)}</span>
-                            <Pill tone={FORMAT_META[t.format].tone} label={FORMAT_META[t.format].label} testId={"trn-fmt-" + t.format} />
-                            <Pill tone={SCOPE_META[t.scope].tone} label={SCOPE_META[t.scope].label} testId={"trn-scope-" + t.scope} />
-                            {t.allows_guests && <span className="pill bg-mpca-brass/15 text-mpca-gold border-mpca-brass/50">+ Guest</span>}
-                            <Pill tone={STATUS_META[t.status].tone} label={STATUS_META[t.status].label} testId={"trn-status-" + t.status} />
-                            <ChevronRight size={14} className="text-mpca-gray" />
-                        </button>
-                    ))
+                                <span className="font-mono text-[11px] text-mpca-gray-dark uppercase tracking-wider w-20 text-right">{ageLabel(t)}</span>
+                                <Pill tone={tm.tone} label={tm.label} testId={"trn-type-" + t.tournament_type} />
+                                <Pill tone={fm.tone} label={fm.label} testId={"trn-fmt-" + t.format} />
+                                {t.is_three_team_format && <span className="pill bg-mpca-gold/15 text-mpca-gold-dark border-mpca-gold/50" data-testid={"trn-3team-" + t.tournament_no}>3-Team</span>}
+                                {t.is_womens && <span className="pill bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/50" data-testid={"trn-womens-" + t.tournament_no}>Women&apos;s</span>}
+                                {t.allows_guests && <span className="pill bg-mpca-brass/15 text-mpca-gold border-mpca-brass/50">+ Guest</span>}
+                                <Pill tone={st.tone} label={st.label} testId={"trn-status-" + t.status} />
+                                <ChevronRight size={14} className="text-mpca-gray" />
+                            </button>
+                        );
+                    })
                 )}
             </div>
         </div>

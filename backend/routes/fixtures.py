@@ -1,0 +1,292 @@
+"""Routes · Phase M2-B/M2-C — Fixtures, Match Results, Rankings, HR Allocation."""
+from datetime import datetime, timezone
+from typing import List, Optional, Dict
+from fastapi import HTTPException
+
+from core.infra import db, api_router
+from models import (
+    Fixture, FixtureCreate, FixtureStatus,
+    MatchResult, MatchResultCreate, MatchOfficialAllocation, MatchOfficialRole,
+    SpecialPerformance,
+)
+from core.helpers import _next_fixture_no
+
+
+# ---------------- Fixtures ----------------
+
+
+@api_router.get("/fixtures", response_model=List[Fixture])
+async def list_fixtures(
+    tournament_id: Optional[str] = None,
+    status: Optional[FixtureStatus] = None,
+    ground_id: Optional[str] = None,
+):
+    q: dict = {}
+    if tournament_id:
+        q["tournament_id"] = tournament_id
+    if status:
+        q["status"] = status
+    if ground_id:
+        q["ground_id"] = ground_id
+    docs = await db.fixtures.find(q, {"_id": 0}).sort("scheduled_date", 1).to_list(500)
+    return docs
+
+
+@api_router.get("/fixtures/{fid}", response_model=Fixture)
+async def get_fixture(fid: str):
+    doc = await db.fixtures.find_one({"id": fid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Fixture not found")
+    return doc
+
+
+@api_router.post("/fixtures", response_model=Fixture)
+async def create_fixture(payload: FixtureCreate):
+    t = await db.tournaments.find_one({"id": payload.tournament_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    if t["status"] not in ("Upcoming", "Squad_Selection", "In_Progress"):
+        raise HTTPException(400, f"Cannot create fixtures for a tournament in status {t['status']}")
+    fx_no = await _next_fixture_no(t.get("fiscal_cycle") or "2025-26")
+    fx = Fixture(
+        fixture_no=fx_no,
+        tournament_name=t.get("name"),
+        **payload.model_dump(),
+    )
+    await db.fixtures.insert_one(fx.model_dump())
+    return fx
+
+
+@api_router.post("/fixtures/{fid}/status/{new_status}", response_model=Fixture)
+async def set_fixture_status(fid: str, new_status: FixtureStatus):
+    doc = await db.fixtures.find_one({"id": fid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Fixture not found")
+    allowed = {
+        "Scheduled": ["In_Progress", "Cancelled", "Abandoned"],
+        "In_Progress": ["Completed", "Abandoned"],
+        "Completed": [],
+        "Abandoned": [],
+        "Cancelled": [],
+    }
+    if new_status not in allowed.get(doc["status"], []):
+        raise HTTPException(400, f"Cannot move fixture from {doc['status']} to {new_status}")
+    await db.fixtures.update_one({"id": fid}, {"$set": {"status": new_status}})
+    return await db.fixtures.find_one({"id": fid}, {"_id": 0})
+
+
+@api_router.post("/fixtures/{fid}/officials", response_model=Fixture)
+async def allocate_official(fid: str, payload: MatchOfficialAllocation):
+    """M2-C · Allocate Ground / Umpire / Scorer / HR to a fixture."""
+    doc = await db.fixtures.find_one({"id": fid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Fixture not found")
+    officials = list(doc.get("officials", []) or [])
+    # Enforce single occupant per role (except Umpire_Reserve which can repeat)
+    if payload.role != "Umpire_Reserve":
+        officials = [o for o in officials if o["role"] != payload.role]
+    officials.append(payload.model_dump())
+    await db.fixtures.update_one({"id": fid}, {"$set": {"officials": officials}})
+    return await db.fixtures.find_one({"id": fid}, {"_id": 0})
+
+
+@api_router.delete("/fixtures/{fid}/officials/{oid}", response_model=Fixture)
+async def remove_official(fid: str, oid: str):
+    doc = await db.fixtures.find_one({"id": fid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Fixture not found")
+    officials = [o for o in (doc.get("officials") or []) if o["id"] != oid]
+    await db.fixtures.update_one({"id": fid}, {"$set": {"officials": officials}})
+    return await db.fixtures.find_one({"id": fid}, {"_id": 0})
+
+
+@api_router.post("/fixtures/{fid}/log-hours")
+async def log_work_hours(fid: str, official_id: str, hours: float, note: Optional[str] = None):
+    """M2-C · Log work hours for an allocated HR against a specific fixture."""
+    doc = await db.fixtures.find_one({"id": fid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Fixture not found")
+    officials = list(doc.get("officials", []) or [])
+    hit = False
+    for o in officials:
+        if o["id"] == official_id:
+            o["work_hours"] = float(o.get("work_hours") or 0) + hours
+            if note:
+                o["hours_note"] = ((o.get("hours_note") or "") + f" · {note}").strip(" ·")
+            hit = True
+    if not hit:
+        raise HTTPException(404, "Official not found on this fixture")
+    await db.fixtures.update_one({"id": fid}, {"$set": {"officials": officials}})
+    return {"ok": True, "officials": officials}
+
+
+# ---------------- Match Results ----------------
+
+
+@api_router.post("/match-results", response_model=MatchResult)
+async def create_match_result(payload: MatchResultCreate):
+    fx = await db.fixtures.find_one({"id": payload.fixture_id}, {"_id": 0})
+    if not fx:
+        raise HTTPException(404, "Fixture not found")
+    if fx.get("result_id"):
+        raise HTTPException(400, "Result already exists for this fixture")
+    mr = MatchResult(**payload.model_dump())
+    await db.match_results.insert_one(mr.model_dump())
+    await db.fixtures.update_one(
+        {"id": payload.fixture_id},
+        {"$set": {"result_id": mr.id, "status": "Completed"}},
+    )
+    return mr
+
+
+@api_router.get("/match-results/{rid}", response_model=MatchResult)
+async def get_match_result(rid: str):
+    doc = await db.match_results.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Result not found")
+    return doc
+
+
+@api_router.get("/match-results", response_model=List[MatchResult])
+async def list_match_results(tournament_id: Optional[str] = None):
+    q: dict = {}
+    if tournament_id:
+        q["tournament_id"] = tournament_id
+    docs = await db.match_results.find(q, {"_id": 0}).sort("entered_at", -1).to_list(500)
+    return docs
+
+
+# ---------------- Rankings ----------------
+
+
+@api_router.get("/rankings/batting")
+async def batting_rankings(tournament_id: Optional[str] = None, season: Optional[str] = None, limit: int = 20):
+    """Aggregate batting rankings by player."""
+    match: dict = {}
+    if tournament_id:
+        match["tournament_id"] = tournament_id
+    pipeline: List[dict] = []
+    if match:
+        pipeline.append({"$match": match})
+    pipeline += [
+        {"$unwind": "$player_stats"},
+        {"$group": {
+            "_id": "$player_stats.player_id",
+            "player_name": {"$first": "$player_stats.player_name"},
+            "team": {"$first": "$player_stats.team"},
+            "innings": {"$sum": 1},
+            "runs": {"$sum": "$player_stats.runs"},
+            "balls": {"$sum": "$player_stats.balls_faced"},
+            "fours": {"$sum": "$player_stats.fours"},
+            "sixes": {"$sum": "$player_stats.sixes"},
+        }},
+        {"$addFields": {
+            "average": {"$cond": [{"$eq": ["$innings", 0]}, 0, {"$divide": ["$runs", "$innings"]}]},
+            "strike_rate": {"$cond": [{"$eq": ["$balls", 0]}, 0, {"$multiply": [{"$divide": ["$runs", "$balls"]}, 100]}]},
+        }},
+        {"$sort": {"runs": -1}},
+        {"$limit": limit},
+    ]
+    return [row async for row in db.match_results.aggregate(pipeline)]
+
+
+@api_router.get("/rankings/bowling")
+async def bowling_rankings(tournament_id: Optional[str] = None, limit: int = 20):
+    match: dict = {}
+    if tournament_id:
+        match["tournament_id"] = tournament_id
+    pipeline: List[dict] = []
+    if match:
+        pipeline.append({"$match": match})
+    pipeline += [
+        {"$unwind": "$player_stats"},
+        {"$match": {"player_stats.overs_bowled": {"$gt": 0}}},
+        {"$group": {
+            "_id": "$player_stats.player_id",
+            "player_name": {"$first": "$player_stats.player_name"},
+            "team": {"$first": "$player_stats.team"},
+            "innings": {"$sum": 1},
+            "overs": {"$sum": "$player_stats.overs_bowled"},
+            "runs_conceded": {"$sum": "$player_stats.runs_conceded"},
+            "wickets": {"$sum": "$player_stats.wickets"},
+            "maidens": {"$sum": "$player_stats.maidens"},
+        }},
+        {"$addFields": {
+            "average": {"$cond": [{"$eq": ["$wickets", 0]}, None, {"$divide": ["$runs_conceded", "$wickets"]}]},
+            "economy": {"$cond": [{"$eq": ["$overs", 0]}, 0, {"$divide": ["$runs_conceded", "$overs"]}]},
+        }},
+        {"$sort": {"wickets": -1, "average": 1}},
+        {"$limit": limit},
+    ]
+    return [row async for row in db.match_results.aggregate(pipeline)]
+
+
+@api_router.get("/rankings/special-performances")
+async def special_performances(tournament_id: Optional[str] = None, limit: int = 50):
+    match: dict = {}
+    if tournament_id:
+        match["tournament_id"] = tournament_id
+    pipeline: List[dict] = []
+    if match:
+        pipeline.append({"$match": match})
+    pipeline += [
+        {"$unwind": "$special_performances"},
+        {"$sort": {"entered_at": -1}},
+        {"$limit": limit},
+        {"$project": {
+            "_id": 0,
+            "player_id": "$special_performances.player_id",
+            "player_name": "$special_performances.player_name",
+            "achievement": "$special_performances.achievement",
+            "value": "$special_performances.value",
+            "innings": "$special_performances.innings",
+            "tournament_id": 1,
+            "match_id": "$fixture_id",
+        }},
+    ]
+    return [row async for row in db.match_results.aggregate(pipeline)]
+
+
+@api_router.get("/hr-allocations/work-hours")
+async def hr_work_hours(name: Optional[str] = None, role: Optional[MatchOfficialRole] = None, tournament_id: Optional[str] = None):
+    """M2-C · aggregated work-hours across fixtures for HR payment."""
+    match_q: dict = {}
+    if tournament_id:
+        match_q["tournament_id"] = tournament_id
+    pipeline: List[dict] = [{"$match": match_q}] if match_q else []
+    pipeline += [
+        {"$unwind": "$officials"},
+    ]
+    if name:
+        pipeline.append({"$match": {"officials.name": {"$regex": name, "$options": "i"}}})
+    if role:
+        pipeline.append({"$match": {"officials.role": role}})
+    pipeline += [
+        {"$group": {
+            "_id": {"name": "$officials.name", "role": "$officials.role"},
+            "name": {"$first": "$officials.name"},
+            "role": {"$first": "$officials.role"},
+            "matches": {"$sum": 1},
+            "total_hours": {"$sum": "$officials.work_hours"},
+            "total_honorarium_inr": {"$sum": "$officials.honorarium_inr"},
+        }},
+        {"$sort": {"total_hours": -1}},
+    ]
+    return [row async for row in db.fixtures.aggregate(pipeline)]
+
+
+@api_router.get("/fixtures-stats/summary")
+async def fixtures_stats(tournament_id: Optional[str] = None):
+    q: dict = {}
+    if tournament_id:
+        q["tournament_id"] = tournament_id
+    scheduled = await db.fixtures.count_documents({**q, "status": "Scheduled"})
+    in_progress = await db.fixtures.count_documents({**q, "status": "In_Progress"})
+    completed = await db.fixtures.count_documents({**q, "status": "Completed"})
+    total = await db.fixtures.count_documents(q)
+    return {
+        "total_fixtures": total,
+        "scheduled": scheduled,
+        "in_progress": in_progress,
+        "completed": completed,
+    }

@@ -391,3 +391,65 @@ The user reviewed every tab of the reference plan and identified that the existi
 - Elasticsearch for global search across modules
 - ABC analysis dashboard for procurement spend
 - Predictive renewal-risk model
+
+## M1 + M2 Enhancement Batch — Feb 10, 2026
+
+### M1 · Player Management (enhancements shipped in this batch)
+- **M1-A · Extended Profile & Portal Fields (DONE)**
+  - New fields: mother_name, sibling_names, gender, proficiency, club_academy,
+    height_cm, weight_kg, residency_since, employment, education, address_line
+  - Guest sub-categories: Education / MP_Domicile_Junior / MP_Domicile_Senior / Out_Of_MP_Senior
+  - Guest disclosure flag + document checklist (uploads via /players/{id}/documents)
+  - Court-order flag (⚑) with case reference
+  - Player Display ID (new format): `YYYY/DD-MM-YY/serial`
+  - Division-wise folder auto-derived: `DIV-XXX`
+- **M1-B · Division Review + Transfer + Audit (DONE)**
+  - Status ladder: Pending → Under_Division_Review → (Discrepancy_Raised → Pending) → Division_Approved → Active
+  - Endpoints: `/players/{id}/start-review`, `/raise-discrepancy`, `/resubmit`, `/division-approve`, `/approve`, `/reopen`
+  - Full audit_trail on every player (append-only PlayerAuditEvent list)
+  - Discrepancy notes surfaced to applicant; submission_locked toggle
+  - Residency validation (3-month local / 1-year out-of-MP)
+- **M1-C · Guest Quotas + Disqualification Engine (DONE)**
+  - Guest sub-type quotas enforced on squad add
+    (Education 1, MP_Domicile_Junior 3, MP_Domicile_Senior 2, Out_Of_MP_Senior 1)
+  - Repeat-offender: 2nd Two_Year_Ban auto-promotes to Lifetime_Ban
+  - Division penalty defaults to ₹50,000
+  - Auto-broadcast notifications to MPCA + BCCI + all state associations
+    (recipient_body_id `ALL_STATE_ASSOCIATIONS` fan-out)
+
+### M2 · Tournament Management (enhancements shipped in this batch)
+- **M2-A · Correct Catalog + Championship Trophies + Approval (DONE)**
+  - Seeded 11 MPCA Inter-Divisional tournaments per user spec:
+    MY Memorial, Madhavrao Scindia, JN Bhaya, Parmanandbhai Patel, Hiralal Gaekwad,
+    SM Khan, MM Jagdale, AW Kanmadikar, JS Anand (Women/Girls U-18/Girls U-15).
+  - Seeded 5 Championship trophies (3-team format Winner + Rest of MP A + B):
+    CT Sarwate, CS Nayudu, Bhausaheb Nimbalkar, Bhau Niwsarkar, RP Singh.
+  - Seeded 7 BCCI tournaments (Ranji, Vijay Hazare, Syed Mushtaq Ali, U-23 CK Nayudu,
+    U-19 Cooch Behar, U-16 Vijay Merchant, U-14 Youth).
+  - Approval workflow: Draft → Awaiting_Approval → Upcoming (or Rejected).
+    Endpoints: `/tournaments/{id}/submit-for-approval`, `/approve`, `/reject`.
+  - New fields: tournament_type, trophy_name, is_three_team_format, is_womens,
+    portal_slot_limit, SquadTimeline (provisional 30d / open 15d / transfer 5d / form 15d).
+- **M2-B · Fixtures + Rankings (DONE)**
+  - Fixture model + `/fixtures` CRUD, status transitions.
+  - MatchResult with player_stats + special_performances.
+  - Rankings endpoints: `/rankings/batting`, `/rankings/bowling`, `/rankings/special-performances`.
+  - Frontend: new `/fixtures` page with tabs (Fixtures · Rankings · HR).
+- **M2-C · HR Allocation + Work Hours (DONE)**
+  - MatchOfficialAllocation model (10 roles from umpire → curator).
+  - `/fixtures/{id}/officials` (POST/DELETE), `/log-hours`.
+  - `/hr-allocations/work-hours` aggregation for payroll.
+
+### Files touched
+- Backend: models.py, core/helpers.py, routes/players.py (rewritten),
+  routes/tournaments.py, routes/fixtures.py (new), seed.py, server.py.
+- Frontend: pages/Players.jsx, pages/Tournaments.jsx, pages/Fixtures.jsx (new),
+  lib/api.js, App.js, components/AppLayout.jsx.
+
+### Testing status
+- Backend curl tests passed (player create → review → discrepancy → resubmit →
+  approve; disqualify → auto-promote lifetime; fixture + officials + rankings +
+  hr work-hours; tournament approval flow).
+- Frontend smoke tests via screenshot passed.
+- Comprehensive testing agent run: pending.
+

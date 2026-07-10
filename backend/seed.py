@@ -702,55 +702,106 @@ async def seed_players():
 
 
 async def seed_tournaments():
-    """Phase IV.2 — seed the 10 named inter-divisional tournaments + 5 championship trophies."""
-    if await db.tournaments.count_documents({}) > 0:
-        return
-    logger.info("Seeding MPCA tournament catalogue…")
+    """Phase IV.2 + M2-A — seed the MPCA-approved tournament catalogue per user screenshot.
+    Additive: preserves existing tournaments; inserts any missing entries by short_name.
+    """
+    logger.info("Seeding MPCA tournament catalogue (additive)…")
 
-    # 10 inter-divisional named tournaments (per MPCA plan + cricket history)
-    samples = [
-        # name, short, format, scope, age_cap, age_floor, allows_guests, dates
-        ("MY Memorial Trophy",              "MYMT",     "Multi_Day",  "Inter_Divisional", None, None, False, "2025-11-10", "2025-11-28"),
-        ("Madhavrao Scindia Trophy",        "MSchT",    "One_Day",    "Inter_Divisional", None, None, False, "2025-12-05", "2025-12-15"),
-        ("Col. CK Nayudu Trophy (MP Leg)",  "CKNT",     "Multi_Day",  "Inter_Divisional", 25,   None, False, "2025-10-15", "2025-11-05"),
-        ("JN Bhaya Trophy",                 "JNBT",     "One_Day",    "Inter_Divisional", 19,   None, False, "2025-10-01", "2025-10-12"),
-        ("Parmanandbhai Patel Trophy",      "PPT",      "T20",        "Inter_Divisional", 19,   16,   False, "2025-09-20", "2025-09-30"),
-        ("Hiralal Gaekwad Trophy",          "HGT",      "Multi_Day",  "Inter_Divisional", 16,   None, False, "2025-09-05", "2025-09-18"),
-        ("SM Khan Trophy",                  "SMKT",     "One_Day",    "Inter_Divisional", 16,   None, False, "2025-08-22", "2025-09-02"),
-        ("MM Jagdale Trophy",               "MMJT",     "T20",        "Inter_Divisional", 14,   None, False, "2025-08-10", "2025-08-18"),
-        ("AW Kanmadikar Trophy",            "AWKT",     "One_Day",    "Inter_Divisional", 14,   12,   False, "2025-07-25", "2025-08-05"),
-        ("JS Anand Memorial Trophy",        "JSAT",     "T20",        "Inter_Divisional", None, 35,   True,  "2025-12-20", "2025-12-28"),  # veterans, guests welcome
-        # 5 championship trophies / MPCA-organised marquees
-        ("Holkar Trophy",                   "HOLK",     "Multi_Day",  "Championship",     None, None, False, "2026-01-10", "2026-01-28"),
-        ("MPCA Premier League (T20)",       "MPL",      "T20",        "Championship",     None, None, True,  "2026-02-15", "2026-03-10"),
-        ("MP Women's One-Day Cup",          "MPWOD",    "One_Day",    "Championship",     None, None, False, "2025-12-12", "2025-12-22"),
-        ("MP U-23 Challenge Cup",           "MPU23",    "Multi_Day",  "Championship",     23,   19,   False, "2025-11-20", "2025-12-05"),
-        ("Holkar Pink-Ball Invitational",   "HPBI",     "Pink_Ball",  "Invitational",     None, None, True,  "2026-03-15", "2026-03-22"),
+    # ─── M2-A · MPCA Inter-Divisional (9 men's + 1 women's + 2 girls trophies within JS Anand) ───
+    # (name, short, format, scope, age_cap, age_floor, allows_guests, is_womens, start, end, tournament_type)
+    inter_divisional = [
+        ("MY Memorial Trophy",              "MYMT",  "Multi_Day", "Inter_Divisional", None, None, False, False, "2025-11-10", "2025-11-28"),   # Sr Men Multi-Day
+        ("Madhavrao Scindia Trophy",        "MSchT", "One_Day",   "Inter_Divisional", None, None, False, False, "2025-12-05", "2025-12-15"),   # Sr 50-over
+        ("JN Bhaya Trophy",                 "JNBT",  "T20",       "Inter_Divisional", None, None, False, False, "2025-10-01", "2025-10-12"),   # Sr T20
+        ("Parmanandbhai Patel Trophy",      "PPT",   "One_Day",   "Inter_Divisional", 22,   None, False, False, "2025-09-20", "2025-09-30"),   # U-22
+        ("Hiralal Gaekwad Trophy",          "HGT",   "Multi_Day", "Inter_Divisional", 18,   None, False, False, "2025-09-05", "2025-09-18"),   # U-18 Multi-Day
+        ("SM Khan Trophy",                  "SMKT",  "One_Day",   "Inter_Divisional", 18,   None, False, False, "2025-08-22", "2025-09-02"),   # U-18 Ltd
+        ("MM Jagdale Trophy",               "MMJT",  "One_Day",   "Inter_Divisional", 15,   None, False, False, "2025-08-10", "2025-08-18"),   # U-15
+        ("AW Kanmadikar Trophy",            "AWKT",  "One_Day",   "Inter_Divisional", 13,   None, False, False, "2025-07-25", "2025-08-05"),   # U-13
+        ("JS Anand Trophy · Women's Senior","JSAT-W","One_Day",   "Inter_Divisional", None, None, False, True,  "2025-12-20", "2025-12-28"),
+        ("JS Anand Trophy · Girls U-18",    "JSAT-G18","One_Day", "Inter_Divisional", 18,   None, False, True,  "2025-12-05", "2025-12-14"),
+        ("JS Anand Trophy · Girls U-15",    "JSAT-G15","One_Day", "Inter_Divisional", 15,   None, False, True,  "2025-11-20", "2025-11-30"),
     ]
 
-    serial = 0
-    for name, short, fmt, scope, ac, af, ag, start, end in samples:
+    # ─── M2-A · Championship Trophies (Winner + Rest of MP A + B, 3-team format) ───
+    championships = [
+        ("CT Sarwate Trophy",         "CTS",  "Multi_Day", "Championship", None, None, "CT Sarwate",         "Senior · Winner + Rest of MP A + B"),
+        ("CS Nayudu Trophy",          "CSN",  "Multi_Day", "Championship", 22,   None, "CS Nayudu",          "U-22 · Winner + Rest of MP A + B"),
+        ("Bhausaheb Nimbalkar Trophy","BSN",  "Multi_Day", "Championship", 18,   None, "Bhausaheb Nimbalkar", "U-18 · Winner + Rest of MP A + B"),
+        ("Bhau Niwsarkar Trophy",     "BNW",  "One_Day",   "Championship", 15,   None, "Bhau Niwsarkar",     "U-15 · Winner + Rest of MP A + B"),
+        ("RP Singh Trophy",           "RPS",  "One_Day",   "Championship", 14,   None, "RP Singh",           "U-14 · Winner + Rest of MP A + B"),
+    ]
+
+    # ─── BCCI Tournaments (with age auto-mapping) ───
+    bcci = [
+        ("BCCI Ranji Trophy",              "RANJI",  "Multi_Day", "Invitational", None, None, False, False, "2025-11-01", "2026-03-15"),
+        ("BCCI Vijay Hazare Trophy",       "VHT",    "One_Day",   "Invitational", None, None, False, False, "2025-12-01", "2025-12-30"),
+        ("BCCI Syed Mushtaq Ali Trophy",   "SMAT",   "T20",       "Invitational", None, None, False, False, "2025-11-15", "2025-12-05"),
+        ("BCCI U-23 CK Nayudu Trophy",     "U23CKN", "Multi_Day", "Invitational", 23,   None, False, False, "2025-11-20", "2026-01-15"),
+        ("BCCI U-19 Cooch Behar Trophy",   "U19CBT", "Multi_Day", "Invitational", 19,   None, False, False, "2025-11-25", "2026-01-25"),
+        ("BCCI U-16 Vijay Merchant Trophy","U16VMT", "Multi_Day", "Invitational", 16,   None, False, False, "2025-10-20", "2025-12-15"),
+        ("BCCI U-14 Youth Trophy",         "U14YT",  "One_Day",   "Invitational", 14,   None, False, False, "2025-09-15", "2025-10-30"),
+    ]
+
+    serial = await db.tournaments.count_documents({})
+    inserted = 0
+    for name, short, fmt, scope, ac, af, ag, iw, start, end in inter_divisional:
+        if await db.tournaments.find_one({"short_name": short}):
+            continue
         serial += 1
         t = Tournament(
             tournament_no=f"TRN-2025-26-{serial:03d}",
-            name=name,
-            short_name=short,
-            format=fmt,
-            scope=scope,
-            fiscal_cycle="2025-26",
-            host_body_id="MPCA",
-            age_cap_years=ac,
-            age_floor_years=af,
-            allows_guests=ag,
-            max_squad_size=18,
-            start_date=start,
-            end_date=end,
-            venue="Holkar Stadium, Indore" if scope == "Championship" else None,
+            name=name, short_name=short, format=fmt, scope=scope,
+            tournament_type="MPCA_InterDivisional",
+            fiscal_cycle="2025-26", host_body_id="MPCA",
+            age_cap_years=ac, age_floor_years=af, allows_guests=ag, is_womens=iw,
+            max_squad_size=18, start_date=start, end_date=end,
+            status="Upcoming",
+            venue="Multiple divisional venues",
+        )
+        await db.tournaments.insert_one(t.model_dump())
+        inserted += 1
+
+    for name, short, fmt, scope, ac, af, trophy_name, notes in championships:
+        if await db.tournaments.find_one({"short_name": short}):
+            continue
+        serial += 1
+        t = Tournament(
+            tournament_no=f"TRN-2025-26-{serial:03d}",
+            name=name, short_name=short, format=fmt, scope=scope,
+            tournament_type="MPCA_Championship",
+            trophy_name=trophy_name, is_three_team_format=True,
+            fiscal_cycle="2025-26", host_body_id="MPCA",
+            age_cap_years=ac, age_floor_years=af, allows_guests=False,
+            max_squad_size=18, status="Upcoming",
+            venue="Holkar Stadium, Indore", notes=notes,
+        )
+        await db.tournaments.insert_one(t.model_dump())
+        inserted += 1
+
+    for name, short, fmt, scope, ac, af, ag, iw, start, end in bcci:
+        if await db.tournaments.find_one({"short_name": short}):
+            continue
+        serial += 1
+        t = Tournament(
+            tournament_no=f"TRN-2025-26-{serial:03d}",
+            name=name, short_name=short, format=fmt, scope=scope,
+            tournament_type="BCCI",
+            fiscal_cycle="2025-26", host_body_id="BCCI",
+            age_cap_years=ac, age_floor_years=af, allows_guests=ag, is_womens=iw,
+            max_squad_size=18, start_date=start, end_date=end,
             status="Upcoming",
         )
         await db.tournaments.insert_one(t.model_dump())
+        inserted += 1
 
-    logger.info(f"Seeded {len(samples)} tournaments.")
+    # Backfill tournament_type on legacy records that don't have it (they default to MPCA_InterDivisional)
+    await db.tournaments.update_many(
+        {"tournament_type": {"$exists": False}},
+        {"$set": {"tournament_type": "MPCA_InterDivisional"}},
+    )
+
+    logger.info(f"Tournament catalogue: +{inserted} inserted, total {await db.tournaments.count_documents({})}.")
 
 
 async def seed_data():

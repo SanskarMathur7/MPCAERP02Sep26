@@ -562,24 +562,72 @@ class AwardPayload(BaseModel):
 #  - Transfer NOC workflow
 
 PlayerCategory = Literal["Local_MP", "Born_Outside", "Guest"]
+GuestSubType = Literal["Education", "MP_Domicile_Junior", "MP_Domicile_Senior", "Out_Of_MP_Senior"]
+PlayerGender = Literal["Male", "Female", "Other"]
+PlayerProficiency = Literal["Beginner", "Club", "District", "State", "National"]
 PlayerRole = Literal["Batter", "Bowler", "All_Rounder", "Wicket_Keeper"]
 PlayerBattingStyle = Literal["Right_Hand", "Left_Hand"]
 PlayerBowlingStyle = Literal[
     "Right_Arm_Fast", "Right_Arm_Medium", "Right_Arm_Off_Spin", "Right_Arm_Leg_Spin",
     "Left_Arm_Fast", "Left_Arm_Medium", "Left_Arm_Orthodox", "Left_Arm_Chinaman", "None",
 ]
-PlayerStatus = Literal["Pending", "Active", "Suspended", "Banned", "Transferred", "Retired"]
+# Phase M1-B: extended lifecycle for the review workflow
+PlayerStatus = Literal[
+    "Pending",                # initial registration, awaiting Division review
+    "Under_Division_Review",  # Division has picked up the file
+    "Discrepancy_Raised",     # Division sent it back for re-submission
+    "Division_Approved",      # Division cleared → in MPCA queue
+    "Active",                 # MPCA cleared / historical shortcut
+    "Suspended",
+    "Banned",
+    "Transferred",
+    "Retired",
+]
 TransferStatus = Literal["Draft", "From_Body_Approved", "To_Body_Approved", "MPCA_Approved", "Completed", "Rejected"]
+
+# Standard document types for the registration portal
+PLAYER_DOC_TYPES = [
+    "birth_certificate", "aadhar", "pan", "passport",
+    "marksheet_10", "marksheet_12", "samagra_id",
+    "affidavit", "transfer_certificate", "hospital_cert",
+    "photo", "signature",
+]
 
 
 class DisqualificationFlag(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    kind: Literal["Two_Year_Ban", "Lifetime_Ban", "Division_Penalty", "Age_Misrepresentation", "Other"]
+    kind: Literal["Two_Year_Ban", "Lifetime_Ban", "Division_Penalty", "Age_Misrepresentation", "Fake_Document", "Repeat_Offender", "Other"]
     reason: str
     imposed_by: str            # body_id imposing
     imposed_on: str            # ISO date
     expires_on: Optional[str] = None  # for time-bound bans
+    penalty_inr: float = 0.0    # e.g. ₹50,000 division penalty
     notes: Optional[str] = None
+
+
+class PlayerDocument(BaseModel):
+    """Uploaded doc slot on the registration portal."""
+    model_config = ConfigDict(extra="ignore")
+    doc_type: str              # one of PLAYER_DOC_TYPES
+    url: str                   # /api/uploads/{id}
+    filename: Optional[str] = None
+    uploaded_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    verified: bool = False     # Division marks verified
+    verified_by: Optional[str] = None
+    verified_at: Optional[str] = None
+
+
+class PlayerAuditEvent(BaseModel):
+    """Append-only trail of every mutation on a player record."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    event: str                 # "created" / "updated" / "reviewed" / "discrepancy" / "approved" / "reopened" / "disqualified"
+    actor_name: Optional[str] = None
+    actor_body_id: Optional[str] = None
+    actor_post: Optional[str] = None
+    notes: Optional[str] = None
+    diff: Optional[dict] = None  # {"field": ["old", "new"]}
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class PlayerBase(BaseModel):
@@ -587,11 +635,23 @@ class PlayerBase(BaseModel):
     body_id: str                                  # registering body (usually a district)
     full_name: str
     father_name: Optional[str] = None
+    # Phase M1-A: extended parentage & profile
+    mother_name: Optional[str] = None
+    sibling_names: Optional[str] = None           # comma-separated names, brief
+    gender: PlayerGender = "Male"
+    proficiency: PlayerProficiency = "Club"
+    club_academy: Optional[str] = None
     date_of_birth: str                            # ISO date YYYY-MM-DD
     place_of_birth: Optional[str] = None
     domicile_state: str = "Madhya Pradesh"
     address_district: Optional[str] = None        # MP district name
+    address_line: Optional[str] = None            # full postal address
+    residency_since: Optional[str] = None         # ISO date; used for 3-month / 1-year eligibility
+    employment: Optional[str] = None              # company/occupation for guest quota
+    education: Optional[str] = None               # school/college for education-guest
     category: PlayerCategory
+    guest_subtype: Optional[GuestSubType] = None  # only for Guest category
+    guest_disclosure_signed: bool = False         # mandatory when category=Guest
     role: PlayerRole = "Batter"
     batting_style: PlayerBattingStyle = "Right_Hand"
     bowling_style: PlayerBowlingStyle = "None"
@@ -604,20 +664,43 @@ class PlayerBase(BaseModel):
     contact_email: Optional[str] = None
     guardian_name: Optional[str] = None
     guardian_phone: Optional[str] = None
+    # Phase M1-A: court order flag
+    court_order_flag: bool = False
+    court_order_ref: Optional[str] = None         # case number / court name
 
 
 class Player(PlayerBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     player_id: str                                # MPCA/YR/SERIAL e.g. MPCA/2025/000123
+    # Phase M1-A: new formatted display id  YYYY/DD-MM-YY/SEQ
+    player_display_id: Optional[str] = None
+    first_registration_year: Optional[int] = None
+    season_year: Optional[str] = "2025-26"        # division-wise folder key
+    division_folder: Optional[str] = None         # DIV-XXX derived from body
     status: PlayerStatus = "Pending"
     disqualifications: List[DisqualificationFlag] = []
+    disqualification_count: int = 0               # for repeat-offender detection
+    documents: List[PlayerDocument] = []          # portal uploads
+    review_notes: List[str] = []                  # discrepancies raised by Division
+    audit_trail: List[PlayerAuditEvent] = []
     registered_on: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     eligibility_notes: List[str] = []             # human-readable validator output
     tw3_verified: bool = False                    # TW3 maturity check (for Guests)
+    submission_locked: bool = False               # no edits after submission unless reopened
 
 
 class PlayerCreate(PlayerBase):
     tw3_verified: bool = False
+    documents: List[PlayerDocument] = []
+
+
+class PlayerReviewAction(BaseModel):
+    """Division / MPCA reviewer action payload."""
+    model_config = ConfigDict(extra="ignore")
+    actor_name: str
+    actor_body_id: str
+    actor_post: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class TransferRequestBase(BaseModel):
@@ -653,9 +736,33 @@ TournamentFormat = Literal[
     "OneDay_Senior", "OneDay_U23", "OneDay_U19", "OneDay_Womens",      # 1-day formats
     "T20_Senior", "T20_U23", "T20_U19", "T20_Womens",                  # T20 formats
     "U16_League",                                                       # additional youth
+    # M2-A · fixture length variants used by BCCI norms
+    "FiveDay", "ThreeDay", "FortyOver", "ThirtyOver",
 ]
-TournamentStatus = Literal["Upcoming", "Squad_Selection", "In_Progress", "Completed", "Cancelled"]
+# M2-A: overall status extended with approval flow before Upcoming
+TournamentStatus = Literal[
+    "Draft", "Awaiting_Approval", "Approved",
+    "Upcoming", "Squad_Selection", "In_Progress", "Completed", "Cancelled",
+    "Rejected",
+]
 TournamentScope = Literal["Inter_Divisional", "Inter_District", "Championship", "Invitational"]
+# M2-A: source/type tag — which catalogue does this tournament belong to
+TournamentType = Literal[
+    "MPCA_InterDivisional",       # MY Memorial, Madhavrao Scindia, JN Bhaya, etc.
+    "MPCA_Championship",          # CT Sarwate, CS Nayudu, Bhausaheb Nimbalkar, etc.
+    "BCCI",                       # U-14/16/19/23, Ranji, ODI/T20
+    "Invitational",
+    "Other",
+]
+
+
+class SquadTimeline(BaseModel):
+    """Squad announcement timelines per MPCA plan."""
+    model_config = ConfigDict(extra="ignore")
+    provisional_squad_days_before: int = 30       # age-verified squad
+    open_squad_days_before: int = 15              # open squad
+    transfer_window_days: int = 5
+    form_submission_days_before: int = 15         # 10-20 range; midpoint
 
 
 class TournamentBase(BaseModel):
@@ -664,15 +771,24 @@ class TournamentBase(BaseModel):
     short_name: Optional[str] = None
     format: TournamentFormat
     scope: TournamentScope
+    tournament_type: TournamentType = "MPCA_InterDivisional"
+    trophy_name: Optional[str] = None            # e.g. "CT Sarwate Trophy"
     fiscal_cycle: str = "2025-26"
     host_body_id: str = "MPCA"                  # who organises the tournament
     age_cap_years: Optional[int] = None          # e.g. 19 for U-19; None = senior
     age_floor_years: Optional[int] = None        # e.g. 14 for U-14
     allows_guests: bool = False                  # Guest-category players permitted?
+    is_womens: bool = False                      # M2-A: JS Anand, Women's Cup etc.
     max_squad_size: int = 18                     # selection rule
+    # M2-A: Championship 3-team format (Winner + Rest of MP A + B)
+    is_three_team_format: bool = False
     start_date: Optional[str] = None             # ISO YYYY-MM-DD
     end_date: Optional[str] = None
     venue: Optional[str] = None
+    # M2-A: squad announcement timelines
+    timelines: SquadTimeline = Field(default_factory=SquadTimeline)
+    # M2-A: portal slot config for this tournament (division-shared registration link)
+    portal_slot_limit: Optional[int] = None      # e.g. 50 for U-13, 30 for Sr Men
     notes: Optional[str] = None
 
 
@@ -680,6 +796,9 @@ class Tournament(TournamentBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     tournament_no: str                           # "TRN-2025-26-001"
     status: TournamentStatus = "Upcoming"
+    # M2-A: approval trail
+    approval_chain: List[ApprovalStep] = []
+    created_by: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -693,6 +812,7 @@ class SquadMember(BaseModel):
     player_no: str                               # human-friendly MPCA/.../...
     full_name: str
     role: str
+    guest_subtype: Optional[str] = None          # snapshot for quota enforcement
     is_captain: bool = False
     is_keeper: bool = False
     added_on: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -1182,3 +1302,116 @@ class SelectionBCCISubmit(BaseModel):
     actor_name: str
     bcci_submission_ref: Optional[str] = None   # external ref if provided manually
 
+
+
+# ---------------- Phase M2-B · Fixtures + Match Results + Rankings ----------------
+# A Fixture is a scheduled match within a tournament. MatchResult captures scorecard
+# highlights + special performances. Rankings are aggregated on demand.
+
+FixtureStatus = Literal["Scheduled", "In_Progress", "Completed", "Abandoned", "Cancelled"]
+MatchOfficialRole = Literal[
+    "Umpire_On_Field_1", "Umpire_On_Field_2", "Umpire_Third", "Umpire_Reserve",
+    "Match_Referee", "Scorer_1", "Scorer_2", "Physio", "Ground_Manager", "Curator",
+]
+
+
+class MatchOfficialAllocation(BaseModel):
+    """A person allocated to a fixture (umpire, scorer, HR, etc.)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    role: MatchOfficialRole
+    name: str
+    body_id: Optional[str] = None                 # if from a body/division
+    phone: Optional[str] = None
+    honorarium_inr: float = 0.0                   # per-match honorarium
+    work_hours: float = 0.0                       # logged after match
+    hours_note: Optional[str] = None
+
+
+class FixtureBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    tournament_id: str
+    round: str                                    # "Group A · Match 1" or "Semi-Final 1"
+    home_squad_id: Optional[str] = None
+    away_squad_id: Optional[str] = None
+    home_team: str                                # snapshot name
+    away_team: str
+    scheduled_date: str                           # ISO date
+    scheduled_time: Optional[str] = None
+    ground_id: Optional[str] = None
+    venue_name: Optional[str] = None              # snapshot
+    ground_name: Optional[str] = None
+    format: TournamentFormat
+    days: int = 1                                 # 1 for LO, 3/4/5 for Multi-Day
+    notes: Optional[str] = None
+
+
+class Fixture(FixtureBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    fixture_no: str                               # "FX-2025-26-001"
+    tournament_name: Optional[str] = None         # snapshot
+    status: FixtureStatus = "Scheduled"
+    officials: List[MatchOfficialAllocation] = []
+    result_id: Optional[str] = None               # linked MatchResult
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class FixtureCreate(FixtureBase):
+    pass
+
+
+class SpecialPerformance(BaseModel):
+    """5-fer, century, MoM, etc. — bubbled up to rankings + placards."""
+    model_config = ConfigDict(extra="ignore")
+    player_id: str
+    player_name: str
+    achievement: Literal["Century", "Double_Century", "Five_Wickets", "Ten_Wickets_Match", "Man_of_the_Match", "Fifty", "Hat_Trick"]
+    value: Optional[str] = None                    # "104 (89b)" or "5/23"
+    innings: Optional[int] = None                  # 1 or 2
+
+
+class PlayerMatchStat(BaseModel):
+    """Per-player scorecard row for a match — feeds rankings."""
+    model_config = ConfigDict(extra="ignore")
+    player_id: str
+    player_name: str
+    team: str
+    runs: int = 0
+    balls_faced: int = 0
+    fours: int = 0
+    sixes: int = 0
+    dismissal: Optional[str] = None                # "c Sharma b Khan"
+    overs_bowled: float = 0.0
+    runs_conceded: int = 0
+    wickets: int = 0
+    maidens: int = 0
+    catches: int = 0
+    stumpings: int = 0
+
+
+class MatchResultBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    fixture_id: str
+    tournament_id: str
+    home_team: str
+    away_team: str
+    home_score: str                                # "312/8 (90)" or "312 & 189/4"
+    away_score: str
+    toss_won_by: Optional[str] = None
+    toss_decision: Optional[Literal["Bat", "Bowl"]] = None
+    result_text: str                               # "Indore Div won by 5 wickets"
+    winner_team: Optional[str] = None              # None if tie/draw/no-result
+    man_of_the_match: Optional[str] = None
+    player_stats: List[PlayerMatchStat] = []
+    special_performances: List[SpecialPerformance] = []
+    notes: Optional[str] = None
+
+
+class MatchResult(MatchResultBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    entered_by: Optional[str] = None
+    entered_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class MatchResultCreate(MatchResultBase):
+    entered_by: Optional[str] = None

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
     fetchPlayers, fetchPlayerStats, createPlayer, checkPlayerEligibility, approvePlayer, disqualifyPlayer, reinstatePlayer,
+    startPlayerReview, raisePlayerDiscrepancy, divisionApprovePlayer,
 } from "@/lib/api";
 import {
     User as UserIcon, Plus, Trophy, ShieldAlert, ShieldCheck, ChevronRight, Filter, X, Award, CheckCircle2, AlertTriangle, BadgeCheck, Ban,
@@ -24,12 +25,15 @@ const CATEGORY_META = {
     Guest:        { label: "Guest",          tone: "suspended", icon: ShieldAlert },
 };
 const STATUS_META = {
-    Active:      { label: "Active",       tone: "active" },
-    Pending:     { label: "Pending Approval", tone: "pending" },
-    Suspended:   { label: "Suspended",    tone: "suspended" },
-    Banned:      { label: "Banned",       tone: "suspended" },
-    Transferred: { label: "Transferred",  tone: "lapsed" },
-    Retired:     { label: "Retired",      tone: "lapsed" },
+    Active:                { label: "Active",                    tone: "active" },
+    Pending:               { label: "Pending Approval",          tone: "pending" },
+    Under_Division_Review: { label: "Under Division Review",     tone: "pending" },
+    Discrepancy_Raised:    { label: "Discrepancy Raised",        tone: "suspended" },
+    Division_Approved:     { label: "Div-Approved · Awaits MPCA", tone: "pending" },
+    Suspended:             { label: "Suspended",                 tone: "suspended" },
+    Banned:                { label: "Banned",                    tone: "suspended" },
+    Transferred:           { label: "Transferred",               tone: "lapsed" },
+    Retired:               { label: "Retired",                   tone: "lapsed" },
 };
 const ROLE_LABEL = {
     Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "Wicket-Keeper",
@@ -57,11 +61,17 @@ const StatTile = ({ icon: Icon, label, value, sub, accent = "navy" }) => {
 const NewPlayerDialog = ({ open, persona, bodies, onClose, onCreated }) => {
     const initial = {
         body_id: persona?.body_type === "District" ? persona.body_code : "",
-        full_name: "", father_name: "", date_of_birth: "", place_of_birth: "",
-        address_district: "", domicile_state: "Madhya Pradesh",
-        category: "Local_MP", role: "Batter", batting_style: "Right_Hand", bowling_style: "None",
+        full_name: "", father_name: "", mother_name: "", sibling_names: "",
+        gender: "Male", proficiency: "Club", club_academy: "",
+        date_of_birth: "", place_of_birth: "",
+        address_district: "", address_line: "", domicile_state: "Madhya Pradesh",
+        residency_since: "", employment: "", education: "",
+        category: "Local_MP", guest_subtype: "", guest_disclosure_signed: false,
+        role: "Batter", batting_style: "Right_Hand", bowling_style: "None",
+        height_cm: "", weight_kg: "",
         contact_phone: "", contact_email: "",
         guardian_name: "", guardian_phone: "",
+        court_order_flag: false, court_order_ref: "",
         tw3_verified: false,
     };
     const [form, setForm] = useState(initial);
@@ -122,8 +132,24 @@ const NewPlayerDialog = ({ open, persona, bodies, onClose, onCreated }) => {
                             <input required value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} className="input-heritage" data-testid="np-name" />
                         </div>
                         <div>
-                            <label className="label-heritage">Father's Name</label>
+                            <label className="label-heritage">Father&apos;s Name</label>
                             <input value={form.father_name} onChange={(e) => setForm((f) => ({ ...f, father_name: e.target.value }))} className="input-heritage" data-testid="np-father" />
+                        </div>
+                        <div>
+                            <label className="label-heritage">Mother&apos;s Name</label>
+                            <input value={form.mother_name} onChange={(e) => setForm((f) => ({ ...f, mother_name: e.target.value }))} className="input-heritage" data-testid="np-mother" />
+                        </div>
+                        <div>
+                            <label className="label-heritage">Sibling(s)</label>
+                            <input value={form.sibling_names} onChange={(e) => setForm((f) => ({ ...f, sibling_names: e.target.value }))} placeholder="Comma-separated" className="input-heritage" data-testid="np-siblings" />
+                        </div>
+                        <div>
+                            <label className="label-heritage">Gender *</label>
+                            <select required value={form.gender} onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))} className="input-heritage" data-testid="np-gender">
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
                         </div>
                         <div>
                             <label className="label-heritage">Date of Birth *</label>
@@ -134,9 +160,54 @@ const NewPlayerDialog = ({ open, persona, bodies, onClose, onCreated }) => {
                             <input value={form.place_of_birth} onChange={(e) => setForm((f) => ({ ...f, place_of_birth: e.target.value }))} className="input-heritage" data-testid="np-pob" />
                         </div>
                         <div>
+                            <label className="label-heritage">Proficiency</label>
+                            <select value={form.proficiency} onChange={(e) => setForm((f) => ({ ...f, proficiency: e.target.value }))} className="input-heritage" data-testid="np-proficiency">
+                                <option value="Beginner">Beginner</option>
+                                <option value="Club">Club</option>
+                                <option value="District">District</option>
+                                <option value="State">State</option>
+                                <option value="National">National</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="label-heritage">Club / Academy</label>
+                            <input value={form.club_academy} onChange={(e) => setForm((f) => ({ ...f, club_academy: e.target.value }))} className="input-heritage" data-testid="np-club" />
+                        </div>
+                        <div>
                             <label className="label-heritage">Address District (MP)</label>
                             <input value={form.address_district} onChange={(e) => setForm((f) => ({ ...f, address_district: e.target.value }))} className="input-heritage" data-testid="np-addr-dist" />
                         </div>
+                        <div className="sm:col-span-2">
+                            <label className="label-heritage">Full Address</label>
+                            <input value={form.address_line} onChange={(e) => setForm((f) => ({ ...f, address_line: e.target.value }))} className="input-heritage" data-testid="np-addr-line" />
+                        </div>
+                        <div>
+                            <label className="label-heritage">Height (cm)</label>
+                            <input type="number" value={form.height_cm} onChange={(e) => setForm((f) => ({ ...f, height_cm: e.target.value ? parseFloat(e.target.value) : "" }))} className="input-heritage" data-testid="np-height" />
+                        </div>
+                        <div>
+                            <label className="label-heritage">Weight (kg)</label>
+                            <input type="number" value={form.weight_kg} onChange={(e) => setForm((f) => ({ ...f, weight_kg: e.target.value ? parseFloat(e.target.value) : "" }))} className="input-heritage" data-testid="np-weight" />
+                        </div>
+                        <div>
+                            <label className="label-heritage">Residency Since (MP)</label>
+                            <input type="date" value={form.residency_since} onChange={(e) => setForm((f) => ({ ...f, residency_since: e.target.value }))} className="input-heritage" data-testid="np-residency" />
+                        </div>
+                        <div>
+                            <label className="label-heritage">Employment / Education</label>
+                            <input value={form.employment} onChange={(e) => setForm((f) => ({ ...f, employment: e.target.value }))} placeholder="Company or School" className="input-heritage" data-testid="np-employment" />
+                        </div>
+                    </div>
+
+                    {/* Court Order Flag */}
+                    <div className="border-t border-mpca-brass/30 pt-5">
+                        <label className="flex items-center gap-2 text-sm text-mpca-charcoal">
+                            <input type="checkbox" checked={form.court_order_flag} onChange={(e) => setForm((f) => ({ ...f, court_order_flag: e.target.checked }))} data-testid="np-court-flag" />
+                            <span className="font-semibold text-mpca-burgundy-dark">⚑ Player permitted by court order (flagged separately)</span>
+                        </label>
+                        {form.court_order_flag && (
+                            <input value={form.court_order_ref} onChange={(e) => setForm((f) => ({ ...f, court_order_ref: e.target.value }))} placeholder="Case number / Court name" className="input-heritage mt-2" data-testid="np-court-ref" />
+                        )}
                     </div>
 
                     {/* Category, Role, Style */}
@@ -184,10 +255,32 @@ const NewPlayerDialog = ({ open, persona, bodies, onClose, onCreated }) => {
                             </div>
                         </div>
                         {form.category === "Guest" && (
-                            <label className="flex items-center gap-2 mt-3 text-sm text-mpca-charcoal" data-testid="np-tw3-label">
-                                <input type="checkbox" checked={form.tw3_verified} onChange={(e) => setForm((f) => ({ ...f, tw3_verified: e.target.checked }))} data-testid="np-tw3" />
-                                TW3 (Tanner-Whitehouse) maturity panel has cleared this player.
-                            </label>
+                            <div className="mt-3 space-y-3 border-l-4 border-mpca-oxblood pl-4 py-2 bg-mpca-oxblood/5">
+                                <div className="grid sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="label-heritage">Guest Sub-Type *</label>
+                                        <select required value={form.guest_subtype} onChange={(e) => setForm((f) => ({ ...f, guest_subtype: e.target.value }))} className="input-heritage" data-testid="np-guest-subtype">
+                                            <option value="">— Select sub-type —</option>
+                                            <option value="Education">Education (max 1/team)</option>
+                                            <option value="MP_Domicile_Junior">MP Domicile · Junior (max 3/team)</option>
+                                            <option value="MP_Domicile_Senior">MP Domicile · Senior (max 2/team)</option>
+                                            <option value="Out_Of_MP_Senior">Out of MP · Senior (max 1/team)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="label-heritage">Education / Institution</label>
+                                        <input value={form.education} onChange={(e) => setForm((f) => ({ ...f, education: e.target.value }))} placeholder="School / College" className="input-heritage" data-testid="np-education" />
+                                    </div>
+                                </div>
+                                <label className="flex items-center gap-2 text-sm text-mpca-charcoal">
+                                    <input type="checkbox" checked={form.guest_disclosure_signed} onChange={(e) => setForm((f) => ({ ...f, guest_disclosure_signed: e.target.checked }))} data-testid="np-guest-disclosure" />
+                                    Guest disclosure form has been signed and attached.
+                                </label>
+                                <label className="flex items-center gap-2 text-sm text-mpca-charcoal" data-testid="np-tw3-label">
+                                    <input type="checkbox" checked={form.tw3_verified} onChange={(e) => setForm((f) => ({ ...f, tw3_verified: e.target.checked }))} data-testid="np-tw3" />
+                                    TW3 (Tanner-Whitehouse) maturity panel has cleared this player.
+                                </label>
+                            </div>
                         )}
                     </div>
 
@@ -252,31 +345,49 @@ const NewPlayerDialog = ({ open, persona, bodies, onClose, onCreated }) => {
     );
 };
 
-const DetailDrawer = ({ player, persona, onClose, onApprove, onSuspend, onReinstate }) => {
+const DetailDrawer = ({ player, persona, onClose, onApprove, onSuspend, onReinstate, onReview, onDiscrepancy, onDivisionApprove }) => {
     if (!player) return null;
     const catMeta = CATEGORY_META[player.category];
-    const stMeta = STATUS_META[player.status];
-    const isOwner = persona && (persona.body_code === player.body_id || persona.body_type === "State");
+    const stMeta = STATUS_META[player.status] || { label: player.status, tone: "pending" };
+    const isOwner = persona && (persona.body_code === player.body_id || persona.body_type === "State" || persona.body_type === "Division");
+    const isDivision = persona && persona.body_type === "Division";
+    const isMPCA = persona && persona.body_type === "State";
     return (
         <div className="fixed inset-0 bg-black/60 z-40 flex justify-end" data-testid="player-drawer">
             <div className="bg-mpca-ivory w-full max-w-2xl h-full overflow-y-auto border-l-2 border-mpca-brass">
                 <div className="bg-mpca-green-dark text-mpca-ivory px-7 py-6 border-b-4 border-mpca-oxblood relative">
                     <button onClick={onClose} className="absolute top-4 right-5 text-mpca-gold-light hover:text-mpca-oxblood text-2xl" data-testid="player-drawer-close">×</button>
+                    {player.player_display_id && (
+                        <div className="overline !text-mpca-gold-light font-mono text-[10px]">{player.player_display_id}</div>
+                    )}
                     <div className="overline !text-mpca-gold-light font-mono">{player.player_id}</div>
                     <div className="font-serif text-3xl mt-2 leading-tight">{player.full_name}</div>
-                    {player.father_name && <div className="text-sm text-mpca-gold-light/85 mt-1">s/o {player.father_name}</div>}
+                    {player.father_name && <div className="text-sm text-mpca-gold-light/85 mt-1">s/o {player.father_name}{player.mother_name ? ` · d/o ${player.mother_name}` : ""}</div>}
                     <div className="text-sm text-mpca-gold-light/85 mt-3">{player.body_id} · {ROLE_LABEL[player.role]} · age {ageYears(player.date_of_birth)}</div>
                     <div className="mt-4 flex flex-wrap gap-2">
                         <Pill tone={catMeta.tone} label={catMeta.label} icon={catMeta.icon} testId={"player-cat-" + player.category} />
                         <Pill tone={stMeta.tone} label={stMeta.label} testId={"player-status-" + player.status} />
+                        {player.court_order_flag && (
+                            <span className="pill pill-suspended" data-testid="player-court-order-pill">⚑ Court Order</span>
+                        )}
+                        {player.guest_subtype && (
+                            <span className="pill pill-pending" data-testid="player-guest-subtype">{player.guest_subtype.replace(/_/g, " ")}</span>
+                        )}
                     </div>
                 </div>
                 <div className="p-7 space-y-6">
                     <div className="grid sm:grid-cols-2 gap-4 text-sm">
                         <div><div className="overline">DOB</div><div className="font-mono text-mpca-charcoal">{fmtDate(player.date_of_birth)}</div></div>
                         <div><div className="overline">Place of Birth</div><div className="text-mpca-charcoal">{player.place_of_birth || "—"}</div></div>
+                        <div><div className="overline">Gender</div><div className="text-mpca-charcoal">{player.gender || "—"}</div></div>
+                        <div><div className="overline">Proficiency</div><div className="text-mpca-charcoal">{player.proficiency || "—"}</div></div>
+                        <div><div className="overline">Club / Academy</div><div className="text-mpca-charcoal">{player.club_academy || "—"}</div></div>
+                        <div><div className="overline">Sibling(s)</div><div className="text-mpca-charcoal">{player.sibling_names || "—"}</div></div>
                         <div><div className="overline">Domicile State</div><div className="text-mpca-charcoal">{player.domicile_state}</div></div>
                         <div><div className="overline">Address District</div><div className="text-mpca-charcoal">{player.address_district || "—"}</div></div>
+                        {player.address_line && <div className="sm:col-span-2"><div className="overline">Address</div><div className="text-mpca-charcoal">{player.address_line}</div></div>}
+                        <div><div className="overline">Height / Weight</div><div className="text-mpca-charcoal">{player.height_cm ? `${player.height_cm} cm` : "—"} · {player.weight_kg ? `${player.weight_kg} kg` : "—"}</div></div>
+                        <div><div className="overline">Division Folder</div><div className="text-mpca-charcoal font-mono">{player.division_folder || "—"} · {player.season_year || "—"}</div></div>
                         <div><div className="overline">Batting</div><div className="text-mpca-charcoal">{player.batting_style?.replace("_", "-")}</div></div>
                         <div><div className="overline">Bowling</div><div className="text-mpca-charcoal">{player.bowling_style?.replace(/_/g, "-")}</div></div>
                         <div><div className="overline">Phone</div><div className="font-mono text-mpca-charcoal">{player.contact_phone || "—"}</div></div>
@@ -284,11 +395,27 @@ const DetailDrawer = ({ player, persona, onClose, onApprove, onSuspend, onReinst
                         {player.guardian_name && (
                             <div className="sm:col-span-2"><div className="overline">Guardian</div><div className="text-mpca-charcoal">{player.guardian_name} · {player.guardian_phone || "—"}</div></div>
                         )}
+                        {player.court_order_flag && (
+                            <div className="sm:col-span-2 border border-mpca-burgundy-dark/40 bg-mpca-burgundy-dark/5 p-3">
+                                <div className="overline !text-mpca-burgundy-dark">⚑ Court Order Reference</div>
+                                <div className="text-mpca-charcoal mt-1">{player.court_order_ref || "—"}</div>
+                            </div>
+                        )}
                     </div>
 
                     {player.category === "Guest" && (
                         <div className={"border p-3 text-sm " + (player.tw3_verified ? "border-mpca-green-dark/40 bg-mpca-green-dark/5 text-mpca-green-dark" : "border-mpca-oxblood/50 bg-mpca-oxblood/5 text-mpca-oxblood")}>
                             {player.tw3_verified ? "✓ TW3 maturity verified by panel." : "⚠ TW3 not yet verified — guest registration cannot be cleared."}
+                            {player.guest_disclosure_signed ? " · Disclosure signed." : " · Disclosure not signed."}
+                        </div>
+                    )}
+
+                    {player.review_notes?.length > 0 && (
+                        <div>
+                            <div className="overline mb-2 !text-mpca-oxblood">Discrepancy Notes</div>
+                            <ul className="text-xs text-mpca-charcoal list-disc list-inside space-y-1 border border-mpca-oxblood/30 bg-mpca-oxblood/5 p-3" data-testid="player-review-notes">
+                                {player.review_notes.map((n, i) => <li key={i}>{n}</li>)}
+                            </ul>
                         </div>
                     )}
 
@@ -298,6 +425,22 @@ const DetailDrawer = ({ player, persona, onClose, onApprove, onSuspend, onReinst
                             <ul className="text-xs text-mpca-charcoal list-disc list-inside space-y-1 border border-mpca-brass/30 p-3">
                                 {player.eligibility_notes.map((n, i) => <li key={i}>{n}</li>)}
                             </ul>
+                        </div>
+                    )}
+
+                    {player.audit_trail?.length > 0 && (
+                        <div>
+                            <div className="overline mb-2">Audit Trail</div>
+                            <div className="text-xs text-mpca-charcoal space-y-1 border border-mpca-brass/20 p-3 max-h-48 overflow-y-auto" data-testid="player-audit-trail">
+                                {player.audit_trail.map((e, i) => (
+                                    <div key={i} className="flex gap-2 font-mono">
+                                        <span className="text-mpca-brass text-[10px]">{new Date(e.timestamp).toLocaleString("en-IN")}</span>
+                                        <span className="text-mpca-green-dark font-semibold">{e.event}</span>
+                                        {e.actor_name && <span>· {e.actor_name}</span>}
+                                        {e.notes && <span className="text-mpca-gray-dark">— {e.notes}</span>}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
 
@@ -311,6 +454,7 @@ const DetailDrawer = ({ player, persona, onClose, onApprove, onSuspend, onReinst
                                     <div className="text-[10px] text-mpca-gray-dark mt-2 font-mono">
                                         Imposed by {d.imposed_by} on {fmtDate(d.imposed_on)}
                                         {d.expires_on && ` · expires ${fmtDate(d.expires_on)}`}
+                                        {d.penalty_inr > 0 && ` · penalty ₹${d.penalty_inr.toLocaleString("en-IN")}`}
                                     </div>
                                 </div>
                             ))}
@@ -321,9 +465,24 @@ const DetailDrawer = ({ player, persona, onClose, onApprove, onSuspend, onReinst
                         <div className="pt-5 border-t border-mpca-brass/30">
                             <div className="overline mb-3">Actions</div>
                             <div className="flex flex-wrap gap-3">
-                                {player.status === "Pending" && (
+                                {(player.status === "Pending" || player.status === "Discrepancy_Raised") && isDivision && (
+                                    <>
+                                        <button onClick={() => onReview(player)} className="btn-heritage-secondary" data-testid="player-start-review">
+                                            <ShieldCheck size={14} /> Start Review
+                                        </button>
+                                        <button onClick={() => onDiscrepancy(player)} className="btn-heritage-secondary !border-mpca-oxblood !text-mpca-oxblood" data-testid="player-raise-discrepancy">
+                                            <AlertTriangle size={14} /> Raise Discrepancy
+                                        </button>
+                                    </>
+                                )}
+                                {(player.status === "Pending" || player.status === "Under_Division_Review") && isDivision && (
+                                    <button onClick={() => onDivisionApprove(player)} className="btn-heritage-primary" data-testid="player-division-approve">
+                                        <CheckCircle2 size={14} /> Division Approve
+                                    </button>
+                                )}
+                                {(player.status === "Pending" || player.status === "Under_Division_Review" || player.status === "Division_Approved") && (isMPCA || isDivision) && (
                                     <button onClick={() => onApprove(player)} className="btn-heritage-primary" data-testid="player-approve">
-                                        <CheckCircle2 size={14} /> Approve Registration
+                                        <CheckCircle2 size={14} /> MPCA Approve → Active
                                     </button>
                                 )}
                                 {player.status === "Active" && (
@@ -451,8 +610,10 @@ const Players = () => {
             // State sees all
         } else if (["Local_MP", "Born_Outside", "Guest"].includes(filter)) {
             r = r.filter((p) => p.category === filter);
-        } else if (["Active", "Pending", "Suspended"].includes(filter)) {
+        } else if (["Active", "Pending", "Under_Division_Review", "Discrepancy_Raised", "Division_Approved", "Suspended"].includes(filter)) {
             r = r.filter((p) => p.status === filter);
+        } else if (filter === "court_order") {
+            r = r.filter((p) => p.court_order_flag);
         }
         if (search.trim()) {
             const s = search.trim().toLowerCase();
@@ -516,10 +677,14 @@ const Players = () => {
                     ["mine", "My Scope"],
                     ["Active", "Active"],
                     ["Pending", "Pending"],
+                    ["Under_Division_Review", "In Review"],
+                    ["Discrepancy_Raised", "Discrepancy"],
+                    ["Division_Approved", "Div-Approved"],
                     ["Suspended", "Suspended"],
                     ["Local_MP", "Local-MP"],
                     ["Born_Outside", "Born-Outside"],
                     ["Guest", "Guest"],
+                    ["court_order", "Court Orders"],
                 ].map(([k, label]) => (
                     <button
                         key={k}
@@ -545,15 +710,19 @@ const Players = () => {
                 ) : (
                     filtered.map((p) => {
                         const cm = CATEGORY_META[p.category];
-                        const sm = STATUS_META[p.status];
+                        const sm = STATUS_META[p.status] || { label: p.status, tone: "pending" };
                         return (
                             <button key={p.id} onClick={() => setSelected(p)} className="ledger-row w-full text-left flex flex-wrap items-center gap-4 px-6 py-4" data-testid={"player-row-" + p.player_id.replace(/\//g, "-")}>
                                 <div className="w-9 h-9 rounded-full bg-mpca-green-dark text-mpca-gold-light flex items-center justify-center font-serif text-sm shrink-0">
                                     {p.full_name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
                                 </div>
-                                <div className="font-mono text-[10px] text-mpca-brass tracking-wider w-32">{p.player_id}</div>
+                                <div className="font-mono text-[10px] text-mpca-brass tracking-wider w-40">
+                                    {p.player_display_id || p.player_id}
+                                </div>
                                 <div className="flex-1 min-w-[200px]">
-                                    <div className="font-serif text-lg text-mpca-green-dark leading-tight">{p.full_name}</div>
+                                    <div className="font-serif text-lg text-mpca-green-dark leading-tight">
+                                        {p.full_name}{p.court_order_flag && <span className="ml-2 text-mpca-burgundy-dark text-xs">⚑</span>}
+                                    </div>
                                     <div className="text-[11px] text-mpca-gray-dark mt-1">
                                         {p.body_id} · {ROLE_LABEL[p.role]} · age {ageYears(p.date_of_birth)} · {p.batting_style?.replace("_", "-")}{p.bowling_style && p.bowling_style !== "None" ? " / " + p.bowling_style.replace(/_/g, "-") : ""}
                                     </div>
@@ -578,7 +747,14 @@ const Players = () => {
                 player={selected}
                 persona={persona}
                 onClose={() => setSelected(null)}
-                onApprove={async (p) => { try { const u = await approvePlayer(p.id); setSelected(u); await load(); } catch (e) { alert(e?.response?.data?.detail || e.message); } }}
+                onApprove={async (p) => { try { const u = await approvePlayer(p.id, { actor_name: persona?.display_name || "Reviewer", actor_body_id: persona?.body_code || "MPCA", actor_post: persona?.role_label }); setSelected(u); await load(); } catch (e) { alert(e?.response?.data?.detail || e.message); } }}
+                onReview={async (p) => { try { const u = await startPlayerReview(p.id, { actor_name: persona?.display_name || "Reviewer", actor_body_id: persona?.body_code || "MPCA", actor_post: persona?.role_label || "Division Secretary" }); setSelected(u); await load(); } catch (e) { alert(e?.response?.data?.detail || e.message); } }}
+                onDiscrepancy={async (p) => {
+                    const notes = window.prompt("Describe the discrepancy (this will be sent back to the applicant):");
+                    if (!notes) return;
+                    try { const u = await raisePlayerDiscrepancy(p.id, { actor_name: persona?.display_name || "Reviewer", actor_body_id: persona?.body_code || "MPCA", actor_post: persona?.role_label, notes }); setSelected(u); await load(); } catch (e) { alert(e?.response?.data?.detail || e.message); }
+                }}
+                onDivisionApprove={async (p) => { try { const u = await divisionApprovePlayer(p.id, { actor_name: persona?.display_name || "Division Sec", actor_body_id: persona?.body_code || "DIV-IND", actor_post: persona?.role_label || "Division Secretary" }); setSelected(u); await load(); } catch (e) { alert(e?.response?.data?.detail || e.message); } }}
                 onSuspend={(p) => setSuspendTarget(p)}
                 onReinstate={async (p) => { try { const u = await reinstatePlayer(p.id); setSelected(u); await load(); } catch (e) { alert(e?.response?.data?.detail || e.message); } }}
             />

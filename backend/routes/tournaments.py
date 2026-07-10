@@ -55,10 +55,53 @@ async def create_tournament(payload: TournamentCreate):
         raise HTTPException(400, "age_floor_years cannot exceed age_cap_years")
     t = Tournament(
         tournament_no=await _next_tournament_no(payload.fiscal_cycle),
+        status="Draft",
         **payload.model_dump(),
     )
     await db.tournaments.insert_one(t.model_dump())
     return t
+
+
+@api_router.post("/tournaments/{tid}/submit-for-approval", response_model=Tournament)
+async def submit_tournament(tid: str, actor_name: str, actor_body_id: str, actor_post: str = "Secretary", notes: Optional[str] = None):
+    """Draft → Awaiting_Approval."""
+    doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Tournament not found")
+    if doc["status"] not in ("Draft", "Rejected"):
+        raise HTTPException(400, f"Cannot submit for approval from status {doc['status']}")
+    from models import ApprovalStep
+    step = ApprovalStep(stage="Awaiting_Approval", actor_post=actor_post, actor_name=actor_name, actor_body_id=actor_body_id, decision="Submitted", notes=notes)
+    await db.tournaments.update_one({"id": tid}, {"$set": {"status": "Awaiting_Approval"}, "$push": {"approval_chain": step.model_dump()}})
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+
+@api_router.post("/tournaments/{tid}/approve", response_model=Tournament)
+async def approve_tournament(tid: str, actor_name: str, actor_body_id: str = "MPCA", actor_post: str = "Hon. Secretary", notes: Optional[str] = None):
+    """Awaiting_Approval → Upcoming (approved & live)."""
+    doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Tournament not found")
+    if doc["status"] not in ("Awaiting_Approval", "Draft"):
+        raise HTTPException(400, f"Cannot approve from status {doc['status']}")
+    from models import ApprovalStep
+    step = ApprovalStep(stage="Approved", actor_post=actor_post, actor_name=actor_name, actor_body_id=actor_body_id, decision="Sanctioned", notes=notes)
+    await db.tournaments.update_one({"id": tid}, {"$set": {"status": "Upcoming"}, "$push": {"approval_chain": step.model_dump()}})
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+
+@api_router.post("/tournaments/{tid}/reject", response_model=Tournament)
+async def reject_tournament(tid: str, actor_name: str, actor_body_id: str = "MPCA", actor_post: str = "Hon. Secretary", notes: Optional[str] = None):
+    """Reject a tournament proposal."""
+    doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Tournament not found")
+    if doc["status"] not in ("Awaiting_Approval", "Draft"):
+        raise HTTPException(400, f"Cannot reject from status {doc['status']}")
+    from models import ApprovalStep
+    step = ApprovalStep(stage="Rejected", actor_post=actor_post, actor_name=actor_name, actor_body_id=actor_body_id, decision="Rejected", notes=notes)
+    await db.tournaments.update_one({"id": tid}, {"$set": {"status": "Rejected"}, "$push": {"approval_chain": step.model_dump()}})
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
 
 
 @api_router.post("/tournaments/{tid}/status/{new_status}", response_model=Tournament)
@@ -68,6 +111,9 @@ async def set_tournament_status(tid: str, new_status: TournamentStatus):
     if not doc:
         raise HTTPException(404, "Tournament not found")
     allowed = {
+        "Draft": ["Awaiting_Approval", "Cancelled"],
+        "Awaiting_Approval": ["Upcoming", "Rejected", "Cancelled"],
+        "Rejected": ["Draft", "Cancelled"],
         "Upcoming": ["Squad_Selection", "Cancelled"],
         "Squad_Selection": ["In_Progress", "Upcoming", "Cancelled"],
         "In_Progress": ["Completed", "Cancelled"],
@@ -106,22 +152,6 @@ async def create_squad(payload: SquadCreate):
     return squad
 
 
-def _check_player_against_tournament(player: dict, t: dict) -> tuple[bool, List[str]]:
-    """Returns (ok, [warnings])."""
-    warnings: List[str] = []
-    age = _age_years(player.get("date_of_birth") or "")
-    if t.get("age_cap_years") and age > t["age_cap_years"]:
-        return False, [f"Player age {age} exceeds tournament cap of U-{t['age_cap_years']}."]
-    if t.get("age_floor_years") and age < t["age_floor_years"]:
-        return False, [f"Player age {age} below tournament floor of {t['age_floor_years']}."]
-    if player.get("category") == "Guest" and not t.get("allows_guests"):
-        return False, [f"Tournament '{t['name']}' does not permit Guest-category players."]
-    if player.get("status") in ("Suspended", "Banned"):
-        return False, [f"Player is currently {player['status']} and cannot be selected."]
-    if player.get("status") == "Pending":
-        warnings.append("Player registration is still Pending — should be approved before tournament.")
-    return True, warnings
-
 
 @api_router.post("/squads/{squad_id}/players", response_model=Squad)
 async def add_player_to_squad(squad_id: str, payload: SquadAddPlayer):
@@ -153,8 +183,8 @@ async def add_player_to_squad(squad_id: str, payload: SquadAddPlayer):
     # Capacity check
     if len(squad.get("members", [])) >= t.get("max_squad_size", 18):
         raise HTTPException(400, f"Squad is full (max {t['max_squad_size']} members)")
-    # Eligibility against tournament rules
-    ok, warns = _check_player_against_tournament(player, t)
+    # Eligibility against tournament rules (with M1-C guest quotas)
+    ok, warns = _check_player_against_tournament(player, t, squad.get("members", []))
     if not ok:
         raise HTTPException(400, " · ".join(warns))
 
@@ -168,6 +198,7 @@ async def add_player_to_squad(squad_id: str, payload: SquadAddPlayer):
         player_no=player["player_id"],
         full_name=player["full_name"],
         role=player["role"],
+        guest_subtype=player.get("guest_subtype"),
         is_captain=payload.is_captain,
         is_keeper=payload.is_keeper or player["role"] == "Wicket_Keeper",
     )

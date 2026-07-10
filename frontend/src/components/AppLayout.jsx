@@ -57,6 +57,7 @@ const NAV_DOMAINS = [
             { to: "/players", label: "Player Register", icon: TrophyIcon },
             { to: "/selection", label: "Selection Funnel", icon: Users },
             { to: "/tournaments", label: "Tournaments", icon: TrophyIcon },
+            { to: "/fixtures", label: "Fixtures & Rankings", icon: Calendar },
             { to: "/venues", label: "Venues & Grounds", icon: MapPinIcon },
         ],
     },

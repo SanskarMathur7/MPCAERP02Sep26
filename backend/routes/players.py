@@ -13,6 +13,7 @@ from core.helpers import (
     _next_player_id, _new_player_display_id, _next_player_display_serial,
     _derive_division_folder, _age_years, _validate_eligibility, _create_notification,
 )
+from core.ai_validator import _run_player_doc_validation
 
 
 # ---------------- Routes: Player Module (Phase IV — M1) ----------------
@@ -417,6 +418,44 @@ async def reinstate_player(pid: str):
         raise HTTPException(400, f"Cannot reinstate from status {doc['status']}")
     await db.players.update_one({"id": pid}, {"$set": {"status": "Active"}})
     await _append_audit(pid, PlayerAuditEvent(event="reinstated", notes="Back to Active status."))
+    return await db.players.find_one({"id": pid}, {"_id": 0})
+
+
+@api_router.post("/players/{pid}/ai-validate-documents", response_model=Player)
+async def ai_validate_player_documents(pid: str):
+    """Run Gemini 3 Flash OCR + fraud check on this player's uploaded KYC documents.
+    Stores the verdict on the player record and appends an audit event.
+    """
+    doc = await db.players.find_one({"id": pid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Player not found")
+    verdict = await _run_player_doc_validation(doc)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.players.update_one(
+        {"id": pid},
+        {"$set": {
+            "ai_document_validation": verdict,
+            "ai_validated_at": now,
+        }},
+    )
+    await _append_audit(pid, PlayerAuditEvent(
+        event="ai_validated",
+        actor_name="Gemini 3 Flash",
+        notes=f"{verdict.get('decision')} · {verdict.get('reasoning', '')[:180]}",
+    ))
+    # If AI flags suspected fraud, notify MPCA
+    if verdict.get("decision") == "SUSPECTED_FRAUD":
+        await _create_notification(
+            recipient_role_id="secretary",
+            recipient_body_id="MPCA",
+            title=f"AI flagged possible fraud on player {doc.get('player_display_id') or doc.get('player_id')}",
+            message=(verdict.get("reasoning") or "")[:180],
+            link=f"/players/{pid}",
+            related_type="player",
+            related_id=pid,
+            severity="critical",
+            kind="info",
+        )
     return await db.players.find_one({"id": pid}, {"_id": 0})
 
 

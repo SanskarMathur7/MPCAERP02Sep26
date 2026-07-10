@@ -5,10 +5,11 @@ import {
     fetchPlayer, updatePlayer, addPlayerDocument, verifyPlayerDocument,
     startPlayerReview, raisePlayerDiscrepancy, divisionApprovePlayer,
     approvePlayer, reinstatePlayer, reopenPlayer, disqualifyPlayer,
+    aiValidatePlayerDocuments,
 } from "@/lib/api";
 import {
     ArrowLeft, User, FileText, ShieldCheck, ClipboardList, Upload, X, CheckCircle2, AlertTriangle,
-    Ban, Loader2, ExternalLink, Trash2, Edit3, Save, Gavel, ScrollText,
+    Ban, Loader2, ExternalLink, Trash2, Edit3, Save, Gavel, ScrollText, Sparkles, ShieldAlert,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 
@@ -368,8 +369,110 @@ const OverviewTab = ({ player, persona, locked, onChanged }) => {
     );
 };
 
+const AI_DECISION_META = {
+    CLEAN:           { label: "Clean · No Issues Found", tone: "active",    icon: CheckCircle2, color: "bg-mpca-green-dark/10 border-mpca-green-dark/40 text-mpca-green-dark" },
+    MINOR_ISSUES:    { label: "Minor Issues",            tone: "pending",   icon: AlertTriangle, color: "bg-mpca-gold/10 border-mpca-gold/50 text-mpca-gold-dark" },
+    FLAGGED:         { label: "Flagged for Review",      tone: "suspended", icon: AlertTriangle, color: "bg-mpca-oxblood/10 border-mpca-oxblood/40 text-mpca-oxblood" },
+    SUSPECTED_FRAUD: { label: "SUSPECTED FRAUD",         tone: "suspended", icon: ShieldAlert,   color: "bg-mpca-burgundy-dark/15 border-mpca-burgundy-dark text-mpca-burgundy-dark" },
+};
+
+const MATCH_ICON = {
+    match:         { char: "✓", cls: "text-mpca-green-dark" },
+    partial:       { char: "≈", cls: "text-mpca-gold-dark" },
+    mismatch:      { char: "✗", cls: "text-mpca-oxblood" },
+    not_visible:   { char: "?", cls: "text-mpca-gray-dark" },
+    not_applicable:{ char: "—", cls: "text-mpca-gray-dark" },
+};
+
+const AIReportCard = ({ player, onRerun, running }) => {
+    const v = player.ai_document_validation;
+    if (!v) return null;
+    const meta = AI_DECISION_META[v.decision] || AI_DECISION_META.FLAGGED;
+    const Icon = meta.icon;
+    return (
+        <div className={`border-2 ${meta.color} p-5`} data-testid="ai-report-card">
+            <div className="flex items-start gap-3">
+                <div className="mt-1"><Sparkles size={16} strokeWidth={1.75} /></div>
+                <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <Icon size={18} />
+                        <div className="font-serif text-lg" data-testid="ai-decision">{meta.label}</div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest ml-auto opacity-70">
+                            Confidence {Math.round((v.confidence || 0) * 100)}%
+                        </span>
+                    </div>
+                    <div className="text-sm mt-2 leading-relaxed">{v.reasoning}</div>
+                    <div className="text-[10px] font-mono mt-3 opacity-70">
+                        Last validated {player.ai_validated_at ? new Date(player.ai_validated_at).toLocaleString("en-IN") : "—"} · Gemini 3 Flash
+                    </div>
+                </div>
+                <button onClick={onRerun} disabled={running} className="btn-heritage-ghost !text-xs !py-1 !px-3" data-testid="ai-rerun">
+                    {running ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Re-run
+                </button>
+            </div>
+
+            {v.warnings && v.warnings.length > 0 && (
+                <div className="mt-4 border-t border-current/20 pt-3">
+                    <div className="overline mb-2 !text-current opacity-75">Cross-Document Warnings</div>
+                    <ul className="text-xs list-disc list-inside space-y-1">
+                        {v.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                    </ul>
+                </div>
+            )}
+
+            {v.documents && v.documents.length > 0 && (
+                <div className="mt-4 border-t border-current/20 pt-3">
+                    <div className="overline mb-2 !text-current opacity-75">Per-Document Extraction</div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-xs border-collapse" data-testid="ai-doc-table">
+                            <thead>
+                                <tr className="text-[10px] uppercase tracking-wider opacity-75 border-b border-current/20">
+                                    <th className="text-left py-2 pr-3">Document</th>
+                                    <th className="text-left py-2 pr-3">Extracted Name</th>
+                                    <th className="text-left py-2 pr-3">Extracted DOB</th>
+                                    <th className="text-center py-2 pr-3">Name</th>
+                                    <th className="text-center py-2 pr-3">DOB</th>
+                                    <th className="text-right py-2">OCR</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {v.documents.map((d, i) => {
+                                    const nm = MATCH_ICON[d.name_match] || MATCH_ICON.not_visible;
+                                    const dm = MATCH_ICON[d.dob_match]  || MATCH_ICON.not_visible;
+                                    return (
+                                        <tr key={i} className="border-b border-current/10" data-testid={`ai-doc-row-${d.doc_type}`}>
+                                            <td className="py-2 pr-3 font-serif">{(d.doc_type || "").replace(/_/g, " ")}</td>
+                                            <td className="py-2 pr-3 font-mono text-[11px]">{d.extracted_name || "—"}</td>
+                                            <td className="py-2 pr-3 font-mono text-[11px]">{d.extracted_dob || "—"}</td>
+                                            <td className={`py-2 pr-3 text-center font-bold ${nm.cls}`}>{nm.char}</td>
+                                            <td className={`py-2 pr-3 text-center font-bold ${dm.cls}`}>{dm.char}</td>
+                                            <td className="py-2 text-right font-mono text-[11px]">{Math.round((d.ocr_confidence || 0) * 100)}%</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    {v.documents.some((d) => d.issues && d.issues.length > 0) && (
+                        <div className="mt-3 space-y-1">
+                            {v.documents.filter((d) => d.issues && d.issues.length > 0).map((d, i) => (
+                                <div key={i} className="text-[11px]">
+                                    <span className="font-mono uppercase opacity-75">{(d.doc_type || "").replace(/_/g, " ")}:</span>{" "}
+                                    <span>{d.issues.join(" · ")}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 /** KYC / permanent document repository. */
 const DocumentsTab = ({ player, persona, onChanged }) => {
+    const [aiRunning, setAiRunning] = useState(false);
+    const [aiError, setAiError] = useState(null);
     const uploaded = useMemo(() => {
         const m = {};
         (player.documents || []).forEach((d) => { m[d.doc_type] = d; });
@@ -377,6 +480,18 @@ const DocumentsTab = ({ player, persona, onChanged }) => {
     }, [player.documents]);
     const locked = !!player.submission_locked;
     const requiredMissing = DOC_SLOTS.filter((s) => s.required && !uploaded[s.key]);
+    const canValidate = persona && (persona.body_type === "State" || persona.body_type === "Division");
+
+    const runAi = async () => {
+        setAiRunning(true); setAiError(null);
+        try {
+            const updated = await aiValidatePlayerDocuments(player.id);
+            onChanged(updated);
+        } catch (e) {
+            setAiError(e?.response?.data?.detail || e.message);
+        } finally { setAiRunning(false); }
+    };
+
     return (
         <div className="space-y-6" data-testid="documents-tab">
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -385,6 +500,7 @@ const DocumentsTab = ({ player, persona, onChanged }) => {
                     <p className="text-sm text-mpca-gray-dark mt-2 max-w-2xl">
                         Upload birth certificate, ID proofs, marksheets and other permanent information for this player.
                         Files are stored on the MPCA server; Division Reviewer can mark each document as verified.
+                        Run the AI validator to cross-check name/DOB across all documents.
                     </p>
                 </div>
                 <div className="text-right">
@@ -394,6 +510,32 @@ const DocumentsTab = ({ player, persona, onChanged }) => {
                     <div className="text-[10px] uppercase tracking-wider text-mpca-brass">Verified</div>
                 </div>
             </div>
+
+            {/* AI Validator control */}
+            {canValidate && (player.documents || []).length > 0 && !player.ai_document_validation && (
+                <div className="border-2 border-dashed border-mpca-brass/40 p-5 bg-mpca-parchment/30 flex items-center gap-4 flex-wrap">
+                    <Sparkles size={20} className="text-mpca-oxblood" />
+                    <div className="flex-1 min-w-[280px]">
+                        <div className="font-serif text-lg text-mpca-green-dark">AI Document Validator</div>
+                        <div className="text-xs text-mpca-gray-dark mt-1">
+                            Gemini 3 Flash reads every uploaded KYC document, extracts name / DOB / father, and flags mismatches or tampering signals.
+                        </div>
+                    </div>
+                    <button onClick={runAi} disabled={aiRunning} className="btn-heritage-primary" data-testid="ai-run-btn">
+                        {aiRunning ? <><Loader2 size={14} className="animate-spin" /> Analysing…</> : <><Sparkles size={14} /> Run AI Validation</>}
+                    </button>
+                </div>
+            )}
+
+            {player.ai_document_validation && (
+                <AIReportCard player={player} onRerun={runAi} running={aiRunning} />
+            )}
+
+            {aiError && (
+                <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood p-3 text-sm" data-testid="ai-error">
+                    {aiError}
+                </div>
+            )}
 
             {locked && (
                 <div className="border border-mpca-brass/40 bg-mpca-parchment/60 p-3 text-xs text-mpca-charcoal flex items-center gap-2">
@@ -652,6 +794,12 @@ const PlayerDetail = () => {
                                 {player.court_order_flag && <span className="pill pill-suspended" data-testid="hdr-court-order">⚑ Court Order</span>}
                                 {player.guest_subtype && <span className="pill pill-pending">{player.guest_subtype.replace(/_/g, " ")}</span>}
                                 {player.submission_locked && <span className="pill pill-lapsed" data-testid="hdr-locked"><ShieldCheck size={10} /> Locked</span>}
+                                {player.ai_document_validation && (
+                                    <span className={"pill " + (AI_DECISION_META[player.ai_document_validation.decision]?.tone === "active" ? "pill-active" : AI_DECISION_META[player.ai_document_validation.decision]?.tone === "pending" ? "pill-pending" : "pill-suspended")}
+                                          data-testid={`hdr-ai-${player.ai_document_validation.decision}`}>
+                                        <Sparkles size={10} /> AI · {AI_DECISION_META[player.ai_document_validation.decision]?.label.split(' ·')[0] || player.ai_document_validation.decision}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>

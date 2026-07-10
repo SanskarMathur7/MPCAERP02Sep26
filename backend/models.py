@@ -683,6 +683,8 @@ class Player(PlayerBase):
     documents: List[PlayerDocument] = []          # portal uploads
     review_notes: List[str] = []                  # discrepancies raised by Division
     audit_trail: List[PlayerAuditEvent] = []
+    ai_document_validation: Optional[dict] = None    # last AI verdict (see core.ai_validator._run_player_doc_validation)
+    ai_validated_at: Optional[str] = None
     registered_on: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     eligibility_notes: List[str] = []             # human-readable validator output
     tw3_verified: bool = False                    # TW3 maturity check (for Guests)

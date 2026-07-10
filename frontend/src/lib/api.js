@@ -339,6 +339,10 @@ export const verifyPlayerDocument = async (id, doc_type, action) => {
     const { data } = await api.post(`/players/${id}/documents/${doc_type}/verify`, action);
     return data;
 };
+export const aiValidatePlayerDocuments = async (id) => {
+    const { data } = await api.post(`/players/${id}/ai-validate-documents`);
+    return data;
+};
 export const disqualifyPlayer = async (id, flag) => {
     const { data } = await api.post(`/players/${id}/disqualify`, flag);
     return data;

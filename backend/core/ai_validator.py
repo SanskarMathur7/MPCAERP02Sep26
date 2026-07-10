@@ -255,3 +255,159 @@ async def _apply_ai_verdict(claim_doc: dict, verdict: dict, actor_name: Optional
             )
 
     return updated
+
+# ─── Phase M1-C · AI Player Document Validator ───
+# Fraud-prevention layer: OCR each uploaded KYC document (birth cert, Aadhaar,
+# PAN, marksheets, Samagra) and cross-check name / DOB / father_name against
+# the values entered in the Player Register.
+
+PLAYER_AI_SYSTEM_MESSAGE = """You are the MPCA Player Document Fraud-Prevention AI.
+
+Your job: read the KYC documents attached to a player registration and cross-verify:
+  1. Name on each document matches the registered full_name.
+  2. Date-of-birth on Birth Certificate / Aadhaar / Marksheet matches the registered DOB.
+  3. Father's name (where visible on Aadhaar or affidavit) matches registered father_name.
+  4. Any obvious signs of tampering, cut-paste, mismatched fonts, or handwriting inconsistencies.
+
+You NEVER approve or reject the player yourself. You only produce a structured verdict that human reviewers act on.
+
+Respond with a SINGLE JSON object — no prose before or after, no code fences. Shape:
+
+{
+  "decision": "CLEAN" | "MINOR_ISSUES" | "FLAGGED" | "SUSPECTED_FRAUD",
+  "reasoning": "<3-6 sentence summary of the overall assessment>",
+  "documents": [
+    {
+      "doc_type": "<slot key such as birth_certificate | aadhar | pan | marksheet_10 | samagra_id | passport | photo | signature | affidavit | transfer_certificate | hospital_cert | marksheet_12>",
+      "extracted_name": "<name as read from doc or null>",
+      "extracted_dob": "<YYYY-MM-DD or null>",
+      "extracted_father_name": "<or null>",
+      "name_match": "match" | "partial" | "mismatch" | "not_visible",
+      "dob_match": "match" | "mismatch" | "not_visible" | "not_applicable",
+      "issues": ["<any specific issues found on this doc>"],
+      "ocr_confidence": 0.0..1.0
+    }
+  ],
+  "warnings": ["<cross-document inconsistencies, tampering signals, missing required docs>"],
+  "confidence": 0.0..1.0
+}
+
+Decision guidance:
+- CLEAN: All documents match, no tampering signals, high OCR confidence.
+- MINOR_ISSUES: Small inconsistencies (partial name match, low OCR confidence on one doc) but nothing suspicious.
+- FLAGGED: Meaningful mismatch (DOB differs by > 30 days across docs, name mismatch on 1 primary doc, one required doc appears blurry/altered).
+- SUSPECTED_FRAUD: Clear signals — e.g. tampered date fields, mismatched fonts, spliced photo, or DOB gap of years across primary docs.
+
+Be strict but explain your findings. Always cite the specific document type.
+"""
+
+
+async def _collect_player_documents(player_doc: dict) -> list:
+    """Return list of FileContentWithMimeType for every uploaded doc on this player."""
+    out: list = []
+    for d in player_doc.get("documents", []) or []:
+        url = d.get("url") or ""
+        if "/api/uploads/" not in url:
+            continue
+        file_id = url.rsplit("/", 1)[-1]
+        rec = await db.uploads.find_one({"id": file_id})
+        if not rec:
+            continue
+        path = rec.get("_path")
+        mime = rec.get("mime_type") or "application/octet-stream"
+        if not path or not Path(path).exists():
+            continue
+        out.append(FileContentWithMimeType(file_path=path, mime_type=mime))
+    return out
+
+
+def _build_player_ai_prompt(player_doc: dict) -> str:
+    docs_list = "\n".join(
+        f"  - {d.get('doc_type')} -> {d.get('filename') or d.get('url')}"
+        for d in (player_doc.get("documents") or [])
+    ) or "  (none uploaded)"
+    guest_bit = ""
+    if player_doc.get("guest_subtype"):
+        guest_bit = f" - {player_doc.get('guest_subtype')}"
+    return f"""REGISTERED PLAYER RECORD (ground truth):
+
+- Player ID: {player_doc.get('player_display_id') or player_doc.get('player_id')}
+- Full Name: {player_doc.get('full_name')}
+- Father's Name: {player_doc.get('father_name') or '(not provided)'}
+- Mother's Name: {player_doc.get('mother_name') or '(not provided)'}
+- Date of Birth: {player_doc.get('date_of_birth')}
+- Gender: {player_doc.get('gender')}
+- Category: {player_doc.get('category')}{guest_bit}
+- Registering Body: {player_doc.get('body_id')}
+
+UPLOADED DOCUMENTS (map doc_type -> filename, then check the attached files IN ORDER):
+{docs_list}
+
+Extract name/DOB/father from each attached document. Compare against the ground-truth values above. Return your verdict JSON.
+"""
+
+
+PLAYER_AI_DECISION_CODES = {"CLEAN", "MINOR_ISSUES", "FLAGGED", "SUSPECTED_FRAUD"}
+
+
+async def _run_player_doc_validation(player_doc: dict) -> dict:
+    """OCR + fraud check on player KYC documents. Returns verdict dict."""
+    if not EMERGENT_LLM_KEY:
+        return {
+            "decision": "FLAGGED",
+            "reasoning": "AI validator unavailable (no EMERGENT_LLM_KEY configured).",
+            "documents": [],
+            "warnings": ["AI not configured"],
+            "confidence": 0.0,
+        }
+    if not (player_doc.get("documents") or []):
+        return {
+            "decision": "FLAGGED",
+            "reasoning": "No documents uploaded - cannot validate. Please upload at least Birth Certificate + Aadhaar + Photo.",
+            "documents": [],
+            "warnings": ["No documents to check"],
+            "confidence": 0.0,
+        }
+
+    attachments = await _collect_player_documents(player_doc)
+    if not attachments:
+        return {
+            "decision": "FLAGGED",
+            "reasoning": "Uploaded documents could not be located on the server. Please re-upload.",
+            "documents": [],
+            "warnings": ["Attachments missing"],
+            "confidence": 0.0,
+        }
+
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"player-doc-{player_doc.get('id')}",
+        system_message=PLAYER_AI_SYSTEM_MESSAGE,
+    ).with_model(AI_MODEL_PROVIDER, AI_MODEL_NAME)
+
+    msg = UserMessage(
+        text=_build_player_ai_prompt(player_doc),
+        file_contents=attachments,
+    )
+
+    try:
+        raw = await chat.send_message(msg)
+    except Exception as e:
+        return {
+            "decision": "FLAGGED",
+            "reasoning": f"AI validator error - route to human review. ({type(e).__name__}: {str(e)[:200]})",
+            "documents": [],
+            "warnings": ["AI call failed"],
+            "confidence": 0.0,
+        }
+
+    parsed = _parse_ai_response(raw if isinstance(raw, str) else str(raw))
+    if parsed.get("decision") not in PLAYER_AI_DECISION_CODES:
+        parsed["decision"] = "FLAGGED"
+        parsed.setdefault("warnings", []).append("AI returned an unknown decision code; defaulted to FLAGGED.")
+    parsed.setdefault("reasoning", "(no reasoning returned)")
+    parsed.setdefault("documents", [])
+    parsed.setdefault("warnings", [])
+    parsed.setdefault("confidence", 0.0)
+    return parsed
+

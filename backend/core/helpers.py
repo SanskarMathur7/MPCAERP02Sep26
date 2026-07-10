@@ -561,10 +561,10 @@ async def _next_tournament_no(cycle: str) -> str:
 # ---- _check_player_against_tournament ----
 # M1-C guest quotas per squad:
 GUEST_QUOTA_PER_SQUAD = {
-    "Education":              {"junior": 1, "senior": 1, "total": 1},
-    "MP_Domicile_Junior":     {"junior": 3, "senior": 0, "total": 3},
-    "MP_Domicile_Senior":     {"junior": 0, "senior": 2, "total": 2},
-    "Out_Of_MP_Senior":       {"junior": 0, "senior": 1, "total": 1},
+    "Education":              {"total": 1},  # max 1 per team
+    "MP_Domicile_Junior":     {"total": 3},
+    "MP_Domicile_Senior":     {"total": 2},
+    "Out_Of_MP_Senior":       {"total": 1},
 }
 
 
@@ -600,7 +600,7 @@ def _check_player_against_tournament(player: dict, t: dict, existing_squad_membe
 
 # ---- fixture helpers ----
 async def _next_fixture_no(cycle: str) -> str:
-    count = await db.fixtures.count_documents({})
+    count = await db.fixtures.count_documents({"fixture_no": {"$regex": f"^FX-{cycle}-"}})
     return f"FX-{cycle}-{count + 1:04d}"
 
 

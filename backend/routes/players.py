@@ -60,6 +60,24 @@ async def list_players(
     return docs
 
 
+@api_router.get("/players/lookup")
+async def lookup_player(display_id: Optional[str] = None, player_id: Optional[str] = None):
+    """Safe lookup by player_display_id (which contains '/') or player_id (MPCA/…).
+    Use this instead of GET /players/{id} when the identifier has slashes.
+    """
+    if not display_id and not player_id:
+        raise HTTPException(400, "Provide either display_id or player_id")
+    query = {}
+    if display_id:
+        query["player_display_id"] = display_id
+    elif player_id:
+        query["player_id"] = player_id
+    doc = await db.players.find_one(query, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Player not found")
+    return doc
+
+
 @api_router.get("/players/{pid}", response_model=Player)
 async def get_player(pid: str):
     """Fetch by either id (uuid), player_id (MPCA/...), or new display id."""
@@ -113,6 +131,9 @@ async def create_player(payload: PlayerCreate):
     player.audit_trail.append(PlayerAuditEvent(
         event="created", notes=f"Registered under {payload.body_id}",
     ))
+    # Persist optional documents supplied at portal registration
+    if payload.documents:
+        player.documents = list(payload.documents)
     await db.players.insert_one(player.model_dump())
     # Notify Division reviewer
     if division_folder:

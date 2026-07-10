@@ -78,12 +78,12 @@ async def submit_tournament(tid: str, actor_name: str, actor_body_id: str, actor
 
 @api_router.post("/tournaments/{tid}/approve", response_model=Tournament)
 async def approve_tournament(tid: str, actor_name: str, actor_body_id: str = "MPCA", actor_post: str = "Hon. Secretary", notes: Optional[str] = None):
-    """Awaiting_Approval → Upcoming (approved & live)."""
+    """Awaiting_Approval → Upcoming (approved & live). Must be submitted first."""
     doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Tournament not found")
-    if doc["status"] not in ("Awaiting_Approval", "Draft"):
-        raise HTTPException(400, f"Cannot approve from status {doc['status']}")
+    if doc["status"] != "Awaiting_Approval":
+        raise HTTPException(400, f"Approve requires status=Awaiting_Approval, got {doc['status']}. Submit for approval first.")
     from models import ApprovalStep
     step = ApprovalStep(stage="Approved", actor_post=actor_post, actor_name=actor_name, actor_body_id=actor_body_id, decision="Sanctioned", notes=notes)
     await db.tournaments.update_one({"id": tid}, {"$set": {"status": "Upcoming"}, "$push": {"approval_chain": step.model_dump()}})

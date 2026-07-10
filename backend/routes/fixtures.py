@@ -103,6 +103,8 @@ async def remove_official(fid: str, oid: str):
 @api_router.post("/fixtures/{fid}/log-hours")
 async def log_work_hours(fid: str, official_id: str, hours: float, note: Optional[str] = None):
     """M2-C · Log work hours for an allocated HR against a specific fixture."""
+    if hours <= 0:
+        raise HTTPException(400, "Work hours must be positive.")
     doc = await db.fixtures.find_one({"id": fid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Fixture not found")

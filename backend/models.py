@@ -805,6 +805,8 @@ class Tournament(TournamentBase):
     plan_status: "TournamentPlanStatus" = "Draft"
     plan_approval_chain: List[ApprovalStep] = []
     auto_budget_id: Optional[str] = None         # linked TournamentBudget auto-generated
+    # T5: expense events — log of every extra-expense request + action
+    expense_events: List[ApprovalStep] = []
     created_by: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -1008,7 +1010,7 @@ VariableItemStatus = Literal["Pending", "Approved", "Rejected"]
 
 class BudgetHeadAllocation(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    head: BudgetHead
+    head: str                                    # head_label from GrantSchemeRate or new head from extra-expense request
     limit_inr: float = 0.0
     notes: Optional[str] = None
 
@@ -1590,3 +1592,54 @@ class MatchOfficialDAUpdate(BaseModel):
     bank_ifsc: Optional[str] = None
     pan: Optional[str] = None
     notes: Optional[str] = None
+
+# ---------------- Phase T5 · Extra Expense Approval ----------------
+# Division requests MPCA approval for expenses NOT covered by the original
+# auto-budget (either a new head, or extra limit on an existing head).
+# Every action is logged on the Tournament.expense_events for full audit.
+
+ExtraExpenseStatus = Literal["Draft", "Submitted", "Approved", "Rejected", "Info_Requested"]
+
+
+class ExtraExpenseRequestBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    tournament_id: str
+    body_id: str                                 # requesting body (Division)
+    head_code: str                               # existing head_code OR new (free text)
+    head_label: str                              # display label
+    is_new_head: bool = False                    # true if head_code not in rate card
+    amount_inr: float                            # additional amount requested
+    justification: str                           # why over-budget?
+    linked_invoice_id: Optional[str] = None      # if triggered by an invoice
+    linked_invoice_ref: Optional[str] = None
+    supporting_file_url: Optional[str] = None    # optional attachment
+
+
+class ExtraExpenseRequest(ExtraExpenseRequestBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    request_ref: str                             # "EER-2025-26-0001"
+    status: ExtraExpenseStatus = "Draft"
+    approval_chain: List[ApprovalStep] = []
+    requested_by: Optional[str] = None
+    approved_amount_inr: float = 0.0             # MPCA may sanction less than requested
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    info_request_notes: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ExtraExpenseCreate(ExtraExpenseRequestBase):
+    requested_by: Optional[str] = None
+
+
+class ExtraExpenseAction(BaseModel):
+    """Actor payload for submit/approve/reject/info request."""
+    model_config = ConfigDict(extra="ignore")
+    actor_name: str
+    actor_body_id: str = "MPCA"
+    actor_post: Optional[str] = None
+    notes: Optional[str] = None
+    approved_amount_inr: Optional[float] = None  # MPCA can sanction less
+

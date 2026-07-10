@@ -10,10 +10,14 @@ import {
     fetchTournamentInvoices, createTournamentInvoice, aiExtractInvoice,
     submitTournamentInvoice, approveTournamentInvoice, rejectTournamentInvoice,
     fetchDAForms, updateDAForm, submitDAForm, approveDAForm, rejectDAForm, rebuildDAForms,
+    fetchExtraExpenseRequests, createExtraExpenseRequest, submitExtraExpenseRequest,
+    approveExtraExpenseRequest, rejectExtraExpenseRequest, requestInfoOnExtraExpense,
+    fetchTournamentExpenseEvents,
 } from "@/lib/api";
 import {
     ClipboardList, IndianRupee, FileText, Users, Save, Send, CheckCircle2, X,
     Sparkles, Upload, AlertTriangle, Loader2, ArrowUpRight, RotateCcw,
+    Plus, HelpCircle, ScrollText, Gavel,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -682,6 +686,291 @@ const DATab = ({ tournament, persona, onChanged }) => {
     );
 };
 
+// ═══════════════════ Extra Expense Approval Tab ═══════════════════
+const EER_STATUS_META = {
+    Draft:          { tone: "lapsed",    label: "Draft" },
+    Submitted:      { tone: "pending",   label: "Submitted · Awaits MPCA" },
+    Approved:       { tone: "active",    label: "Approved" },
+    Rejected:       { tone: "suspended", label: "Rejected" },
+    Info_Requested: { tone: "pending",   label: "Info Requested" },
+};
+
+const HEAD_CHOICES = [
+    ["GROUND_FEES",           "Ground Fees"],
+    ["MATCH_OFFICIAL_DA",     "Match Official DA"],
+    ["MATCH_OFFICIAL_TRAVEL", "Match Official Travel"],
+    ["PLAYER_DA_FOOD",        "Player DA / Food"],
+    ["PLAYER_TRAVEL",         "Player Travel"],
+    ["PLAYER_STAY",           "Player Stay (Hotel)"],
+    ["KIT_CONSUMABLES",       "Balls / Kit Consumables"],
+    ["UMPIRE_HONORARIUM",     "Umpire Honorarium"],
+    ["SCORER_HONORARIUM",     "Scorer Honorarium"],
+    ["PHYSIO_HONORARIUM",     "Physio Honorarium"],
+    ["CONTINGENCY",           "Contingency"],
+    ["MISCELLANEOUS",         "Miscellaneous"],
+    ["NEW_HEAD",              "── New head (specify below) ──"],
+];
+
+const ExtraExpenseTab = ({ tournament, persona, onChanged }) => {
+    const [requests, setRequests] = useState([]);
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [showNew, setShowNew] = useState(false);
+    const [form, setForm] = useState({
+        head_choice: "GROUND_FEES", head_code: "GROUND_FEES", head_label: "Ground Fees",
+        is_new_head: false, custom_head: "", amount_inr: 0, justification: "",
+    });
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+
+    const canRequest = persona && (persona.body_type === "Division" || persona.body_type === "District" || persona.body_type === "State");
+    const canApprove = persona && persona.body_type === "State";
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const [r, ev] = await Promise.all([
+                fetchExtraExpenseRequests({ tournament_id: tournament.id }),
+                fetchTournamentExpenseEvents(tournament.id),
+            ]);
+            setRequests(r);
+            setEvents(ev.events || []);
+        } finally { setLoading(false); }
+    };
+    useEffect(() => { load(); }, [tournament.id]);
+
+    const create = async () => {
+        setBusy(true); setError(null);
+        try {
+            const isNew = form.head_choice === "NEW_HEAD";
+            const label = isNew ? (form.custom_head || "").trim() : form.head_label;
+            const code = isNew ? label.toUpperCase().replace(/\s+/g, "_") : form.head_code;
+            if (!label) throw new Error("Please enter the new head name.");
+            await createExtraExpenseRequest({
+                tournament_id: tournament.id,
+                body_id: persona?.body_code || "DIV",
+                head_code: code,
+                head_label: label,
+                is_new_head: isNew,
+                amount_inr: parseFloat(form.amount_inr) || 0,
+                justification: form.justification,
+                requested_by: persona?.display_name,
+            });
+            setShowNew(false);
+            setForm({ head_choice: "GROUND_FEES", head_code: "GROUND_FEES", head_label: "Ground Fees", is_new_head: false, custom_head: "", amount_inr: 0, justification: "" });
+            await load(); onChanged?.();
+        } catch (e) { setError(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
+    const submit = async (r) => {
+        try {
+            await submitExtraExpenseRequest(r.id, {
+                actor_name: persona?.display_name || "Division", actor_body_id: persona?.body_code || "DIV",
+                actor_post: persona?.role_label,
+            });
+            await load(); onChanged?.();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const approve = async (r) => {
+        const custom = window.prompt(`Sanction amount (₹). Leave blank to sanction full ₹${r.amount_inr}:`, "");
+        try {
+            await approveExtraExpenseRequest(r.id, {
+                actor_name: persona?.display_name || "MPCA", actor_body_id: "MPCA", actor_post: persona?.role_label || "Hon. Secretary",
+                approved_amount_inr: custom && custom.trim() ? parseFloat(custom) : undefined,
+                notes: "Approved by MPCA",
+            });
+            await load(); onChanged?.();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const reject = async (r) => {
+        const notes = window.prompt("Rejection reason:"); if (!notes) return;
+        try {
+            await rejectExtraExpenseRequest(r.id, { actor_name: persona?.display_name || "MPCA", actor_body_id: "MPCA", notes });
+            await load(); onChanged?.();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const askInfo = async (r) => {
+        const notes = window.prompt("What information do you need from the Division?"); if (!notes) return;
+        try {
+            await requestInfoOnExtraExpense(r.id, { actor_name: persona?.display_name || "MPCA", actor_body_id: "MPCA", notes });
+            await load(); onChanged?.();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
+    return (
+        <div className="space-y-6" data-testid="extra-expense-tab">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <div className="overline">Extra Expense Approvals</div>
+                    <p className="text-sm text-mpca-gray-dark mt-1 max-w-2xl">
+                        Request MPCA approval for expenses not in the auto-budget. Every action is logged on the tournament for full audit.
+                    </p>
+                </div>
+                {canRequest && (
+                    <button onClick={() => setShowNew(true)} className="btn-heritage-primary" data-testid="new-eer-btn">
+                        <Plus size={12} /> Request Extra Approval
+                    </button>
+                )}
+            </div>
+
+            {loading ? <div className="p-8 text-center"><Loader2 className="animate-spin inline" /></div> : requests.length === 0 ? (
+                <div className="p-10 border border-mpca-brass/30 text-center text-mpca-gray-dark italic font-serif" data-testid="no-eer">
+                    No extra expense requests raised yet.
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {requests.map((r) => {
+                        const meta = EER_STATUS_META[r.status];
+                        return (
+                            <div key={r.id} className="border border-mpca-brass/30 bg-mpca-ivory/40 p-4" data-testid={`eer-row-${r.request_ref}`}>
+                                <div className="flex items-start justify-between flex-wrap gap-3">
+                                    <div className="flex-1">
+                                        <div className="font-mono text-[10px] text-mpca-brass">{r.request_ref}</div>
+                                        <div className="font-serif text-lg text-mpca-green-dark mt-1">
+                                            {r.head_label}
+                                            {r.is_new_head && <span className="ml-2 text-[9px] uppercase tracking-widest text-mpca-oxblood font-semibold">New Head</span>}
+                                        </div>
+                                        <div className="text-[11px] text-mpca-gray-dark mt-1">
+                                            Requested by {r.body_id} · {new Date(r.created_at).toLocaleDateString("en-IN")}
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="font-serif text-xl text-mpca-oxblood">₹{r.amount_inr.toLocaleString("en-IN")}</div>
+                                        {r.status === "Approved" && r.approved_amount_inr !== r.amount_inr && (
+                                            <div className="text-[10px] text-mpca-green-dark">Sanctioned ₹{r.approved_amount_inr.toLocaleString("en-IN")}</div>
+                                        )}
+                                        <div className="mt-1"><Pill tone={meta.tone} label={meta.label} testId={`eer-status-${r.request_ref}`} /></div>
+                                    </div>
+                                </div>
+                                <div className="mt-3 text-sm text-mpca-charcoal border-l-4 border-mpca-brass/30 pl-3 italic">
+                                    {r.justification}
+                                </div>
+                                {r.info_request_notes && (
+                                    <div className="mt-2 text-xs text-mpca-oxblood border border-mpca-oxblood/30 bg-mpca-oxblood/5 p-2">
+                                        <strong>MPCA needs info:</strong> {r.info_request_notes}
+                                    </div>
+                                )}
+                                {r.rejection_reason && (
+                                    <div className="mt-2 text-xs text-mpca-oxblood border border-mpca-oxblood/30 bg-mpca-oxblood/5 p-2">
+                                        <strong>Rejected:</strong> {r.rejection_reason}
+                                    </div>
+                                )}
+                                {/* Actions */}
+                                <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-wider">
+                                    {r.status === "Draft" && canRequest && (
+                                        <button onClick={() => submit(r)} className="text-mpca-green-dark underline" data-testid={`eer-submit-${r.request_ref}`}>Submit to MPCA</button>
+                                    )}
+                                    {r.status === "Info_Requested" && canRequest && (
+                                        <button onClick={() => submit(r)} className="text-mpca-green-dark underline">Re-submit after edits</button>
+                                    )}
+                                    {r.status === "Submitted" && canApprove && (
+                                        <>
+                                            <button onClick={() => approve(r)} className="text-mpca-green-dark underline" data-testid={`eer-approve-${r.request_ref}`}>Approve</button>
+                                            <button onClick={() => reject(r)} className="text-mpca-oxblood underline" data-testid={`eer-reject-${r.request_ref}`}>Reject</button>
+                                            <button onClick={() => askInfo(r)} className="text-mpca-brass underline" data-testid={`eer-info-${r.request_ref}`}>Ask for Info</button>
+                                        </>
+                                    )}
+                                </div>
+                                {/* Per-request approval trail */}
+                                {r.approval_chain && r.approval_chain.length > 0 && (
+                                    <div className="mt-3 border-t border-mpca-brass/20 pt-2">
+                                        <div className="overline mb-1 text-[9px]">Trail</div>
+                                        <ol className="text-[11px] font-mono space-y-1">
+                                            {r.approval_chain.map((s, i) => (
+                                                <li key={i}>
+                                                    <span className="text-mpca-brass">{s.stage}</span> · {s.actor_name}{s.actor_post ? ` (${s.actor_post})` : ""} · <span className="italic text-mpca-gray-dark">{s.notes || ""}</span>
+                                                </li>
+                                            ))}
+                                        </ol>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Tournament-wide expense event log */}
+            {events.length > 0 && (
+                <div className="mt-8 border-t border-mpca-brass/30 pt-6">
+                    <div className="overline mb-3 flex items-center gap-2"><ScrollText size={12} /> Tournament Expense Log · {events.length} events</div>
+                    <ol className="relative border-l-2 border-mpca-brass/40 ml-3 space-y-3" data-testid="expense-events-log">
+                        {[...events].reverse().map((e, i) => (
+                            <li key={i} className="pl-5 relative">
+                                <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-mpca-green-dark ring-4 ring-mpca-ivory" />
+                                <div className="flex items-baseline gap-2 flex-wrap">
+                                    <span className="font-serif text-mpca-green-dark uppercase tracking-wider text-xs">{e.stage.replace(/_/g, " ")}</span>
+                                    <span className="text-[10px] font-mono text-mpca-brass">{e.decided_on ? new Date(e.decided_on).toLocaleString("en-IN") : ""}</span>
+                                </div>
+                                <div className="text-[11px] text-mpca-charcoal mt-1">
+                                    {e.actor_name}{e.actor_post ? ` · ${e.actor_post}` : ""}{e.actor_body_id ? ` · ${e.actor_body_id}` : ""}
+                                </div>
+                                {e.notes && <div className="text-[11px] italic text-mpca-gray-dark mt-1">{e.notes}</div>}
+                            </li>
+                        ))}
+                    </ol>
+                </div>
+            )}
+
+            {/* New request modal */}
+            {showNew && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 overflow-y-auto" data-testid="new-eer-dialog">
+                    <div className="bg-mpca-ivory border-2 border-mpca-brass max-w-lg w-full my-8">
+                        <div className="bg-mpca-green-dark text-mpca-ivory px-6 py-4 border-b-4 border-mpca-oxblood flex items-center justify-between">
+                            <div>
+                                <div className="overline !text-mpca-gold-light">Extra Expense</div>
+                                <div className="font-serif text-2xl mt-1">Request MPCA Approval</div>
+                            </div>
+                            <button onClick={() => setShowNew(false)}><X className="text-mpca-gold-light" /></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="label-heritage">Head *</label>
+                                <select value={form.head_choice} onChange={(e) => {
+                                    const val = e.target.value;
+                                    const choice = HEAD_CHOICES.find(([c]) => c === val);
+                                    setForm((f) => ({
+                                        ...f,
+                                        head_choice: val,
+                                        head_code: val === "NEW_HEAD" ? "" : val,
+                                        head_label: val === "NEW_HEAD" ? "" : (choice ? choice[1] : val),
+                                        is_new_head: val === "NEW_HEAD",
+                                    }));
+                                }} className="input-heritage" data-testid="eer-head">
+                                    {HEAD_CHOICES.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
+                                </select>
+                            </div>
+                            {form.head_choice === "NEW_HEAD" && (
+                                <div>
+                                    <label className="label-heritage">New Head Name *</label>
+                                    <input value={form.custom_head} onChange={(e) => setForm((f) => ({ ...f, custom_head: e.target.value }))} placeholder="e.g., Ambulance Standby" className="input-heritage" data-testid="eer-custom-head" />
+                                </div>
+                            )}
+                            <div>
+                                <label className="label-heritage">Additional Amount Requested (₹) *</label>
+                                <input type="number" value={form.amount_inr} onChange={(e) => setForm((f) => ({ ...f, amount_inr: e.target.value }))} className="input-heritage" data-testid="eer-amount" />
+                            </div>
+                            <div>
+                                <label className="label-heritage">Justification * <span className="text-[10px] text-mpca-gray-dark">(min 10 characters)</span></label>
+                                <textarea rows={4} value={form.justification} onChange={(e) => setForm((f) => ({ ...f, justification: e.target.value }))} className="input-heritage" placeholder="Why is this expense necessary and why wasn't it in the original budget?" data-testid="eer-justification" />
+                            </div>
+                            {error && <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood p-2 text-xs">{error}</div>}
+                        </div>
+                        <div className="px-6 pb-5 flex justify-end gap-3">
+                            <button onClick={() => setShowNew(false)} className="btn-heritage-ghost">Cancel</button>
+                            <button onClick={create} disabled={busy || !form.justification || form.justification.length < 10 || form.amount_inr <= 0} className="btn-heritage-primary" data-testid="eer-create">
+                                {busy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save as Draft
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 // ═══════════════════ Master TournamentOps ═══════════════════
 const TournamentOps = ({ tournament, persona, onChanged }) => {
     const [tab, setTab] = useState("plan");
@@ -690,10 +979,11 @@ const TournamentOps = ({ tournament, persona, onChanged }) => {
             <div className="overline mb-4">Tournament Operations</div>
             <div className="flex gap-4 flex-wrap border-b border-mpca-brass/30 mb-6">
                 {[
-                    ["plan",     "Plan · Approval",   ClipboardList],
-                    ["budget",   "Budget Tracker",    IndianRupee],
-                    ["invoices", "Invoices · AI",     FileText],
-                    ["da",       "DA Forms",          Users],
+                    ["plan",      "Plan · Approval",       ClipboardList],
+                    ["budget",    "Budget Tracker",        IndianRupee],
+                    ["invoices",  "Invoices · AI",         FileText],
+                    ["da",        "DA Forms",              Users],
+                    ["extra",     "Extra Expense",         Gavel],
                 ].map(([k, l, I]) => (
                     <button key={k} onClick={() => setTab(k)} data-testid={`ops-tab-${k}`}
                         className={"pb-3 flex items-center gap-2 text-[13px] uppercase tracking-wider font-semibold transition-colors " + (tab === k ? "text-mpca-oxblood border-b-2 border-mpca-oxblood -mb-px" : "text-mpca-gray-dark hover:text-mpca-green-dark")}>
@@ -701,10 +991,11 @@ const TournamentOps = ({ tournament, persona, onChanged }) => {
                     </button>
                 ))}
             </div>
-            {tab === "plan"     && <PlanTab     tournament={tournament} persona={persona} onChanged={onChanged} />}
-            {tab === "budget"   && <BudgetTab   tournament={tournament} />}
-            {tab === "invoices" && <InvoicesTab tournament={tournament} persona={persona} onChanged={onChanged} />}
-            {tab === "da"       && <DATab       tournament={tournament} persona={persona} onChanged={onChanged} />}
+            {tab === "plan"     && <PlanTab          tournament={tournament} persona={persona} onChanged={onChanged} />}
+            {tab === "budget"   && <BudgetTab        tournament={tournament} />}
+            {tab === "invoices" && <InvoicesTab      tournament={tournament} persona={persona} onChanged={onChanged} />}
+            {tab === "da"       && <DATab            tournament={tournament} persona={persona} onChanged={onChanged} />}
+            {tab === "extra"    && <ExtraExpenseTab  tournament={tournament} persona={persona} onChanged={onChanged} />}
         </div>
     );
 };

@@ -507,6 +507,40 @@ export const fetchBudgetTracker = async (bid) => {
     return data;
 };
 
+// ---------- Phase T5 · Extra Expense Approval ----------
+export const fetchExtraExpenseRequests = async (params = {}) => {
+    const { data } = await api.get("/extra-expense-requests", { params });
+    return data;
+};
+export const createExtraExpenseRequest = async (payload) => {
+    const { data } = await api.post("/extra-expense-requests", payload);
+    return data;
+};
+export const updateExtraExpenseRequest = async (rid, patch) => {
+    const { data } = await api.patch(`/extra-expense-requests/${rid}`, patch);
+    return data;
+};
+export const submitExtraExpenseRequest = async (rid, action) => {
+    const { data } = await api.post(`/extra-expense-requests/${rid}/submit`, action);
+    return data;
+};
+export const approveExtraExpenseRequest = async (rid, action) => {
+    const { data } = await api.post(`/extra-expense-requests/${rid}/approve`, action);
+    return data;
+};
+export const rejectExtraExpenseRequest = async (rid, action) => {
+    const { data } = await api.post(`/extra-expense-requests/${rid}/reject`, action);
+    return data;
+};
+export const requestInfoOnExtraExpense = async (rid, action) => {
+    const { data } = await api.post(`/extra-expense-requests/${rid}/request-info`, action);
+    return data;
+};
+export const fetchTournamentExpenseEvents = async (tid) => {
+    const { data } = await api.get(`/tournaments/${tid}/expense-events`);
+    return data;
+};
+
 
 // ---------- Phase M2-B/M2-C: Fixtures, Match Results, Rankings, HR ----------
 export const fetchFixtures = async (params = {}) => {

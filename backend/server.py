@@ -16,7 +16,7 @@ from routes import (  # noqa: F401
     fees, bank, financial_powers, bodies, claims, budgets,
     procurement, players, transfers, tournaments,
     notifications, uploads, ai_claims, rulebook, vendor_bills, tournament_budgets,
-    venues_grounds, selection, fixtures, tournament_plan, tournament_invoices,
+    venues_grounds, selection, fixtures, tournament_plan, tournament_invoices, extra_expense,
 )
 from seed import seed_data
 

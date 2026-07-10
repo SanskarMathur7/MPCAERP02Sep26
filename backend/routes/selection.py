@@ -8,7 +8,7 @@ Workflow:
   5. Squad finalised at 12 → "Submitted to BCCI App" (placeholder).
   6. For international tournaments: Division proposes squad → MPCA validates → BCCI submit.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import List, Optional
 from fastapi import HTTPException
 
@@ -20,6 +20,21 @@ from models import (
     SelectionAddPlayers, SelectionAdvance, SelectionRemovePlayer, SelectionBCCISubmit,
     STAGE_LIMITS, STAGE_NEXT,
 )
+
+
+def _player_snapshot(player: dict) -> dict:
+    """Pull the fields we snapshot onto SelectionEntry / SeasonRegistration."""
+    name = player.get("full_name") or player.get("name") or "—"
+    dob = player.get("date_of_birth")
+    age = None
+    if dob:
+        try:
+            d = datetime.fromisoformat(dob).date() if "T" in dob else date.fromisoformat(dob)
+            today = date.today()
+            age = today.year - d.year - ((today.month, today.day) < (d.month, d.day))
+        except Exception:
+            age = None
+    return {"name": name, "age": age, "role": player.get("role")}
 
 
 # ─────────── Season Registration ───────────
@@ -63,7 +78,7 @@ async def create_season_registration(payload: SeasonRegistrationCreate):
     reg_no = await _next_seasonreg_no(payload.season_year, payload.body_id)
     reg = SeasonRegistration(
         registration_no=reg_no,
-        player_name=player.get("name"),
+        player_name=_player_snapshot(player)["name"],
         **payload.model_dump(),
     )
     await db.season_registrations.insert_one(reg.model_dump())
@@ -175,11 +190,12 @@ async def add_players(fid: str, payload: SelectionAddPlayers):
         player = await db.players.find_one({"id": pid}, {"_id": 0})
         if not player:
             continue
+        snap = _player_snapshot(player)
         entry = SelectionEntry(
             player_id=pid,
-            player_name=player.get("name"),
-            age=player.get("age"),
-            role=player.get("role"),
+            player_name=snap["name"],
+            age=snap["age"],
+            role=snap["role"],
             stage=stage,
             notes=payload.notes,
             added_by=payload.added_by,

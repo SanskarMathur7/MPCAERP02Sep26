@@ -171,8 +171,8 @@ const AddPlayersDialog = ({ funnel, currentStage, persona, onClose, onDone }) =>
                         <label key={p.id} className={"flex items-center gap-3 p-2 border cursor-pointer " + (picked.has(p.id) ? "border-mpca-oxblood bg-mpca-oxblood/5" : "border-mpca-brass/30 hover:bg-mpca-cream/30")} data-testid={`player-pick-${p.id}`}>
                             <input type="checkbox" checked={picked.has(p.id)} onChange={() => toggle(p.id)} />
                             <div className="flex-1 min-w-0">
-                                <div className="text-sm font-semibold text-mpca-navy truncate">{p.name}</div>
-                                <div className="text-xs text-mpca-gray-dark">{p.role || "—"} · age {p.age || "?"} · {p.body_id}</div>
+                                <div className="text-sm font-semibold text-mpca-navy truncate">{p.full_name || p.name || "—"}</div>
+                                <div className="text-xs text-mpca-gray-dark">{(p.role || "—").replace(/_/g, " ")} · {p.date_of_birth ? `b. ${p.date_of_birth.slice(0,4)}` : "DOB unknown"} · {p.body_id}</div>
                             </div>
                         </label>
                     ))}
@@ -242,8 +242,8 @@ const AdvanceDialog = ({ funnel, persona, onClose, onDone }) => {
                         <label key={e.player_id} className={"flex items-center gap-3 p-2 border cursor-pointer " + (picked.has(e.player_id) ? "border-mpca-oxblood bg-mpca-oxblood/5" : "border-mpca-brass/30 hover:bg-mpca-cream/30")} data-testid={`advance-pick-${e.player_id}`}>
                             <input type="checkbox" checked={picked.has(e.player_id)} onChange={() => toggle(e.player_id)} />
                             <div className="flex-1 min-w-0">
-                                <div className="text-sm font-semibold text-mpca-navy truncate">{e.player_name}</div>
-                                <div className="text-xs text-mpca-gray-dark">{e.role || "—"} · age {e.age || "?"}</div>
+                                <div className="text-sm font-semibold text-mpca-navy truncate">{e.player_name || "—"}</div>
+                                <div className="text-xs text-mpca-gray-dark">{(e.role || "—").replace(/_/g, " ")} {e.age ? `· age ${e.age}` : ""}</div>
                             </div>
                         </label>
                     ))}
@@ -417,8 +417,8 @@ export default function SelectionFunnel() {
                                                         <div key={e.player_id} className="text-xs border border-mpca-brass/30 bg-mpca-ivory p-2 flex items-center gap-2" data-testid={`entry-${f.id}-${e.player_id}`}>
                                                             <Trophy className="w-3 h-3 text-mpca-saffron shrink-0" />
                                                             <div className="flex-1 min-w-0">
-                                                                <div className="font-semibold text-mpca-navy truncate">{e.player_name}</div>
-                                                                <div className="text-mpca-gray-dark text-[10px]">{e.role || "—"} · age {e.age || "?"}</div>
+                                                                <div className="font-semibold text-mpca-navy truncate">{e.player_name || "—"}</div>
+                                                                <div className="text-mpca-gray-dark text-[10px]">{(e.role || "—").replace(/_/g, " ")} {e.age ? `· age ${e.age}` : ""}</div>
                                                             </div>
                                                             {canSelect && (
                                                                 <button onClick={async () => {

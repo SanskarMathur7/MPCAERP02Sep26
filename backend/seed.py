@@ -1304,7 +1304,7 @@ async def seed_selection_funnels():
             reg = SeasonRegistration(
                 registration_no=f"SR-2025-26-{p.get('body_id','MPCA')}-{i:05d}",
                 player_id=p["id"],
-                player_name=p.get("name"),
+                player_name=p.get("full_name") or p.get("name"),
                 season_year="2025-26",
                 body_id=p.get("body_id") or "MPCA",
                 fees_paid_inr=500.0,
@@ -1316,6 +1316,25 @@ async def seed_selection_funnels():
         return
     logger.info("Seeding selection funnels…")
 
+    # Helper to derive age from date_of_birth
+    from datetime import date as _date
+    def _age(dob_str):
+        if not dob_str:
+            return None
+        try:
+            d = _date.fromisoformat(dob_str[:10])
+            t = _date.today()
+            return t.year - d.year - ((t.month, t.day) < (d.month, d.day))
+        except Exception:
+            return None
+
+    def _snap(p):
+        return {
+            "name": p.get("full_name") or p.get("name") or "—",
+            "age": _age(p.get("date_of_birth")),
+            "role": p.get("role"),
+        }
+
     tournaments = await db.tournaments.find({}, {"_id": 0}).sort("created_at", 1).to_list(4)
     if not tournaments:
         return
@@ -1323,21 +1342,20 @@ async def seed_selection_funnels():
     # Funnel A — domestic, at Pool stage with 20 players
     pool_players = players[:20]
     pool_entries = [SelectionEntry(
-        player_id=p["id"], player_name=p.get("name"),
-        age=p.get("age"), role=p.get("role"),
+        player_id=p["id"], player_name=_snap(p)["name"],
+        age=_snap(p)["age"], role=_snap(p)["role"],
         stage="Pool", added_by="Selection Committee Chair",
     ).model_dump() for p in pool_players]
-    # Also seed the prior-stage entries for trail visualization
     long_list_entries = [SelectionEntry(
-        player_id=p["id"], player_name=p.get("name"),
-        age=p.get("age"), role=p.get("role"),
+        player_id=p["id"], player_name=_snap(p)["name"],
+        age=_snap(p)["age"], role=_snap(p)["role"],
         stage="LongList", added_by="Selection Committee Chair",
     ).model_dump() for p in players[:min(150, len(players))]]
     short_list_entries = [SelectionEntry(
-        player_id=p["id"], player_name=p.get("name"),
-        age=p.get("age"), role=p.get("role"),
+        player_id=p["id"], player_name=_snap(p)["name"],
+        age=_snap(p)["age"], role=_snap(p)["role"],
         stage="ShortList", added_by="Selection Committee Chair",
-    ).model_dump() for p in players[:30] if p in players[:30]]
+    ).model_dump() for p in players[:30]]
 
     funnel_a = SelectionFunnel(
         funnel_no="SF-2025-26-001",

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
     fetchPlayers, fetchPlayerStats, createPlayer, checkPlayerEligibility, approvePlayer, disqualifyPlayer, reinstatePlayer,
@@ -574,6 +575,7 @@ const SuspendDialog = ({ open, player, onClose, onDone }) => {
 
 const Players = () => {
     const { persona } = useAuth();
+    const navigate = useNavigate();
     const [players, setPlayers] = useState([]);
     const [stats, setStats] = useState(null);
     const [bodies, setBodies] = useState([]);
@@ -712,7 +714,7 @@ const Players = () => {
                         const cm = CATEGORY_META[p.category];
                         const sm = STATUS_META[p.status] || { label: p.status, tone: "pending" };
                         return (
-                            <button key={p.id} onClick={() => setSelected(p)} className="ledger-row w-full text-left flex flex-wrap items-center gap-4 px-6 py-4" data-testid={"player-row-" + p.player_id.replace(/\//g, "-")}>
+                            <button key={p.id} onClick={() => navigate(`/players/${p.id}`)} className="ledger-row w-full text-left flex flex-wrap items-center gap-4 px-6 py-4" data-testid={"player-row-" + p.player_id.replace(/\//g, "-")}>
                                 <div className="w-9 h-9 rounded-full bg-mpca-green-dark text-mpca-gold-light flex items-center justify-center font-serif text-sm shrink-0">
                                     {p.full_name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
                                 </div>

@@ -33,6 +33,7 @@ import TournamentBudgets from "@/pages/TournamentBudgets";
 import VenuesGrounds from "@/pages/VenuesGrounds";
 import SelectionFunnel from "@/pages/SelectionFunnel";
 import Players from "@/pages/Players";
+import PlayerDetail from "@/pages/PlayerDetail";
 import Tournaments from "@/pages/Tournaments";
 import TournamentDetail from "@/pages/TournamentDetail";
 import Fixtures from "@/pages/Fixtures";
@@ -104,6 +105,7 @@ function App() {
 
                         {/* Protected — Phase IV: Player Module */}
                         <Route path="/players" element={<Protected><Players /></Protected>} />
+                        <Route path="/players/:id" element={<Protected><PlayerDetail /></Protected>} />
 
                         {/* Protected — Phase IV.2: Tournament Module */}
                         <Route path="/tournaments" element={<Protected><Tournaments /></Protected>} />

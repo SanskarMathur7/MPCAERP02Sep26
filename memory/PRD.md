@@ -594,3 +594,88 @@ spine that feeds Sprint 1's ledger.
 - **Sprints 5-6** — Dashboards & Reports, AI Assistant Panel.
 - Tally integration still BLOCKED awaiting credentials from MPCA.
 
+
+---
+
+## Sprint 3 · Asset Register + HR/Payroll (Feb 2026) — SHIPPED
+
+Sprint 3 of the 8-Sprint Hybrid Plan. Delivers the fixed-asset and human-capital
+back-office spine that closes the loop with Sprint 1's ledger via auto-vouchers.
+
+### What shipped
+- **Fixed Asset Register** (`routes/assets.py`) — SLM depreciation with per-month
+  book-value roll-forward, tag/QR reference, disposal flow with computed
+  gain_loss_on_disposal_inr. Categories: Land · Building · Vehicle · Equipment ·
+  Furniture · Computer · Networking · Sports_Equipment · Other. Life-years
+  auto-default per category (Building 30 · Computer 3 · Land 0 non-depreciable).
+- **Depreciation schedule** endpoint returns period-by-period rows with running
+  accumulated depreciation and book value up to end-of-life.
+- **Employee Master** (`routes/hr_payroll.py`) — full CV + salary structure
+  (Basic + HRA + Special Allowance + Conveyance), employment_type (Permanent /
+  Contract / Consultant / Intern / Retainer), statutory flags (tds_applicable,
+  pf_applicable, esi_applicable, professional_tax_applicable).
+- **Monthly Payroll Register** — auto-computes PF (12% of Basic) + ESI (0.75% of
+  Gross, only when Gross ≤ ₹21,000) + Professional Tax (₹200 flat for MP when
+  Gross ≥ ₹15,000) + TDS (10% u/s 194J for consultants). Idempotent regenerate.
+  Finalise flips status Draft → Finalised, locks the register, AND creates a
+  Payment Voucher (Salaries & Wages Dr / Bank Cr) via Sprint 1's vouchers module.
+- **Frontend pages**: `/asset-register` (KPI tiles for Gross/Accum/Net Block +
+  Utilisation, filter chips, drawer with depreciation projection, disposal dialog
+  with live Gain/Loss preview) and `/payroll` (2 tabs: Payroll Registers +
+  Employee Master, generate/finalise flows, 12-column payroll detail table,
+  auto-voucher badge on finalised registers).
+
+### Seeded data
+- 8 fixed assets across all 8 category prototypes (₹11.36 Cr gross · ₹8.82 Cr net).
+- 7 employees (6 payroll + 1 consultant on TDS).
+- 1 Draft payroll register for the current period (~₹7.7L gross · ₹7.15L net).
+
+### Endpoints added
+- `GET/POST /api/assets`, `GET /api/assets/{id}/depreciation-schedule`,
+  `POST /api/assets/{id}/dispose`, `GET /api/assets-stats/summary`.
+- `GET/POST /api/employees`, `GET /api/employees-stats/summary`.
+- `POST /api/payroll/generate`, `GET /api/payroll/registers[/id]`,
+  `POST /api/payroll/registers/{id}/finalise`, `GET /api/payroll-stats/summary`.
+
+### Files added/changed
+- Backend: `routes/assets.py` (new · 260 LOC), `routes/hr_payroll.py`
+  (new · 285 LOC), `seed.py` (seed_assets · seed_employees), `server.py` (router
+  imports).
+- Frontend: `pages/AssetRegister.jsx` (new · 385 LOC), `pages/Payroll.jsx`
+  (new · 400 LOC), `lib/api.js` (Sprint 3 helpers), `App.js` (2 routes),
+  `components/AppLayout.jsx` (new 'Assets & HR' sidebar section).
+- Tests: `/app/backend/tests/test_sprint3_assets_hr.py` (26 pytest cases · **26/26 pass** after fix).
+
+### Testing status
+- **Backend**: 26/26 pytest ✅ (Sprint 1 + Sprint 2 regressions bundled).
+- **Frontend**: 100% smoke ✅ — both new pages render correctly.
+
+### Bugs fixed on-the-fly (from testing agent iteration_17)
+- **HIGH**: `gain_loss_on_disposal_inr` was persisted to Mongo but stripped by
+  `response_model=Asset` (classic `extra='ignore'` silent-drop). Added the field
+  to the `Asset` pydantic model — now surfaces in `/api/assets` and drawer.
+- **LOW polish**: Added default-life helper text under New Asset dialog's Life
+  field ("Default for Computer: 3 years").
+- **LOW polish**: Added defensive strip-honorific in `AppLayout` — safeguards
+  against 'Shri Shri X' render when persona.name already carries the honorific.
+- **LOW cosmetic**: Corrected `AST/` → `ASS/` in the Asset code prefix comment.
+
+### Deferred / documented approximations
+- MP Professional Tax uses a flat ₹200/mo slab (real graduated slab ₹125-208
+  documented as approximation in `_compute_payroll_row`).
+- Depreciation is SLM only. WDV / double-declining deferred.
+- Payroll finalise does not yet push individual TDS entries to a 24Q filing
+  (deferred to Sprint 4 Governance).
+- Bill IDs on PO `/link-bill` are opaque strings — canonical vendor_bills
+  cross-check still deferred to Sprint 4.
+
+### What's next
+- **Sprint 4** — Governance & Compliance: DMS folders/tags, doc-expiry reminders,
+  compliance register, audit workpapers PDF.
+- **Sprint 5** — Dashboards & Reports (6 standard reports · MPCA letterhead PDF).
+- **Sprint 6** — AI Assistant Panel (scoped read-only chat with deep links).
+- **Sprint 7** — Integrations: Google Doc AI, Bank NEFT/RTGS bulk, SMTP live email.
+- **Sprint 8** — Hindi i18n + Postgres migration + MFA + AWS deploy.
+- **Phase VI** — BCCI-level ball-by-ball online scoring tool.
+
+

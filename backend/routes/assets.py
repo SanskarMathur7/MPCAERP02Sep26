@@ -61,13 +61,14 @@ class AssetBase(BaseModel):
 
 class Asset(AssetBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    asset_no: str = ""  # AST/MPCA/2026-27/00001
+    asset_no: str = ""  # ASS/MPCA/2026-27/00001
     status: AssetStatus = "Active"
     accumulated_depreciation_inr: float = 0.0
     book_value_inr: float = 0.0  # cached; also recomputed on read
     disposal_date: Optional[str] = None
     disposal_amount_inr: Optional[float] = None
     disposal_reason: Optional[str] = None
+    gain_loss_on_disposal_inr: Optional[float] = None  # +ve = gain, -ve = loss
     created_by_name: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: Optional[str] = None

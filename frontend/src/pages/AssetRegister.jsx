@@ -359,6 +359,13 @@ const NewAssetDialog = ({ onClose, onCreated, persona }) => {
                         <div>
                             <label className="label-heritage">Life (years)</label>
                             <input type="number" min="0" value={form.useful_life_years} onChange={(e) => setForm({ ...form, useful_life_years: e.target.value })} className="input-heritage" placeholder="auto by category" data-testid="input-life" />
+                            <div className="text-[10px] text-mpca-gray-dark mt-1">
+                                Default for <b className="text-mpca-brass">{form.category?.replace(/_/g, " ")}</b>:{" "}
+                                <span className="font-mono">
+                                    {({ Land: 0, Building: 30, Vehicle: 8, Equipment: 10, Furniture: 10, Computer: 3, Networking: 5, Sports_Equipment: 5, Other: 5 })[form.category] ?? 5}
+                                </span>{" "}
+                                years
+                            </div>
                         </div>
                     </div>
                     <div>

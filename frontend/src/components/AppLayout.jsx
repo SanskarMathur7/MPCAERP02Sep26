@@ -143,7 +143,13 @@ const AppLayout = ({ children }) => {
                             </div>
                         </div>
                         <div className="font-serif text-lg text-mpca-ivory leading-tight">
-                            {persona.honorific} {persona.name}
+                            {/* Defensive: strip a leading honorific from name so we never render 'Shri Shri …' */}
+                            {(() => {
+                                const h = persona.honorific || "";
+                                const n = persona.name || "";
+                                const alreadyPrefixed = h && n.toLowerCase().startsWith(h.toLowerCase());
+                                return alreadyPrefixed ? n : `${h} ${n}`.trim();
+                            })()}
                         </div>
                         <div className="text-[11px] tracking-wide text-mpca-gold-light/85 mt-1">
                             {persona.post}

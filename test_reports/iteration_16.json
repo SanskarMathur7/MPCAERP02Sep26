@@ -1,0 +1,62 @@
+{
+  "summary": "Sprint 2 (Vendor KYC + Purchase Orders) — full backend + frontend regression against the public REACT_APP_BACKEND_URL. 36/36 pytest cases pass covering: KYC summary shape (total=15, verified=13, expiring_30d=2 with days_left), KYC submit-docs (400 when required docs missing; happy path moves Not_Started→Docs_Submitted), KYC verify (guard: 400 unless Docs_Submitted; sets kyc_expires_at ~6mo when validity_months=6, records tds_rate_pct=10, verified_by), KYC reject (400 without note; sets kyc_rejected_reason), Auto-Expired flag surfaced in /vendors-kyc/summary when kyc_expires_at is in the past, PO list returns >=3 seeded POs with po_no/total/gst/tds/tds_rate populated, PO stats summary (committed=₹3,04,675 · invoiced=₹1,72,275 · outstanding=₹1,32,400 · tds=₹5,225 · outstanding=committed-invoiced), PO create guards (non-KYC 400 with 'not KYC verified', blacklisted 400, empty items 400), PO auto-compute (10 000 base ⇒ GST 1 800 ⇒ total 11 800 ⇒ TDS 200 @ 2% ⇒ net 11 600 ⇒ 2-step; 2 00 000 base ⇒ total 2 36 000 ⇒ 3-step), Full 2-step happy path submit→approve→issue→mark-received(100)→link-bill (partial then full non-paid ⇒ status Invoiced), 3-step gate (1st approve keeps status=Submitted but moves stage=Finance_Approval, 2nd approve ⇒ Approved), Partial receipt repeatable 60→80→100 flip to Received, link-bill overage 400, burn-down shape (remaining=total-invoiced, invoiced_pct/paid_pct/linked_bill_ids), send-back/cancel require note and refuse on Cancelled. Frontend smoke on /vendor-kyc + /purchase-orders confirms 4 KPI tiles each, filter chips (kyc-filter-*, po-filter-*), 15 vendor rows / 3 PO rows, drawer with items+burn-down+approval-chain+actions, New PO dialog restricts input-vendor dropdown to 12 KYC-verified non-blacklisted vendors (13 options incl. '— select vendor —' placeholder), AppLayout sidebar exposes both 'Purchase Orders' and 'Vendor KYC'. Sprint 1 regression endpoints (division-grants, ledger, budget-vs-actual, vouchers, audit-log) all 200-OK.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/vendors",
+        "issue": "Response is validated against Literal['Hotel','Travel','Material','Infra','Catering','Printing','Services','Other'] on the Vendor.category field. If ANY vendor document in Mongo has an out-of-enum category (data drift, historical import, manual insertion), the entire listing crashes with fastapi.exceptions.ResponseValidationError → 500. This cascades: /purchase-orders 'New PO' dialog calls fetchVendors() and cannot render the vendor dropdown when this 500s, blocking PO creation for every user. Suggest either (a) widening VendorCategory to `str` with a soft-validated enum on write only, (b) using `response_model_exclude_unset=True` with a fallback, or (c) validate-on-write, coerce-on-read (map unknown ⇒ 'Other'). Discovered when a test-seeded vendor with category='General' silently broke /api/vendors.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/purchase-orders · New PO dialog",
+        "issues": [
+          "'Category' field is a free-text input (defaults to 'General'), but Vendor.category is a Literal on the backend. PO create ends up accepting whatever the user types for its own PO.category (which is `str` on POBase, so it works), but this mismatch is confusing and inconsistent — recommend making it a <select> constrained to the same 8 VendorCategory values (or a distinct PO-category taxonomy documented separately).",
+          "Line-items row #1 has no left padding on the very first cell (`p-2` collapses when a placeholder is empty). Cosmetic only."
+        ]
+      },
+      {
+        "screen": "/vendor-kyc · KYC action dialog · Verify branch",
+        "issues": [
+          "'Validity (months)' defaults to 12 which is correct, but there is no visual indication that TDS Rate defaults to the vendor's existing tds_rate_pct — a stale non-zero prefill can surprise a verifier who expected 2%. Consider showing a helper text: 'Current: {vendor.tds_rate_pct}% · default 2% u/s 194C'."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint2_procurement.py",
+    "/app/test_reports/pytest/iter16_results.xml"
+  ],
+  "action_items": [
+    "HIGH: Harden GET /api/vendors against enum-drift in `category`. As-is, one malformed row breaks the entire vendor listing (and blocks New PO creation). Either widen the Literal to `str` or coerce unknowns to 'Other' during read.",
+    "LOW: Make the New PO 'Category' field a constrained <select> to mirror the VendorCategory enum, or explicitly document that PO.category is a free-text tag distinct from Vendor.category.",
+    "LOW: In KYC verify dialog, show 'current TDS rate' as helper text so the verifier confirms rather than blindly accepts the prefill."
+  ],
+  "critical_code_review_comments": [
+    "routes/purchase_orders.py::link_bill treats `bill_id` as an opaque string (documented as MOCKED in the review request) — but there is also no uniqueness check, so the same bill_id can be linked twice against the same PO, double-counting invoiced_amount_inr. Add a guard: `if payload.bill_id in po.get('linked_bill_ids', []): raise 400`.",
+    "routes/purchase_orders.py::approve_po branches on `any(c['action']=='Approve' and c['stage']=='Head_Approval')`. If a PO is send-back and re-submitted, the earlier 'Approve @ Head_Approval' entry stays in approval_chain, so on the next approval the flow skips Head_Approval and jumps straight to marking Approved (Finance step is bypassed). Bug on re-work path. Fix by tracking approvals since the last Submit (find last 'Submit' timestamp and count Approvals after that) or clearing prior approvals on send-back.",
+    "routes/purchase_orders.py::_compute_totals calls TDS on `sub` (base only, correct per Indian tax practice), but the endpoint accepts vendor.tds_applicable=False silently by setting rate to 0.0 without recording the exemption reason. Add a note field or persist the pre-computed rate for audit.",
+    "routes/purchase_orders.py::create_po does not currently check kyc_expires_at — a vendor whose kyc_status still says 'KYC_Verified' but whose expiry is in the past will pass. The lazy expiry flag only fires in /vendors-kyc/summary. Move the expiry check into create_po so an expired vendor cannot have a PO raised against them.",
+    "routes/vendor_kyc.py::verify_kyc uses `now + timedelta(days=30 * validity_months)` which is a fixed 30-day month. For a 12-month cycle this gives 360 days, not 365 — so a KYC verified today (Jan 15 2026) 'expires' on Jan 10 2027 (short by 5 days). Use dateutil.relativedelta(months=+n) for calendar-accurate expiry.",
+    "routes/vendor_kyc.py:: verify path force-marks every existing kyc_doc as verified: `{**d, 'verified': True}`. This is a policy statement (verification is at the KYC-level, not per-doc), but it silently overwrites any per-doc reject flags the reviewer previously set — losing audit history. Preserve individual doc verified/remarks, or gate this behind an explicit `bulk_accept_docs=True` param.",
+    "models.py:: VendorCategory Literal is used as a response_model constraint (see the /api/vendors 500 finding above). Response-level Literals are dangerous in a system that has historical data or free-text write-paths. Preferred pattern: Enum on write endpoints, `str` on Vendor model, and a `/api/vendors/categories` metadata endpoint that lists the canonical values.",
+    "routes/purchase_orders.py: no field-level validation on POLineItem.quantity/unit_price_inr against negatives — a malicious payload with quantity=-1 or unit_price_inr=-1000 would flow through _compute_totals and produce negative totals + negative TDS. Add `Field(gt=0)` on both."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sprint2_procurement.py (new — 36 pytest cases, all pass)",
+    "/app/test_reports/pytest/iter16_results.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (36/36)", "frontend": "100% smoke — all Sprint 2 UI elements + integrations verified"},
+  "test_credentials": "President 'Shri Mahanaryaman Scindia' via [data-testid=persona-chip-president] on /login → click 'Sign in to the Registrar'. Only State-tier personas see the KYC verify/reject actions (per KycDrawer canVerify/canReject checks).",
+  "seed_data_creation": "test_sprint2_procurement.py directly inserts TEST_SPRINT2_* vendors via pymongo (there is no create-vendor API in Sprint 2) — categories set to 'Services' to comply with the VendorCategory Literal (see critical finding). All TEST_SPRINT2_ vendors and POs are deleted in the module-scoped teardown. Verified post-run: 0 TEST_SPRINT2_ vendors, 0 TEST_SPRINT2_ POs remain, and /api/vendors returns 200. The 3 seeded POs (Invoiced · Draft · Partially_Received) are untouched by tests — note that per handoff, one seeded PO (PO/MPCA/2026-27/00003) had already been walked through Submit→2×Approve→Issue→Receive(60%)→Link_Bill(₹80K) by prior manual E2E, so its status is 'Partially_Received' not 'Submitted' as the review-request handoff line suggested — that's data drift from manual testing, not a bug.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: `pytest /app/backend/tests/test_sprint2_procurement.py -v`. Requires local Mongo (mongodb://localhost:27017 · test_database) for the direct-insert seed vendors — the test file soft-skips those cases if Mongo is unreachable. All 36 tests pass in ~3s. For frontend smoke: /login → persona-chip-president → 'Sign in' → /vendor-kyc + /purchase-orders both render fully. Two design polish items (New PO Category is free-text; KYC verify TDS-rate helper text) and one CRITICAL finding (GET /api/vendors ResponseValidationError on enum-drift) are the outstanding items for main-agent. Sprint 1 regression is included in this test file — no need to re-run test_sprint1_finance.py separately.",
+  "rca of the issue": "GET /api/vendors 500 root cause: routes/vendors.py returns `response_model=List[Vendor]` where Vendor.category is `Literal[...]`. Any vendor row in Mongo with a category outside the enum (data drift, historical import, or a create-vendor path that bypasses validation) causes fastapi.serialize_response to raise ResponseValidationError, which becomes a 500. Reproduction: `db.vendors.insertOne({id:'x', name:'x', category:'General', ...})` then `GET /api/vendors` returns 500 with `literal_error` for that row. Mitigation options (in order of preference): (1) widen `VendorCategory` on the Vendor response model to `str` and keep the Literal only on VendorCreate/VendorUpdate write paths; (2) add a `@validator('category', pre=True)` that coerces unknown values to 'Other'; (3) apply `response_model_exclude_unset=True` + strip unrecognised categories at repo level. Option (1) is the safest and matches typical DDD read/write model split."
+}

@@ -1,5 +1,5 @@
 """Seed data + idempotent seed_data() coroutine called on startup."""
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List
 from core.infra import db, logger
 from models import (
@@ -904,6 +904,8 @@ async def seed_data():
     await seed_selection_funnels()
     await seed_grant_scheme_rates()
     await seed_division_grants()
+    await seed_vendor_kyc()
+    await seed_purchase_orders()
 
 
 async def seed_division_grants():
@@ -1019,6 +1021,156 @@ async def seed_division_grants():
             }},
             upsert=True,
         )
+
+
+async def seed_vendor_kyc():
+    """Bring existing vendors into the KYC lifecycle: mark ~half verified."""
+    # Only backfill vendors that don't yet have a kyc_status field.
+    to_update = await db.vendors.find({"kyc_status": {"$exists": False}}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+    if not to_update:
+        return
+    logger.info(f"Backfilling KYC status for {len(to_update)} vendors…")
+    now = datetime.now(timezone.utc)
+    verified_expiry = (now + timedelta(days=300)).isoformat()  # ~10 months out
+    expiring_soon_expiry = (now + timedelta(days=20)).isoformat()  # <30d — will surface as expiring
+    for i, v in enumerate(to_update):
+        # Round-robin: 60% verified, 20% expiring soon, 10% docs_submitted awaiting verify, 10% not_started
+        m = i % 10
+        if m < 6:
+            update = {
+                "kyc_status": "KYC_Verified",
+                "kyc_verified_at": now.isoformat(),
+                "kyc_verified_by": "Smt. Anita Rao (Finance Officer)",
+                "kyc_expires_at": verified_expiry,
+                "tds_applicable": True,
+                "tds_rate_pct": 2.0,
+                "msme_registered": (i % 3 == 0),
+            }
+        elif m < 8:
+            update = {
+                "kyc_status": "KYC_Verified",
+                "kyc_verified_at": (now - timedelta(days=340)).isoformat(),
+                "kyc_verified_by": "Smt. Anita Rao (Finance Officer)",
+                "kyc_expires_at": expiring_soon_expiry,
+                "tds_applicable": True,
+                "tds_rate_pct": 2.0,
+                "msme_registered": False,
+            }
+        elif m < 9:
+            update = {
+                "kyc_status": "Docs_Submitted",
+                "kyc_submitted_at": now.isoformat(),
+                "kyc_docs": [
+                    {"doc_type": "gst_certificate", "url": "https://example.com/gst.pdf",
+                     "uploaded_at": now.isoformat(), "verified": False},
+                    {"doc_type": "pan_card", "url": "https://example.com/pan.pdf",
+                     "uploaded_at": now.isoformat(), "verified": False},
+                    {"doc_type": "cancelled_cheque", "url": "https://example.com/cheque.pdf",
+                     "uploaded_at": now.isoformat(), "verified": False},
+                    {"doc_type": "signed_declaration", "url": "https://example.com/dec.pdf",
+                     "uploaded_at": now.isoformat(), "verified": False},
+                ],
+                "msme_registered": False,
+            }
+        else:
+            update = {"kyc_status": "Not_Started"}
+        await db.vendors.update_one({"id": v["id"]}, {"$set": update})
+    logger.info("Vendor KYC backfill complete.")
+
+
+async def seed_purchase_orders():
+    """Seed representative Purchase Orders across the lifecycle."""
+    if await db.purchase_orders.count_documents({}) > 0:
+        return
+    # Pick two KYC-verified vendors
+    verified = await db.vendors.find({"kyc_status": "KYC_Verified"},
+                                      {"_id": 0, "id": 1, "name": 1, "tds_rate_pct": 1}).limit(3).to_list(3)
+    if len(verified) < 2:
+        logger.info("Not enough verified vendors to seed POs, skipping.")
+        return
+
+    logger.info("Seeding purchase orders…")
+    from routes.purchase_orders import (
+        PurchaseOrder, PurchaseOrderCreate, POLineItem, ApprovalEntry, _compute_totals,
+    )
+    from core.shared_services import next_code, indian_fy
+    fy = indian_fy()
+    now = datetime.now(timezone.utc).isoformat()
+
+    # PO 1 — Issued, partial invoice already linked (sports kits)
+    v1 = verified[0]
+    items1 = [
+        POLineItem(description="Cricket Whites — Team A · U-19", hsn_sac="6203", quantity=25, uom="sets", unit_price_inr=2400, gst_pct=12),
+        POLineItem(description="Kit Bags — Bulk", hsn_sac="4202", quantity=25, uom="nos", unit_price_inr=850, gst_pct=18),
+    ]
+    totals1 = _compute_totals(items1, 2.0)
+    po1 = PurchaseOrder(
+        body_id="MPCA", vendor_id=v1["id"], vendor_name=v1["name"], fiscal_cycle=fy,
+        category="Sports Equipment", subject="U-19 Team Kits · Winter Camp",
+        description="Complete kit for Indore U-19 winter camp cohort of 25 players.",
+        items=items1, delivery_date="2026-02-25", payment_terms="Net 30",
+        **totals1,
+        status="Invoiced",
+        current_stage="Ready_to_Invoice",
+        approval_required_steps=3,
+        invoiced_amount_inr=totals1["total_amount_inr"],
+        paid_amount_inr=0,
+        approval_chain=[
+            ApprovalEntry(stage="Draft", action="Submit", actor_name="MPCA Accounts", actor_role="mpca_accounts", note="Kit tender awarded.").model_dump(),
+            ApprovalEntry(stage="Head_Approval", action="Approve", actor_name="Shri Sanjeev Rao", actor_role="mpca_secretary", note="Approved on shortlist.").model_dump(),
+            ApprovalEntry(stage="Finance_Approval", action="Approve", actor_name="Smt. Meera Verma", actor_role="mpca_treasurer", note="Budget available; TDS captured.").model_dump(),
+            ApprovalEntry(stage="Ready_to_Issue", action="Issue", actor_name="MPCA Accounts", actor_role="mpca_accounts", note="Issued to vendor via email + hard copy.").model_dump(),
+            ApprovalEntry(stage="Awaiting_Delivery", action="Receive", actor_name="Stores Officer", actor_role="mpca_accounts", note="Full quantity received in good condition.").model_dump(),
+            ApprovalEntry(stage="Ready_to_Invoice", action="Link_Bill", actor_name="MPCA Accounts", actor_role="mpca_accounts", note=f"Linked bill demo-bill-1 · ₹{totals1['total_amount_inr']:,.2f}").model_dump(),
+        ],
+        linked_bill_ids=["demo-bill-1"],
+        created_by_name="MPCA Accounts",
+    )
+    po1.po_no = await next_code("po", org_short="MPCA", fy=fy)
+    await db.purchase_orders.insert_one(po1.model_dump())
+
+    # PO 2 — Draft (small stationery order, awaiting submit)
+    v2 = verified[1]
+    items2 = [
+        POLineItem(description="Score sheets · Duplicate carbon", hsn_sac="4820", quantity=1000, uom="books", unit_price_inr=48, gst_pct=12),
+        POLineItem(description="Score board magnetic tiles", quantity=4, uom="sets", unit_price_inr=6500, gst_pct=18),
+    ]
+    totals2 = _compute_totals(items2, 2.0)
+    po2 = PurchaseOrder(
+        body_id="MPCA", vendor_id=v2["id"], vendor_name=v2["name"], fiscal_cycle=fy,
+        category="Match Operations", subject="Score sheets & board tiles · Q4",
+        items=items2, delivery_date="2026-03-15",
+        **totals2,
+        status="Draft",
+        approval_required_steps=2 if totals2["total_amount_inr"] <= 100_000 else 3,
+        created_by_name="MPCA Accounts",
+    )
+    po2.po_no = await next_code("po", org_short="MPCA", fy=fy)
+    await db.purchase_orders.insert_one(po2.model_dump())
+
+    # PO 3 — Submitted awaiting Head approval (venue prep)
+    v3 = verified[2] if len(verified) >= 3 else verified[0]
+    items3 = [
+        POLineItem(description="Pitch preparation — Full outfield roller + top-dressing", quantity=1, uom="job", unit_price_inr=180000, gst_pct=18),
+    ]
+    totals3 = _compute_totals(items3, 2.0)
+    po3 = PurchaseOrder(
+        body_id="MPCA", vendor_id=v3["id"], vendor_name=v3["name"], fiscal_cycle=fy,
+        category="Venue Ops", subject="Pitch prep · Holkar Stadium",
+        items=items3, delivery_date="2026-03-01",
+        **totals3,
+        status="Submitted",
+        current_stage="Head_Approval",
+        approval_required_steps=3,
+        approval_chain=[
+            ApprovalEntry(stage="Draft", action="Submit", actor_name="MPCA Accounts", actor_role="mpca_accounts", note="Pitch prep for Ranji return leg.").model_dump(),
+        ],
+        created_by_name="MPCA Accounts",
+    )
+    po3.po_no = await next_code("po", org_short="MPCA", fy=fy)
+    await db.purchase_orders.insert_one(po3.model_dump())
+
+    logger.info(f"Seeded 3 purchase orders totalling ~₹{po1.total_amount_inr + po2.total_amount_inr + po3.total_amount_inr:,.0f}.")
 
 
 async def seed_grant_scheme_rates():

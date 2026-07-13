@@ -916,6 +916,19 @@ class VendorBase(BaseModel):
     is_blacklisted: bool = False
     blacklist_reason: Optional[str] = None
     notes: Optional[str] = None
+    # Sprint 2 · Vendor KYC lifecycle fields
+    kyc_status: Optional[str] = "Not_Started"       # Not_Started · Docs_Submitted · KYC_Verified · Rejected · Expired
+    kyc_docs: List[dict] = []
+    kyc_submitted_at: Optional[str] = None
+    kyc_verified_at: Optional[str] = None
+    kyc_verified_by: Optional[str] = None
+    kyc_expires_at: Optional[str] = None
+    kyc_rejected_at: Optional[str] = None
+    kyc_rejected_reason: Optional[str] = None
+    msme_registered: bool = False
+    msme_udyam_no: Optional[str] = None
+    tds_applicable: bool = True
+    tds_rate_pct: float = 2.0
 
 
 class Vendor(VendorBase):

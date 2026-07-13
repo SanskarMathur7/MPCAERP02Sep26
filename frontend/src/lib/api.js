@@ -525,7 +525,45 @@ export const fetchAuditLog = async (params = {}) => {
     return data;
 };
 
-// ---------- Sprint 1 · Finance Rails ----------
+// ---------- Sprint 2 · Vendor KYC + Purchase Orders ----------
+export const fetchKycSummary = async () => {
+    const { data } = await api.get("/vendors-kyc/summary");
+    return data;
+};
+export const kycAction = async (vid, action, payload) => {
+    // action ∈ submit-docs | verify | reject
+    const { data } = await api.post(`/vendors/${vid}/kyc/${action}`, payload);
+    return data;
+};
+export const fetchPurchaseOrders = async (params = {}) => {
+    const { data } = await api.get("/purchase-orders", { params });
+    return data;
+};
+export const fetchPurchaseOrder = async (pid) => {
+    const { data } = await api.get(`/purchase-orders/${pid}`);
+    return data;
+};
+export const createPurchaseOrder = async (payload) => {
+    const { data } = await api.post("/purchase-orders", payload);
+    return data;
+};
+export const poAction = async (pid, action, payload) => {
+    // action ∈ submit | approve | issue | mark-received | send-back | cancel
+    const { data } = await api.post(`/purchase-orders/${pid}/${action}`, payload);
+    return data;
+};
+export const linkPoBill = async (pid, payload) => {
+    const { data } = await api.post(`/purchase-orders/${pid}/link-bill`, payload);
+    return data;
+};
+export const fetchPoBurndown = async (pid) => {
+    const { data } = await api.get(`/purchase-orders/${pid}/burn-down`);
+    return data;
+};
+export const fetchPoStats = async (params = {}) => {
+    const { data } = await api.get("/purchase-orders-stats/summary", { params });
+    return data;
+};
 export const fetchDivisionGrants = async (params = {}) => {
     const { data } = await api.get("/division-grants", { params });
     return data;

@@ -22,6 +22,7 @@ import {
     FileCheck,
     Wallet,
     MapPin as MapPinIcon,
+    UserCheck,
 } from "lucide-react";
 
 const DASHBOARD_LINK = { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
@@ -48,7 +49,9 @@ const NAV_DOMAINS = [
             { to: "/rulebook", label: "AI Rulebook", icon: BookOpen },
             { to: "/audit-log", label: "Audit Log", icon: BookOpen },
             { to: "/procurement", label: "Procurement", icon: ShoppingCart },
+            { to: "/purchase-orders", label: "Purchase Orders", icon: ShoppingCart },
             { to: "/vendors", label: "Vendor Master", icon: Users },
+            { to: "/vendor-kyc", label: "Vendor KYC", icon: UserCheck },
             { to: "/vendor-bills", label: "Vendor Bills", icon: FileCheck },
             { to: "/fees", label: "Fees & Subscriptions", icon: Receipt },
             { to: "/bank", label: "Bank Operations", icon: Landmark },

@@ -507,6 +507,24 @@ export const fetchBudgetTracker = async (bid) => {
     return data;
 };
 
+// ---------- Sprint 0 · Shared services ----------
+export const fetchSharedConstants = async () => {
+    const { data } = await api.get("/shared/constants");
+    return data;
+};
+export const fetchCanonicalRoles = async () => {
+    const { data } = await api.get("/shared/roles");
+    return data;
+};
+export const fetchWorkflows = async () => {
+    const { data } = await api.get("/shared/workflows");
+    return data;
+};
+export const fetchAuditLog = async (params = {}) => {
+    const { data } = await api.get("/shared/audit-log", { params });
+    return data;
+};
+
 // ---------- Phase T5 · Extra Expense Approval ----------
 export const fetchExtraExpenseRequests = async (params = {}) => {
     const { data } = await api.get("/extra-expense-requests", { params });

@@ -272,3 +272,45 @@ ANNUAL_DISTRICT_GRANT_WORKFLOW = WorkflowConfig(
         WorkflowStage(stage_key="sec_treas_authorise",stage_label="Secretary + Treasurer · Authorise", acting_role="mpca_secretary",    action="Authorise"),
     ],
 )
+
+DIVISION_GRANT_WORKFLOW = WorkflowConfig(
+    workflow_key="division_grant",
+    workflow_label="Division Grant from MPCA",
+    entity="grant",
+    stages=[
+        WorkflowStage(stage_key="division_request", stage_label="Division · Request",           acting_role="division_checker",     action="Submit"),
+        WorkflowStage(stage_key="auditor_review",   stage_label="Internal Auditor · Review",    acting_role="mpca_internal_auditor", action="Review"),
+        WorkflowStage(stage_key="cao_approve",      stage_label="CAO · Approve",                acting_role="cao",                   action="Approve"),
+        WorkflowStage(stage_key="accounts_disburse",stage_label="Accounts · Disburse",          acting_role="mpca_accounts",         action="Disburse", requires_document=True),
+    ],
+)
+
+TOURNAMENT_INVOICE_WORKFLOW = WorkflowConfig(
+    workflow_key="tournament_invoice",
+    workflow_label="Tournament Invoice Submission",
+    entity="invoice",
+    stages=[
+        WorkflowStage(stage_key="division_submit",  stage_label="Division · Upload & Submit",   acting_role="division_checker",  action="Submit", requires_document=True),
+        WorkflowStage(stage_key="accounts_review",  stage_label="MPCA Accounts · Review",       acting_role="mpca_accounts",     action="Review"),
+        WorkflowStage(stage_key="treasurer_approve",stage_label="Treasurer · Approve",          acting_role="mpca_treasurer",    action="Approve"),
+    ],
+)
+
+VOUCHER_PAYMENT_WORKFLOW = WorkflowConfig(
+    workflow_key="voucher_payment",
+    workflow_label="Payment Voucher",
+    entity="voucher",
+    stages=[
+        WorkflowStage(stage_key="accounts_prepare", stage_label="Accounts · Prepare",           acting_role="mpca_accounts",    action="Submit"),
+        WorkflowStage(stage_key="cao_verify",       stage_label="CAO · Verify",                 acting_role="cao",              action="Review"),
+        WorkflowStage(stage_key="treasurer_sign",   stage_label="Treasurer · Sign",             acting_role="mpca_treasurer",   action="Approve"),
+        WorkflowStage(stage_key="secretary_sign",   stage_label="Secretary · Counter-Sign",     acting_role="mpca_secretary",   action="Authorise"),
+    ],
+)
+
+ALL_REFERENCE_WORKFLOWS = [
+    ANNUAL_DISTRICT_GRANT_WORKFLOW,
+    DIVISION_GRANT_WORKFLOW,
+    TOURNAMENT_INVOICE_WORKFLOW,
+    VOUCHER_PAYMENT_WORKFLOW,
+]

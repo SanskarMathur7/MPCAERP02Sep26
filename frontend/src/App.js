@@ -37,6 +37,7 @@ import PlayerDetail from "@/pages/PlayerDetail";
 import Tournaments from "@/pages/Tournaments";
 import TournamentDetail from "@/pages/TournamentDetail";
 import Fixtures from "@/pages/Fixtures";
+import AuditLog from "@/pages/AuditLog";
 import Rulebook from "@/pages/Rulebook";
 
 const ProtectedShell = ({ children }) => {
@@ -110,6 +111,7 @@ function App() {
                         {/* Protected — Phase IV.2: Tournament Module */}
                         <Route path="/tournaments" element={<Protected><Tournaments /></Protected>} />
                         <Route path="/fixtures" element={<Protected><Fixtures /></Protected>} />
+                        <Route path="/audit-log" element={<Protected><AuditLog /></Protected>} />
                         <Route path="/tournaments/:id" element={<Protected><TournamentDetail /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />

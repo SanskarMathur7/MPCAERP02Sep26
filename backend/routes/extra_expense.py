@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from core.infra import db, api_router
 from core.helpers import _create_notification
+from core.shared_services import write_audit_log, next_code
 from models import (
     ExtraExpenseRequest, ExtraExpenseCreate, ExtraExpenseAction, ExtraExpenseStatus,
     ApprovalStep, BudgetHeadAllocation,
@@ -16,8 +17,8 @@ from models import (
 
 
 async def _next_eer_ref(cycle: str) -> str:
-    count = await db.extra_expense_requests.count_documents({"request_ref": {"$regex": f"^EER-{cycle}-"}})
-    return f"EER-{cycle}-{count + 1:04d}"
+    # Sprint 0: use shared CODE generator (was: local counter).
+    return await next_code("extra_expense", org_short="MPCA", fy=cycle)
 
 
 async def _log_expense_event(tid: str, step: ApprovalStep) -> None:
@@ -107,6 +108,12 @@ async def submit_extra_expense_request(rid: str, action: ExtraExpenseAction):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }})
     await _log_expense_event(doc["tournament_id"], step)
+    # Sprint 0: also to global audit log
+    await write_audit_log(
+        module="extra_expense", record_id=rid, action="submit",
+        actor={"name": action.actor_name, "role": action.actor_post, "body_id": action.actor_body_id},
+        details={"head": doc["head_label"], "amount_inr": doc["amount_inr"]},
+    )
     # Notify MPCA
     await _create_notification(
         recipient_role_id="secretary", recipient_body_id="MPCA",
@@ -185,6 +192,11 @@ async def approve_extra_expense_request(rid: str, action: ExtraExpenseAction):
         "updated_at": now,
     }})
     await _log_expense_event(doc["tournament_id"], step)
+    await write_audit_log(
+        module="extra_expense", record_id=rid, action="approve",
+        actor={"name": action.actor_name, "role": action.actor_post, "body_id": action.actor_body_id or "MPCA"},
+        details={"head": doc["head_label"], "requested_inr": doc["amount_inr"], "approved_inr": approved, "new_ceiling_inr": new_ceiling},
+    )
 
     # Notify Division
     await _create_notification(

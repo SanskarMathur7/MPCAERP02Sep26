@@ -43,8 +43,9 @@ app.add_middleware(
 async def on_startup():
     await seed_data()
     # Sprint 0: register playbook workflow configs
-    from core.shared_services import upsert_workflow_config, ANNUAL_DISTRICT_GRANT_WORKFLOW
-    await upsert_workflow_config(ANNUAL_DISTRICT_GRANT_WORKFLOW)
+    from core.shared_services import upsert_workflow_config, ALL_REFERENCE_WORKFLOWS
+    for wf in ALL_REFERENCE_WORKFLOWS:
+        await upsert_workflow_config(wf)
 
 
 @app.on_event("shutdown")

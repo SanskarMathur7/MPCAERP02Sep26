@@ -43,6 +43,7 @@ const NAV_DOMAINS = [
             { to: "/tournament-budgets", label: "Tournament Budgets", icon: Wallet },
             { to: "/claims", label: "Grant Claims", icon: HandCoins },
             { to: "/rulebook", label: "AI Rulebook", icon: BookOpen },
+            { to: "/audit-log", label: "Audit Log", icon: BookOpen },
             { to: "/procurement", label: "Procurement", icon: ShoppingCart },
             { to: "/vendors", label: "Vendor Master", icon: Users },
             { to: "/vendor-bills", label: "Vendor Bills", icon: FileCheck },

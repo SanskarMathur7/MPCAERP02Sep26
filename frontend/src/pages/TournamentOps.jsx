@@ -19,6 +19,7 @@ import {
     Sparkles, Upload, AlertTriangle, Loader2, ArrowUpRight, RotateCcw,
     Plus, HelpCircle, ScrollText, Gavel,
 } from "lucide-react";
+import WorkflowTimeline from "@/components/WorkflowTimeline";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const fmtINR = (v) => `₹${(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -215,13 +216,7 @@ const PlanTab = ({ tournament, persona, onChanged }) => {
             {tournament.plan_approval_chain?.length > 0 && (
                 <div>
                     <div className="overline mb-2">Approval Trail</div>
-                    <ol className="text-xs space-y-1">
-                        {tournament.plan_approval_chain.map((s, i) => (
-                            <li key={i} className="font-mono">
-                                <span className="text-mpca-brass">{s.stage}</span> · {s.actor_name} {s.actor_post ? `(${s.actor_post})` : ""} · {s.notes || ""}
-                            </li>
-                        ))}
-                    </ol>
+                    <WorkflowTimeline chain={tournament.plan_approval_chain} testId="plan-approval-timeline" />
                 </div>
             )}
         </div>
@@ -895,21 +890,7 @@ const ExtraExpenseTab = ({ tournament, persona, onChanged }) => {
             {events.length > 0 && (
                 <div className="mt-8 border-t border-mpca-brass/30 pt-6">
                     <div className="overline mb-3 flex items-center gap-2"><ScrollText size={12} /> Tournament Expense Log · {events.length} events</div>
-                    <ol className="relative border-l-2 border-mpca-brass/40 ml-3 space-y-3" data-testid="expense-events-log">
-                        {[...events].reverse().map((e, i) => (
-                            <li key={i} className="pl-5 relative">
-                                <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-mpca-green-dark ring-4 ring-mpca-ivory" />
-                                <div className="flex items-baseline gap-2 flex-wrap">
-                                    <span className="font-serif text-mpca-green-dark uppercase tracking-wider text-xs">{e.stage.replace(/_/g, " ")}</span>
-                                    <span className="text-[10px] font-mono text-mpca-brass">{e.decided_on ? new Date(e.decided_on).toLocaleString("en-IN") : ""}</span>
-                                </div>
-                                <div className="text-[11px] text-mpca-charcoal mt-1">
-                                    {e.actor_name}{e.actor_post ? ` · ${e.actor_post}` : ""}{e.actor_body_id ? ` · ${e.actor_body_id}` : ""}
-                                </div>
-                                {e.notes && <div className="text-[11px] italic text-mpca-gray-dark mt-1">{e.notes}</div>}
-                            </li>
-                        ))}
-                    </ol>
+                    <WorkflowTimeline chain={events} testId="expense-events-log" />
                 </div>
             )}
 

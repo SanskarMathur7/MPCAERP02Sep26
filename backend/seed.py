@@ -906,6 +906,8 @@ async def seed_data():
     await seed_division_grants()
     await seed_vendor_kyc()
     await seed_purchase_orders()
+    await seed_assets()
+    await seed_employees()
 
 
 async def seed_division_grants():
@@ -1171,6 +1173,127 @@ async def seed_purchase_orders():
     await db.purchase_orders.insert_one(po3.model_dump())
 
     logger.info(f"Seeded 3 purchase orders totalling ~₹{po1.total_amount_inr + po2.total_amount_inr + po3.total_amount_inr:,.0f}.")
+
+
+async def seed_assets():
+    if await db.assets.count_documents({}) > 0:
+        return
+    logger.info("Seeding fixed asset register…")
+    from routes.assets import Asset, _compute_depreciation
+    from core.shared_services import next_code, indian_fy
+    fy = indian_fy()
+
+    seed_data = [
+        {"category": "Building", "description": "Holkar Stadium — Practice Pavilion",
+         "location": "Indore · Race Course Road", "purchase_date": "2015-04-01",
+         "cost_inr": 65_000_000, "salvage_value_inr": 5_000_000, "useful_life_years": 30,
+         "gl_account": "Fixed Assets · Buildings"},
+        {"category": "Land", "description": "Ground No. 3 — Freehold Land",
+         "location": "Bhopal · TT Nagar", "purchase_date": "2008-06-15",
+         "cost_inr": 42_000_000, "useful_life_years": 0,
+         "gl_account": "Fixed Assets · Land"},
+        {"category": "Vehicle", "description": "Team Bus — Ashok Leyland Falcon (30-seater)",
+         "location": "Indore · MPCA HQ", "purchase_date": "2023-09-10",
+         "cost_inr": 3_800_000, "salvage_value_inr": 400_000, "useful_life_years": 8,
+         "tag_no": "MPCA-VEH-001", "gl_account": "Fixed Assets · Vehicles"},
+        {"category": "Sports_Equipment", "description": "SG Ceat Bowling Machine × 4",
+         "location": "Indore · Indoor Nets", "purchase_date": "2024-11-01",
+         "cost_inr": 480_000, "useful_life_years": 5, "tag_no": "MPCA-SPT-014",
+         "gl_account": "Fixed Assets · Sports Equipment"},
+        {"category": "Computer", "description": "Dell Optiplex Workstations × 12",
+         "location": "MPCA HQ · Admin Block", "purchase_date": "2024-04-20",
+         "cost_inr": 720_000, "salvage_value_inr": 60_000, "useful_life_years": 3,
+         "tag_no": "MPCA-CMP-2024", "gl_account": "Fixed Assets · IT Equipment"},
+        {"category": "Furniture", "description": "Board Room Conference Table + 20 Chairs",
+         "location": "MPCA HQ · Board Room", "purchase_date": "2019-12-08",
+         "cost_inr": 340_000, "useful_life_years": 10,
+         "gl_account": "Fixed Assets · Furniture"},
+        {"category": "Networking", "description": "Cisco 24-port Switches × 4 + WiFi APs × 12",
+         "location": "MPCA HQ · Server Room", "purchase_date": "2022-07-18",
+         "cost_inr": 285_000, "useful_life_years": 5,
+         "gl_account": "Fixed Assets · Networking"},
+        {"category": "Equipment", "description": "Ground Roller — Diesel · 8-tonne",
+         "location": "Holkar Stadium · Groundsmen Shed", "purchase_date": "2020-02-14",
+         "cost_inr": 950_000, "salvage_value_inr": 80_000, "useful_life_years": 10,
+         "gl_account": "Fixed Assets · Plant & Machinery"},
+    ]
+    for s in seed_data:
+        a = Asset(body_id="MPCA", fiscal_cycle=fy, **s, created_by_name="MPCA Accounts")
+        a.asset_no = await next_code("asset", org_short="MPCA", fy=fy)
+        calc = _compute_depreciation(a.model_dump())
+        a.accumulated_depreciation_inr = calc["accumulated_depreciation_inr"]
+        a.book_value_inr = calc["book_value_inr"]
+        await db.assets.insert_one(a.model_dump())
+    logger.info(f"Seeded {len(seed_data)} fixed assets.")
+
+
+async def seed_employees():
+    if await db.employees.count_documents({}) > 0:
+        return
+    logger.info("Seeding employees + one draft payroll register…")
+    from routes.hr_payroll import Employee, _compute_payroll_row, PayrollRegister
+    from core.shared_services import next_code, indian_fy
+    fy = indian_fy()
+
+    seed_data = [
+        {"name": "Rakesh Sharma", "designation": "Chief Executive Officer",
+         "department": "Executive", "employment_type": "Permanent",
+         "date_of_joining": "2018-04-01", "pan": "ABCPS1234K",
+         "basic_pay_inr": 145_000, "hra_inr": 58_000, "special_allowance_inr": 45_000,
+         "conveyance_inr": 3_200, "contact_email": "ceo@mpca.in"},
+        {"name": "Meera Kulkarni", "designation": "Head of Cricket Operations",
+         "department": "Cricket Ops", "employment_type": "Permanent",
+         "date_of_joining": "2020-07-15", "pan": "MNKPK5432L",
+         "basic_pay_inr": 95_000, "hra_inr": 38_000, "special_allowance_inr": 28_000,
+         "conveyance_inr": 3_200},
+        {"name": "Suresh Iyer", "designation": "Finance Manager",
+         "department": "Finance & Accounts", "employment_type": "Permanent",
+         "date_of_joining": "2019-01-20", "pan": "AASPI4567M",
+         "basic_pay_inr": 78_000, "hra_inr": 31_000, "special_allowance_inr": 21_000,
+         "conveyance_inr": 3_200},
+        {"name": "Priyanka Verma", "designation": "Admin Executive",
+         "department": "Administration", "employment_type": "Permanent",
+         "date_of_joining": "2022-03-01", "pan": "BBPPV8765N",
+         "basic_pay_inr": 26_000, "hra_inr": 10_400, "special_allowance_inr": 4_000,
+         "conveyance_inr": 1_600},
+        {"name": "Ravi Patel", "designation": "Head Groundsman",
+         "department": "Ground Ops", "employment_type": "Permanent",
+         "date_of_joining": "2015-11-01", "pan": "CCRPP2345O",
+         "basic_pay_inr": 22_000, "hra_inr": 8_800, "special_allowance_inr": 2_500,
+         "conveyance_inr": 1_200},
+        {"name": "Anjali Deshpande", "designation": "Media & Communications",
+         "department": "Media", "employment_type": "Contract",
+         "date_of_joining": "2024-04-10", "pan": "DDANP6789P",
+         "basic_pay_inr": 42_000, "hra_inr": 16_800, "special_allowance_inr": 8_000,
+         "conveyance_inr": 2_000},
+        {"name": "Manish Gupta", "designation": "Data & Analytics Consultant",
+         "department": "Analytics", "employment_type": "Consultant",
+         "date_of_joining": "2025-01-05", "pan": "EEMGP3456Q",
+         "basic_pay_inr": 80_000, "hra_inr": 0, "special_allowance_inr": 0,
+         "conveyance_inr": 0, "tds_applicable": True, "tds_rate_pct": 10.0,
+         "pf_applicable": False, "esi_applicable": False,
+         "professional_tax_applicable": False},
+    ]
+    employees_created = []
+    for s in seed_data:
+        e = Employee(body_id="MPCA", **s)
+        e.employee_no = await next_code("employee", org_short="MPCA", fy=fy)
+        await db.employees.insert_one(e.model_dump())
+        employees_created.append(e.model_dump())
+
+    # Seed one Draft payroll register for the current month
+    current_period = datetime.now(timezone.utc).strftime("%Y-%m")
+    rows = [_compute_payroll_row(e).model_dump() for e in employees_created]
+    reg = PayrollRegister(
+        body_id="MPCA", fiscal_cycle=fy, period=current_period,
+        rows=rows,
+        total_gross_inr=round(sum(r["gross_inr"] for r in rows), 2),
+        total_deductions_inr=round(sum(r["total_deductions_inr"] for r in rows), 2),
+        total_net_inr=round(sum(r["net_pay_inr"] for r in rows), 2),
+    )
+    await db.payroll_registers.insert_one(reg.model_dump())
+    logger.info(f"Seeded {len(employees_created)} employees + 1 draft payroll register for {current_period} (₹{reg.total_net_inr:,.0f} net).")
+
 
 
 async def seed_grant_scheme_rates():

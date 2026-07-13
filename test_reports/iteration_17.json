@@ -1,0 +1,82 @@
+{
+  "summary": "Sprint 3 (Fixed Asset Register + HR/Payroll) — full backend + frontend regression against public REACT_APP_BACKEND_URL. 25/26 pytest cases pass. Verified: /api/assets returns 8 seeded assets across all 8 expected categories with book_value < cost (Land book == cost); /api/assets-stats/summary returns gross ~₹11.36 Cr, accumulated_dep ~₹2.54 Cr, net_block ~₹8.82 Cr with by_category / by_status counts; POST /api/assets auto-codes ASS/MPCA/2026-27/NNNNN, defaults life_years from category (Computer=3, Building=30, Land=0), and rejects salvage >= cost with 400; depreciation-schedule for a Building yields monthly = (cost-salvage)/360 and Land returns rows=[] + note; dispose flow requires reason (422/400), locks status=Disposed, computes gain_loss (in DB), and refuses duplicate dispose (400); /api/employees returns 7 seeded rows with Consultant Manish Gupta correctly flagged tds_applicable=True + pf_applicable=False; /api/employees-stats/summary returns count/active/by_type/monthly_gross_inr/annual_projected_inr where annual == 12×monthly; POST /api/employees rejects basic_pay_inr=0 and negative with 422 (Field(gt=0)); GET /api/payroll/registers returns 1 draft register for 2026-07 (~₹7.7L gross / ~₹7.15L net / 7 rows); per-row math verified: gross = Basic+HRA+Special+Conv, PF = 12% Basic when applicable, ESI = 0.75% Gross only if Gross ≤ ₹21K, PT = ₹200 fixed when Gross ≥ ₹15K, TDS = 10% Gross for consultant, Net = Gross - deductions; regeneration idempotent (same id returned); finalise flips Draft→Finalised, sets voucher_id, refuses second finalise (400) and refuses regeneration after finalise (400); voucher created via voucher_type=Payment · linked_module=payroll · linked_ref_id=reg.id · amount_inr==total_net_inr (verified by diffing /api/vouchers before/after). Sprint 1/2 regression endpoints (division-grants, vouchers, ledger?body_id=MPCA&fiscal_cycle=2026-27, finance/budget-vs-actual, purchase-orders, vendors-kyc/summary, shared/audit-log) all 200 OK. Frontend Playwright smoke against /asset-register + /payroll: 4 KPI tiles per view, 8 asset rows, filter chip 'depreciating' correctly excludes Land (8→7 rows), asset-drawer opens with dep-schedule + dispose-btn, new-asset dialog input-life placeholder is 'auto by category', payroll-page renders 2 tabs (Payroll Registers·1 · Employee Master·7) with correct KPI tile sets per tab, register-drawer renders full 12-column detail table with 8 payroll rows (7 original + 1 TEST_SPRINT3 employee added mid-test), reg-voucher badge shown for finalised register, finalise-btn correctly hidden post-finalise; new-employee dialog statutory hint switches correctly between 'PF 12% of Basic + ESI 0.75% if gross ≤ ₹21K + PT ₹200 (MP)' (Permanent) and 'Consultants: TDS 10% (u/s 194J), no PF/ESI/PT' (Consultant).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/assets/{aid}/dispose · GET /api/assets · GET /api/assets/{aid}",
+        "issue": "`gain_loss_on_disposal_inr` is computed and PERSISTED into Mongo on dispose, but is STRIPPED from every API response because the `Asset` pydantic model does not declare it as a field (AssetBase has ConfigDict(extra='ignore') and Asset inherits AssetBase). FastAPI's response_model=Asset serialisation drops the extra key. Confirmed via curl: disposed asset returns keys {status, disposal_date, disposal_amount_inr, disposal_reason, accumulated_depreciation_inr, book_value_inr} — but gain_loss is missing. Consequence: the /asset-register 'Disposal Record' block in AssetDrawer (which reads asset.gain_loss_on_disposal_inr, AssetRegister.jsx L231-232) will ALWAYS show ₹0 gain/loss regardless of the actual value. This is a visible business-logic bug for finance users. Fix: add `gain_loss_on_disposal_inr: Optional[float] = None` to the Asset model (routes/assets.py class Asset around L67).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "routes/assets.py L64 comment",
+        "issue": "Docstring/comment says 'AST/MPCA/2026-27/00001' but next_code('asset', ...) actually emits 'ASS/…' prefix (verified). Cosmetic — update the comment to match."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AppLayout · signed-in-as block",
+        "issue": "Persona name renders 'Shri Shri Mahanaryaman Scindia' — the honorific is concatenated twice (likely both the persona.name already contains 'Shri' and the AppLayout re-prefixes it). Cosmetic but visible on every page.",
+        "selector": "signed-in-as label in the sidebar",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Asset Disposal · AssetDrawer disposal-block",
+        "issue": "AssetRegister.jsx reads asset.gain_loss_on_disposal_inr, but the backend response omits this key (see backend critical finding above). Post-disposal, the 'Gain/Loss' number will display as ₹0 for every disposed asset. Reproduction: dispose any asset with disposal_amount != book_value → drawer's disposal-block shows ₹0 instead of the real gain/loss (which IS correctly stored in Mongo).",
+        "affected_selectors": ["disposal-block", "gain-loss-preview (dispose dialog is fine — computed client-side)"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "/payroll · register drawer",
+        "issues": [
+          "Totals row in the 12-column payroll table uses `colSpan={4}` for the deductions cell (PF+ESI+PT+TDS collapsed into one cell showing ₹60,760). That's fine for at-a-glance, but a reviewer verifying whether PF or TDS reconcile per-column will need to sum by hand. Consider showing per-column sub-totals (Basic total, HRA total, PF total, TDS total) rather than collapsing everything."
+        ]
+      },
+      {
+        "screen": "/asset-register · New Asset dialog",
+        "issues": [
+          "The 'Life (years)' input placeholder says 'auto by category' but there's no live indicator of WHAT the auto life would be once a category is picked (e.g. Computer=3, Building=30). Small helper text under the field mirroring the DEFAULT_LIFE_YEARS[category] value would remove ambiguity."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint3_assets_hr.py",
+    "/app/test_reports/pytest/iter17_results.xml"
+  ],
+  "action_items": [
+    "HIGH: Add `gain_loss_on_disposal_inr: Optional[float] = None` to routes/assets.py::Asset (and optionally its disposal_* companions too) — right now the field is persisted but never returned, making the AssetDrawer disposal-block permanently show ₹0.",
+    "LOW: Fix double-honorific in sidebar signed-in-as label ('Shri Shri Mahanaryaman Scindia').",
+    "LOW: Add helper text under 'Life (years)' in New Asset dialog showing the category default (e.g. 'Auto: 3yr for Computer, 30yr for Building').",
+    "LOW: Update routes/assets.py L64 comment prefix from AST/ to ASS/ (matches next_code output).",
+    "LOW: Payroll register totals row collapses PF/ESI/PT/TDS via colSpan; consider per-column totals for finance reconciliation."
+  ],
+  "critical_code_review_comments": [
+    "routes/assets.py::dispose_asset writes gain_loss_on_disposal_inr via db.assets.update_one $set, but Asset pydantic model does not declare the field ⇒ FastAPI strips it on read. This is the classic 'silent field-drop' due to Config(extra='ignore') on the response model. Extend Asset to include disposal-side fields (disposal_date, disposal_amount_inr, disposal_reason are already declared; gain_loss_on_disposal_inr is not).",
+    "routes/hr_payroll.py::_compute_payroll_row PT logic: `PT_MP_SLAB_INR if gross >= 15000 else 0.0` uses a single flat slab. Real MP PT slabs (FY 25-26) are graduated: ₹0 up to ₹18,750/mo, ₹125/mo ₹18,751-25,000, ₹208 (₹212 in month of Feb) above ₹25,000 → total ₹2,500 annually. The current flat ₹200 for anyone above ₹15K is a simplification; document as an approximation or upgrade to a slab helper.",
+    "routes/hr_payroll.py::finalise_register: imports `from routes.vouchers import Voucher` INSIDE the function to avoid circular import. This works but couples routes/vouchers.py's Voucher class name — if Voucher is renamed or moved, the failure surfaces only at finalise time. Consider moving the Voucher class into core/models.py or a domain module referenced by both.",
+    "routes/hr_payroll.py::_compute_payroll_row: ESI boundary is `gross <= 21000` (inclusive). India ESI ceiling is ₹21,000 gross (excluded above), so `<=` is correct — but a comment stating 'inclusive per Employees State Insurance Act, Sec 2(9)' would help future auditors.",
+    "routes/assets.py::_compute_depreciation calculates months_used via `min(_months_between(purchase, end), total_months)` which is a signed month diff; a purchase_date IN THE FUTURE would give months_used=0 (correct, silently). But a purchase_date in an unparseable ISO format falls back to `purchase = as_on`, giving months_used = 0 (silent). Log a warning when purchase_date fails to parse — otherwise a data-quality issue hides.",
+    "routes/hr_payroll.py: /payroll/generate re-uses `existing['generated_at']` on regenerate (preserves first-cut timestamp — good) but does NOT preserve the `voucher_id` field when the existing register is Draft. That's fine (no voucher created yet in Draft), but code should assert existing['voucher_id'] is None on the regenerate path as a defence.",
+    "routes/hr_payroll.py::finalise_register writes {\"status\":\"Finalised\", …, \"voucher_id\": v.id}, but does not persist `linked_ref_code` back into the register. When someone looks at the register they see voucher_id (UUID) but not the friendly VCH/MPCA/2026-27/NNNNN code. Consider also persisting `voucher_no` on the register for legibility.",
+    "AssetRegister.jsx L149 util calc: `a.cost_inr ? (a.book_value_inr / a.cost_inr) * 100 : 100` yields 100% for zero-cost. A zero-cost asset is a data-quality issue; consider setting util to 0 (or hiding the bar) when cost is 0.",
+    "Payroll.jsx L115 KPI 'PF + ESI + PT' is the sum but excludes TDS. Copy is technically correct ('Statutory contributions'), but TDS-conscious auditors may misread. Sub-line already says 'Statutory contributions' which is fine, but the semantic split between TDS (Income Tax) and PF/ESI/PT (Employer statutory) could be reinforced with a tooltip."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sprint3_assets_hr.py (new — 26 pytest cases, 25 pass, 1 fail reveals the gain_loss_on_disposal_inr response-model bug)",
+    "/app/test_reports/pytest/iter17_results.xml (new)"
+  ],
+  "success_rate": {"backend": "96% (25/26) — 1 fail exposes a real API bug (gain_loss_on_disposal_inr stripped by response_model)", "frontend": "100% smoke — asset-register + payroll (both tabs) + drawers + dialogs + statutory hints all verified"},
+  "test_credentials": "President 'Shri Mahanaryaman Scindia' via [data-testid=persona-chip-president] on /login. Persona is stored in localStorage under key 'mpca_persona' — set directly for automated tests via evaluate().",
+  "seed_data_creation": "test file creates TEST_SPRINT3-prefixed assets (Computer/Building/Furniture) and one TEST_SPRINT3 Ravi employee. Teardown deletes these via pymongo (best-effort). One artifact remains: the seeded draft payroll register at period 2026-07 has been FINALISED by test_payroll_finalise_creates_voucher (creating a new voucher VCH/MPCA/2026-27/00006 for ~₹7.41L net). The register now shows 8 rows (7 original + 1 TEST_SPRINT3 Ravi) with total_gross_inr ≈ ₹8.01L / total_net_inr ≈ ₹7.41L. Rerunning generate for 2026-07 now returns 400 (already finalised) — this is expected. If main agent wants to re-run without the extra row, delete the TEST_SPRINT3 employee's row from the register document or re-seed.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/test_sprint3_assets_hr.py -v`. Test `test_dispose_asset_flow` will FAIL until routes/assets.py::Asset gets the `gain_loss_on_disposal_inr: Optional[float] = None` field added (the disposal itself works and computes correctly; only the response is missing the key). Sprint 3 seed register is now Finalised (test_payroll_finalise_creates_voucher effect) — to fully retest the finalise path from a Draft state, re-seed via /app/backend/seed.py or POST /api/payroll/generate for a fresh period (e.g. '2026-08'). Auto-voucher on finalise verified: VCH/MPCA/2026-27/00006 · voucher_type=Payment · linked_module=payroll · linked_ref_id={register_id} · amount_inr==total_net_inr.",
+  "rca of the issue": "gain_loss_on_disposal_inr silent-drop RCA: routes/assets.py class Asset(AssetBase) inherits AssetBase which has ConfigDict(extra='ignore'). The dispose_asset endpoint (L245-257) writes gain_loss_on_disposal_inr into Mongo via $set, but the response is validated against response_model=Asset. Because gain_loss_on_disposal_inr is not a declared field on Asset (only disposal_date, disposal_amount_inr, disposal_reason are), FastAPI's model_validate call silently drops the key. Reproduction: `curl -X POST /api/assets/{id}/dispose -d '{\"disposal_amount_inr\": 5000, \"disposal_reason\": \"obsolete\"}'` → response has status=Disposed and book_value_inr, but NO gain_loss_on_disposal_inr; then GET /api/assets/{id} confirms the field is absent (though `db.assets.find_one({id})` in Mongo shows it IS persisted). Fix: add `gain_loss_on_disposal_inr: Optional[float] = None` on the Asset model. Alternative: change ConfigDict to extra='allow' (broader impact, not recommended)."
+}

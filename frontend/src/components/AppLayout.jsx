@@ -68,6 +68,13 @@ const NAV_DOMAINS = [
             { to: "/venues", label: "Venues & Grounds", icon: MapPinIcon },
         ],
     },
+    {
+        domain: "Assets & HR",
+        items: [
+            { to: "/asset-register", label: "Asset Register", icon: Landmark },
+            { to: "/payroll", label: "Employees & Payroll", icon: Users },
+        ],
+    },
 ];
 
 const COMING_SOON = [

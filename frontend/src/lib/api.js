@@ -525,6 +525,64 @@ export const fetchAuditLog = async (params = {}) => {
     return data;
 };
 
+// ---------- Sprint 3 · Asset Register + HR/Payroll ----------
+export const fetchAssets = async (params = {}) => {
+    const { data } = await api.get("/assets", { params });
+    return data;
+};
+export const fetchAsset = async (aid) => {
+    const { data } = await api.get(`/assets/${aid}`);
+    return data;
+};
+export const createAsset = async (payload) => {
+    const { data } = await api.post("/assets", payload);
+    return data;
+};
+export const fetchAssetSchedule = async (aid, months = 60) => {
+    const { data } = await api.get(`/assets/${aid}/depreciation-schedule`, { params: { months } });
+    return data;
+};
+export const disposeAsset = async (aid, payload) => {
+    const { data } = await api.post(`/assets/${aid}/dispose`, payload);
+    return data;
+};
+export const fetchAssetsSummary = async (params = {}) => {
+    const { data } = await api.get("/assets-stats/summary", { params });
+    return data;
+};
+export const fetchEmployees = async (params = {}) => {
+    const { data } = await api.get("/employees", { params });
+    return data;
+};
+export const createEmployee = async (payload) => {
+    const { data } = await api.post("/employees", payload);
+    return data;
+};
+export const fetchEmployeesSummary = async (params = {}) => {
+    const { data } = await api.get("/employees-stats/summary", { params });
+    return data;
+};
+export const generatePayroll = async (payload) => {
+    const { data } = await api.post("/payroll/generate", payload);
+    return data;
+};
+export const fetchPayrollRegisters = async (params = {}) => {
+    const { data } = await api.get("/payroll/registers", { params });
+    return data;
+};
+export const fetchPayrollRegister = async (rid) => {
+    const { data } = await api.get(`/payroll/registers/${rid}`);
+    return data;
+};
+export const finalisePayrollRegister = async (rid, payload) => {
+    const { data } = await api.post(`/payroll/registers/${rid}/finalise`, payload);
+    return data;
+};
+export const fetchPayrollSummary = async (params = {}) => {
+    const { data } = await api.get("/payroll-stats/summary", { params });
+    return data;
+};
+
 // ---------- Sprint 2 · Vendor KYC + Purchase Orders ----------
 export const fetchKycSummary = async () => {
     const { data } = await api.get("/vendors-kyc/summary");

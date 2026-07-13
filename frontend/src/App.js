@@ -44,6 +44,8 @@ import Ledger from "@/pages/Ledger";
 import BudgetVsActual from "@/pages/BudgetVsActual";
 import PurchaseOrders from "@/pages/PurchaseOrders";
 import VendorKYC from "@/pages/VendorKYC";
+import AssetRegister from "@/pages/AssetRegister";
+import Payroll from "@/pages/Payroll";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -127,6 +129,10 @@ function App() {
                         {/* Protected — Sprint 2: Purchase Orders + Vendor KYC */}
                         <Route path="/purchase-orders" element={<Protected><PurchaseOrders /></Protected>} />
                         <Route path="/vendor-kyc" element={<Protected><VendorKYC /></Protected>} />
+
+                        {/* Protected — Sprint 3: Asset Register + HR/Payroll */}
+                        <Route path="/asset-register" element={<Protected><AssetRegister /></Protected>} />
+                        <Route path="/payroll" element={<Protected><Payroll /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

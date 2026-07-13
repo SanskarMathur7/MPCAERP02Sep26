@@ -16,7 +16,7 @@ from routes import (  # noqa: F401
     fees, bank, financial_powers, bodies, claims, budgets,
     procurement, players, transfers, tournaments,
     notifications, uploads, ai_claims, rulebook, vendor_bills, tournament_budgets,
-    venues_grounds, selection, fixtures, tournament_plan, tournament_invoices, extra_expense,
+    venues_grounds, selection, fixtures, tournament_plan, tournament_invoices, extra_expense, shared,
 )
 from seed import seed_data
 
@@ -42,6 +42,9 @@ app.add_middleware(
 @app.on_event("startup")
 async def on_startup():
     await seed_data()
+    # Sprint 0: register playbook workflow configs
+    from core.shared_services import upsert_workflow_config, ANNUAL_DISTRICT_GRANT_WORKFLOW
+    await upsert_workflow_config(ANNUAL_DISTRICT_GRANT_WORKFLOW)
 
 
 @app.on_event("shutdown")

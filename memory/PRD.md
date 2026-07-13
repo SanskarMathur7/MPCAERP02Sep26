@@ -453,3 +453,89 @@ The user reviewed every tab of the reference plan and identified that the existi
 - Frontend smoke tests via screenshot passed.
 - Comprehensive testing agent run: pending.
 
+
+---
+
+## Sprint 1 · Finance Rails Completion (Feb 2026) — SHIPPED
+
+Sprint 1 of the approved 8-Sprint Hybrid Plan. Sprint 0 (foundations: shared_services,
+CODE service, global audit log, playbook constants) was completed prior. Sprint 1
+delivers the double-entry accounting spine.
+
+### What shipped
+- **P3.1 · Division Grants (3-step maker-checker)** — Division raises → State Finance
+  reviews → State Secretary approves → auto-disburse. Endpoints: `/api/division-grants`,
+  `/submit`, `/finance-review`, `/secretary-approve`, `/disburse`, `/send-back`, `/reject`,
+  `/division-grants-stats/summary`. Approval chain persisted on the document; illegal
+  state transitions return HTTP 400. Send-back and Reject require a note.
+- **P3.5 · Vouchers (auto from disbursement)** — When a Division Grant is disbursed a
+  Payment Voucher is auto-created via `routes.vouchers.create_voucher_for_grant()`,
+  keyed by `linked_ref_id` (idempotent). Voucher No. format: `VCH/MPCA/2026-27/NNNNN`.
+  Types: Payment · Receipt · Journal. Endpoints: `/api/vouchers`, `POST /api/vouchers`
+  (manual), `/api/vouchers/{id}/cancel`, `/api/vouchers-stats/summary`.
+- **P3.6 · General Ledger with running balance** — `GET /api/ledger?body_id=&fiscal_cycle=`
+  projects posted vouchers into a running-balance statement. Opening balance sourced
+  from `body_budgets.opening_balance_inr` (seeded ₹1.5 Cr for MPCA · 2026-27).
+- **P3.7 · Excel + PDF export utility** — `GET /api/ledger/export.xlsx` (openpyxl,
+  cricket-themed header fill) and `GET /api/ledger/export.pdf` (reportlab landscape A4
+  with MPCA colours). Both return proper MIME + attachment disposition.
+- **P3.9 · Budget-vs-Actual dashboard** — `GET /api/finance/budget-vs-actual` produces
+  per-body reconciliation with annual_budget · actual · variance · utilisation_pct ·
+  status (on_track / under_utilised / over_budget). Aggregates from vouchers +
+  division_grants + legacy claims.
+
+### Frontend
+- **Recent Activity widget** on Dashboard (`data-testid="recent-activity"`) — last 10
+  events from `/api/shared/audit-log` with time, module pill, action, actor, ref-code.
+  "View full log" link routes to `/audit-log`.
+- New pages: `/division-grants`, `/ledger`, `/budget-vs-actual`. All wired into the
+  Financial sidebar group in `AppLayout.jsx`.
+- DivisionGrants drawer with 4-stage timeline, action buttons (Submit / Finance Review /
+  Secretary Approve / Disburse / Send Back / Reject) role-gated via `canAct(persona, grant)`.
+- Ledger page with 4 KPI tiles (Opening · Debits · Credits · Closing), Excel/PDF export
+  buttons, and Ledger/Vouchers tabs.
+- BudgetVsActual page with 4 KPI tiles + type filter chips + 64-body utilisation table
+  with progress bars.
+
+### Seeded data
+- 4 Division Grants across all key statuses (Disbursed · Finance_Reviewed · Draft · Sent_Back)
+  covering DIV-IND · DIV-JBP · DIV-UJN · DIV-GWL.
+- 1 auto-generated Payment Voucher linked to the DIV-IND disbursement.
+- MPCA opening balance ₹1.5 Cr for both 2025-26 and 2026-27 fiscal cycles.
+
+### Endpoints registered
+- `/api/division-grants` (+ 6 workflow actions + stats/summary)
+- `/api/vouchers` (+ cancel + stats/summary)
+- `/api/ledger`, `/api/ledger/export.xlsx`, `/api/ledger/export.pdf`
+- `/api/finance/budget-vs-actual`
+
+### Files added/changed
+- Backend: `routes/division_grants.py` (new · 200 LOC), `routes/vouchers.py` (new · 160 LOC),
+  `routes/ledger.py` (new · 260 LOC), `models.py` (`BodyBudgetBase.opening_balance_inr`),
+  `seed.py` (`seed_division_grants()` + MPCA opening balance), `server.py` (router imports),
+  `requirements.txt` (+openpyxl, +reportlab already present).
+- Frontend: `pages/DivisionGrants.jsx` (new · 380 LOC), `pages/Ledger.jsx` (new · 220 LOC),
+  `pages/BudgetVsActual.jsx` (new · 175 LOC), `pages/Dashboard.jsx` (Recent Activity
+  widget), `lib/api.js` (Sprint 1 helpers), `App.js` (3 new routes), `components/AppLayout.jsx`
+  (3 new sidebar links).
+- Tests: `/app/backend/tests/test_sprint1_finance.py` (28 tests, all pass).
+
+### Testing status
+- **Backend**: 28/28 pytest cases pass (regressions + happy paths + guards).
+- **Frontend**: 100% smoke — all 3 Sprint 1 pages render, drawer + timeline + exports work.
+- **Regression**: 13 existing endpoints unaffected (verified: claims, vendors, bodies,
+  tournaments, players, vendor-bills, tournament-budgets, procurement, shared/audit-log).
+
+### Known non-blocking notes (from testing agent)
+- `routes/ledger.py::_ledger_rows` uses a loose `particulars` regex for scope filtering —
+  fine at current scale but should move to structured joins (linked_ref_id / cr_account)
+  when Sprint 2 adds PO/invoice ledger entries.
+- Voucher creation on disbursement is not wrapped in a Mongo transaction; helper is
+  idempotent on `linked_ref_id`, so a retry endpoint (future) closes the gap.
+
+### What's next
+- **Sprint 2** (Purchase Orders + Vendor KYC): Vendor KYC workflow, PO → invoice →
+  payment routing, PO burn-down + TDS flag.
+- **Sprint 3** (Asset Register + HR/Payroll).
+- Tally integration still BLOCKED awaiting credentials from MPCA.
+

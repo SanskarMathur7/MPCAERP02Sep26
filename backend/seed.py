@@ -1006,6 +1006,20 @@ async def seed_division_grants():
 
     logger.info("Seeded 4 division grants (1 disbursed + auto voucher · 1 pending Sec · 1 draft · 1 sent-back).")
 
+    # Seed a realistic MPCA opening balance so ledger closing does not start negative.
+    for opening_fy in ("2025-26", "2026-27"):
+        await db.body_budgets.update_one(
+            {"body_id": "MPCA", "fiscal_cycle": opening_fy},
+            {"$setOnInsert": {
+                "body_id": "MPCA",
+                "fiscal_cycle": opening_fy,
+                "annual_budget_inr": 25_000_000.0,   # ₹2.5 Cr MPCA HQ operating budget
+                "opening_balance_inr": 15_000_000.0,  # ₹1.5 Cr bank opening
+                "note": "Auto-seeded HQ opening balance & annual budget.",
+            }},
+            upsert=True,
+        )
+
 
 async def seed_grant_scheme_rates():
     """Seed placeholder Grant Scheme rates. MPCA can edit these anytime."""

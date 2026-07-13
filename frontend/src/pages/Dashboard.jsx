@@ -406,10 +406,11 @@ const Dashboard = () => {
                                     </span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="text-sm text-mpca-charcoal">
-                                        <span className="font-mono text-mpca-oxblood text-[11px] uppercase tracking-wider mr-2">{r.action}</span>
+                                    <div className="text-sm text-mpca-charcoal flex flex-wrap items-baseline gap-x-2">
+                                        <span className="font-mono text-mpca-oxblood text-[11px] uppercase tracking-wider">{r.action}</span>
+                                        <span className="text-mpca-gray-dark">·</span>
                                         <span className="text-mpca-green-dark font-medium">{r.actor_name}</span>
-                                        {r.actor_role && <span className="text-mpca-gray-dark text-[10px] ml-2">· {r.actor_role}</span>}
+                                        {r.actor_role && <span className="text-mpca-gray-dark text-[10px]">· {r.actor_role}</span>}
                                     </div>
                                     {r.details?.code && (
                                         <div className="text-[10px] font-mono text-mpca-brass mt-0.5 truncate">

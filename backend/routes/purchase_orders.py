@@ -35,10 +35,10 @@ class POLineItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
     description: str
     hsn_sac: Optional[str] = None
-    quantity: float = 1
+    quantity: float = Field(gt=0)
     uom: str = "nos"
-    unit_price_inr: float
-    gst_pct: float = 18.0
+    unit_price_inr: float = Field(gt=0)
+    gst_pct: float = Field(default=18.0, ge=0, le=28)
 
     @property
     def subtotal(self) -> float:
@@ -208,8 +208,17 @@ async def create_po(payload: PurchaseOrderCreate):
         raise HTTPException(400, "Vendor not found")
     if vendor.get("is_blacklisted"):
         raise HTTPException(400, "Cannot raise PO against a blacklisted vendor")
-    if (vendor.get("kyc_status") or "Not_Started") != "KYC_Verified":
-        raise HTTPException(400, f"Vendor is not KYC verified (current: {vendor.get('kyc_status', 'Not_Started')}). Complete KYC before raising PO.")
+    kyc_status = vendor.get("kyc_status") or "Not_Started"
+    if kyc_status != "KYC_Verified":
+        raise HTTPException(400, f"Vendor is not KYC verified (current: {kyc_status}). Complete KYC before raising PO.")
+    # Reject if the KYC verification has silently lapsed (expiry in the past).
+    expiry = vendor.get("kyc_expires_at")
+    if expiry:
+        try:
+            if datetime.fromisoformat(expiry.replace("Z", "+00:00")) <= datetime.now(timezone.utc):
+                raise HTTPException(400, "Vendor KYC has expired. Re-verify KYC before raising PO.")
+        except ValueError:
+            pass  # bad ISO — skip the check rather than block
 
     if not payload.items:
         raise HTTPException(400, "PO must have at least one line item")
@@ -253,14 +262,15 @@ async def approve_po(pid: str, payload: ActionPayload):
     po = await _get(pid)
     if po["status"] not in ("Submitted",):
         raise HTTPException(400, f"Cannot approve — status is {po['status']}")
-    # Determine if we need Finance step (3-step)
     if po.get("approval_required_steps", 2) >= 3:
-        # First approval = Head done; move to Finance
-        already_head = any(c["action"] == "Approve" and c["stage"] == "Head_Approval" for c in po.get("approval_chain", []))
-        if not already_head:
+        # Count Approvals *since the last Submit* — so a send-back + re-submit resets
+        # the head/finance sequence rather than skipping straight past.
+        chain = po.get("approval_chain", [])
+        last_submit_idx = max((i for i, c in enumerate(chain) if c.get("action") == "Submit"), default=-1)
+        approvals_since_submit = [c for c in chain[last_submit_idx + 1:] if c.get("action") == "Approve"]
+        if not approvals_since_submit:
             return await _append_chain(pid, action="Approve", new_status="Submitted",
                                         new_stage="Finance_Approval", payload=payload)
-    # Otherwise (or after Finance approval) — mark Approved
     return await _append_chain(pid, action="Approve", new_status="Approved",
                                 new_stage="Ready_to_Issue", payload=payload)
 
@@ -295,6 +305,10 @@ async def link_bill(pid: str, payload: LinkBillPayload):
     po = await _get(pid)
     if po["status"] in ("Cancelled", "Paid", "Draft"):
         raise HTTPException(400, f"Cannot link a bill to a PO in status {po['status']}")
+    if payload.bill_id in (po.get("linked_bill_ids") or []):
+        raise HTTPException(400, f"Bill {payload.bill_id} is already linked to this PO")
+    if payload.amount_inr <= 0:
+        raise HTTPException(400, "Bill amount must be greater than zero")
     total_available = float(po["total_amount_inr"]) - float(po.get("invoiced_amount_inr") or 0)
     if payload.amount_inr > total_available + 0.01:
         raise HTTPException(400, f"Bill amount ₹{payload.amount_inr:,.2f} exceeds PO remaining ₹{total_available:,.2f}")

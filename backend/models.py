@@ -891,6 +891,10 @@ class UploadRecord(BaseModel):
 # Travel, Material, Infrastructure, Catering, Printing, Services. Bills follow a
 # 4-stage workflow: Submitted → Verified (Accounts) → Sanctioned (Treasurer) → Paid.
 
+# NOTE: VendorCategory Literal is kept only for the write-path (VendorCreate) to
+# enforce canonical categories at creation time. The Vendor read model (`category`
+# below) is intentionally widened to `str` so historical data drift or manual DB
+# imports outside the enum do not break /api/vendors listings.
 VendorCategory = Literal[
     "Hotel", "Travel", "Material", "Infra", "Catering",
     "Printing", "Services", "Other",
@@ -901,7 +905,7 @@ class VendorBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     body_id: str = "MPCA"                  # owning body (vendor empanelled by)
     name: str
-    category: VendorCategory
+    category: str                          # widened; VendorCategory is enforced on write
     gstin: Optional[str] = None
     pan: Optional[str] = None
     contact_name: Optional[str] = None
@@ -938,7 +942,8 @@ class Vendor(VendorBase):
 
 
 class VendorCreate(VendorBase):
-    pass
+    # Enforce canonical category enum on write only.
+    category: VendorCategory = "Other"
 
 
 VendorBillStatus = Literal[

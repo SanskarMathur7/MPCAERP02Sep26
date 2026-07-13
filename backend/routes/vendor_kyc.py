@@ -10,6 +10,7 @@ Also carries TDS applicability + rate (default 2% u/s 194C for contractual work)
 GST verification flag, and MSME registration flag. This data flows into the PO module.
 """
 from datetime import datetime, timedelta, timezone
+from dateutil.relativedelta import relativedelta
 from typing import List, Literal, Optional
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ConfigDict
@@ -88,7 +89,7 @@ async def verify_kyc(vid: str, payload: KycActionPayload):
     if v.get("kyc_status") != "Docs_Submitted":
         raise HTTPException(400, f"Cannot verify — current KYC status is {v.get('kyc_status', 'Not_Started')}")
     now = datetime.now(timezone.utc)
-    expiry = (now + timedelta(days=30 * payload.validity_months)).isoformat()
+    expiry = (now + relativedelta(months=+payload.validity_months)).isoformat()
     updates = {
         "kyc_status": "KYC_Verified",
         "kyc_verified_at": now.isoformat(),

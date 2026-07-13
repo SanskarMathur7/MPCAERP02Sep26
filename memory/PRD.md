@@ -539,3 +539,58 @@ delivers the double-entry accounting spine.
 - **Sprint 3** (Asset Register + HR/Payroll).
 - Tally integration still BLOCKED awaiting credentials from MPCA.
 
+
+
+---
+
+## Sprint 2 · Purchase Orders + Vendor KYC (Feb 2026) — SHIPPED
+
+Sprint 2 of the 8-Sprint Hybrid Plan. Delivers the vendor-management + procurement
+spine that feeds Sprint 1's ledger.
+
+### What shipped
+- **Vendor KYC lifecycle** (`routes/vendor_kyc.py`) — Not_Started → Docs_Submitted →
+  KYC_Verified (12-mo default, calendar-accurate via `relativedelta`) → Expired.
+  Rejected branch with mandatory note. 4 required docs enforced on submit.
+- **Purchase Orders** (`routes/purchase_orders.py`) — full lifecycle Draft → Submitted
+  → Approved → Issued → Partially_Received/Received → Invoiced → Paid.
+  2-step approval ≤ ₹1L, 3-step > ₹1L (Head + Finance). Send-back and Cancel branches.
+- **TDS auto-calc** on PO creation from `vendor.tds_rate_pct` (default 2% u/s 194C).
+- **PO burn-down** — `invoiced_amount_inr` + `paid_amount_inr` incremented via
+  `/link-bill` (idempotent on `bill_id`). Auto-flips status Invoiced/Paid.
+- **Vendor guards** — PO refuses blacklisted, non-verified, or expired-KYC vendors.
+- **Frontend pages**: `/purchase-orders` and `/vendor-kyc` with drawers, approval
+  trails, action dialogs, burn-down bars.
+
+### Seeded data
+- 13 verified · 1 docs-submitted · 1 not-started vendors; 2 expiring-in-30-days.
+- 3 POs (~₹3L committed): Invoiced · Draft · Submitted.
+
+### Testing status
+- Backend: 36/36 pytest ✅ (Sprint 1 regression bundled).
+- Frontend: 100% smoke ✅.
+
+### Bugs fixed on-the-fly (from testing agent iteration_16)
+- **CRITICAL**: Widened `Vendor.category` from `Literal` to `str` on the read
+  model — historical data drift can no longer 500 `/api/vendors`. Enum kept
+  on `VendorCreate` (write path).
+- **HIGH**: `/link-bill` idempotency check on `bill_id`.
+- **HIGH**: `/approve` re-work path counts approvals since last `Submit` so
+  send-back + re-submit correctly re-runs Head → Finance.
+- **MEDIUM**: `create_po` blocks expired-KYC vendors.
+- **MEDIUM**: `POLineItem` quantity/unit_price `Field(gt=0)`; gst_pct bounded 0-28.
+- **MEDIUM**: KYC verify uses `dateutil.relativedelta(months=+n)` — calendar accurate.
+
+### Deferred to Sprint 4 (Governance)
+- Cross-checking link-bill bill_ids against a canonical vendor_bills collection.
+- Per-doc KYC verified/remarks history preservation.
+- Vendor categories metadata endpoint.
+
+### What's next
+- **Sprint 3** — Asset Register + HR/Payroll (fixed assets, depreciation, employee
+  master, TDS, payroll register).
+- **Sprint 4** — Governance & Compliance (DMS, doc expiry, compliance register,
+  audit workpapers PDF).
+- **Sprints 5-6** — Dashboards & Reports, AI Assistant Panel.
+- Tally integration still BLOCKED awaiting credentials from MPCA.
+

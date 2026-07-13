@@ -40,8 +40,11 @@ const NAV_DOMAINS = [
         domain: "Financial",
         items: [
             { to: "/budgets", label: "Budget Ledger", icon: Coins },
+            { to: "/budget-vs-actual", label: "Budget vs Actual", icon: Coins },
             { to: "/tournament-budgets", label: "Tournament Budgets", icon: Wallet },
+            { to: "/division-grants", label: "Division Grants", icon: HandCoins },
             { to: "/claims", label: "Grant Claims", icon: HandCoins },
+            { to: "/ledger", label: "General Ledger", icon: BookOpen },
             { to: "/rulebook", label: "AI Rulebook", icon: BookOpen },
             { to: "/audit-log", label: "Audit Log", icon: BookOpen },
             { to: "/procurement", label: "Procurement", icon: ShoppingCart },

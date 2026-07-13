@@ -455,6 +455,7 @@ class BodyBudgetBase(BaseModel):
     body_id: str
     fiscal_cycle: str
     annual_budget_inr: float = 0.0
+    opening_balance_inr: float = 0.0
     note: Optional[str] = None
 
 

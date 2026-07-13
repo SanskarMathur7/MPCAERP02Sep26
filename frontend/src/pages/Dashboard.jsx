@@ -1,11 +1,11 @@
 import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { api } from "@/lib/api";
+import { api, fetchAuditLog } from "@/lib/api";
 import {
     Users, Calendar, HandCoins, AlertTriangle, ChevronRight,
     Building2, MapPin, Landmark, TrendingUp, Inbox, Sparkles, ArrowUpRight,
-    Trophy, TrendingDown,
+    Trophy, TrendingDown, Activity, ScrollText,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 
@@ -174,6 +174,7 @@ const Dashboard = () => {
     const [stateStats, setStateStats] = useState(null); // for District-only persona
     const [claimsStats, setClaimsStats] = useState(null);
     const [performance, setPerformance] = useState(null); // division leaderboard (State persona only)
+    const [recentAudit, setRecentAudit] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -200,6 +201,11 @@ const Dashboard = () => {
                     const { data: claims } = await api.get(`/claims?body_id=${rootCode}`);
                     setClaimsStats(claims);
                 }
+                // Recent audit trail — universal across personas
+                try {
+                    const audit = await fetchAuditLog({ limit: 10 });
+                    setRecentAudit(audit);
+                } catch (_) { /* swallow */ }
             } catch (e) {
                 console.error("dashboard load failed", e);
             } finally {
@@ -355,6 +361,64 @@ const Dashboard = () => {
                                     navigate(`/claims?body_id=${c.code}`);
                                 }}
                             />
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* Recent Activity — universal, last 10 audit events */}
+            {recentAudit.length > 0 && (
+                <section className="mb-12" data-testid="recent-activity">
+                    <div className="flex items-end justify-between mb-5">
+                        <div>
+                            <div className="overline flex items-center gap-2">
+                                <Activity size={12} strokeWidth={1.75} /> Live Ledger
+                            </div>
+                            <h2 className="font-serif text-2xl text-mpca-green-dark mt-1">Recent Activity</h2>
+                            <p className="text-[11px] text-mpca-gray-dark mt-1">
+                                Latest 10 workflow actions across the ERP — pulled from the immutable audit log.
+                            </p>
+                        </div>
+                        <Link
+                            to="/audit-log"
+                            className="inline-flex items-center gap-1 text-xs tracking-wider uppercase text-mpca-brass hover:text-mpca-oxblood"
+                            data-testid="recent-activity-view-all"
+                        >
+                            <ScrollText size={11} strokeWidth={1.75} />
+                            View full log
+                            <ArrowUpRight size={11} strokeWidth={1.75} />
+                        </Link>
+                    </div>
+                    <div className="bulletin-card divide-y divide-mpca-brass/20 overflow-hidden" data-testid="recent-activity-list">
+                        {recentAudit.map((r) => (
+                            <div key={r.id} className="flex items-start gap-4 px-5 py-3.5 hover:bg-mpca-parchment/30" data-testid={`recent-activity-row-${r.id}`}>
+                                <div className="flex-shrink-0 w-16 text-right">
+                                    <div className="text-[10px] font-mono text-mpca-brass">
+                                        {new Date(r.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                                    </div>
+                                    <div className="text-[9px] tracking-wider uppercase text-mpca-gray-dark">
+                                        {new Date(r.timestamp).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                                    </div>
+                                </div>
+                                <div className="flex-shrink-0">
+                                    <span className="inline-block px-2 py-0.5 bg-mpca-brass/15 text-mpca-brass text-[9px] tracking-wider uppercase font-semibold">
+                                        {r.module?.replace(/_/g, " ")}
+                                    </span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm text-mpca-charcoal">
+                                        <span className="font-mono text-mpca-oxblood text-[11px] uppercase tracking-wider mr-2">{r.action}</span>
+                                        <span className="text-mpca-green-dark font-medium">{r.actor_name}</span>
+                                        {r.actor_role && <span className="text-mpca-gray-dark text-[10px] ml-2">· {r.actor_role}</span>}
+                                    </div>
+                                    {r.details?.code && (
+                                        <div className="text-[10px] font-mono text-mpca-brass mt-0.5 truncate">
+                                            {r.details.code}
+                                            {r.details?.note && <span className="text-mpca-gray-dark ml-2 italic">— {r.details.note}</span>}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         ))}
                     </div>
                 </section>

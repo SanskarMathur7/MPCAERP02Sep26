@@ -903,6 +903,108 @@ async def seed_data():
     await seed_venues_grounds()
     await seed_selection_funnels()
     await seed_grant_scheme_rates()
+    await seed_division_grants()
+
+
+async def seed_division_grants():
+    """Seed representative Division Grants covering key workflow states."""
+    if await db.division_grants.count_documents({}) > 0:
+        return
+    from routes.division_grants import DivisionGrant, ApprovalEntry
+    from routes.vouchers import Voucher
+    from core.shared_services import next_code, indian_fy
+    logger.info("Seeding division grants + auto-vouchers…")
+
+    fy = indian_fy()
+    now = datetime.now(timezone.utc).isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    # 1) Approved & Disbursed grant to Indore Division (with auto voucher)
+    g1_id_code = await next_code("grant", org_short="DIV-IND", fy=fy)
+    g1 = DivisionGrant(
+        body_id="DIV-IND", fiscal_cycle=fy,
+        category="Coaching_Grant",
+        purpose="Winter U-19 coaching camp — 4 weeks",
+        amount_inr=450000.0,
+        approved_amount_inr=400000.0,
+        status="Disbursed",
+        current_stage="Disbursed",
+        code=g1_id_code,
+        created_by_name="Shri Vikram Patil (Division Sec)",
+        created_by_user_id="user-div-ind",
+        approval_chain=[
+            ApprovalEntry(stage="Division · Request", action="Submit", actor_name="Shri Vikram Patil", actor_role="division_checker", note="Winter camp per calendar").model_dump(),
+            ApprovalEntry(stage="State Finance Officer · Review", action="Review", actor_name="Smt. Anita Rao", actor_role="mpca_accounts", note="Rate card verified.").model_dump(),
+            ApprovalEntry(stage="State Secretary · Approve", action="Approve", actor_name="Shri Sanjeev Rao", actor_role="mpca_secretary", note="Approved with 11.1% reduction (excess venue charges)").model_dump(),
+            ApprovalEntry(stage="Disbursed", action="Disburse", actor_name="MPCA Accounts", actor_role="mpca_accounts", note="NEFT 2025-11-12 · UTR AXIS/N0123456").model_dump(),
+        ],
+    )
+    await db.division_grants.insert_one(g1.model_dump())
+
+    v1 = Voucher(
+        body_id="MPCA", voucher_type="Payment",
+        date=today, amount_inr=400000.0,
+        particulars=f"Disbursement of Coaching_Grant grant to DIV-IND — {g1.purpose}",
+        dr_account="Grants Given · DIV-IND",
+        cr_account="MPCA General Bank Account",
+        linked_module="division_grant", linked_ref_id=g1.id, linked_ref_code=g1.code,
+        fiscal_cycle=fy, created_by_name="System",
+    )
+    v1.voucher_no = await next_code("voucher", org_short="MPCA", fy=fy)
+    await db.vouchers.insert_one(v1.model_dump())
+    await db.division_grants.update_one({"id": g1.id}, {"$set": {"voucher_id": v1.id}})
+
+    # 2) In-flight grant awaiting Secretary approval (Jabalpur Division)
+    g2_code = await next_code("grant", org_short="DIV-JBP", fy=fy)
+    g2 = DivisionGrant(
+        body_id="DIV-JBP", fiscal_cycle=fy,
+        category="Tournament_Funding",
+        purpose="MY Memorial Trophy hosting — venue & catering",
+        amount_inr=275000.0,
+        status="Finance_Reviewed",
+        current_stage="Secretary_Approve",
+        code=g2_code,
+        created_by_name="Division Sec (Jabalpur)",
+        approval_chain=[
+            ApprovalEntry(stage="Division · Request", action="Submit", actor_name="Division Sec (Jabalpur)", actor_role="division_checker", note="Home hosting for MY Memorial").model_dump(),
+            ApprovalEntry(stage="State Finance Officer · Review", action="Review", actor_name="Smt. Anita Rao", actor_role="mpca_accounts", note="Line items match rate card.").model_dump(),
+        ],
+    )
+    await db.division_grants.insert_one(g2.model_dump())
+
+    # 3) Draft grant at Ujjain Division (freshly created)
+    g3_code = await next_code("grant", org_short="DIV-UJN", fy=fy)
+    g3 = DivisionGrant(
+        body_id="DIV-UJN", fiscal_cycle=fy,
+        category="District_Travel",
+        purpose="Travel subsidy for U-16 selectors camp",
+        amount_inr=95000.0,
+        status="Draft",
+        current_stage="Division_Request",
+        code=g3_code,
+        created_by_name="Division Sec (Ujjain)",
+    )
+    await db.division_grants.insert_one(g3.model_dump())
+
+    # 4) Sent-back grant with a note (Gwalior)
+    g4_code = await next_code("grant", org_short="DIV-GWL", fy=fy)
+    g4 = DivisionGrant(
+        body_id="DIV-GWL", fiscal_cycle=fy,
+        category="Admin_Grant",
+        purpose="Office running expenses — Q3",
+        amount_inr=125000.0,
+        status="Sent_Back",
+        current_stage="Division_Request",
+        code=g4_code,
+        created_by_name="Division Sec (Gwalior)",
+        approval_chain=[
+            ApprovalEntry(stage="Division · Request", action="Submit", actor_name="Division Sec (Gwalior)", actor_role="division_checker", note="").model_dump(),
+            ApprovalEntry(stage="State Finance Officer · Review", action="Send_Back", actor_name="Smt. Anita Rao", actor_role="mpca_accounts", note="[DOCS_MISSING] Attach GST-paid utility bills and rent agreement.").model_dump(),
+        ],
+    )
+    await db.division_grants.insert_one(g4.model_dump())
+
+    logger.info("Seeded 4 division grants (1 disbursed + auto voucher · 1 pending Sec · 1 draft · 1 sent-back).")
 
 
 async def seed_grant_scheme_rates():

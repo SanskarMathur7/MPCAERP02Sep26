@@ -525,6 +525,58 @@ export const fetchAuditLog = async (params = {}) => {
     return data;
 };
 
+// ---------- Sprint 1 · Finance Rails ----------
+export const fetchDivisionGrants = async (params = {}) => {
+    const { data } = await api.get("/division-grants", { params });
+    return data;
+};
+export const fetchDivisionGrant = async (gid) => {
+    const { data } = await api.get(`/division-grants/${gid}`);
+    return data;
+};
+export const createDivisionGrant = async (payload) => {
+    const { data } = await api.post("/division-grants", payload);
+    return data;
+};
+export const grantAction = async (gid, action, payload) => {
+    // action ∈ submit | finance-review | secretary-approve | disburse | send-back | reject
+    const { data } = await api.post(`/division-grants/${gid}/${action}`, payload);
+    return data;
+};
+export const fetchDivisionGrantStats = async (params = {}) => {
+    const { data } = await api.get("/division-grants-stats/summary", { params });
+    return data;
+};
+export const fetchVouchers = async (params = {}) => {
+    const { data } = await api.get("/vouchers", { params });
+    return data;
+};
+export const createVoucher = async (payload) => {
+    const { data } = await api.post("/vouchers", payload);
+    return data;
+};
+export const cancelVoucher = async (vid, reason) => {
+    const { data } = await api.post(`/vouchers/${vid}/cancel`, null, { params: { reason } });
+    return data;
+};
+export const fetchVoucherStats = async (params = {}) => {
+    const { data } = await api.get("/vouchers-stats/summary", { params });
+    return data;
+};
+export const fetchLedger = async (params = {}) => {
+    const { data } = await api.get("/ledger", { params });
+    return data;
+};
+export const ledgerExportUrl = (body_id, fiscal_cycle, format = "xlsx") => {
+    const base = API_BASE;
+    const fy = fiscal_cycle ? `&fiscal_cycle=${fiscal_cycle}` : "";
+    return `${base}/ledger/export.${format}?body_id=${encodeURIComponent(body_id)}${fy}`;
+};
+export const fetchBudgetVsActual = async (params = {}) => {
+    const { data } = await api.get("/finance/budget-vs-actual", { params });
+    return data;
+};
+
 // ---------- Phase T5 · Extra Expense Approval ----------
 export const fetchExtraExpenseRequests = async (params = {}) => {
     const { data } = await api.get("/extra-expense-requests", { params });

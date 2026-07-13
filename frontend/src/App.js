@@ -39,6 +39,9 @@ import TournamentDetail from "@/pages/TournamentDetail";
 import Fixtures from "@/pages/Fixtures";
 import AuditLog from "@/pages/AuditLog";
 import Rulebook from "@/pages/Rulebook";
+import DivisionGrants from "@/pages/DivisionGrants";
+import Ledger from "@/pages/Ledger";
+import BudgetVsActual from "@/pages/BudgetVsActual";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -113,6 +116,11 @@ function App() {
                         <Route path="/fixtures" element={<Protected><Fixtures /></Protected>} />
                         <Route path="/audit-log" element={<Protected><AuditLog /></Protected>} />
                         <Route path="/tournaments/:id" element={<Protected><TournamentDetail /></Protected>} />
+
+                        {/* Protected — Sprint 1: Finance Rails */}
+                        <Route path="/division-grants" element={<Protected><DivisionGrants /></Protected>} />
+                        <Route path="/ledger" element={<Protected><Ledger /></Protected>} />
+                        <Route path="/budget-vs-actual" element={<Protected><BudgetVsActual /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

@@ -8,6 +8,20 @@ export const api = axios.create({
     timeout: 20000,
 });
 
+// Attach persona (role) + optional email to every request so backend RBAC works.
+api.interceptors.request.use((config) => {
+    try {
+        const raw = typeof window !== "undefined" && window.localStorage.getItem("mpca_persona");
+        if (raw) {
+            const p = JSON.parse(raw);
+            config.headers = config.headers || {};
+            if (p?.id) config.headers["X-Role-Id"] = p.id;
+            if (p?.email) config.headers["X-User-Email"] = p.email;
+        }
+    } catch (_) { /* noop */ }
+    return config;
+});
+
 export const fetchMembers = async (params = {}) => {
     const { data } = await api.get("/members", { params });
     return data;
@@ -30,6 +44,47 @@ export const updateMember = async (id, payload) => {
 
 export const deleteMember = async (id) => {
     const { data } = await api.delete(`/members/${id}`);
+    return data;
+};
+
+// ---- M6 · Member categories + bulk upload ----
+export const fetchMemberStats = async () => {
+    const { data } = await api.get("/members/stats");
+    return data;
+};
+
+export const fetchMemberCategories = async (params = {}) => {
+    const { data } = await api.get("/member-categories", { params });
+    return data;
+};
+
+export const createMemberCategory = async (payload) => {
+    const { data } = await api.post("/member-categories", payload);
+    return data;
+};
+
+export const updateMemberCategory = async (id, payload) => {
+    const { data } = await api.patch(`/member-categories/${id}`, payload);
+    return data;
+};
+
+export const deleteMemberCategory = async (id) => {
+    const { data } = await api.delete(`/member-categories/${id}`);
+    return data;
+};
+
+export const bulkUploadMembers = async (file, dryRun = false) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("dry_run", dryRun ? "true" : "false");
+    const { data } = await api.post("/members/bulk-upload", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+};
+
+export const downloadBulkTemplate = async () => {
+    const { data } = await api.get("/members/bulk-upload/template");
     return data;
 };
 

@@ -9,6 +9,7 @@ import Members from "@/pages/Members";
 import MemberDetail from "@/pages/MemberDetail";
 import MemberNew from "@/pages/MemberNew";
 import MemberCard from "@/pages/MemberCard";
+import MemberCategories from "@/pages/MemberCategories";
 import Disclosures from "@/pages/Disclosures";
 import Meetings from "@/pages/Meetings";
 import MeetingDetail from "@/pages/MeetingDetail";
@@ -78,6 +79,7 @@ function App() {
                         <Route path="/rulebook" element={<Protected><Rulebook /></Protected>} />
                         <Route path="/members" element={<Protected><Members /></Protected>} />
                         <Route path="/members/new" element={<Protected><MemberNew /></Protected>} />
+                        <Route path="/members/categories" element={<Protected><MemberCategories /></Protected>} />
                         <Route path="/members/:id" element={<Protected><MemberDetail /></Protected>} />
                         <Route path="/members/:id/card" element={<Protected><MemberCard /></Protected>} />
                         <Route path="/disclosures" element={<Protected><Disclosures /></Protected>} />

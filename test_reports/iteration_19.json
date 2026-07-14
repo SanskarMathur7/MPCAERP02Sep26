@@ -1,0 +1,36 @@
+{
+  "summary": "Sprint M6 (Membership Register Upgrade) tested end-to-end. 15/15 backend pytest cases pass. All frontend flows (stats strip, filter chips, bulk upload dry-run + real, categories CRUD, member detail edit + persist + cancel, RBAC visibility for district-secretary) pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/members/bulk-upload", "issue": "Two CSV aliases in _CSV_ALIAS ('e-mail' and 'sub-category') are dead-keys: _norm_key() replaces hyphens with underscores BEFORE the alias lookup, so headers like 'e-mail' get normalised to 'e_mail' which is not in the alias table. Users writing 'e-mail' will end up with the column dropped. Fix: change alias keys to 'e_mail' and 'sub_category' (harmless — they're already valid canonical names) OR normalise the alias table at import time."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_members_m6.py",
+    "/app/test_reports/pytest/iter19_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL — Fix _CSV_ALIAS keys 'e-mail' → 'e_mail' and 'sub-category' → 'sub_category' in /app/backend/routes/members.py (minor CSV alias bug — see minor issues)."
+  ],
+  "critical_code_review_comments": [
+    "routes/members.py delete_member allows the operation when NO X-Role-Id header is supplied (backwards-compat), so a raw curl with no headers can still delete members. Confirmed intentional in comment but worth flagging.",
+    "update_member also permits edits when no headers are supplied. Documented in the docstring as 'backwards compatible with existing dev flows' but this means the UI-hides-the-action is the only guard for legacy callers. Consider enforcing headers in production.",
+    "MemberBulkUploadModal — no client-side file-size guard (backend accepts any size). The UI text says 'up to 5 MB' but nothing enforces it."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_members_m6.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Persona login (localStorage). Used persona-chip-secretary and persona-chip-district-secretary. See /app/memory/test_credentials.md.",
+  "seed_data_creation": "All fixtures create TEST_-prefixed rows and clean up in the teardown / after each test. One residual frontend-created member (TEST_E2E_FE) was manually deleted after the playwright run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_members_m6.py — 15 cases covering M6 (categories CRUD + RBAC, bulk upload dry-run/real with alias/skip rules, /members/stats, list filters, PATCH email-based RBAC, DELETE RBAC). Run via: `REACT_APP_BACKEND_URL=$(grep REACT_APP_BACKEND_URL /app/frontend/.env | cut -d= -f2) pytest backend/tests/test_members_m6.py -v`. Seeded categories are: Office Bearer, Life Member, Annual Member, District Association, School / Institution (note: spaces around slash), Honorary Member, Patron.",
+  "rca of the issue": "N/A — no functional bugs found. Only minor issue is the dead-key aliases in _CSV_ALIAS (fixable in 2 lines)."
+}

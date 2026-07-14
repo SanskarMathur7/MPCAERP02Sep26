@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 MemberCategory = Literal["Individual", "Institutional", "Honorary", "Patron"]
 MemberStatus = Literal["Active", "Suspended", "Lapsed", "Transferred", "Pending"]
+MemberType = Literal["MPCA", "Division"]
 
 
 class MemberBase(BaseModel):
@@ -15,7 +16,12 @@ class MemberBase(BaseModel):
     body_id: str = "MPCA"  # owning body — defaults to MPCA HQ
     name: str
     category: MemberCategory
-    sub_category: Optional[str] = None  # e.g. "Life Member", "Annual", "School", "District Assoc."
+    sub_category: Optional[str] = None  # dynamic — matches a MemberCategoryDef.name
+    # M6 · Membership Upgrade
+    member_type: MemberType = "MPCA"  # MPCA general body OR Division-linked
+    division_body_id: Optional[str] = None  # required when member_type == "Division"
+    role: Optional[str] = None  # e.g. "President", "Vice President", "Member"
+    membership_id: Optional[str] = None  # external / legacy membership id from CSV
     address: str
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -38,10 +44,70 @@ class Member(MemberBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     uid: str  # MPCA UID like "MPCA-IND-0001"
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: Optional[str] = None
+    updated_by: Optional[str] = None  # role_id of the last editor
 
 
 class MemberCreate(MemberBase):
     pass
+
+
+class MemberUpdate(BaseModel):
+    """Partial update — every field is optional."""
+    model_config = ConfigDict(extra="ignore")
+    name: Optional[str] = None
+    category: Optional[MemberCategory] = None
+    sub_category: Optional[str] = None
+    member_type: Optional[MemberType] = None
+    division_body_id: Optional[str] = None
+    role: Optional[str] = None
+    membership_id: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    eligibility_factor: Optional[str] = None
+    membership_date: Optional[str] = None
+    effectiveness: Optional[str] = None
+    fee_structure: Optional[str] = None
+    photo_url: Optional[str] = None
+    signature_url: Optional[str] = None
+    approving_authority: Optional[str] = None
+    representative_name: Optional[str] = None
+    representative_contact: Optional[str] = None
+    status: Optional[MemberStatus] = None
+    loss_reason: Optional[str] = None
+    transferred_to: Optional[str] = None
+    notes: Optional[str] = None
+
+
+# ---- M6 · Dynamic Member Category Definitions ----
+class MemberCategoryDefBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: str  # display name, e.g. "Life Member", "Annual Member", "Office Bearer"
+    code: Optional[str] = None  # short code used inside UID generation (auto-derived if omitted)
+    description: Optional[str] = None
+    applies_to: Literal["MPCA", "Division", "Both"] = "Both"
+    base_category: MemberCategory = "Individual"  # anchors to one of the 4 constitutional buckets
+    fee_amount_inr: Optional[float] = None
+    display_order: int = 100
+    active: bool = True
+
+
+class MemberCategoryDef(MemberCategoryDefBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class MemberCategoryDefCreate(MemberCategoryDefBase):
+    pass
+
+
+class BulkUploadReport(BaseModel):
+    """Return payload for /members/bulk-upload."""
+    total_rows: int
+    inserted: int
+    skipped: int
+    errors: List[dict]  # each: {row: int, name: str, reason: str}
 
 
 DisclosureType = Literal["AGM_Notice", "Committee_Minutes", "GBM_Minutes", "Audited_Accounts", "Selection_Announcement", "Circular"]

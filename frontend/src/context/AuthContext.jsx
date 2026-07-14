@@ -109,7 +109,13 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ persona, login, logout, isAuthed: !!persona }}>
+        <AuthContext.Provider value={{
+            persona,
+            login,
+            logout,
+            isAuthed: !!persona,
+            isOfficeBearer: !!persona && ["president", "secretary", "treasurer", "division-secretary"].includes(persona.id),
+        }}>
             {children}
         </AuthContext.Provider>
     );

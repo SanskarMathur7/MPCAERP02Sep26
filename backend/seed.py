@@ -908,6 +908,8 @@ async def seed_data():
     await seed_purchase_orders()
     await seed_assets()
     await seed_employees()
+    await seed_compliance()
+    await seed_dms()
 
 
 async def seed_division_grants():
@@ -1293,6 +1295,133 @@ async def seed_employees():
     )
     await db.payroll_registers.insert_one(reg.model_dump())
     logger.info(f"Seeded {len(employees_created)} employees + 1 draft payroll register for {current_period} (₹{reg.total_net_inr:,.0f} net).")
+
+
+async def seed_compliance():
+    if await db.compliance_items.count_documents({}) > 0:
+        return
+    logger.info("Seeding compliance register…")
+    from routes.compliance import ComplianceItem, FiledRecord
+    from core.shared_services import indian_fy
+    now_iso = datetime.now(timezone.utc).isoformat()
+    items = [
+        ComplianceItem(name="GSTR-3B · Monthly GST Return", authority="GSTN",
+                        frequency="Monthly", due_day=20,
+                        section_ref="GSTR-3B", penalty_note="₹50/day late fee · ₹25 CGST + ₹25 SGST",
+                        filed_history=[
+                            FiledRecord(period="2026-05", filed_date="2026-06-19", filed_by="Finance Officer",
+                                         ack_ref="AA23BM26050004321", amount_inr=125000).model_dump(),
+                            FiledRecord(period="2026-06", filed_date="2026-07-18", filed_by="Finance Officer",
+                                         ack_ref="AA23BM26060004987", amount_inr=98750).model_dump(),
+                        ]),
+        ComplianceItem(name="GSTR-1 · Outward Supplies", authority="GSTN",
+                        frequency="Monthly", due_day=11,
+                        section_ref="GSTR-1",
+                        filed_history=[
+                            FiledRecord(period="2026-05", filed_date="2026-06-10", filed_by="Finance Officer",
+                                         ack_ref="AA23BS26050002211").model_dump(),
+                        ]),
+        ComplianceItem(name="TDS Return · 24Q (Salary)", authority="Income Tax Department",
+                        frequency="Quarterly", due_day=31,
+                        section_ref="Form 24Q u/s 200",
+                        penalty_note="₹200/day u/s 234E for late filing",
+                        filed_history=[
+                            FiledRecord(period="Q1 2026-27", filed_date="2026-07-28", filed_by="Finance Manager",
+                                         ack_ref="24Q-2627-Q1-8834", amount_inr=48750).model_dump(),
+                        ]),
+        ComplianceItem(name="TDS Return · 26Q (Non-Salary)", authority="Income Tax Department",
+                        frequency="Quarterly", due_day=31,
+                        section_ref="Form 26Q u/s 200"),
+        ComplianceItem(name="PF Return · ECR", authority="EPFO",
+                        frequency="Monthly", due_day=15,
+                        section_ref="Electronic Challan-cum-Return",
+                        filed_history=[
+                            FiledRecord(period="2026-05", filed_date="2026-06-13", filed_by="HR",
+                                         ack_ref="EPFO-ECR-2605-45211").model_dump(),
+                            FiledRecord(period="2026-06", filed_date="2026-07-14", filed_by="HR",
+                                         ack_ref="EPFO-ECR-2606-48921").model_dump(),
+                        ]),
+        ComplianceItem(name="ESI Return", authority="ESIC",
+                        frequency="Half_Yearly", due_day=11,
+                        section_ref="Regulation 26"),
+        ComplianceItem(name="Income Tax Return · ITR-7", authority="Income Tax Department",
+                        frequency="Yearly", due_day=31, due_month=10,
+                        section_ref="ITR-7 · Section 139(4A)",
+                        penalty_note="₹5,000 u/s 234F"),
+        ComplianceItem(name="Annual Return · Registrar of Societies", authority="Registrar of Societies (MP)",
+                        frequency="Yearly", due_day=30, due_month=6,
+                        section_ref="MP Societies Registrikaran Adhiniyam 1973 · Sec 27"),
+        ComplianceItem(name="Statutory Audit · BCCI Submission", authority="BCCI",
+                        frequency="Yearly", due_day=30, due_month=9,
+                        section_ref="BCCI Constitution · Rule 40",
+                        penalty_note="Grant suspension until audit certificate is submitted"),
+        ComplianceItem(name="Professional Tax Return (MP)", authority="MP Commercial Tax Dept.",
+                        frequency="Monthly", due_day=10,
+                        section_ref="MP PT Act 1995"),
+    ]
+    for it in items:
+        await db.compliance_items.insert_one(it.model_dump())
+    logger.info(f"Seeded {len(items)} compliance items with historical filings.")
+
+
+async def seed_dms():
+    if await db.documents.count_documents({}) > 0:
+        return
+    logger.info("Seeding DMS · syncing from KYC + adding sample governance docs…")
+    from routes.dms import _sync_from_kyc, Document
+    kyc_indexed = await _sync_from_kyc()
+
+    now = datetime.now(timezone.utc)
+    # Add a few institutional documents with realistic expiry dates
+    seed_docs = [
+        {"folder": "Legal", "filename": "MPCA_MOA_2018.pdf",
+         "url": "https://example.com/dms/moa.pdf", "doc_type": "Memorandum of Association",
+         "tags": ["governance", "constitution"], "notes": "Original filing at Registrar of Societies · Bhopal."},
+        {"folder": "Statutory", "filename": "GST_Registration_Certificate.pdf",
+         "url": "https://example.com/dms/gst.pdf", "doc_type": "GST Registration",
+         "tags": ["GST", "statutory"], "expiry_date": (now + timedelta(days=15)).isoformat(),
+         "notes": "Renewal in progress — flagged for follow-up."},
+        {"folder": "Statutory", "filename": "12A_Certificate_Renewed_2024.pdf",
+         "url": "https://example.com/dms/12a.pdf", "doc_type": "12A · Income Tax Exemption",
+         "tags": ["tax", "exemption"], "expiry_date": (now + timedelta(days=1200)).isoformat()},
+        {"folder": "Statutory", "filename": "80G_Certificate.pdf",
+         "url": "https://example.com/dms/80g.pdf", "doc_type": "80G · Donor Tax Deduction",
+         "tags": ["tax", "donor"], "expiry_date": (now + timedelta(days=180)).isoformat()},
+        {"folder": "Board", "filename": "AGM_Minutes_2025.pdf",
+         "url": "https://example.com/dms/agm25.pdf", "doc_type": "AGM Minutes",
+         "tags": ["board", "AGM", "2025"]},
+        {"folder": "Board", "filename": "Committee_Constitution_Order_2024.pdf",
+         "url": "https://example.com/dms/committee.pdf", "doc_type": "Committee Constitution",
+         "tags": ["board", "committee"]},
+        {"folder": "Contracts", "filename": "BCCI_Affiliation_Agreement.pdf",
+         "url": "https://example.com/dms/bcci.pdf", "doc_type": "Affiliation Agreement",
+         "tags": ["BCCI", "affiliation"], "expiry_date": (now + timedelta(days=25)).isoformat(),
+         "notes": "Annual renewal due — action required."},
+        {"folder": "Contracts", "filename": "Stadium_Lease_HolkarStadium_2020_2030.pdf",
+         "url": "https://example.com/dms/lease.pdf", "doc_type": "Stadium Lease",
+         "tags": ["stadium", "lease", "Holkar"], "expiry_date": (now + timedelta(days=1600)).isoformat()},
+        {"folder": "HR", "filename": "HR_Policy_Manual_v3.pdf",
+         "url": "https://example.com/dms/hr-policy.pdf", "doc_type": "HR Policy Manual",
+         "tags": ["HR", "policy"]},
+        {"folder": "Financial", "filename": "Audit_Report_2024-25.pdf",
+         "url": "https://example.com/dms/audit.pdf", "doc_type": "Statutory Audit Report",
+         "tags": ["audit", "2024-25", "CA firm"]},
+        {"folder": "Statutory", "filename": "PAN_Card_MPCA.pdf",
+         "url": "https://example.com/dms/pan.pdf", "doc_type": "PAN Card",
+         "tags": ["PAN", "identity"]},
+        # An expired document to drive the expiry widget
+        {"folder": "Contracts", "filename": "Insurance_Policy_2024-25.pdf",
+         "url": "https://example.com/dms/insurance.pdf", "doc_type": "Insurance Policy",
+         "tags": ["insurance", "expired"], "expiry_date": (now - timedelta(days=45)).isoformat(),
+         "notes": "EXPIRED · replaced by 2025-26 policy in Contracts folder (pending)."},
+    ]
+    count = await db.documents.count_documents({})
+    for i, d in enumerate(seed_docs, start=1):
+        doc = Document(body_id="MPCA", uploaded_by="System Seed", **d)
+        doc.doc_no = f"DOC-{now.year}-{count + i:05d}"
+        await db.documents.insert_one(doc.model_dump())
+    logger.info(f"Seeded DMS: {kyc_indexed} KYC-synced + {len(seed_docs)} governance documents.")
+
 
 
 

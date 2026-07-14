@@ -525,6 +525,57 @@ export const fetchAuditLog = async (params = {}) => {
     return data;
 };
 
+// ---------- Sprint 4 · Governance & Compliance ----------
+export const fetchDocuments = async (params = {}) => {
+    const { data } = await api.get("/documents", { params });
+    return data;
+};
+export const fetchDocument = async (did) => {
+    const { data } = await api.get(`/documents/${did}`);
+    return data;
+};
+export const createDocument = async (payload) => {
+    const { data } = await api.post("/documents", payload);
+    return data;
+};
+export const archiveDocument = async (did, note) => {
+    const { data } = await api.post(`/documents/${did}/archive`, null, { params: { note } });
+    return data;
+};
+export const fetchDocumentsExpiring = async (days = 60) => {
+    const { data } = await api.get("/documents-expiring", { params: { days } });
+    return data;
+};
+export const fetchDmsSummary = async () => {
+    const { data } = await api.get("/dms-stats/summary");
+    return data;
+};
+export const fetchCompliance = async (params = {}) => {
+    const { data } = await api.get("/compliance", { params });
+    return data;
+};
+export const fetchComplianceDashboard = async () => {
+    const { data } = await api.get("/compliance/dashboard");
+    return data;
+};
+export const createCompliance = async (payload) => {
+    const { data } = await api.post("/compliance", payload);
+    return data;
+};
+export const fileCompliance = async (cid, payload) => {
+    const { data } = await api.post(`/compliance/${cid}/file`, payload);
+    return data;
+};
+export const fetchAuditPackPreview = async (fiscal_cycle) => {
+    const { data } = await api.get("/audit-pack/preview", { params: { fiscal_cycle } });
+    return data;
+};
+export const auditPackDownloadUrl = (fiscal_cycle) => {
+    const base = API_BASE;
+    const qs = fiscal_cycle ? `?fiscal_cycle=${encodeURIComponent(fiscal_cycle)}` : "";
+    return `${base}/audit-pack/generate.pdf${qs}`;
+};
+
 // ---------- Sprint 3 · Asset Register + HR/Payroll ----------
 export const fetchAssets = async (params = {}) => {
     const { data } = await api.get("/assets", { params });

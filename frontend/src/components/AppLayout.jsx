@@ -23,9 +23,16 @@ import {
     Wallet,
     MapPin as MapPinIcon,
     UserCheck,
+    ShieldCheck,
 } from "lucide-react";
 
 const DASHBOARD_LINK = { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
+
+// ═══════════════════════════════════════════════════════════════════
+// User-requested MVP nav — only these 5 top-level tabs are active.
+// Everything else is present but disabled under "Coming Soon", keeping
+// the original groupings visible so nothing looks abandoned.
+// ═══════════════════════════════════════════════════════════════════
 
 const NAV_DOMAINS = [
     {
@@ -33,56 +40,81 @@ const NAV_DOMAINS = [
         items: [
             { to: "/members", label: "Membership Register", icon: Users },
             { to: "/meetings", label: "AGM & Meetings", icon: Calendar },
-            { to: "/elections", label: "Elections", icon: Vote },
             { to: "/disclosures", label: "Disclosures", icon: FileText },
-        ],
-    },
-    {
-        domain: "Financial",
-        items: [
-            { to: "/budgets", label: "Budget Ledger", icon: Coins },
-            { to: "/budget-vs-actual", label: "Budget vs Actual", icon: Coins },
-            { to: "/tournament-budgets", label: "Tournament Budgets", icon: Wallet },
-            { to: "/division-grants", label: "Division Grants", icon: HandCoins },
-            { to: "/claims", label: "Grant Claims", icon: HandCoins },
-            { to: "/ledger", label: "General Ledger", icon: BookOpen },
-            { to: "/rulebook", label: "AI Rulebook", icon: BookOpen },
-            { to: "/audit-log", label: "Audit Log", icon: BookOpen },
-            { to: "/procurement", label: "Procurement", icon: ShoppingCart },
-            { to: "/purchase-orders", label: "Purchase Orders", icon: ShoppingCart },
-            { to: "/vendors", label: "Vendor Master", icon: Users },
-            { to: "/vendor-kyc", label: "Vendor KYC", icon: UserCheck },
-            { to: "/vendor-bills", label: "Vendor Bills", icon: FileCheck },
-            { to: "/fees", label: "Fees & Subscriptions", icon: Receipt },
-            { to: "/bank", label: "Bank Operations", icon: Landmark },
-            { to: "/financial-powers", label: "Financial Powers", icon: Scale },
         ],
     },
     {
         domain: "Operations",
         items: [
-            { to: "/players", label: "Player Register", icon: TrophyIcon },
-            { to: "/selection", label: "Selection Funnel", icon: Users },
-            { to: "/tournaments", label: "Tournaments", icon: TrophyIcon },
-            { to: "/fixtures", label: "Fixtures & Rankings", icon: Calendar },
-            { to: "/venues", label: "Venues & Grounds", icon: MapPinIcon },
+            { to: "/tournaments", label: "MPCA Tournament Calendar", icon: TrophyIcon },
+        ],
+    },
+];
+
+// Coming Soon — grouped by same domain labels as before so the roadmap
+// stays visible to stakeholders. Routes still exist in App.js and can be
+// reached by URL, but the nav treats them as future work.
+const COMING_SOON_DOMAINS = [
+    {
+        domain: "Secretarial",
+        items: [
+            { label: "Elections", icon: Vote },
+        ],
+    },
+    {
+        domain: "Financial",
+        items: [
+            { label: "Budget Ledger", icon: Coins },
+            { label: "Budget vs Actual", icon: Coins },
+            { label: "Tournament Budgets", icon: Wallet },
+            { label: "Division Grants", icon: HandCoins },
+            { label: "Grant Claims", icon: HandCoins },
+            { label: "General Ledger", icon: BookOpen },
+            { label: "AI Rulebook", icon: BookOpen },
+            { label: "Audit Log", icon: BookOpen },
+            { label: "Procurement", icon: ShoppingCart },
+            { label: "Purchase Orders", icon: ShoppingCart },
+            { label: "Vendor Master", icon: Users },
+            { label: "Vendor KYC", icon: UserCheck },
+            { label: "Vendor Bills", icon: FileCheck },
+            { label: "Fees & Subscriptions", icon: Receipt },
+            { label: "Bank Operations", icon: Landmark },
+            { label: "Financial Powers", icon: Scale },
+        ],
+    },
+    {
+        domain: "Operations",
+        items: [
+            { label: "Player Register", icon: TrophyIcon },
+            { label: "Selection Funnel", icon: Users },
+            { label: "Fixtures & Rankings", icon: Calendar },
+            { label: "Venues & Grounds", icon: MapPinIcon },
         ],
     },
     {
         domain: "Assets & HR",
         items: [
-            { to: "/asset-register", label: "Asset Register", icon: Landmark },
-            { to: "/payroll", label: "Employees & Payroll", icon: Users },
+            { label: "Asset Register", icon: Landmark },
+            { label: "Employees & Payroll", icon: Users },
         ],
     },
-];
-
-const COMING_SOON = [
-    { label: "Match Officials", icon: Trophy },
-    { label: "Team Officials", icon: Trophy },
-    { label: "Grievance Redressal", icon: AlertTriangle },
-    { label: "Constitution Library", icon: BookOpen },
-    { label: "Registrar Assistant", icon: Sparkles },
+    {
+        domain: "Governance",
+        items: [
+            { label: "Document Manager", icon: FileCheck },
+            { label: "Compliance Register", icon: ShieldCheck },
+        ],
+    },
+    {
+        domain: "Future Modules",
+        items: [
+            { label: "Match Officials", icon: Trophy },
+            { label: "Team Officials", icon: Trophy },
+            { label: "Grievance Redressal", icon: AlertTriangle },
+            { label: "Constitution Library", icon: BookOpen },
+            { label: "Registrar Assistant", icon: Sparkles },
+        ],
+    },
 ];
 
 import { MpcaEmblem as MPCACrest } from "@/components/MpcaEmblem";
@@ -217,22 +249,36 @@ const AppLayout = ({ children }) => {
                         </div>
                     ))}
 
-                    <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
-                        Coming Soon
-                    </div>
-                    <ul className="space-y-0.5">
-                        {COMING_SOON.map((item) => (
-                            <li key={item.label}>
+                    <div className="border-t border-mpca-brass/15 pt-4">
+                        <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
+                            Coming Soon
+                        </div>
+                        {COMING_SOON_DOMAINS.map((group) => (
+                            <div key={`cs-${group.domain}`} className="mb-4">
                                 <div
-                                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-mpca-ivory/45 cursor-not-allowed select-none"
-                                    data-testid={`nav-future-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
+                                    className="text-[8px] tracking-[0.2em] uppercase text-mpca-gold-light/40 mb-1.5 px-3"
+                                    data-testid={`nav-coming-domain-${group.domain.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
                                 >
-                                    <item.icon size={16} strokeWidth={1.5} />
-                                    <span className="tracking-wide flex-1">{item.label}</span>
+                                    {group.domain}
                                 </div>
-                            </li>
+                                <ul className="space-y-0.5">
+                                    {group.items.map((item) => (
+                                        <li key={item.label}>
+                                            <div
+                                                className="flex items-center gap-3 px-3 py-2 text-[13px] text-mpca-ivory/40 cursor-not-allowed select-none"
+                                                data-testid={`nav-future-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
+                                                title="Coming soon"
+                                            >
+                                                <item.icon size={14} strokeWidth={1.5} />
+                                                <span className="tracking-wide flex-1">{item.label}</span>
+                                                <span className="text-[8px] tracking-widest uppercase text-mpca-brass/50">Soon</span>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         ))}
-                    </ul>
+                    </div>
                 </nav>
 
                 {/* Logout */}

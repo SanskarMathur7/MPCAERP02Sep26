@@ -1,0 +1,2472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MPCA — Master Document of Schemes &amp; BCCI Staging Guidelines (2025-26)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --green:#0d4f3c;
+    --green-dark:#08382a;
+    --green-soft:#e8f0ec;
+    --gold:#b8893b;
+    --gold-soft:#f6e9d6;
+    --rust:#8a3a3a;
+    --paper:#fbf8f1;
+    --ink:#1f2a25;
+    --muted:#5d6b63;
+    --line:#cdd7d0;
+    --cell-alt:#f4f1e8;
+    --head-row:#eef3ef;
+    --na-bg:#faf4ea;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased;}
+  html{scroll-behavior:smooth;}
+
+  /* ---------- Toolbar ---------- */
+  .toolbar{position:sticky;top:0;z-index:50;background:var(--green-dark);color:#fff;padding:10px 18px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.25);}
+  .toolbar .tname{font-family:'Libre Baskerville',serif;font-weight:700;font-size:15px;letter-spacing:.3px;margin-right:auto;}
+  .toolbar .tname small{display:block;font-family:'Inter';font-weight:400;font-size:11px;opacity:.75;letter-spacing:0;}
+  .btn{font-family:'Inter';font-size:13px;font-weight:600;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;background:#ffffff;color:var(--green-dark);transition:.15s;}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.2);}
+  .btn.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.45);}
+  .btn.ghost:hover{background:rgba(255,255,255,.12);}
+  .btn.gold{background:var(--gold);color:#fff;}
+
+  /* ---------- TOC ---------- */
+  .toc{position:sticky;top:54px;z-index:40;background:var(--green-soft);border-bottom:1px solid var(--line);padding:8px 18px;display:flex;flex-wrap:wrap;gap:6px;font-size:12px;}
+  .toc a{color:var(--green-dark);text-decoration:none;padding:5px 10px;border-radius:4px;font-weight:600;border:1px solid transparent;transition:.15s;}
+  .toc a:hover{background:#fff;border-color:var(--green);}
+  .toc .toc-label{font-weight:700;color:var(--green-dark);margin-right:6px;font-size:11px;letter-spacing:.5px;text-transform:uppercase;align-self:center;}
+
+  /* ---------- Wrap & Header ---------- */
+  .wrap{max-width:100%;padding:24px 28px 60px;}
+  header.doc{text-align:center;border-bottom:3px double var(--green);padding-bottom:18px;margin-bottom:6px;}
+  header.doc .assoc{font-family:'Libre Baskerville',serif;font-weight:700;font-size:26px;color:var(--green);letter-spacing:.5px;margin:0;}
+  header.doc .sub{font-size:12px;color:var(--muted);margin:4px 0 0;letter-spacing:.4px;}
+  header.doc .title{font-family:'Libre Baskerville',serif;font-weight:700;font-size:21px;margin:14px 0 2px;color:var(--ink);}
+  header.doc .badge{display:inline-block;background:var(--gold);color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.6px;padding:2px 8px;border-radius:3px;margin-left:6px;text-transform:uppercase;}
+  header.doc .meta{font-size:12px;color:var(--muted);margin:2px 0;}
+  header.doc .gold-rule{width:90px;height:3px;background:var(--gold);margin:12px auto 0;border-radius:2px;}
+
+  .hint{background:var(--green-soft);border-left:4px solid var(--green);font-size:12.5px;color:var(--muted);padding:11px 14px;margin:16px 0;border-radius:0 6px 6px 0;}
+  .hint b{color:var(--green-dark);}
+
+  /* ---------- Section banner ---------- */
+  .sec{margin-top:36px;scroll-margin-top:110px;}
+  .sec-banner{display:flex;align-items:center;gap:14px;background:var(--green);color:#fff;padding:14px 20px;border-radius:8px 8px 0 0;box-shadow:0 2px 8px rgba(0,0,0,.08);}
+  .sec-banner .sec-num{font-family:'Libre Baskerville',serif;font-weight:700;font-size:26px;width:46px;height:46px;background:var(--green-dark);border:2px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;}
+  .sec-banner h2{font-family:'Libre Baskerville',serif;font-weight:700;font-size:20px;margin:0;letter-spacing:.4px;}
+  .sec-banner h2 .sub{display:block;font-family:'Inter';font-weight:400;font-size:11px;opacity:.8;letter-spacing:.4px;margin-top:2px;}
+  .sec-body{background:#fff;border:1px solid var(--line);border-top:none;border-radius:0 0 8px 8px;padding:18px;}
+
+  /* ---------- Scheme card ---------- */
+  .scheme{border:1px solid var(--line);border-radius:7px;background:var(--card);margin-bottom:18px;overflow:hidden;}
+  .scheme:last-child{margin-bottom:0;}
+  .scheme-head{background:var(--head-row);padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+  .scheme-head h3{font-family:'Libre Baskerville',serif;font-size:15px;color:var(--green-dark);margin:0;font-weight:700;letter-spacing:.2px;}
+  .scheme-head .ref{font-size:10.5px;color:var(--muted);font-weight:600;background:#fff;border:1px solid var(--line);padding:2px 8px;border-radius:3px;letter-spacing:.4px;text-transform:uppercase;}
+  .scheme-body{padding:14px 16px;font-size:12.5px;line-height:1.55;}
+  .scheme-body p{margin:0 0 8px;}
+  .scheme-body p:last-child{margin-bottom:0;}
+  .scheme-body b{color:var(--green-dark);}
+
+  /* Key–Value list */
+  .kvl{display:grid;grid-template-columns:200px 1fr;gap:8px 18px;margin:8px 0;}
+  .kvl .k{font-weight:700;color:var(--green-dark);font-size:12px;padding-top:2px;}
+  .kvl .v{font-size:12.5px;color:var(--ink);}
+  .kvl .v .amt{display:block;font-weight:700;color:var(--green-dark);margin-bottom:2px;}
+  .kvl .v .note{display:block;color:var(--muted);font-size:11.5px;}
+
+  /* Group blocks within scheme */
+  .gblock{border:1px solid var(--line);border-radius:5px;padding:10px 12px;margin:10px 0;background:#fafaf6;}
+  .gblock .gtitle{font-weight:700;font-size:11.5px;color:var(--green-dark);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;display:block;}
+  .gblock ul{margin:4px 0 0;padding-left:20px;font-size:12px;color:var(--ink);}
+  .gblock ul li{margin-bottom:3px;line-height:1.5;}
+
+  /* Conditional cards (reused from matrix) */
+  .cond{display:block;padding:7px 9px;background:#fff;border:1px solid var(--line);border-radius:5px;margin-bottom:6px;}
+  .cond:last-child{margin-bottom:0;}
+  .cond-when{display:inline-block;background:var(--green-soft);color:var(--green-dark);font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+  .cond-when.alt{background:var(--gold-soft);color:#7a5a25;}
+  .cond-amt{display:block;font-weight:700;color:var(--green-dark);margin-top:2px;}
+  .cond-note{display:block;color:var(--muted);font-size:11px;margin-top:3px;line-height:1.4;}
+
+  /* Sub-tables for slabs etc. */
+  .subtable{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;margin:8px 0;background:#fff;border:1px solid var(--line);border-radius:5px;overflow:hidden;}
+  .subtable th,.subtable td{padding:8px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);text-align:left;vertical-align:top;}
+  .subtable th:last-child,.subtable td:last-child{border-right:none;}
+  .subtable thead th{background:var(--green);color:#fff;font-weight:700;font-size:11.5px;letter-spacing:.3px;}
+  .subtable tbody tr:nth-child(even) td{background:#fafaf3;}
+  .subtable tbody tr:last-child td{border-bottom:none;}
+  .subtable td.amt-cell{font-weight:700;color:var(--green-dark);}
+  .subtable td.label{font-weight:700;color:var(--green-dark);background:var(--head-row) !important;}
+  .subtable tfoot td{background:var(--green-soft) !important;font-weight:700;color:var(--green-dark);border-top:2px solid var(--green);}
+
+  /* Main tournament matrix (Section 2) */
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin:0 0 14px;padding:8px 14px;background:#fff;border:1px solid var(--line);border-radius:6px;}
+  .legend .sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px;border:1px solid var(--line);}
+  .legend .sw.amt{background:#fff;}
+  .legend .sw.na{background:var(--na-bg);}
+  .legend .sw.cond{background:var(--green-soft);}
+
+  .table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#fff;}
+  table#matrix{border-collapse:separate;border-spacing:0;width:100%;min-width:1280px;font-size:12.5px;}
+  table#matrix th,table#matrix td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);vertical-align:top;}
+  table#matrix th:last-child,table#matrix td:last-child{border-right:none;}
+  table#matrix thead th{position:sticky;top:0;z-index:20;background:var(--green);color:#fff;font-family:'Libre Baskerville',serif;font-weight:700;font-size:13px;padding:14px 12px;text-align:left;line-height:1.35;}
+  table#matrix thead th .csub{display:block;font-family:'Inter';font-weight:400;font-size:10.5px;opacity:.82;margin-top:3px;}
+  table#matrix thead th.corner{z-index:30;left:0;background:var(--green-dark);min-width:200px;max-width:200px;}
+  table#matrix tbody th.rowhead{position:sticky;left:0;z-index:10;background:var(--head-row);color:var(--green-dark);font-weight:700;font-size:12.5px;text-align:left;padding:12px 12px;min-width:200px;max-width:200px;line-height:1.3;font-family:'Inter';}
+  table#matrix tbody tr:nth-child(even) th.rowhead{background:#e7ede9;}
+  table#matrix td{padding:11px 12px;line-height:1.45;color:var(--ink);min-width:200px;}
+  table#matrix tbody tr:nth-child(even) td{background:var(--cell-alt);}
+  table#matrix td .amt{font-weight:700;color:var(--green-dark);display:block;margin-bottom:3px;}
+  table#matrix td .note{color:var(--muted);font-size:11.5px;display:block;}
+  table#matrix td .cond{display:block;padding:7px 9px;background:#fff;border:1px solid var(--line);border-radius:5px;margin-bottom:6px;}
+  table#matrix tbody tr:nth-child(even) td .cond{background:#fffaf0;}
+  table#matrix td .cond:last-child{margin-bottom:0;}
+  table#matrix td.na{background:var(--na-bg);}
+  table#matrix tbody tr:nth-child(even) td.na{background:#f5efe2;}
+  table#matrix td.na .not-sanc{display:inline-block;font-weight:700;color:var(--rust);font-size:10.5px;letter-spacing:.4px;margin-bottom:5px;text-transform:uppercase;border:1px solid #d9b0a5;background:#fff;padding:1px 6px;border-radius:3px;}
+  table#matrix td.na .reason{display:block;color:var(--ink);font-size:11.5px;line-height:1.5;}
+  table#matrix td.na .reason b{color:var(--green-dark);}
+
+  [contenteditable]:focus{outline:2px solid var(--gold);outline-offset:-2px;background:#fffdf4;}
+
+  .del{display:none;cursor:pointer;color:#fff;background:#b04a3a;border:none;border-radius:4px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:6px;float:right;line-height:1.5;}
+  body.editing .del{display:inline-block;}
+  .del:hover{background:#933a2c;}
+
+  .note-callout{background:var(--gold-soft);border-left:4px solid var(--gold);padding:9px 12px;margin:10px 0;font-size:11.5px;color:#5a4015;border-radius:0 4px 4px 0;}
+  .note-callout b{color:var(--rust);}
+
+  footer.doc{margin-top:32px;font-size:11.5px;color:var(--muted);line-height:1.6;border-top:1px solid var(--line);padding-top:14px;}
+  footer.doc b{color:var(--green-dark);}
+
+  .backtop{position:fixed;bottom:24px;right:24px;background:var(--green-dark);color:#fff;border:none;width:44px;height:44px;border-radius:50%;cursor:pointer;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:.2s;z-index:60;}
+  .backtop.visible{opacity:1;pointer-events:auto;}
+
+  /* ---------- Section 10 — Budget Calculator ---------- */
+  .calc-card{background:#fff;border:1px solid var(--line);border-radius:7px;padding:16px 18px;margin-bottom:14px;}
+  .calc-card h3{font-family:'Libre Baskerville',serif;font-size:15px;color:var(--green-dark);margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .calc-row{display:grid;grid-template-columns:240px 1fr;gap:8px 18px;align-items:center;margin-bottom:9px;}
+  .calc-row label{font-weight:600;color:var(--green-dark);font-size:12.5px;}
+  .calc-row label .hlp{display:block;font-weight:400;color:var(--muted);font-size:10.5px;margin-top:2px;}
+  .calc-row input[type="number"],.calc-row input[type="text"],.calc-row select{font-family:'Inter',sans-serif;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:4px;background:#fafaf6;width:100%;max-width:340px;}
+  .calc-row input:focus,.calc-row select:focus{outline:2px solid var(--gold);outline-offset:-1px;background:#fffdf4;}
+  .calc-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .calc-actions .btn{padding:9px 16px;}
+  .btn-calc{background:var(--green-dark);color:#fff;}
+  .btn-calc:hover{background:var(--green);}
+
+  .budget-table{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border:1px solid var(--line);border-radius:5px;overflow:hidden;font-size:12.5px;}
+  .budget-table thead th{background:var(--green);color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.3px;padding:9px 10px;text-align:left;}
+  .budget-table tbody td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  .budget-table tbody tr:last-child td{border-bottom:none;}
+  .budget-table tbody tr:nth-child(even) td{background:#fafaf3;}
+  .budget-table .head-col{font-weight:600;color:var(--ink);}
+  .budget-table .formula-col{color:var(--muted);font-size:11.5px;line-height:1.45;}
+  .budget-table .formula-col i{color:#7a5a25;font-style:italic;}
+  .budget-table .scheme-col{font-size:10.5px;color:var(--muted);font-weight:600;white-space:nowrap;}
+  .budget-table .amt-col{text-align:right;font-weight:700;color:var(--green-dark);white-space:nowrap;font-family:'Inter';}
+  .budget-table tr.revenue td{background:#f0f7f1 !important;}
+  .budget-table tr.revenue .amt-col{color:var(--rust);}
+  .budget-table tfoot td{background:var(--green-soft);font-weight:700;color:var(--green-dark);padding:10px;border-top:2px solid var(--green);}
+  .budget-table tfoot .amt-col{font-size:14px;}
+
+  .budget-notes{background:#fffaf0;border-left:4px solid var(--gold);padding:10px 14px;margin-top:12px;border-radius:0 4px 4px 0;font-size:11.5px;color:#5a4015;}
+  .budget-notes b{color:var(--rust);}
+  .budget-notes ul{margin:6px 0 0;padding-left:20px;}
+  .budget-notes li{margin-bottom:3px;line-height:1.5;}
+
+  .adhoc-card{background:#fdf6ec;border-color:#d9b0a5;}
+  .adhoc-card h3{color:#8b4513;border-bottom-color:#d9b0a5;}
+  .adhoc-card .approval-flag{font-size:10.5px;color:#fff;font-weight:700;background:#a0522d;padding:2px 8px;border-radius:3px;letter-spacing:.4px;text-transform:uppercase;}
+  #adhocTable{margin-top:8px;}
+  #adhocTable input[type="text"],#adhocTable input[type="number"],#adhocTable select{width:100%;font-size:12px;padding:6px 8px;border:1px solid #cbb;border-radius:3px;background:#fff;font-family:'Inter';}
+  #adhocTable input:focus,#adhocTable select:focus{outline:2px solid var(--gold);outline-offset:-1px;}
+  #adhocTable .del-adhoc{background:#b04a3a;color:#fff;border:none;border-radius:3px;width:24px;height:24px;cursor:pointer;font-weight:700;}
+  #adhocTable .del-adhoc:hover{background:#933a2c;}
+  #adhocTable td{padding:5px 6px;}
+
+  .budget-summary{background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);color:#fff;border-radius:8px;padding:18px 22px;margin-top:14px;}
+  .budget-summary .srow{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.18);}
+  .budget-summary .srow:last-child{border-bottom:none;padding-top:10px;}
+  .budget-summary .lbl{font-size:12.5px;opacity:.88;}
+  .budget-summary .val{font-family:'Libre Baskerville',serif;font-size:16px;font-weight:700;}
+  .budget-summary .grand .lbl{font-size:14px;font-weight:700;opacity:1;letter-spacing:.4px;text-transform:uppercase;}
+  .budget-summary .grand .val{font-size:26px;color:var(--gold-soft);}
+
+  .calc-hint-bcci{background:#fdf6ec;border-left-color:#a0522d;}
+
+  @media print{
+    .toolbar,.toc,.hint,.legend,.del,.backtop,.calc-actions,.calc-card button,#adhocTable .del-adhoc{display:none !important;}
+    body{background:#fff;}
+    .wrap{padding:0;}
+    .sec{margin-top:18px;page-break-inside:avoid;}
+    .sec-banner{box-shadow:none;}
+    .table-scroll{overflow:visible;border:none;border-radius:0;}
+    table#matrix{min-width:0;width:100%;font-size:8.5px;}
+    table#matrix thead th,table#matrix tbody th.rowhead{position:static;}
+    table#matrix th,table#matrix td{padding:5px 5px;}
+    table#matrix thead th{background:var(--green) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    table#matrix td .cond{padding:4px 5px;}
+    .scheme,.gblock,.calc-card,.budget-table{page-break-inside:avoid;}
+    .budget-summary{background:var(--green) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    @page{size:A3 landscape;margin:8mm;}
+  }
+
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="tname">MADHYA PRADESH CRICKET ASSOCIATION<small>Master Document of Schemes &amp; BCCI Staging Guidelines · Season 2025-26</small></div>
+  <button class="btn" onclick="toggleEdit()" id="editBtn">✎ Enable Edit Mode</button>
+  <button class="btn ghost" onclick="window.print()">🖨 Print / PDF</button>
+  <button class="btn gold" onclick="downloadHTML()">⬇ Download HTML</button>
+</div>
+
+<nav class="toc">
+  <span class="toc-label">Jump to:</span>
+  <a href="#sec1">1 · General Grants</a>
+  <a href="#sec2">2 · Tournaments</a>
+  <a href="#sec3">3 · Camps</a>
+  <a href="#sec4">4 · Awards &amp; Welfare</a>
+  <a href="#sec5">5 · One-time Allotments</a>
+  <a href="#sec6">6 · Office &amp; Ground</a>
+  <a href="#sec7">7 · MBC</a>
+  <a href="#sec8">8 · Age Verification</a>
+  <a href="#sec9" style="background:#fff;border:1px solid var(--gold);">9 · BCCI Guidelines</a>
+  <a href="#sec10" style="background:#fff;border:1px solid #a0522d;color:#8b4513;">10 · Budget Calculator ⚙</a>
+</nav>
+
+<div class="wrap">
+
+  <header class="doc">
+    <p class="assoc">MADHYA PRADESH CRICKET ASSOCIATION</p>
+    <p class="sub">HOLKAR STADIUM, RACE COURSE ROAD, INDORE 452 001 · WWW.MPCAONLINE.COM</p>
+    <p class="title">Master Document of Schemes &amp; BCCI Staging Guidelines <span class="badge">Comprehensive</span></p>
+    <p class="meta">MPCA Development Schemes (Season 2025-26) · BCCI Guidelines to Staging Associations (Domestic Season 2025-26)</p>
+    <p class="meta">MPCA schemes per MC Meeting 19.08.2025, w.e.f. 01.09.2025 · BCCI Guidelines per the document for Domestic Season 2025-26 · For internal use only</p>
+    <div class="gold-rule"></div>
+  </header>
+
+  <div class="hint">
+    <b>What this document covers:</b> Sections 1–8 cover MPCA's own grant, subsidy, reimbursement, award and welfare schemes at the Divisional / District level. <b>Section 9</b> covers <b>BCCI's Guidelines to Staging Associations</b> — the mandatory requirements that apply whenever MPCA or a Division hosts a BCCI Domestic Tournament. Each entry shows the <b>sanctioned amount</b> or <b>required arrangement</b>, with <b>conditions</b> and <b>documents</b> where applicable. Click <b>Enable Edit Mode</b> to revise any content inline, then click <b>Download HTML</b> to save the revised master.
+  </div>
+
+  <!-- =====================================================================
+       SECTION 1 — GENERAL GRANTS
+       ===================================================================== -->
+  <section id="sec1" class="sec">
+    <div class="sec-banner">
+      <span class="sec-num">1</span>
+      <h2>General Grants<span class="sub">Annual grants &amp; revenue-share to Divisional / District units</span></h2>
+    </div>
+    <div class="sec-body">
+
+      <!-- 1A -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Annual Grants to Divisional / District Cricket Associations</h3><span class="ref">Scheme 1-A · p.4-5</span></div>
+        <div class="scheme-body">
+          <div class="kvl">
+            <div class="k">Grant per District (via Division)</div>
+            <div class="v"><span class="amt">₹1,10,000 / District / year</span><span class="note">Passed on by the Division to the concerned District body.</span></div>
+
+            <div class="k">Division-retained amount</div>
+            <div class="v"><span class="amt">₹30,000 / District / year</span><span class="note">Retained by the Divisional Cricket Association to meet common expenses on activities conducted by the Division for the Districts under its aegis.</span></div>
+
+            <div class="k">Periodicity</div>
+            <div class="v">Yearly</div>
+
+            <div class="k">Distribution Mechanism</div>
+            <div class="v"><span class="note"><b>Step 1:</b> Districts submit required documents to Division. <b>Step 2:</b> Division compiles &amp; forwards to MPCA. <b>Step 3:</b> MPCA scrutinises and releases grant to Division. <b>Step 4:</b> Division releases share to Districts.</span></div>
+
+            <div class="k">Ceiling Adjustment</div>
+            <div class="v"><span class="note">The annual grant ceiling is assessed against the District's spending pattern in the previous 2-3 years. If the pattern is <b>less than 80%</b> of the grant ceiling, the <b>average amount</b> (not the ceiling) is paid.</span></div>
+          </div>
+
+          <div class="note-callout"><b>Important (w.e.f. 01.04.2026):</b> The right of any District / Division to claim the annual grant shall stand <b>automatically forfeited</b> if the grant is not claimed within <b>12 months</b> of the closure of the previous financial year.</div>
+
+          <div class="gblock">
+            <span class="gtitle">Documents Required — From Division</span>
+            <ul>
+              <li>Utilization Certificate (CA-certified) for the last grant received by the Division</li>
+              <li>Confirmation by Hon. Secretary regarding validity of the Division's registration under the Societies Registration Act</li>
+              <li>Auditor's Report &amp; Audited Statement of Accounts for the immediately preceding financial year</li>
+              <li>Notice &amp; Draft Minutes of the AGM in which the Auditor's Report / Accounts were passed (attested by Hon. Secretary)</li>
+              <li>List of members of the Divisional Association as on AGM date (attested)</li>
+              <li>Annual Budget of the Division for the corresponding year</li>
+              <li>Copy of documents (financials, member list etc.) submitted to the Registrar of Firms &amp; Societies, with challan copy of payment</li>
+              <li>Bank statement depicting payment of the last annual grant to Districts</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Documents Required — From Districts</span>
+            <ul>
+              <li>Auditor's Report, Balance Sheet and Income &amp; Expenditure or Receipts &amp; Payments for the immediately preceding FY (preferably with CA-certified UC for the previous grant)</li>
+              <li>Notice &amp; Draft Minutes of the AGM (attested by Hon. Secretary)</li>
+              <li>List of members of the District Association as on AGM date (attested)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1B -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Share to Divisions out of Net Revenue from ODI / T20</h3><span class="ref">Scheme 1-B · p.6</span></div>
+        <div class="scheme-body">
+          <div class="kvl">
+            <div class="k">Division's Share</div>
+            <div class="v"><span class="amt">4% of the surplus per Division</span><span class="note">Of net revenue (excess of income over expenses) from each International Match hosted by MPCA — as per audited figures. Effective from the ODI held in October 2015.</span></div>
+
+            <div class="k">Applicability</div>
+            <div class="v"><span class="note">Applicable for ODI &amp; T20 matches. For <b>Test Matches</b>, applicability is on a <b>case-to-case basis</b>.</span></div>
+
+            <div class="k">Periodicity</div>
+            <div class="v">Per ODI / T20 match hosted by MPCA</div>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Utilization Pattern (Mandatory)</span>
+            <ul>
+              <li><b>70% of the surplus share</b> must be utilised for one of: (i) Earmarked investment (FD) for District incentive schemes — annual interest income spent on the cause; (ii) Earmarked investment (FD) for rewards for junior players — annual interest spent on the cause; (iii) Any infrastructure development for a common cause.</li>
+              <li><b>30% of the surplus share</b> may be used towards any other common expenditure of the Division.</li>
+              <li>Internal distribution within the 70% is at the Division's discretion, payable only after MPCA approval on a reasonable basis.</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Documents Required</span>
+            <ul>
+              <li>Copies of Fixed Deposit instruments for earmarked investments</li>
+              <li>Written norms for the schemes funded — District Incentive Scheme &amp; Junior Player Rewards</li>
+              <li>CA-certified Utilization Certificate for surplus spent on infrastructure (common cause) &amp; common expenditure for the previous paid surplus</li>
+            </ul>
+          </div>
+
+          <div class="note-callout"><b>Sequencing rule:</b> Only after receipt of the above documents <b>in chronological order</b> shall the Division be entitled to the share for the next match or the next installment.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       SECTION 2 — TOURNAMENT REIMBURSEMENT MATRIX
+       ===================================================================== -->
+  <section id="sec2" class="sec">
+    <div class="sec-banner">
+      <span class="sec-num">2</span>
+      <h2>Tournament Reimbursement Matrix<span class="sub">Hosting &amp; participation in tournaments — heads, amounts &amp; conditions</span></h2>
+    </div>
+    <div class="sec-body">
+
+      <div class="legend">
+        <span><span class="sw amt"></span>Sanctioned amount &amp; conditions</span>
+        <span><span class="sw cond"></span>Conditional split — each value on its own card</span>
+        <span><span class="sw na"></span>Not separately sanctioned — reasoning given</span>
+      </div>
+
+      <div class="table-scroll">
+        <table id="matrix">
+          <thead>
+            <tr>
+              <th class="corner" contenteditable="false">Reimbursement Head ↓ &nbsp;/&nbsp; Tournament →</th>
+              <th>Inter-School<span class="csub">Within Division (Scheme 2-A, p.7)</span></th>
+              <th>Inter-District<span class="csub">Within Division (Scheme 2-B, p.8-9)</span></th>
+              <th>Inter-Divisional — Hosting<span class="csub">Host Division (Scheme 2-D, p.11-13)</span></th>
+              <th>Inter-Divisional — Travel<span class="csub">Participating Division (Scheme 2-C, p.10)</span></th>
+              <th>Inter-Club (‘A’ Grade)<span class="csub">2-day only (Scheme 2-E, p.14-15)</span></th>
+              <th>Reciprocal Matches<span class="csub">Between Divisions (Scheme 3-C, p.18)</span></th>
+            </tr>
+          </thead>
+          <tbody>
+
+            <!-- Per-day Ceiling -->
+            <tr>
+              <th class="rowhead">Per-day Ceiling / Max Subsidy</th>
+              <td><span class="amt">₹5,000 / day (grant)</span><span class="note">Same flat amount whether one match or two are played in a day. Covers match balls, ground rent (if any) &amp; trophies. Umpire/scorer fees additional.</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">When only ONE team is outstation</span><span class="cond-amt">Max ₹28,000 / match-day</span><span class="cond-note">Built up from: accommodation (max 16 pax @₹500), food (max 40 pax @₹350), dinner (16 pax @₹150), misc ₹3,600/day, visiting team travel.</span></div>
+                <div class="cond"><span class="cond-when alt">When BOTH teams are outstation</span><span class="cond-amt">Max ₹39,000 / match-day</span><span class="cond-note">Same heads but max 32 pax for accommodation/dinner, misc raised to ₹4,200/day.</span></div>
+              </td>
+              <td><span class="amt">No single per-day cap</span><span class="note">Built up head-by-head (rooms ₹1,800+tax, ground ₹4,500/match-day, food per-pax, officials' honoraria). Office Bearers may allow minor variation at discretion.</span></td>
+              <td class="na"><span class="not-sanc">Not a per-day scheme</span><span class="reason">This is a <b>travel-participation</b> scheme — MPCA reimburses the visiting Division on <b>actual journey costs by entitlement</b>, not per-day. See <b>Inter-city Travel</b> row.</span></td>
+              <td><span class="amt">No single per-day cap</span><span class="note">Built up head-by-head; 2-day (multi-day) format only. Max 10–12 ‘A’-grade clubs.</span></td>
+              <td><span class="amt">Max ₹11,000 / match-day</span><span class="note">Subject to actuals. Camp + reciprocal matches together ≤ 8 days. Expenses shared between the two Divisions.</span></td>
+            </tr>
+
+            <!-- Accommodation -->
+            <tr>
+              <th class="rowhead">Accommodation / Hotel (Rooms)</th>
+              <td class="na"><span class="not-sanc">Not sanctioned</span><span class="reason">Inter-school is held at the Divisional HQ or District city; <b>only local schools</b> are invited and players return home daily — no hotel cost arises.</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">When only ONE team is outstation</span><span class="cond-amt">₹500 / outstation member / day · max 16 pax</span></div>
+                <div class="cond"><span class="cond-when alt">When BOTH teams are outstation</span><span class="cond-amt">₹500 / outstation member / day · max 32 pax</span></div>
+                <span class="note">Paid if team arrives one day before. <b>Not paid</b> if within 10 km of venue.</span>
+              </td>
+              <td><span class="amt">₹1,800 + taxes / room (Double Occupancy)</span><span class="note">For (i) visiting team players, coach, manager, trainer; (ii) host team players from district places (actual 15-member team); (iii) Umpires; (iv) Match Observers / Selectors — upgraded room for umpires/observers. Reasonable tariff increase case-to-case. If gap between two multi-day matches &gt; 2 days, district players return home and come back.</span></td>
+              <td class="na"><span class="not-sanc">Not claimable in Travel scheme</span><span class="reason">Borne by the <b>HOST Division</b> under Hosting scheme (₹1,800+tax, double occupancy). Travelling Division claims only travel costs.</span></td>
+              <td><span class="amt">₹1,500 + taxes / room / day (Triple Sharing)</span><span class="note">Outstation clubs only; for actual stay required. Local clubs: no accommodation.</span></td>
+              <td><span class="amt">As per Inter-District norms</span><span class="note">i.e. ₹500/outstation member/day. Claimed by host Division.</span></td>
+            </tr>
+
+            <!-- Food -->
+            <tr>
+              <th class="rowhead">Food &amp; Boarding</th>
+              <td class="na"><span class="not-sanc">Not sanctioned</span><span class="reason">Scheme explicitly states <b>“no need to arrange for any food”</b> — players are local residents.</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">During match-days (lunch + tea)</span><span class="cond-amt">₹350 / member · max 40 pax</span><span class="cond-note">Same 40-pax cap whether one or both teams outstation.</span></div>
+                <div class="cond"><span class="cond-when alt">Dinner — outstation only</span><span class="cond-amt">₹150 / member · 16 members</span><span class="cond-note">Max 16 pax (one team outstation) / 32 pax (both outstation).</span></div>
+              </td>
+              <td>
+                <div class="cond"><span class="cond-when">Day BEFORE match (outstation, max 18 pax)</span><span class="cond-amt">₹630 / head total</span><span class="cond-note">B'fast 80 + Lunch 250 + Eve b'fast 80 + Dinner 220. Allowed only if team has arrived a day before.</span></div>
+                <div class="cond"><span class="cond-when">Match-day — B'fast / Tea / Eve b'fast (50 pax)</span><span class="cond-amt">B'fast ₹100 · Tea ₹20 · Eve b'fast ₹80</span><span class="cond-note">50 pax = team (36) + umpires/scorers/selectors/observer + ground staff + officials + guests.</span></div>
+                <div class="cond"><span class="cond-when">Match-day — Lunch (incl. 1 egg) (60 pax)</span><span class="cond-amt">₹300 / head</span></div>
+                <div class="cond"><span class="cond-when alt">Match-day — Dinner (visiting team only, 18 pax)</span><span class="cond-amt">₹300 / head</span><span class="cond-note">Local team members not provided dinner. Non-veg not mandatory.</span></div>
+              </td>
+              <td class="na"><span class="not-sanc">Not claimable in Travel scheme</span><span class="reason">Borne by the <b>HOST Division</b> (₹800/head match-days, ₹630/head day-before). Travelling Division claims only ₹2,500 misc per one-way for journey.</span></td>
+              <td><span class="amt">₹500 / day · max 16 members</span><span class="note">Outstation clubs only, actual stay. No food for local clubs.</span></td>
+              <td><span class="amt">As per Inter-District norms</span></td>
+            </tr>
+
+            <!-- Local Conveyance -->
+            <tr>
+              <th class="rowhead">Local Conveyance</th>
+              <td><span class="amt">Within ₹5,000/day grant</span><span class="note">Umpires/scorers get +₹100 conveyance if ground far.</span></td>
+              <td><span class="amt">Allowed on reasonable basis</span><span class="note">Allowed for both teams &amp; officials <b>only if ground is away from city</b>.</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">For ground use — visiting team</span><span class="cond-amt">₹1,500 / day</span><span class="cond-note">Covers 1 practice session + all match days.</span></div>
+                <div class="cond"><span class="cond-when alt">For station / bus-stand transfers</span><span class="cond-amt">₹1,500 / local journey</span><span class="cond-note">Host team's responsibility; actuals if hotel-to-ground distance large.</span></div>
+              </td>
+              <td class="na"><span class="not-sanc">Not claimable in Travel scheme</span><span class="reason">Provided by <b>HOST Division</b>. Travelling Division claims only inter-city travel.</span></td>
+              <td class="na"><span class="not-sanc">Club's own responsibility</span><span class="reason">Per scheme: <b>“Local conveyance shall be the responsibility of the concerned club even if it is an out-station club.”</b></span></td>
+              <td><span class="amt">As per Inter-District norms</span></td>
+            </tr>
+
+            <!-- Inter-city Travel -->
+            <tr>
+              <th class="rowhead">Inter-city Travel</th>
+              <td class="na"><span class="not-sanc">Not applicable</span><span class="reason">Only same-city schools invited; no inter-city journey involved.</span></td>
+              <td><span class="amt">Actual bus / sleeper rail · max 16 pax</span><span class="note">For visiting team's journey from District HQ to venue.</span></td>
+              <td class="na"><span class="not-sanc">Not claimable by Host Division</span><span class="reason">Borne by <b>visiting team's Division</b> under its own Travel scheme.</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">Main team journey — to &amp; fro venue</span><span class="cond-amt">Actual III-tier AC rail · 18 pax</span><span class="cond-note">18 = 15 players + coach + manager + trainer. Coach &amp; trainer must be MPCA-empanelled.</span></div>
+                <div class="cond"><span class="cond-when">If rail not convenient / unavailable</span><span class="cond-amt">Actual fare of alternate mode</span><span class="cond-note">Minimum-fare alternate; <b>prior approval</b> from MPCA required.</span></div>
+                <div class="cond"><span class="cond-when">Misc. journey expense</span><span class="cond-amt">₹2,500 per ONE-WAY journey</span><span class="cond-note">i.e. ₹5,000 round-trip. Reasonable medical during tour also admissible.</span></div>
+                <div class="cond"><span class="cond-when">District-HQ → Division-HQ for joining players</span><span class="cond-amt">Bus / ordinary class rail fare</span><span class="cond-note">Only for players joining the team — <b>not</b> for camp-only players.</span></div>
+                <div class="cond"><span class="cond-when alt">Tatkal / cancellation</span><span class="cond-amt">Allowed case-to-case</span></div>
+                <div class="cond"><span class="cond-when alt">Out-of-MP senior guest player</span><span class="cond-amt">NOT reimbursed</span><span class="cond-note">Travel/accommodation/boarding for out-of-MP guest senior player not reimbursed.</span></div>
+              </td>
+              <td><span class="amt">SL rail / ordinary bus · max 16 players</span><span class="note">To &amp; fro inter-city travel for outstation clubs.</span></td>
+              <td><span class="amt">Claimed within visiting team's grant claim</span><span class="note">Visiting team claims travel in its own visiting grant; host Division claims boarding/lodging/officials.</span></td>
+            </tr>
+
+            <!-- Umpire -->
+            <tr>
+              <th class="rowhead">Umpire Fees</th>
+              <td><span class="amt">₹700 / umpire / day</span><span class="note">+ ₹100 if ground far. Additional to ₹5,000/day grant.</span></td>
+              <td><span class="amt">₹700 / umpire / day</span><span class="note">Same rate for ltd-overs / multi-day / T20. + ₹100 if far. Travel/lodging/boarding for outstation officials on reasonable basis.</span></td>
+              <td><span class="amt">Room &amp; food covered; fee per MPCA norms</span><span class="note">Room ₹1,800+tax upgraded; food in pax pool.</span></td>
+              <td class="na"><span class="not-sanc">Not applicable</span><span class="reason">Umpires appointed &amp; paid by <b>HOST Division</b>.</span></td>
+              <td><span class="amt">₹700 / umpire / day</span><span class="note">+ ₹100 if far.</span></td>
+              <td><span class="amt">₹700 / umpire / day</span><span class="note">+ ₹100 if far.</span></td>
+            </tr>
+
+            <!-- Scorer -->
+            <tr>
+              <th class="rowhead">Scorer Fees</th>
+              <td><span class="amt">₹500 / scorer / day</span><span class="note">+ ₹100 if far.</span></td>
+              <td><span class="amt">₹500 / scorer / day</span><span class="note">+ ₹100 if far.</span></td>
+              <td><span class="amt">Boarding covered; fee per MPCA norms</span></td>
+              <td class="na"><span class="not-sanc">Not applicable</span><span class="reason">Scorers appointed &amp; paid by <b>HOST Division</b>.</span></td>
+              <td><span class="amt">₹500 / scorer / day</span><span class="note">+ ₹100 if far.</span></td>
+              <td><span class="amt">₹500 / scorer / day</span><span class="note">+ ₹100 if far.</span></td>
+            </tr>
+
+            <!-- Match Balls -->
+            <tr>
+              <th class="rowhead">Match Balls</th>
+              <td><span class="amt">Within ₹5,000/day grant</span><span class="note">No separate ball supply by MPCA.</span></td>
+              <td><span class="amt">Provided by MPCA in kind</span><span class="note">Written request ≥ <b>8 days</b> before. <b>No cash</b> reimbursement.</span></td>
+              <td><span class="amt">Provided by MPCA in kind</span><span class="note">For tournament &amp; pre-tournament camp. No cash reimbursement.</span></td>
+              <td class="na"><span class="not-sanc">Not applicable</span><span class="reason">Balls provided centrally by MPCA to <b>host Division</b>.</span></td>
+              <td><span class="amt">Provided by MPCA in kind</span><span class="note">Written request ≥ 8 days before. No cash.</span></td>
+              <td><span class="amt">Provided by MPCA in kind</span><span class="note">Written request ≥ 8 days before. No cash.</span></td>
+            </tr>
+
+            <!-- Ground / Tents -->
+            <tr>
+              <th class="rowhead">Ground Rent / Tents / Misc.</th>
+              <td><span class="amt">Within ₹5,000/day grant</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">Misc — when ONE team outstation</span><span class="cond-amt">₹3,600 / day</span></div>
+                <div class="cond"><span class="cond-when alt">Misc — when BOTH teams outstation</span><span class="cond-amt">₹4,200 / day</span></div>
+                <span class="note">Ground rent allowed if non-MPCA ground used; reasonable maintenance allowed. Selector/coach fee, prize money, kit etc. within per-day ceiling provided quality not compromised.</span>
+              </td>
+              <td><span class="amt">₹4,500 / match-day (ground &amp; tent)</span><span class="note">Sight screen / tents <b>extra at actual</b>. Reasonable allowance for water, additional tentage, summer drinks (lemon water/chaach/ice), refreshments on practice days between matches, temporary labour + their food, night ground-staff food, venue in-charge / coordinator / scoreboard operators (per Cricket Ops approval).</span></td>
+              <td class="na"><span class="not-sanc">Not applicable</span><span class="reason">All ground arrangements claimed by <b>HOST Division</b>.</span></td>
+              <td><span class="amt">Reasonable on actual</span><span class="note">Hiring grounds: <b>prior MPCA approval</b>. Packaged water: Division's responsibility (claimable).</span></td>
+              <td><span class="amt">Reasonable on actual</span></td>
+            </tr>
+
+            <!-- Coach -->
+            <tr>
+              <th class="rowhead">Coach Fee / Honorarium</th>
+              <td class="na"><span class="not-sanc">Not sanctioned</span><span class="reason">School-team event — coaching is at school's end.</span></td>
+              <td><span class="amt">Within per-day ceiling</span><span class="note">Coach/selector fee allowed within ₹28K/₹39K ceiling, provided basic quality not compromised.</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">During match-days of tournament</span><span class="cond-amt">₹1,500 / day</span></div>
+                <div class="cond"><span class="cond-when alt">During pre-tournament camp</span><span class="cond-amt">₹1,000 / day</span><span class="cond-note">Max 8 camp days. Empanelled coaches only.</span></div>
+                <span class="note">Profiles submitted in advance. Breaks between matches included.</span>
+              </td>
+              <td class="na"><span class="not-sanc">Not applicable</span><span class="reason">Coach honorarium paid by <b>HOST Division</b>. Coach's travel included in 18-pax rail entitlement.</span></td>
+              <td class="na"><span class="not-sanc">Not sanctioned</span><span class="reason">Coaching is at club's end.</span></td>
+              <td><span class="amt">₹1,000 / camp-day</span><span class="note">Reciprocal matches form part of pre-tournament camp.</span></td>
+            </tr>
+
+            <!-- Manager -->
+            <tr>
+              <th class="rowhead">Manager Honorarium</th>
+              <td class="na"><span class="not-sanc">Not sanctioned</span><span class="reason">No team manager engaged for inter-school.</span></td>
+              <td class="na"><span class="not-sanc">Not separately sanctioned</span><span class="reason">Absorbed within per-day ceiling.</span></td>
+              <td><span class="amt">₹1,000 / scheduled match-day</span><span class="note">Breaks included. Any camp role at <b>Division's own cost</b>.</span></td>
+              <td class="na"><span class="not-sanc">Not applicable</span><span class="reason">Paid by <b>HOST Division</b>. Travel included in 18-pax rail.</span></td>
+              <td class="na"><span class="not-sanc">Not sanctioned</span></td>
+              <td class="na"><span class="not-sanc">Not sanctioned</span><span class="reason">Practice exposure games, no separate manager.</span></td>
+            </tr>
+
+            <!-- Trainer -->
+            <tr>
+              <th class="rowhead">Trainer Fee / Honorarium</th>
+              <td class="na"><span class="not-sanc">Not sanctioned</span></td>
+              <td class="na"><span class="not-sanc">Not sanctioned</span><span class="reason">Trainers not engaged at inter-district level.</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">During match-days of tournament</span><span class="cond-amt">₹1,000 / day</span></div>
+                <div class="cond"><span class="cond-when alt">During pre-tournament camp</span><span class="cond-amt">₹750 / day</span><span class="cond-note">Max 8 camp days. Empanelled trainers only.</span></div>
+              </td>
+              <td class="na"><span class="not-sanc">Not applicable</span><span class="reason">Paid by <b>HOST Division</b>. Travel included in 18-pax rail.</span></td>
+              <td class="na"><span class="not-sanc">Not sanctioned</span></td>
+              <td><span class="amt">₹750 / camp-day</span></td>
+            </tr>
+
+            <!-- MOM -->
+            <tr>
+              <th class="rowhead">Man of the Match</th>
+              <td class="na"><span class="not-sanc">Not sanctioned</span></td>
+              <td><span class="amt">₹1,500 / multi-day match</span><span class="note">Token of appreciation for good performance.</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">For each Limited-overs / T20 match</span><span class="cond-amt">₹2,500 / match</span></div>
+                <div class="cond"><span class="cond-when alt">For each Multi-day match</span><span class="cond-amt">₹5,000 / match</span></div>
+                <span class="note">Adjudicated by 2 umpires + selector + MPCA observer. ONE MOM per match. Paid in <b>cash</b> with signatures; photo emailed to MPCA.</span>
+              </td>
+              <td class="na"><span class="not-sanc">Not applicable</span><span class="reason">MOM given by <b>HOST Division</b>.</span></td>
+              <td class="na"><span class="not-sanc">Not sanctioned</span><span class="reason">Recognition is via team prize money.</span></td>
+              <td class="na"><span class="not-sanc">Not sanctioned</span><span class="reason">Exposure/practice games, not competitive tournament.</span></td>
+            </tr>
+
+            <!-- Team Prize -->
+            <tr>
+              <th class="rowhead">Team Prize / Winner–Runner-up</th>
+              <td><span class="amt">Trophies within ₹5,000/day grant</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">Open &amp; U-23 — RANK 1</span><span class="cond-amt">₹30,000</span></div>
+                <div class="cond"><span class="cond-when">Open &amp; U-23 — RANK 2</span><span class="cond-amt">₹20,000</span><span class="cond-note">Only if Division has 5+ Districts.</span></div>
+                <div class="cond"><span class="cond-when alt">Other age-groups — RANK 1</span><span class="cond-amt">₹20,000</span></div>
+                <div class="cond"><span class="cond-when alt">Other age-groups — RANK 2</span><span class="cond-amt">₹15,000</span><span class="cond-note">Only if 5+ Districts.</span></div>
+                <span class="note">Excludes Divisional HQ team. If HQ wins, finalist treated as Rank 1; better-performing losing semi-finalist as Rank 2.</span>
+              </td>
+              <td>
+                <div class="cond"><span class="cond-when">Multi-day · WINNER team</span><span class="cond-amt">₹3.00 L (player + staff pool) + ₹75,000 (Division)</span><span class="cond-note">Distribution: Playing XI 75% (pro-rata), non-playing 15% (pro-rata), Coach 4%, Other staff 6% (equal).</span></div>
+                <div class="cond"><span class="cond-when">Multi-day · RUNNER-UP team</span><span class="cond-amt">₹1.50 L (player + staff pool) + ₹35,000 (Division)</span></div>
+                <div class="cond"><span class="cond-when alt">Ltd-overs / T20 · WINNER team</span><span class="cond-amt">₹1.50 L (player + staff pool) + ₹40,000 (Division)</span></div>
+                <div class="cond"><span class="cond-when alt">Ltd-overs / T20 · RUNNER-UP team</span><span class="cond-amt">₹75,000 (player + staff pool) + ₹20,000 (Division)</span></div>
+                <span class="note">Individual trophies (Best Batsman/Bowler/Fielder-WK) extra — see Section 4-C.</span>
+              </td>
+              <td class="na"><span class="not-sanc">Not claimable in Travel scheme</span><span class="reason">Team award paid <b>centrally</b> by MPCA on conclusion (see Hosting column).</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">WINNER club</span><span class="cond-amt">₹50,000</span></div>
+                <div class="cond"><span class="cond-when alt">RUNNER-UP club</span><span class="cond-amt">₹30,000</span></div>
+                <span class="note">Subject to TDS. <b>Bank transfer only</b> to club's a/c. <b>Forfeited</b> if not claimed within 6 months.</span>
+              </td>
+              <td class="na"><span class="not-sanc">Not sanctioned</span><span class="reason">Exposure/practice games.</span></td>
+            </tr>
+
+            <!-- Entry Fee -->
+            <tr>
+              <th class="rowhead">Entry Fee (collected by host)</th>
+              <td><span class="amt">₹1,500 / school (mandatory)</span><span class="note">Receipt issued; collection <b>declared</b> in claim. Only schools that promote cricket year-round (max 12 at Div HQ / 8 at District).</span></td>
+              <td class="na"><span class="not-sanc">No entry fee</span><span class="reason">MPCA fully subsidises district participation.</span></td>
+              <td class="na"><span class="not-sanc">No entry fee</span></td>
+              <td class="na"><span class="not-sanc">Not applicable</span></td>
+              <td class="na"><span class="not-sanc">No entry fee</span></td>
+              <td class="na"><span class="not-sanc">No entry fee</span><span class="reason">Bilateral arrangement.</span></td>
+            </tr>
+
+            <!-- Doctor -->
+            <tr>
+              <th class="rowhead">Doctor / Ambulance / Medical</th>
+              <td class="na"><span class="not-sanc">Not separately sanctioned</span><span class="reason">In-city matches; emergencies handled at school's end.</span></td>
+              <td><span class="amt">Allowed if ground far</span></td>
+              <td><span class="amt">Allowed if ground far</span><span class="note">Common provision for int-div/inter-club/similar MPCA-funded.</span></td>
+              <td><span class="amt">Reasonable medical at actual</span><span class="note">Admissible during tour/tournament.</span></td>
+              <td><span class="amt">Allowed if ground far</span></td>
+              <td><span class="amt">Reasonable medical at actual</span></td>
+            </tr>
+
+            <!-- Format -->
+            <tr>
+              <th class="rowhead">Match Format / Overs / Duration</th>
+              <td><span class="amt">Knockout only</span><span class="note">Up to SF: 25 overs/side. SF &amp; Final: 50 overs/side. ≤12 teams (Div HQ) / ≤8 (District). Players registered with school since start of academic year.</span></td>
+              <td>
+                <div class="cond"><span class="cond-when">U-13 &amp; U-15 (if Ltd-overs)</span><span class="cond-amt">Min 40 overs/side · 2-day</span></div>
+                <div class="cond"><span class="cond-when">U-18 (if Ltd-overs)</span><span class="cond-amt">Min 50 overs/side · 2-day</span></div>
+                <div class="cond"><span class="cond-when alt">Open age-group</span><span class="cond-amt">2-day; SF 2-day / Final 3-day</span></div>
+                <span class="note"><b>No T20</b> until players are 19 complete. Pre-qualification on matting allowed. All Divisions must hold inter-district to select divisional team.</span>
+              </td>
+              <td><span class="amt">As per MPCA / CDC / Tournament Committee schedule</span></td>
+              <td class="na"><span class="not-sanc">Not applicable</span><span class="reason">Format decided by the tournament attended.</span></td>
+              <td><span class="amt">2-day matches ONLY · Knockout</span><span class="note">One/year for U-15 &amp; U-18 each. <b>No one-day</b>, <b>no league-cum-knockout</b>. Max 10–12 clubs.</span></td>
+              <td><span class="amt">Part of pre-tournament camp · ≤ 8 days total</span></td>
+            </tr>
+
+            <!-- Other Conditions -->
+            <tr>
+              <th class="rowhead">Other / Special Conditions</th>
+              <td><span class="note">Segregate district vs city schools — top district teams may be invited to city phase. Women's: inter-school OR inter-club OR combined allowed.</span></td>
+              <td><span class="note">Within 10 km: no hotel/dinner, only daily journey cost. Match-days up to 3/4 if few districts (MPCA approval). Hold maximum matches at District places.</span></td>
+              <td><span class="note">Refreshments on practice days between matches. Summer extras (lemon water/chaach/ice). Night ground-staff food allowed. Coach &amp; trainer profiles in advance.</span></td>
+              <td><span class="note">₹2,500 misc is per ONE-WAY journey. Coach/trainer from MPCA empanelled pool. Tatkal allowed. Out-of-MP guest player NOT reimbursed.</span></td>
+              <td><span class="note">Only competitive ‘A’-grade clubs (10-point ranking guideline). Scores sent to MPCA. If no clubs, District team eligible.</span></td>
+              <td><span class="note">Total expenses shared between Divisions. MPCA informed in advance. Media release issued.</span></td>
+            </tr>
+
+            <!-- Claim Pattern -->
+            <tr>
+              <th class="rowhead">Claim Pattern / Documents</th>
+              <td><span class="note">Statement of matches/format/days; declaration of entry-fee collection; supporting bills.</span></td>
+              <td><span class="note">Submit only on <b>completion</b>. Attach fixtures, scoresheets, original bills/receipts/vouchers.</span></td>
+              <td><span class="note">Claim statement + scoresheet + original bills/receipts/vouchers. MOM photo to MPCA.</span></td>
+              <td><span class="note">Claim statement with match/journey dates, team strength, mode/category of journey, photocopy of tickets. On completion.</span></td>
+              <td><span class="note">Scores to MPCA. Bills/receipts. Prize by bank.</span></td>
+              <td><span class="note">Claim form + attested scoresheets + bills/vouchers.</span></td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       SECTION 3 — CAMPS & SUB-CENTRE ACTIVITIES
+       ===================================================================== -->
+  <section id="sec3" class="sec">
+    <div class="sec-banner">
+      <span class="sec-num">3</span>
+      <h2>Camps &amp; Sub-Centre Activities<span class="sub">Coaching camps, vacation camps, pre-tournament camps &amp; district-specific schemes</span></h2>
+    </div>
+    <div class="sec-body">
+
+      <!-- 3A -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Periodical Coaching Camp for District Players</h3><span class="ref">Scheme 3-A · p.16</span></div>
+        <div class="scheme-body">
+          <div class="kvl">
+            <div class="k">Purpose</div>
+            <div class="v"><span class="note">For District/rural players who cannot practice under Divisional guidance daily owing to logistical difficulties.</span></div>
+
+            <div class="k">Duration &amp; Frequency</div>
+            <div class="v"><span class="amt">2 weeks · once a year</span><span class="note">Two groups: up to 18 yrs and elder players. Camp modelled on MPCA academy — daily 2 sessions with one weekly off.</span></div>
+
+            <div class="k">Accommodation</div>
+            <div class="v"><span class="amt">₹500 / player / day</span><span class="note">Triple occupancy only.</span></div>
+
+            <div class="k">Food</div>
+            <div class="v"><span class="amt">₹500 / player / day</span></div>
+
+            <div class="k">Travel</div>
+            <div class="v"><span class="amt">Actual ordinary bus / SL rail fare</span><span class="note">Subject to supporting documents.</span></div>
+
+            <div class="k">Daily Conveyance</div>
+            <div class="v"><span class="amt">₹50 / player</span><span class="note">For activity days only.</span></div>
+
+            <div class="k">Match Balls</div>
+            <div class="v">Provided by MPCA</div>
+
+            <div class="k">Misc. Expenses</div>
+            <div class="v"><span class="amt">Up to ₹15,000 / camp</span><span class="note">Subject to submission of appropriate documents.</span></div>
+
+            <div class="k">Pre-requisites</div>
+            <div class="v"><span class="note">Inform MPCA in advance with: number of players, native places, duration. Division should issue a media release (news + photos) about the endeavour.</span></div>
+
+            <div class="k">Documents</div>
+            <div class="v"><span class="note">Claim form + bills / vouchers / relevant supporting for cause of expenditure.</span></div>
+          </div>
+          <div class="note-callout"><b>Important:</b> This subsidy is <b>NOT applicable</b> for camps of Divisional teams before the Inter-Divisional Tournament (those follow Scheme 3-D).</div>
+        </div>
+      </div>
+
+      <!-- 3B -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Vacation Camps</h3><span class="ref">Scheme 3-B · p.17</span></div>
+        <div class="scheme-body">
+          <div class="kvl">
+            <div class="k">Duration &amp; Frequency</div>
+            <div class="v"><span class="amt">2–3 weeks · once a year (summer vacation)</span><span class="note">Two groups: up to 18 yrs and elder. MPCA academy model (daily 2 sessions, one weekly off).</span></div>
+
+            <div class="k">Accommodation (outstation players)</div>
+            <div class="v"><span class="amt">₹500 / player / day</span><span class="note">Triple occupancy.</span></div>
+
+            <div class="k">Food (outstation players)</div>
+            <div class="v"><span class="amt">₹500 / player / day</span></div>
+
+            <div class="k">Inter-city Travel</div>
+            <div class="v"><span class="amt">Actual ordinary bus / SL rail fare</span></div>
+
+            <div class="k">Local Conveyance (outstation)</div>
+            <div class="v"><span class="amt">₹50 / player / day</span></div>
+
+            <div class="k">Refreshment (local players)</div>
+            <div class="v"><span class="amt">₹50 / player / day</span></div>
+
+            <div class="k">Kit &amp; Misc.</div>
+            <div class="v"><span class="amt">₹15,000 / camp</span></div>
+
+            <div class="k">Match Balls</div>
+            <div class="v">Provided by MPCA on request</div>
+
+            <div class="k">Documents</div>
+            <div class="v"><span class="note">Claim form + bills/vouchers + Divisional Secretary's <b>undertaking</b> that <b>no amount is charged from the players</b> for the camp or for any of the above cost elements.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3D -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Pre-Tournament Camp for Divisional Teams</h3><span class="ref">Scheme 3-D · p.19</span></div>
+        <div class="scheme-body">
+          <div class="kvl">
+            <div class="k">Applicability</div>
+            <div class="v"><span class="note">Valid for camps before <b>all</b> Inter-Divisional Tournaments organised by MPCA.</span></div>
+
+            <div class="k">Camp Duration</div>
+            <div class="v"><span class="amt">Max 8 days</span><span class="note">Including the day of reporting &amp; departure (no claim for one day before / one day after). Separate camps allowed for league &amp; knock-out if gap is large.</span></div>
+
+            <div class="k">Camp Strength</div>
+            <div class="v"><span class="amt">18–20 players</span><span class="note">Typically 7–8 from outstation.</span></div>
+
+            <div class="k">Max Daily Subsidy</div>
+            <div class="v"><span class="amt">₹11,000 / day</span><span class="note">Subject to relevant documents. If Division has higher number of district players, subsidy adjusted on basis of accommodation (₹500/day/outstation player) + boarding (₹500/day/player).</span></div>
+
+            <div class="k">Coach Honorarium</div>
+            <div class="v"><span class="amt">₹1,000 / day</span><span class="note">From the MPCA-empanelled list.</span></div>
+
+            <div class="k">Trainer Honorarium</div>
+            <div class="v"><span class="amt">₹750 / day</span><span class="note">From the MPCA-empanelled list.</span></div>
+
+            <div class="k">Match Balls</div>
+            <div class="v">Provided by MPCA for the camp</div>
+
+            <div class="k">Medical</div>
+            <div class="v"><span class="amt">At actual</span></div>
+          </div>
+          <div class="note-callout"><b>Tournament postponement clause:</b> If a tournament is postponed within 8–10 days of the scheduled date and the pre-tournament camp is already organised / scheduled within a day or two, additional camp days will be allowed on a <b>case-to-case basis</b>.</div>
+        </div>
+      </div>
+
+      <!-- 3E -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Schemes Specific for District Cricket Associations</h3><span class="ref">Scheme 3-E · p.20 · w.e.f. 01.09.2025</span></div>
+        <div class="scheme-body">
+          <p>Four sub-schemes are introduced from Season 2025-26 specifically for District Cricket Associations affiliated to the Divisions:</p>
+
+          <div class="gblock">
+            <span class="gtitle">3-E.1 · Award for top District team in multi-day Inter-District Tournament</span>
+            <div class="cond"><span class="cond-when">Open &amp; U-23 — RANK 1 District team</span><span class="cond-amt">₹30,000</span></div>
+            <div class="cond"><span class="cond-when">Open &amp; U-23 — RANK 2 District team</span><span class="cond-amt">₹20,000</span></div>
+            <div class="cond"><span class="cond-when alt">Other age-groups — RANK 1</span><span class="cond-amt">₹20,000</span></div>
+            <div class="cond"><span class="cond-when alt">Other age-groups — RANK 2</span><span class="cond-amt">₹15,000</span></div>
+            <p style="margin-top:8px;"><b>Eligibility:</b> Award is for Districts other than the Divisional HQ team. For Divisions with <b>5+ Districts</b>: top 2 ranked teams. For Divisions with <b>≤ 4 Districts</b>: top 1 team only. If the Inter-District tournament is won by the HQ team, the finalist is treated as Rank 1; the better-performing losing semi-finalist as Rank 2.</p>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">3-E.2 · Coaching Grant for Districts</span>
+            <p><span class="amt" style="font-weight:700;color:var(--green-dark);">₹50,000 / season</span> to all Districts, split as:</p>
+            <ul>
+              <li>Up to ₹25,000 — for conducting coaching camps at District</li>
+              <li>Up to ₹25,000 — for coaches attending Inter-District tournaments</li>
+            </ul>
+            <p>Detailed norms to be determined by MPCA.</p>
+            <div class="note-callout"><b>Condition:</b> This grant <b>cannot be claimed</b> if the annual grant claim (Scheme 1-A) is not submitted accurately within 8–9 months of the closure of the previous financial year.</div>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">3-E.3 · Administrative Grant for Districts</span>
+            <p><span class="amt" style="font-weight:700;color:var(--green-dark);">₹25,000 / year</span> to all Districts for basic administrative purposes. Norms to be determined by MPCA.</p>
+            <div class="note-callout"><b>Condition:</b> Cannot be claimed if the annual grant claim is not submitted accurately within 8–9 months of the closure of the previous FY.</div>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">3-E.4 · Scholarship for raw / untapped District players</span>
+            <p>For players residing &amp; coached in Districts who are not into any active activity at the Divisional HQ:</p>
+            <div class="cond"><span class="cond-when">Top 5 players in multi-day Inter-Divisional circuit</span><span class="cond-amt">₹15,000 / year (cash or kind)</span><span class="cond-note">Player should not be a state team member or above.</span></div>
+            <div class="cond"><span class="cond-when">Top 5 players in Women's Inter-Divisional circuit</span><span class="cond-amt">₹15,000 / year (cash or kind)</span><span class="cond-note">Player should not be a state team member or above.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;">Note: Scheme 3-C (Reciprocal Matches Between Divisions) is covered as a column in the Tournament Matrix in Section 2.</p>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       SECTION 4 — AWARDS & PLAYERS' WELFARE
+       ===================================================================== -->
+  <section id="sec4" class="sec">
+    <div class="sec-banner">
+      <span class="sec-num">4</span>
+      <h2>Awards &amp; Players' Welfare<span class="sub">Apparels, performance awards, outright-victory incentives, lifetime &amp; Karmyogi awards, Division incentive</span></h2>
+    </div>
+    <div class="sec-body">
+
+      <!-- 4B -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Apparels to State Team Players</h3><span class="ref">Scheme 4-B · p.21</span></div>
+        <div class="scheme-body">
+          <p>All players selected in the MP Team for any BCCI Tournament are provided with a comprehensive set of cricket apparels before the start of the tournament / tour. The team is required to use these apparels for every appearance.</p>
+          <div class="gblock">
+            <span class="gtitle">Items Provided</span>
+            <ul>
+              <li>Team kit bag · Team hand bag</li>
+              <li>Playing T-shirts (full and half sleeves) — white &amp; coloured (as required)</li>
+              <li>Playing trousers — white &amp; coloured (as required)</li>
+              <li>Practice T-shirts · Practice shorts · Practice lower</li>
+              <li>Caps / Hats · Sweaters / Pull-overs · Hoodie</li>
+              <li>Travel T-shirts · Track Suit</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4C -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Performance Awards to Players / Teams / Umpires (BCCI &amp; Domestic Circuit)</h3><span class="ref">Scheme 4-C · p.22-23</span></div>
+        <div class="scheme-body">
+
+          <div class="gblock">
+            <span class="gtitle">Special Award</span>
+            <div class="kvl"><div class="k">International Debut</div><div class="v"><span class="amt">₹5,00,000</span></div></div>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">BCCI / Central Zone — Individual Awards</span>
+            <table class="subtable">
+              <thead><tr><th>Award</th><th>Category</th><th>Amount</th></tr></thead>
+              <tbody>
+                <tr><td>Madhavrao Scindia Award</td><td>Best Senior Cricketer — Men's (BCCI season)</td><td class="amt-cell">₹1,00,000</td></tr>
+                <tr><td>Madhavrao Scindia Award</td><td>Best Junior Cricketer — Men's (BCCI season)</td><td class="amt-cell">₹1,00,000</td></tr>
+                <tr><td>Maharani Ushadevi Award</td><td>Best Senior Cricketer — Women's (BCCI season)</td><td class="amt-cell">₹50,000</td></tr>
+                <tr><td>Chandra Nayudu Award</td><td>Best Junior Cricketer — Women's (BCCI season)</td><td class="amt-cell">₹50,000</td></tr>
+                <tr><td>—</td><td>Best Spin Bowler in U-16 BCCI tournament</td><td class="amt-cell">₹20,000</td></tr>
+                <tr><td>—</td><td>Best Fast Bowler in U-16 BCCI tournament</td><td class="amt-cell">₹20,000</td></tr>
+                <tr><td>Narendra Hirwani Award</td><td>Best Spin Bowler in U-19 BCCI tournament</td><td class="amt-cell">₹20,000</td></tr>
+                <tr><td>Ashok Jagdale Award</td><td>Best Fast Bowler in U-19 BCCI tournament</td><td class="amt-cell">₹20,000</td></tr>
+                <tr><td>Rekha Punekar Award</td><td>Promising Debutant in Women's / Girls Team for BCCI Tournament</td><td class="amt-cell">₹20,000</td></tr>
+                <tr><td>—</td><td>Special Recognition Award</td><td class="amt-cell">₹30,000</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:11.5px;color:var(--muted);margin-top:4px;">Note: Awards to Best Spin &amp; Fast bowlers are subject to any player displaying noteworthy performance. Team prize money (BCCI tournaments) is decided by the Managing Committee at the end of each season, additional to BCCI's own prize.</p>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">MPCA Tournament — Team Prize Money</span>
+            <table class="subtable">
+              <thead><tr><th>Tournament</th><th>Winner</th><th>Runner-up</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="label">Multi-day Tournaments</td>
+                  <td><span class="amt-cell">₹3.00 Lacs</span><br><span style="color:var(--muted);font-size:11px;">(to be distributed among players + support staff)</span><br><span class="amt-cell">+ ₹75,000 for Division</span></td>
+                  <td><span class="amt-cell">₹1.50 Lacs</span><br><span style="color:var(--muted);font-size:11px;">(players + support staff)</span><br><span class="amt-cell">+ ₹35,000 for Division</span></td>
+                </tr>
+                <tr>
+                  <td class="label">Ltd. Overs / T-20 Tournaments</td>
+                  <td><span class="amt-cell">₹1.50 Lacs</span><br><span style="color:var(--muted);font-size:11px;">(players + support staff)</span><br><span class="amt-cell">+ ₹40,000 for Division</span></td>
+                  <td><span class="amt-cell">₹75,000</span><br><span style="color:var(--muted);font-size:11px;">(players + support staff)</span><br><span class="amt-cell">+ ₹20,000 for Division</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Individual Awards in Inter-Divisional Tournaments</span>
+            <table class="subtable">
+              <thead><tr><th>Tournament</th><th>Per-award Amount</th><th>Best Batsman</th><th>Best Bowler</th><th>Best Fielder / WK</th></tr></thead>
+              <tbody>
+                <tr><td class="label">MY Memorial Trophy</td><td class="amt-cell">₹20,000 each</td><td>Amay Khurasiya Award</td><td>Sunil Lahore Award</td><td>Kirti Patel Award</td></tr>
+                <tr><td class="label">Madhavrao Scindia Trophy</td><td class="amt-cell">₹10,000 each</td><td>—</td><td>—</td><td>—</td></tr>
+                <tr><td class="label">JN Bhaya Trophy</td><td class="amt-cell">₹10,000 each</td><td>—</td><td>—</td><td>—</td></tr>
+                <tr><td class="label">H. Gaekwad Trophy</td><td class="amt-cell">₹20,000 each</td><td>Manohar Sharma Award</td><td>Syed Gulrez Ali Award</td><td>Bhagwandas Suthar Award</td></tr>
+                <tr><td class="label">SM Khan Trophy</td><td class="amt-cell">₹10,000 each</td><td>—</td><td>—</td><td>—</td></tr>
+                <tr><td class="label">Parmanandbhai Patel Trophy</td><td class="amt-cell">₹20,000 each</td><td>—</td><td>—</td><td>—</td></tr>
+                <tr><td class="label">Boys U-22 Ltd. Over Trophy</td><td class="amt-cell">₹10,000 each</td><td>—</td><td>—</td><td>—</td></tr>
+                <tr><td class="label">MM Jagdale Trophy</td><td class="amt-cell">₹20,000 each</td><td>—</td><td>Prashant Dwivedi Award</td><td>HS Sodhi Award</td></tr>
+                <tr><td class="label">AW Kanmadikar Trophy</td><td class="amt-cell">₹20,000 each</td><td>—</td><td>Sanjeev Rao Award</td><td>Narendra Dua Award</td></tr>
+                <tr><td class="label">JS Anand Trophy</td><td class="amt-cell">₹10,000 each</td><td>—</td><td>Sandhya Agarwal Award</td><td>Rupanjali Shastri Award</td></tr>
+                <tr><td class="label">Girls U-18 Trophy</td><td class="amt-cell">₹10,000 each</td><td>—</td><td>—</td><td>—</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Other Performance Awards</span>
+            <div class="kvl">
+              <div class="k">Consistent Upcoming Umpire / Scorer<br><span style="font-weight:400;color:var(--muted);font-size:10.5px;">(other than BCCI Umpire / Scorers)</span></div>
+              <div class="v"><span class="amt">₹10,000 (Narendra Menon Award)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4D -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Incentive Scheme for Encouraging Outright Victories (Multi-Day Matches)</h3><span class="ref">Scheme 4-D · p.24-25</span></div>
+        <div class="scheme-body">
+          <p>Incentive paid to teams achieving outright victories in multi-day matches of both the BCCI circuit and the MPCA Inter-Divisional Tournaments. Scheme applicable only if the team reaches the knock-out / super-league stage of the respective tournament.</p>
+
+          <div class="gblock">
+            <span class="gtitle">Distribution Pattern (Both BCCI &amp; MPCA)</span>
+            <ul>
+              <li><b>Playing XI:</b> 75% of the reward — pro-rata to number of games played</li>
+              <li><b>Non-playing:</b> 15% of the reward — pro-rata to number of games</li>
+              <li><b>Coach:</b> 4% of the reward</li>
+              <li><b>Other support staff:</b> 6% of the reward — shared equally</li>
+              <li><b>TDS:</b> Deducted from players for Senior &amp; U-23 / U-22 age groups. For junior teams, TDS is borne by MPCA.</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Individual Reward — for each outright match</span>
+            <div class="kvl">
+              <div class="k">Player scoring 100 runs OR taking 5 wickets</div>
+              <div class="v"><span class="amt">₹20,000 each</span></div>
+            </div>
+            <p style="font-size:11.5px;color:var(--muted);margin-top:4px;">Additionally, the analysis panel (Coach + Chairman/Selection Committee nominee + 2 CDC nominees + 1 Office Bearer) considers suitable rewards for players whose performance in a particular match was exceptional (achieving victory, avoiding loss, changing course of match favourably, etc.).</p>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">BCCI Matches — Incentive Amount Table</span>
+            <p style="font-size:11.5px;color:var(--muted);margin:0 0 6px;"><b>League stage:</b> For wins against top 6–8 teams of previous season OR against teams entering knockout in current season. For wins against other ranked teams, <b>75%</b> of the amounts below apply.</p>
+            <table class="subtable">
+              <thead><tr><th>Stage &amp; Outcome</th><th>Ranji Trophy</th><th>U-23</th><th>U-19</th><th>U-16</th></tr></thead>
+              <tbody>
+                <tr><td class="label">League · Victory by innings or 10 wkts</td><td class="amt-cell">₹2.20 L</td><td class="amt-cell">₹1.65 L</td><td class="amt-cell">₹1.65 L</td><td class="amt-cell">₹1.10 L</td></tr>
+                <tr><td class="label">League · Outright win</td><td class="amt-cell">₹1.65 L</td><td class="amt-cell">₹1.10 L</td><td class="amt-cell">₹1.10 L</td><td class="amt-cell">₹82,500</td></tr>
+                <tr><td class="label">League · ADDITIONAL if NRR &gt; 20% of opponent</td><td class="amt-cell">+₹1.10 L</td><td class="amt-cell">+₹1.10 L</td><td class="amt-cell">+₹1.10 L</td><td class="amt-cell">+₹55,000</td></tr>
+                <tr><td class="label">Knock-out · Outright win</td><td class="amt-cell">₹3.30 L</td><td class="amt-cell">₹3.30 L</td><td class="amt-cell">₹3.30 L</td><td class="amt-cell">₹3.30 L</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">MPCA Inter-Divisional Matches — Incentive Amount Table</span>
+            <p style="font-size:11.5px;color:var(--muted);margin:0 0 6px;"><b>League stage:</b> For wins against top 4 teams of previous season. For wins against other ranked teams, <b>50%</b> of the amounts below apply.</p>
+            <table class="subtable">
+              <thead><tr><th>Stage &amp; Outcome</th><th>Men's Open</th><th>U-23</th><th>U-18</th><th>U-15</th></tr></thead>
+              <tbody>
+                <tr><td class="label">League · Victory by innings or 10 wkts</td><td class="amt-cell">₹55,000</td><td class="amt-cell">₹55,000</td><td class="amt-cell">₹44,000</td><td class="amt-cell">₹33,000</td></tr>
+                <tr><td class="label">League · Outright win</td><td class="amt-cell">₹44,000</td><td class="amt-cell">₹44,000</td><td class="amt-cell">₹33,000</td><td class="amt-cell">₹22,000</td></tr>
+                <tr><td class="label">League · ADDITIONAL if NRR &gt; 20% of opponent</td><td class="amt-cell">+₹22,000</td><td class="amt-cell">+₹22,000</td><td class="amt-cell">+₹11,000</td><td class="amt-cell">+₹11,000</td></tr>
+                <tr><td class="label">Knock-out · Outright win</td><td class="amt-cell">₹77,000</td><td class="amt-cell">₹77,000</td><td class="amt-cell">₹77,000</td><td class="amt-cell">₹77,000</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="note-callout"><b>Note:</b> Awards under the annual awards pattern (Scheme 4-C) are <b>additional</b> to the above. The CDC reviews this scheme annually.</div>
+        </div>
+      </div>
+
+      <!-- 4E -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>MPCA Lifetime Achievement Awards</h3><span class="ref">Scheme 4-E · p.26</span></div>
+        <div class="scheme-body">
+          <p>MPCA's <b>highest award</b>, presented annually to a person who has achieved or contributed for the betterment of cricket and who belongs to Holkar / Madhya Bharat / Madhya Pradesh Cricket Association.</p>
+
+          <table class="subtable">
+            <thead><tr><th>Category</th><th>Profiles Included</th><th>Award Title</th><th>Amount</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="label">On-Field Category</td>
+                <td>National First-Class Cricketers · International Cricketers · Umpires · Scorer · Curator</td>
+                <td><b>C T Sarwate Award</b></td>
+                <td class="amt-cell">₹5,00,000 + silver plaque</td>
+              </tr>
+              <tr>
+                <td class="label">General Category</td>
+                <td>Selectors · Coach · Administrators · Commentators · Historians · Statisticians · Journalists</td>
+                <td><b>Madhavrao Scindia Award</b></td>
+                <td class="amt-cell">₹5,00,000 + silver plaque</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="gblock">
+            <span class="gtitle">Governing Rules</span>
+            <ul>
+              <li><b>Maximum 2 awards per year</b> — one for each category.</li>
+              <li>Only <b>one candidate</b> per Award per year — not shared as far as possible.</li>
+              <li>Award is to be given during the lifetime of the awardee — <b>NOT posthumous</b>.</li>
+              <li>Open for appropriate candidates from <b>Men's or Women's</b> cricket.</li>
+              <li>No candidate facing punitive action from MPCA / BCCI is eligible (irrespective of completion of substance of punishment).</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Order of Consideration</span>
+            <ul>
+              <li>Achievement and Contribution to and for betterment of <b>Cricket in India</b> (Priority 1)</li>
+              <li>Achievement and Contribution to and for betterment of <b>Cricket in MP / Madhya Bharat / Holkar</b> (Priority 2)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4F -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>MPCA Nishkaam Karmyogi Awards</h3><span class="ref">Scheme 4-F · p.27</span></div>
+        <div class="scheme-body">
+          <p>Recognition of the <b>“Unsung Heroes”</b> — industrious and passionate individuals who support cricket with on-field and off-the-field activities, involvement and contributions, working for a cause that has very little or no glory, recognition, or award-reward.</p>
+          <div class="kvl">
+            <div class="k">Number of Awards / Year</div>
+            <div class="v"><span class="amt">3 individuals every year</span></div>
+            <div class="k">Award</div>
+            <div class="v"><span class="amt">Silver Plaque of Appreciation + ₹1,11,111</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4G -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Annual Incentive Scheme for Divisional Cricket Associations</h3><span class="ref">Scheme 4-G · p.28</span></div>
+        <div class="scheme-body">
+          <p>Top two Divisions are given monetary incentive — an effort to motivate Divisions to streamline their activities. MPCA analyses multi-faceted parameters (cricket-oriented activities, players' development schemes, efforts for resource development, administrative set-up, statutory compliances, etc.) and rates the Divisions accordingly.</p>
+          <div class="cond"><span class="cond-when">1st Rank Division</span><span class="cond-amt">₹7.50 Lacs</span></div>
+          <div class="cond"><span class="cond-when alt">2nd Rank Division</span><span class="cond-amt">₹5.00 Lacs</span></div>
+          <p style="margin-top:8px;font-size:11.5px;color:var(--muted);">Scheme parameters are reviewed annually by CDC. Divisions are required to submit documents supporting their claim.</p>
+        </div>
+      </div>
+
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;">Note: Scheme 4-A (Benevolent Fund for Health Care) is governed by a separate scheme-policy document. Refer to MPCA for the policy text.</p>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       SECTION 5 — ONE-TIME ALLOTMENTS
+       ===================================================================== -->
+  <section id="sec5" class="sec">
+    <div class="sec-banner">
+      <span class="sec-num">5</span>
+      <h2>One-Time Allotments<span class="sub">Ground equipment &amp; office computer set-up</span></h2>
+    </div>
+    <div class="sec-body">
+
+      <!-- 5B -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Computer &amp; Peripherals for Divisional Office</h3><span class="ref">Scheme 5-B · p.29</span></div>
+        <div class="scheme-body">
+          <div class="kvl">
+            <div class="k">Periodicity</div>
+            <div class="v"><span class="amt">One time in a span of 5–8 years</span></div>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Items Reimbursed</span>
+            <ul>
+              <li><b>All-in-One Desktop Computer</b> (with keyboard &amp; mouse) — Configuration: 500 GB SSD, 8 GB RAM, i3 Processor, Screen Size 20-22 inch</li>
+              <li><b>All-in-One Printer</b> — Printer, Copier and Scanner</li>
+              <li><b>UPS</b> — with backup of 15-20 minutes</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Process</span>
+            <ul>
+              <li>Procure consolidated rates (quotation) for the equipment from an established service provider</li>
+              <li>Include charges for annual maintenance after warranty expiry</li>
+              <li>Furnish details to MPCA; on confirmation, issue PO to the reliable vendor</li>
+              <li>After delivery: forward original invoice (endorsed by the Division's Secretary) to MPCA for <b>direct payment to vendor</b></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;">Note: Scheme 5-A (Ground Maintenance Equipment to Districts / Divisions) is governed by a separate scheme-policy document. Refer to MPCA for the policy text.</p>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       SECTION 6 — OFFICE OPERATIONS & GROUND MAINTENANCE
+       ===================================================================== -->
+  <section id="sec6" class="sec">
+    <div class="sec-banner">
+      <span class="sec-num">6</span>
+      <h2>Office Operations &amp; Ground Maintenance<span class="sub">Annual grants for staff &amp; cricket-ground upkeep</span></h2>
+    </div>
+    <div class="sec-body">
+
+      <!-- 6A -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Annual Grant for Engaging Office Staff (Divisional Office)</h3><span class="ref">Scheme 6-A · p.30 · w.e.f. 01.09.2025</span></div>
+        <div class="scheme-body">
+          <table class="subtable">
+            <thead><tr><th>Quantum</th><th>Sanctioned Amount (per annum)</th></tr></thead>
+            <tbody>
+              <tr><td class="label">CTC for hiring services for office / cricketing / accounts work (annual)</td><td class="amt-cell">Up to ₹3,54,500 p.a. (rounded off)</td></tr>
+              <tr><td class="label">Cost towards other office expenses (stationery / printing / postage etc.)</td><td class="amt-cell">Up to ₹44,300 p.a. (rounded off)</td></tr>
+              <tr><td class="label">In-built escalation</td><td class="amt-cell">5% per annum</td></tr>
+            </tbody>
+          </table>
+
+          <div class="kvl" style="margin-top:14px;">
+            <div class="k">Claim Periodicity</div>
+            <div class="v"><span class="amt">Half-yearly</span><span class="note">Submitted in April (for Oct–Mar) and October (for Apr–Sep).</span></div>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Engagement Requirements</span>
+            <ul>
+              <li>Division must inform MPCA of its choice of individual(s) who will handle (i) Accounts + office work; (ii) Cricket activities</li>
+              <li>Covering letter must mention the qualifications of the individual suited to the job</li>
+              <li>Provide a copy of the employment / assignment letter — must cover scope of work, daily hours, paid-leave entitlement, monthly emoluments, date of joining, probation period (if any), contact details</li>
+              <li>Monetary consideration must <b>not be less than minimum wages</b> as per government norms; for part-time duty, the proportional minimum-wage figure applies</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Documents to attach with each half-yearly claim</span>
+            <ul>
+              <li>Photocopy of monthly attendance register — with signature of the staff and time of daily attendance</li>
+              <li>Payment to staff is <b>strictly by cheque</b>; photocopy of bank statement highlighting payments must be attached</li>
+              <li>Supportings for office expense — duly certified by the Secretary or another office bearer</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6B -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Subsidy for Ground Maintenance (Divisional Cricket Association)</h3><span class="ref">Scheme 6-B · p.31 · in force since 04.04.2011</span></div>
+        <div class="scheme-body">
+
+          <div class="gblock">
+            <span class="gtitle">Eligibility &amp; Conditions</span>
+            <ul>
+              <li>Maximum <b>2 grounds per Division</b> covered under this scheme</li>
+              <li>Division must submit a list of grounds regularly used for Divisional / BCCI matches over the last few years</li>
+              <li>Hon. Secretary must give a written <b>assurance</b> that the ground will continue to be used for Divisional / BCCI matches for a minimum of <b>3 years</b> subsequently</li>
+              <li>Scheme applies only if the ground is approved by the <b>CDC</b></li>
+              <li>If the Division fails to provide the ground for MPCA's required purposes, the grant is <b>immediately discontinued</b> and the <b>previous 3 years' grant</b> is recoverable from amounts due to the Division within 2 years</li>
+              <li>W.e.f. FY 2025-26: in-built provision of <b>5% annual increment</b> subject to satisfactory performance</li>
+            </ul>
+          </div>
+
+          <table class="subtable">
+            <thead><tr><th rowspan="2">Nature of Payment</th><th colspan="2">BCCI-Accredited Grounds</th><th colspan="2">Other Grounds</th></tr><tr><th>Details</th><th>Total / year</th><th>Details</th><th>Total / year</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="label">Main ground curator / staff</td>
+                <td>Qualified as per local conditions; <b>appointed full-time</b></td>
+                <td class="amt-cell">₹4,00,000</td>
+                <td>Qualified as per local conditions; <b>appointed part-time</b></td>
+                <td class="amt-cell">₹2,60,000</td>
+              </tr>
+              <tr>
+                <td class="label">Additional support staff</td>
+                <td><b>3–4 staff full-time</b> as per qualifications &amp; local conditions</td>
+                <td class="amt-cell">₹4,90,000</td>
+                <td><b>3 staff part-time</b> as per qualifications &amp; local conditions</td>
+                <td class="amt-cell">₹2,45,500</td>
+              </tr>
+              <tr>
+                <td class="label">Ground equipment / soil laying</td>
+                <td>Lumpsum</td>
+                <td class="amt-cell" rowspan="2">₹2,82,000<br><span style="font-weight:400;color:var(--muted);font-size:10.5px;">(combined for equipment + misc)</span></td>
+                <td>Lumpsum</td>
+                <td class="amt-cell" rowspan="2">₹1,71,500<br><span style="font-weight:400;color:var(--muted);font-size:10.5px;">(combined for equipment + misc)</span></td>
+              </tr>
+              <tr><td class="label">Misc. maintenance</td><td>Lumpsum</td><td>Lumpsum</td></tr>
+            </tbody>
+            <tfoot>
+              <tr><td>TOTAL</td><td colspan="2">₹11,72,000</td><td colspan="2">₹6,77,000</td></tr>
+            </tfoot>
+          </table>
+
+          <div class="gblock">
+            <span class="gtitle">Claim Pattern / Documents</span>
+            <ul>
+              <li>Photocopy of monthly attendance register — signatures &amp; time of daily attendance</li>
+              <li>Payment to staff <b>strictly by cheque</b>; bank statement copy highlighting these payments</li>
+              <li>Supportings for office expense — certified by Secretary or another office bearer</li>
+              <li>Copy of the employment / assignment letter for each engagement (scope, hours, leave, emoluments, date of joining, probation, contact)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       SECTION 7 — MONTHLY BENEVOLENCE CONTRIBUTION (MBC)
+       ===================================================================== -->
+  <section id="sec7" class="sec">
+    <div class="sec-banner">
+      <span class="sec-num">7</span>
+      <h2>Monthly Benevolence Contribution (MBC)<span class="sub">Welfare scheme for former First-Class Cricketers &amp; BCCI / State Panel Umpires</span></h2>
+    </div>
+    <div class="sec-body">
+
+      <div class="scheme">
+        <div class="scheme-head"><h3>Monthly Benevolence Contribution Scheme</h3><span class="ref">Scheme 7-A · p.32-34 · payment effective 01.09.2025</span></div>
+        <div class="scheme-body">
+          <p>Introduced in 2011 as a welfare scheme for former Ranji Trophy cricketers and former State Panel umpires from MP / Holkar — to provide financial assistance to those who contributed to the game when financial resources were minimal and who are <b>not covered</b> by the BCCI or any other state association's similar scheme. MPCA has created a corpus (earmarked investment) to fund the monthly payments.</p>
+
+          <div class="gblock">
+            <span class="gtitle">Payment Slabs — PLAYERS</span>
+            <table class="subtable">
+              <thead><tr><th>S. No.</th><th>Category</th><th>Amount</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td class="label">Cricketers who have crossed 75 years of age — irrespective of number of matches played</td><td class="amt-cell">₹15,000 / month</td></tr>
+                <tr><td>2</td><td class="label">Cricketers who have played 15 – 24 matches</td><td class="amt-cell">₹10,000 / month</td></tr>
+                <tr><td>3</td><td class="label">Cricketers who have played 5 – 14 matches</td><td class="amt-cell">₹7,500 / month</td></tr>
+                <tr><td>4</td><td class="label">Cricketers who have played up to 4 matches</td><td class="amt-cell">₹5,000 / month</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Payment Slabs — UMPIRES</span>
+            <table class="subtable">
+              <thead><tr><th>S. No.</th><th>Category</th><th>Amount</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td class="label">BCCI Panel umpires not covered under the BCCI's own scheme</td><td class="amt-cell">₹7,500 / month</td></tr>
+                <tr><td>2</td><td class="label">State Panel umpires</td><td class="amt-cell">₹5,000 / month</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="note-callout"><b>75-year increment:</b> For Players S.No. 2–4 and Umpires S.No. 1–2 — when the beneficiary attains the age of 75 years, an increment of <b>+₹5,000</b> is added to the last amount drawn under this scheme.</div>
+
+          <div class="gblock">
+            <span class="gtitle">Core Conditions (since launch)</span>
+            <ul>
+              <li>Applicable only to former first-class cricketers / state-panel or BCCI-panel umpires <b>not covered</b> by a similar scheme of BCCI or any other state association</li>
+              <li>A beneficiary can be entitled under <b>only one category</b> — either as a player or as an umpire, whichever is higher</li>
+              <li><b>Players:</b> Must have featured in playing XI for Holkar / Madhya Pradesh; eligible only after announcement of retirement from first-class cricket and on crossing the eligible age (40+ years since Sep 2017)</li>
+              <li><b>Umpires:</b> Must have crossed 55 years of age and announced retirement from umpiring</li>
+              <li>Scheme is <b>not applicable posthumous</b> — ceases on the life of the beneficiary</li>
+              <li>Late-enrolment cut-off: applications received on or after 01.01.2022 do <b>not</b> receive benefits for the period prior to enrolment</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Revised Provisions w.e.f. 01.04.2025 — PLAYERS</span>
+            <ul>
+              <li>Scheme is applicable only for players who have played <b>up to 24 FC matches</b> (regardless of whether they receive any gratis from BCCI or otherwise). Players who played more than 24 FC matches in career but not these many before the BCCI cut-off season are <b>not</b> entitled.</li>
+              <li>If BCCI in future extends gratis to players with fewer than 25 FC matches, the MPCA scheme will <b>automatically be modified</b> to remove names receiving BCCI gratis.</li>
+              <li>Any new player eligible w.e.f. 01.04.2025 (by matches criterion &amp; other rules) shall be eligible for MBC <b>after completing 50 years</b> (original scheme norm).</li>
+              <li>Players not enrolled as on 01.04.2025 and who had the advantage of employment / gainful occupation / business shall be enrolled (if otherwise eligible) <b>on completing age 60</b> — irrespective of later discontinuation of employment.</li>
+              <li>Players who have played international matches (any format, any number) or IPL matches (any number) after 01.04.2011 (launch of MBC), are not receiving BCCI gratis, and have played less than 25 FC matches — shall be eligible for MBC upon completion of <b>60 years</b>.</li>
+              <li>A player who has retired from domestic circuit but is playing veterans / legends (or similar) tournaments — <b>not</b> considered until completely off the ground.</li>
+              <li>The scheme is <b>not applicable</b> to any fresh-enrolment player who has represented a team other than Holkar / Madhya Pradesh — irrespective of seasons or matches played.</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Revised Provisions w.e.f. 01.04.2025 — UMPIRES</span>
+            <ul>
+              <li>Any umpire (state panel or BCCI panel) inducted as State Panel <b>after 01.04.2025</b> shall <b>not be eligible</b> for the scheme.</li>
+              <li>Any state-panel / BCCI umpire actively officiating prior to 01.04.2025 who has the advantage of employment / gainful occupation / business shall be enrolled <b>upon completing age 60</b> — irrespective of later discontinuation.</li>
+            </ul>
+          </div>
+
+          <div class="note-callout"><b>Women's Cricketers:</b> A Benevolence Scheme for former female cricketers of MP has been approved by the Managing Committee. Detailed norms are to be made accordingly.</div>
+
+          <p style="font-size:11.5px;color:var(--muted);margin-top:10px;">The scheme is reviewed every year and can be discontinued if the situation requires, as per the recommendation of the Finance Committee.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       SECTION 8 — CENTRALISED AGE VERIFICATION PROGRAMME
+       ===================================================================== -->
+  <section id="sec8" class="sec">
+    <div class="sec-banner">
+      <span class="sec-num">8</span>
+      <h2>Centralised Age Verification Programme<span class="sub">Reference scheme — separate policy document</span></h2>
+    </div>
+    <div class="sec-body">
+      <div class="scheme">
+        <div class="scheme-head"><h3>Centralised Age Verification Process</h3><span class="ref">Scheme 8-A</span></div>
+        <div class="scheme-body">
+          <p>The Centralised Age Verification Process is governed by a <b>specific scheme policy document available separately</b>. For norms, applicable amounts, claim pattern and operational protocol, refer to that policy document held with MPCA.</p>
+          <p style="font-size:11.5px;color:var(--muted);">This entry is included in the Master Document for completeness — once the policy document is finalised in tabular form, the sanctioned amounts &amp; conditions can be added here using the Add Row / Add Column functionality and the document re-downloaded as the updated master.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       SECTION 9 — BCCI GUIDELINES TO STAGING ASSOCIATIONS (Domestic 2025-26)
+       ===================================================================== -->
+  <section id="sec9" class="sec">
+    <div class="sec-banner" style="background:linear-gradient(90deg,var(--green) 0%,#1c5d4a 100%);">
+      <span class="sec-num" style="background:var(--gold);border-color:#fff;color:#fff;">9</span>
+      <h2>BCCI Guidelines to Staging Associations <span class="badge" style="background:#fff;color:var(--green-dark);margin-left:8px;">BCCI</span><span class="sub">Domestic Season 2025-26 · Applicable when MPCA / a Division hosts a BCCI Domestic Tournament (Men / Women · Senior / Junior)</span></h2>
+    </div>
+    <div class="sec-body">
+
+      <div class="hint" style="margin-top:0;background:var(--gold-soft);border-left-color:var(--gold);">
+        <b>Source:</b> BCCI document <i>“Guidelines to Staging Associations · Domestic Season 2025–2026”</i>. These are BCCI's <b>mandatory requirements</b> for any State / Divisional Association staging a BCCI tournament — applicable to MPCA and its Divisions whenever they host a BCCI fixture. They complement (and in case of any overlap, supersede) MPCA's own internal Hosting scheme in Section 2-D. BCCI reserves the right to amend any clause during the season.
+      </div>
+
+      <!-- 9.1 Hosting Fees & Participation Subsidy -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Hosting Fees &amp; Participation Subsidy</h3><span class="ref">BCCI Guideline 1 · p.1</span></div>
+        <div class="scheme-body">
+          <div class="gblock">
+            <span class="gtitle">Hosting Fees for Domestic Tournaments — paid by BCCI to Host</span>
+            <table class="subtable">
+              <thead><tr><th>Format</th><th>Hosting Fee</th></tr></thead>
+              <tbody>
+                <tr><td class="label">All multi-day RED-ball tournaments</td><td class="amt-cell">₹1.75 Lakhs / match-day</td></tr>
+                <tr><td class="label">All limited-overs WHITE-ball tournaments (50 overs &amp; T20)</td><td class="amt-cell">₹3.50 Lakhs / match</td></tr>
+                <tr><td class="label">Limited-overs WHITE-ball tournaments played UNDER LIGHTS (50 overs &amp; T20)</td><td class="amt-cell">₹4.50 Lakhs / match</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Participation Subsidy — paid by BCCI to visiting team's State Association</span>
+            <table class="subtable">
+              <thead><tr><th>Format</th><th>Participation Subsidy</th></tr></thead>
+              <tbody>
+                <tr><td class="label">All multi-day RED-ball tournaments</td><td class="amt-cell">₹1.25 Lakhs / match</td></tr>
+                <tr><td class="label">All limited-overs WHITE-ball tournaments (50 overs &amp; T20)</td><td class="amt-cell">₹0.75 Lakhs / match</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9.2 Match Operations -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Match Operations — Security, Reporting, Squad &amp; Match Conditions</h3><span class="ref">BCCI Guidelines 2–8, 23 · p.1-2, 6</span></div>
+        <div class="scheme-body">
+          <div class="kvl">
+
+            <div class="k">Security <span style="font-weight:400;color:var(--muted);font-size:10.5px;">(G-2)</span></div>
+            <div class="v"><span class="note">Host Association to arrange <b>local security personnel</b> at <b>all match AND practice venues</b>.</span></div>
+
+            <div class="k">Reporting &amp; Practice <span style="font-weight:400;color:var(--muted);font-size:10.5px;">(G-3)</span></div>
+            <div class="v"><span class="amt">≥ 2 practice sessions of 3 hours each</span><span class="note">No restriction on team reporting day. Host must provide <b>at least 2 practice sessions of 3 hours</b> to each visiting team. Additional sessions on request, subject to availability. <b>Special attention</b> to quality of practice pitches.</span></div>
+
+            <div class="k">Squad Size <span style="font-weight:400;color:var(--muted);font-size:10.5px;">(G-4)</span></div>
+            <div class="v"><span class="amt">Up to 25 members per squad</span><span class="note">Max <b>15 players</b> + max <b>10 support staff</b>. Per PMOA protocol, <b>not more than 15 players</b> are permitted in the dressing room on match days.</span></div>
+
+            <div class="k">Match Fee Eligibility <span style="font-weight:400;color:var(--muted);font-size:10.5px;">(G-4)</span></div>
+            <div class="v">
+              <span class="note" style="margin-bottom:6px;display:block;"><b>15 players</b> are eligible for match fee:</span>
+              <div class="cond"><span class="cond-when">Playing XI</span><span class="cond-amt">100% match fee</span></div>
+              <div class="cond"><span class="cond-when alt">Remaining 4 (non-Playing XI)</span><span class="cond-amt">50% match fee</span></div>
+              <span class="note" style="margin-top:6px;display:block;">If a <b>Team India cricketer</b> is deputed by BCCI for domestic cricket, he/she is eligible for match fee <b>over and above</b> the 15-player limit, based on Playing/non-Playing XI status.</span>
+            </div>
+
+            <div class="k">Match Playing Conditions <span style="font-weight:400;color:var(--muted);font-size:10.5px;">(G-5)</span></div>
+            <div class="v"><span class="note">Covered in a <b>separate BCCI document</b> on Match Playing Conditions — refer to that document for tournament-specific playing conditions.</span></div>
+
+            <div class="k">Practice Under Lights <span style="font-weight:400;color:var(--muted);font-size:10.5px;">(G-6)</span></div>
+            <div class="v"><span class="amt">Mandatory — at least 1 session per team</span><span class="note">For tournaments where match-play is under lights, Host MUST provide at least <b>one practice session under lights</b> to every participating team <b>before the tournament starts</b>.</span></div>
+
+            <div class="k">Winner / Runner-up Medals <span style="font-weight:400;color:var(--muted);font-size:10.5px;">(G-7)</span></div>
+            <div class="v"><span class="note">BCCI provides <b>medals</b> for Winners and Runners-up of all tournaments (Senior &amp; Junior). Medals are <b>dispatched by BCCI</b> to the Host Association ahead of the Final match.</span></div>
+
+            <div class="k">Match Clothing <span style="font-weight:400;color:var(--muted);font-size:10.5px;">(G-8)</span></div>
+            <div class="v"><span class="note">All State teams (irrespective of age-group, gender, format) must take the field in <b>State-Association-provided clothing</b> bearing <b>NAME &amp; NUMBER</b> on the back of the match jersey. Refer to BCCI Commercial Regulations document for details.</span></div>
+
+            <div class="k">Match Timing <span style="font-weight:400;color:var(--muted);font-size:10.5px;">(G-23)</span></div>
+            <div class="v"><span class="note">Refer to BCCI Match Playing Conditions document for tournament-wise match timings.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9.3 Match Balls -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Match Balls — Tournament-wise Specifications</h3><span class="ref">BCCI Guidelines 9 &amp; 18 · p.2-3, 5</span></div>
+        <div class="scheme-body">
+          <p><b>Supply:</b> Match balls are <b>arranged &amp; sent by BCCI</b> to all Host Associations (Guideline 18). Host does not procure balls.</p>
+
+          <div class="gblock">
+            <span class="gtitle">Men's Tournaments — Ball Specifications</span>
+            <table class="subtable">
+              <thead><tr><th>Ball Type</th><th>Tournaments</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="label">SG Test LE Red 156 gm</td>
+                  <td>Ranji Trophy — Elite · Ranji Trophy — Plate · Duleep Trophy · ZR Irani Cup · Col CK Nayudu Trophy — Elite · Col CK Nayudu Trophy — Plate · Cooch Behar Trophy — Elite · Cooch Behar Trophy — Plate · Vijay Merchant Trophy — Elite · Vijay Merchant Trophy — Plate</td>
+                </tr>
+                <tr>
+                  <td class="label">SG Test LE White 156 gm</td>
+                  <td>Vinoo Mankad Trophy — Elite · Vinoo Mankad Trophy — Plate · Men's U-23 State A One Day Trophy — Elite · Men's U-23 State A One Day Trophy — Plate · Vizzy Trophy</td>
+                </tr>
+                <tr>
+                  <td class="label">Kookaburra Turf White 156 gm</td>
+                  <td>Vijay Hazare Trophy — Elite · Vijay Hazare Trophy — Plate · Syed Mushtaq Ali Trophy — Elite · Syed Mushtaq Ali Trophy — Plate · Men's U-19 One Day Challenger Trophy</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Women's Tournaments — Ball Specifications</span>
+            <table class="subtable">
+              <thead><tr><th>Ball Type</th><th>Tournaments</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="label">SG Test Red LE 142 gm</td>
+                  <td>Sr. Women's Multi Day Inter Zonal Trophy</td>
+                </tr>
+                <tr>
+                  <td class="label">SG Test White LE 142 gm</td>
+                  <td>Women's U-23 T20 Trophy — Elite · Women's U-23 T20 Trophy — Plate · Women's U-23 One Day Trophy — Elite · Women's U-23 One Day Trophy — Plate · Women's U-19 T20 Trophy — Elite · Women's U-19 T20 Trophy — Plate · Women's U-19 One Day Trophy — Elite · Women's U-19 One Day Trophy — Plate · Women's U-15 One Day Trophy — Elite · Women's U-15 One Day Trophy — Plate</td>
+                </tr>
+                <tr>
+                  <td class="label">Kookaburra Turf White 142 gm</td>
+                  <td>Sr. Women's T20 Trophy — Elite · Sr. Women's T20 Trophy — Plate · Sr. Women's T20 Inter Zonal Trophy · Sr. Women's One Day Trophy — Elite · Sr. Women's One Day Trophy — Plate · Sr. Women's One Day Inter Zonal Trophy</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9.4 Venue Infrastructure -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Venue Infrastructure — Cameras, Ground Equipment, Dressing Rooms, Anti-Doping</h3><span class="ref">BCCI Guidelines 10, 11, 12, 20 · p.3-4, 6</span></div>
+        <div class="scheme-body">
+
+          <div class="gblock">
+            <span class="gtitle">Camera Positions &amp; Video-Analyst Minimum Standards (G-10)</span>
+            <ul>
+              <li><b>Front-fix ghodas, main wicket end-to-end:</b> 30 ft; ladder from corner; lower base 5×5 ft; shade on top.</li>
+              <li><b>Side-camera ghodas (moving):</b> 12 ft from base; upper base 4×4 ft; ladder from behind with 12-inch tyre for movement.</li>
+              <li>Mounting structure must be <b>stable and firm</b>, ensuring necessary safety protocols of the Video Analysts.</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Mandatory Ground Equipment (G-11)</span>
+            <table class="subtable">
+              <thead><tr><th>Equipment</th><th>Specification / Quantity</th></tr></thead>
+              <tbody>
+                <tr><td class="label">Rollers</td><td>One <b>500 kg</b> AND one <b>750 kg</b> per ground</td></tr>
+                <tr><td class="label">Ground Covers</td><td><b>Main square</b> AND <b>bowling run-ups on both ends</b></td></tr>
+                <tr><td class="label">Super Sopper</td><td>One per ground</td></tr>
+                <tr><td class="label">Sight Screen</td><td>Minimum dimensions <b>20 × 60 ft</b></td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:11.5px;color:var(--muted);margin-top:6px;">All State units are expected to maintain minimum basic ground equipment for ground &amp; pitch maintenance/preparation. The above items are mandatory on every ground.</p>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Dressing Room Facilities (G-12)</span>
+            <ul>
+              <li><b>Size:</b> Decent dressing room of ~<b>2,000 sq ft</b> with attached toilets and showers</li>
+              <li><b>Seating:</b> Space for minimum <b>20 pax</b> + space for kit bags</li>
+              <li><b>Physio:</b> At least <b>2 physiotherapy / massage tables</b> for visiting teams at all venues</li>
+              <li><b>Ice:</b> Sufficient ice supplied by Host on request for ice baths</li>
+              <li><b>Women's matches:</b> Separate Men's &amp; Women's washrooms within the PMOA — <b>mandatory</b></li>
+              <li><b>Buffet area:</b> Dedicated buffet-dining area identified within the PMOA</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Anti-Doping Room (G-20)</span>
+            <ul>
+              <li>Each venue must have a <b>dedicated anti-doping room</b> exclusively for anti-doping officials</li>
+              <li>Must have an <b>attached toilet</b> (required for sample collection)</li>
+              <li>Available on <b>all match AND practice days</b></li>
+              <li>NADA officials collect samples; the <b>testing plan is confidential</b> and not disclosed until NADA reaches venue on a given day</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9.5 Visiting Team Hospitality & Logistics -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Visiting Team Hospitality &amp; Logistics</h3><span class="ref">BCCI Guidelines 13–17 · p.4-5</span></div>
+        <div class="scheme-body">
+
+          <div class="gblock">
+            <span class="gtitle">Hotel Accommodation (G-13)</span>
+            <ul>
+              <li>BCCI is standardising rates with major hotel chains; Host Association is to <b>help visiting teams book hotel of their choice</b></li>
+              <li>For knock-out stages with multiple teams: Host may <b>tentatively block rooms well in advance</b> based on the tournament schedule</li>
+              <li><b>Billing:</b> Each State Association bears the cost of its travelling squad members. <b>Match Officials' invoices borne by BCCI</b>.</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Medical (G-14)</span>
+            <p>Host Association must appoint a medical partner who ensures the following on <b>all practice AND match days</b>:</p>
+            <ul>
+              <li><b>Doctor on site</b> to cover medical emergencies</li>
+              <li><b>Fully equipped ambulance</b> with at least <b>2 paramedics</b></li>
+              <li><b>Tie-up with the nearest hospital</b> with <b>green-corridor</b> arrangement for emergency admission</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Transport (G-15)</span>
+            <table class="subtable">
+              <thead><tr><th>For Whom</th><th>Vehicle</th><th>Coverage</th></tr></thead>
+              <tbody>
+                <tr><td class="label">Visiting team</td><td><b>45-seater luxury coach</b></td><td>All match &amp; practice days; nearest airport ↔ hotel transfers</td></tr>
+                <tr><td class="label">Team — baggage overflow</td><td><b>Separate baggage van</b></td><td>When team bus is insufficient for luggage</td></tr>
+                <tr><td class="label">Team Manager</td><td><b>Innova (team car)</b></td><td>All match &amp; practice days · <b>official movements only</b></td></tr>
+                <tr><td class="label">Match Officials <span style="font-weight:400;color:var(--muted);font-size:10.5px;">(Referees, Umpires, Video Analysts, Scorers)</span></td><td><b>Separate Innova car/s</b></td><td>Airport/railway-station transfers + all match/practice day movements</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:11.5px;color:var(--muted);margin-top:6px;">Staging Association makes <b>all transport arrangements</b> for teams &amp; match officials for the entire duration of their stay.</p>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Catering (G-16)</span>
+            <ul>
+              <li><b>Buffet meals + Tea / Coffee + whole fruits</b> on practice &amp; match days</li>
+              <li>Team Manager communicates <b>veg / non-veg preferences</b> 1 day prior to the TLO</li>
+              <li>Match Referee + Match Officials LO coordinate meal preferences for officials</li>
+              <li><b>Food boxes</b> for groundsmen, housekeeping, drivers and other working staff on all match days</li>
+              <li>Food quality and quantity to be of <b>best standards available</b></li>
+              <li><b>Sufficient bottled drinking water</b> for all teams &amp; working personnel on practice / match days</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Team Liaison Officer — TLO (G-17)</span>
+            <p>Host Association nominates one <b>dedicated TLO per team</b>. Responsibilities:</p>
+            <ul>
+              <li>Coordinate team's arrival &amp; departure; ensure smooth airport transfers</li>
+              <li>Ensure each team member carries their accreditation card</li>
+              <li>Ensure ground transfers on all practice &amp; match days</li>
+              <li>Coordinate with catering staff on meal preferences and timing to receive food on practice &amp; match days</li>
+              <li>Any other team requirement in consultation with BCCI officials</li>
+            </ul>
+            <p style="margin-top:6px;"><b>Match Officials LO:</b> A separate Liaison Officer (one per venue) is nominated specifically for match officials.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9.6 Accreditation, Anti-Corruption, Media & Misc -->
+      <div class="scheme">
+        <div class="scheme-head"><h3>Accreditation, Anti-Corruption, Media &amp; General</h3><span class="ref">BCCI Guidelines 19, 21, 22 + General · p.5-6</span></div>
+        <div class="scheme-body">
+
+          <div class="gblock">
+            <span class="gtitle">Local Accreditation &amp; PMOA Protocol (G-19)</span>
+            <ul>
+              <li>Participating teams are <b>responsible for preparing accreditation cards</b> for their players &amp; support staff</li>
+              <li><b>PMOA accreditation</b> issued to <b>no more than 15 players + 10 support staff</b> per team</li>
+              <li>Host Association prepares <b>signage</b> per anti-corruption guidelines, including <b>headshot boards</b> of all teams, match officials and Anti-Corruption Officials permitted in the PMOA</li>
+              <li>BCCI Anti-Corruption Officials / nominated ACO at each venue provide further guidance</li>
+              <li>One dedicated <b>ACLO (Anti-Corruption Liaison Officer)</b> appointed by Host to manage PMOA protocol</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Media Reporters (G-21)</span>
+            <p>Media reporters may be allowed to cover matches through a <b>dedicated Media Enclosure</b>. Apart from this, only working personnel and limited association representatives are allowed inside the match venue.</p>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">Selectors not part of the squad (G-22)</span>
+            <ul>
+              <li>Selectors of participating teams who are not part of the squad (15 players + 10 support staff) may stay in the <b>team hotel at the respective State Association's expense</b></li>
+              <li>Host Association to make <b>separate seating arrangements</b> for such personnel on all match days</li>
+            </ul>
+          </div>
+
+          <div class="gblock">
+            <span class="gtitle">General Notes</span>
+            <ul>
+              <li><b>No COVID protocols</b> for Domestic Season 2025-26 — basic hygiene &amp; frequent sanitisation of dressing rooms and common utility areas to be maintained</li>
+              <li>Host to provide <b>one helper + one electrician</b> for BCCI video analyst's pre-match setup</li>
+              <li>BCCI <b>reserves the right</b> to make changes / amendments / additions to the document at any time during the season</li>
+              <li>For queries / clarifications, connect with BCCI-nominated personnel at the venue</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       SECTION 10 — TOURNAMENT BUDGET CALCULATOR (Utility)
+       ===================================================================== -->
+  <section id="sec10" class="sec">
+    <div class="sec-banner" style="background:linear-gradient(90deg,#8b4513 0%,#a0522d 100%);">
+      <span class="sec-num" style="background:var(--gold);border-color:#fff;color:#fff;">10</span>
+      <h2>Tournament Budget Calculator <span class="badge" style="background:#fff;color:#8b4513;margin-left:8px;">UTILITY</span><span class="sub">Self-budget tool · pick a tournament, enter parameters, get a head-wise claim / receivable budget per the relevant scheme</span></h2>
+    </div>
+    <div class="sec-body">
+
+      <div class="hint calc-hint-bcci" style="margin-top:0;">
+        <b>How to use:</b> (1) Choose a tournament from the dropdown — MPCA tournaments calculate a <b>CLAIM from MPCA</b>; BCCI tournaments calculate the <b>RECEIVABLE from BCCI</b>. (2) Fill in the parameters; reasonable defaults are pre-filled. (3) Click <b>Calculate Budget</b> — the utility shows the <b>maximum permissible amount</b> under each head as per the scheme. (4) Add any <b>ad-hoc expenses</b> not covered by the scheme in the dedicated section — these are clearly flagged as requiring <b>special MPCA approval</b>. (5) Click <b>Download Budget</b> to save a self-contained budget sheet, or <b>Print Budget</b> for a hard copy.
+      </div>
+
+      <!-- Tournament selection & input form -->
+      <div class="calc-card">
+        <h3>① Tournament Selection &amp; Parameters</h3>
+
+        <div class="calc-row">
+          <label>Tournament<span class="hlp">Choose the scheme under which the budget is being prepared</span></label>
+          <select id="tourSelect" onchange="renderTourForm()">
+            <option value="">— select a tournament —</option>
+            <optgroup label="MPCA Tournaments (Claim from MPCA)">
+              <option value="inter-school">Inter-School Tournament · 2-A</option>
+              <option value="inter-district">Inter-District Tournament · 2-B</option>
+              <option value="inter-div-hosting">Inter-Divisional Tournament — Hosting · 2-D</option>
+              <option value="inter-div-travel">Inter-Divisional Tournament — Travel · 2-C</option>
+              <option value="inter-club">Inter-Club ‘A’ Grade · 2-E</option>
+              <option value="reciprocal">Reciprocal Matches between Divisions · 3-C</option>
+              <option value="pre-tournament-camp">Pre-Tournament Camp · 3-D</option>
+              <option value="periodical-camp">Periodical Coaching Camp · 3-A</option>
+              <option value="vacation-camp">Vacation Camp · 3-B</option>
+            </optgroup>
+            <optgroup label="BCCI Tournaments (Receivable from BCCI)">
+              <option value="bcci-hosting">BCCI Tournament — Hosting fees</option>
+              <option value="bcci-participation">BCCI Tournament — Participation subsidy</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <div id="tourFields"></div>
+
+        <div class="calc-actions">
+          <button class="btn btn-calc" onclick="calculateBudget()">▷ Calculate Budget</button>
+          <button class="btn ghost" style="background:transparent;color:var(--green-dark);border:1px solid var(--green-dark);" onclick="resetCalc()">↺ Reset</button>
+        </div>
+      </div>
+
+      <!-- Output area -->
+      <div id="calc-output"></div>
+
+      <!-- Ad-hoc expenses -->
+      <div class="calc-card adhoc-card">
+        <h3>② Ad-hoc Expenses <span class="approval-flag">Requires special MPCA approval</span></h3>
+        <p style="font-size:11.5px;color:#5a4015;margin:0 0 8px;">For expenses that fall <b>outside the scheme</b> — e.g., special equipment hire, additional officials, unusual travel, force-majeure costs. Each row is included in the grand total but is clearly flagged as requiring special approval from MPCA before payment.</p>
+        <table class="subtable" id="adhocTable">
+          <thead><tr><th style="width:26%;">Head / Description</th><th style="width:13%;">Amount (₹)</th><th style="width:38%;">Reason &amp; nature</th><th style="width:13%;">Approval status</th><th style="width:5%;"></th></tr></thead>
+          <tbody id="adhocBody"></tbody>
+        </table>
+        <button class="btn ghost" style="margin-top:10px;background:#8b4513;color:#fff;border-color:#8b4513;" onclick="addAdhocRow()">+ Add Ad-hoc Expense</button>
+      </div>
+
+      <!-- Grand total -->
+      <div id="grand-total"></div>
+
+      <!-- Action buttons -->
+      <div class="calc-actions" style="margin-top:14px;justify-content:flex-end;">
+        <button class="btn gold" onclick="downloadBudget()">⬇ Download Budget Sheet</button>
+        <button class="btn ghost" style="background:transparent;color:var(--green-dark);border:1px solid var(--green-dark);" onclick="printBudget()">🖨 Print Budget</button>
+      </div>
+
+    </div>
+  </section>
+
+  <footer class="doc">
+    <p><b>General norm for MPCA claims:</b> All bills / invoices / receipts / vouchers filed with a claim must be signed by the Hon. Secretary or another office-bearer of the Division to authenticate them. Any photocopy attached must be attested by the Hon. Secretary or an office-bearer. Unendorsed documents may be returned for rectification.</p>
+    <p>This Master Document is a consolidated working reference. Sections 1–8 are prepared from MPCA's scheme document for Season 2025-26 (w.e.f. 01.09.2025). Section 9 is prepared from BCCI's “Guidelines to Staging Associations · Domestic Season 2025-26”. It is not a substitute for either source document; in case of any conflict, the underlying source document prevails. Amounts and conditions are summarised here — refer to the indicated scheme &amp; page numbers for full text. Schemes shown as having a "separate policy document" (4-A, 5-A, 8-A) are to be referred to in their respective standalone documents. BCCI reserves the right to amend its guidelines at any time during the season.</p>
+  </footer>
+
+</div>
+
+<button class="backtop" id="backtop" onclick="window.scrollTo({top:0,behavior:'smooth'})">▲</button>
+
+<script>
+  function getEditableEls(){
+    return document.querySelectorAll(
+      '#matrix td, #matrix th.rowhead, #matrix thead th:not(.corner), .scheme-body, .scheme-head h3, .sec-banner h2, .sec-banner h2 .sub, .toc a'
+    );
+  }
+
+  function toggleEdit(){
+    var on = document.body.classList.toggle('editing');
+    var btn = document.getElementById('editBtn');
+    var els = getEditableEls();
+    els.forEach(function(c){ c.setAttribute('contenteditable', on ? 'true' : 'false'); });
+    // exclude toc anchors from being editable (we want them clickable still)
+    document.querySelectorAll('.toc a').forEach(function(a){ a.setAttribute('contenteditable','false'); });
+    btn.textContent = on ? '✓ Editing — click to lock' : '✎ Enable Edit Mode';
+    btn.style.background = on ? '#b8893b' : '#ffffff';
+    btn.style.color = on ? '#fff' : '#08382a';
+  }
+
+  function downloadHTML(){
+    if(document.body.classList.contains('editing')) toggleEdit();
+    var clone = document.documentElement.cloneNode(true);
+    clone.querySelector('body').classList.remove('editing');
+    var html = '<!DOCTYPE html>\n' + clone.outerHTML;
+    var blob = new Blob([html], {type:'text/html'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'MPCA_Master_Schemes_Document.html';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }
+
+  /* =====================================================================
+     SECTION 10 — BUDGET CALCULATOR LOGIC
+     ===================================================================== */
+
+  // --- Helper: format Indian currency ---
+  function fmt(n){
+    if(n === 0) return '₹0';
+    var abs = Math.abs(Math.round(n));
+    var s = abs.toLocaleString('en-IN');
+    return (n < 0 ? '–₹' : '₹') + s;
+  }
+
+  // --- Scheme definitions: each tournament has fields + a calculate() ---
+  var SCHEMES = {
+
+    'inter-school': {
+      label: 'Inter-School Tournament', ref: 'MPCA Scheme 2-A', party: 'CLAIM FROM MPCA',
+      fields: [
+        {id:'days', label:'Tournament days', hlp:'Total number of days the tournament runs', type:'number', def:4, min:1},
+        {id:'schools', label:'Number of schools participating', hlp:'Max 12 at Div HQ / Max 8 at District', type:'number', def:8, min:2, max:12},
+        {id:'matchesPerDay', label:'Matches per day', type:'number', def:1, min:1, max:2},
+        {id:'umpires', label:'Umpires per match', type:'number', def:2, min:1, max:3},
+        {id:'scorers', label:'Scorers per match', type:'number', def:1, min:1, max:2},
+        {id:'far', label:'Ground far from city?', hlp:'Adds ₹100 conveyance per umpire/scorer day', type:'select', opts:['No','Yes'], def:'No'}
+      ],
+      calc: function(p){
+        var ff = p.far === 'Yes' ? 100 : 0;
+        var totalMatches = p.matchesPerDay * p.days;
+        var lines = [];
+        lines.push({h:'Per-day grant', f:'₹5,000 × '+p.days+' days', a:5000*p.days, s:'2-A', n:'Covers match balls, ground rent (if any), trophies'});
+        lines.push({h:'Umpire fees', f:'₹'+(700+ff)+' × '+p.umpires+' umpires × '+totalMatches+' matches', a:(700+ff)*p.umpires*totalMatches, s:'2-A', n: ff?'Includes ₹100 conveyance/umpire-day':''});
+        lines.push({h:'Scorer fees', f:'₹'+(500+ff)+' × '+p.scorers+' scorers × '+totalMatches+' matches', a:(500+ff)*p.scorers*totalMatches, s:'2-A', n: ff?'Includes ₹100 conveyance/scorer-day':''});
+        lines.push({h:'Entry fees collected (REVENUE — offset)', f:'₹1,500 × '+p.schools+' schools (mandatory)', a:-1500*p.schools, s:'2-A', n:'Must be declared in claim', rev:true});
+        return {lines:lines, notes:[
+          'Inter-school is for local schools only — no accommodation / food / travel sanctioned.',
+          'Players must be registered with the school since the beginning of the academic year.',
+          'Statement of matches/format/days, declaration of entry-fee collection, and supporting bills must accompany the claim.'
+        ]};
+      }
+    },
+
+    'inter-district': {
+      label: 'Inter-District Tournament', ref: 'MPCA Scheme 2-B', party: 'CLAIM FROM MPCA',
+      fields: [
+        {id:'matchDays', label:'Total match days', type:'number', def:6, min:1},
+        {id:'numMatches', label:'Total matches', type:'number', def:3, min:1},
+        {id:'outstation', label:'Outstation team(s)', hlp:'Drives accommodation/food caps & per-day ceiling', type:'select', opts:['None (both local)','One team outstation','Both teams outstation'], def:'One team outstation'},
+        {id:'format', label:'Format', type:'select', opts:['Multi-day','Limited-overs'], def:'Multi-day'},
+        {id:'umpires', label:'Umpires per match', type:'number', def:2, min:1, max:3},
+        {id:'scorers', label:'Scorers per match', type:'number', def:2, min:1, max:2},
+        {id:'far', label:'Ground far from city?', type:'select', opts:['No','Yes'], def:'No'},
+        {id:'ageGroup', label:'Age group', hlp:'Determines team-prize amounts', type:'select', opts:['Open','U-23','U-18','U-15','U-13'], def:'Open'},
+        {id:'numDistricts', label:'Districts in Division', hlp:'≥5 ⇒ both Rank 1 and Rank 2 prizes; ≤4 ⇒ only Rank 1', type:'number', def:5, min:1},
+        {id:'visitTravel', label:'Visiting team travel — estimate (₹)', hlp:'Actual bus / sleeper rail · max 16 pax', type:'number', def:5000, min:0}
+      ],
+      calc: function(p){
+        var ff = p.far === 'Yes' ? 100 : 0;
+        var pax = 0, miscDay = 0, perDayCap = 0;
+        if(p.outstation === 'One team outstation'){ pax = 16; miscDay = 3600; perDayCap = 28000; }
+        else if(p.outstation === 'Both teams outstation'){ pax = 32; miscDay = 4200; perDayCap = 39000; }
+        var lines = [];
+        if(pax > 0){
+          lines.push({h:'Accommodation — outstation members', f:'₹500 × '+pax+' pax × '+p.matchDays+' days', a:500*pax*p.matchDays, s:'2-B'});
+        }
+        lines.push({h:'Food — match days (lunch + tea)', f:'₹350 × 40 pax × '+p.matchDays+' days', a:350*40*p.matchDays, s:'2-B'});
+        if(pax > 0){
+          lines.push({h:'Dinner — outstation only', f:'₹150 × '+pax+' pax × '+p.matchDays+' days', a:150*pax*p.matchDays, s:'2-B'});
+        }
+        if(miscDay > 0){
+          lines.push({h:'Miscellaneous expenses', f:'₹'+miscDay.toLocaleString('en-IN')+' × '+p.matchDays+' days', a:miscDay*p.matchDays, s:'2-B', n:'Covers ground rent (if non-MPCA ground), maintenance, selector/coach/manager fees within ceiling'});
+        }
+        if(p.visitTravel > 0){
+          lines.push({h:'Visiting team inter-city travel', f:'Estimate based on actuals (max 16 pax)', a:p.visitTravel, s:'2-B', n:'Submit photocopy of tickets'});
+        }
+        lines.push({h:'Umpire fees', f:'₹'+(700+ff)+' × '+p.umpires+' umpires × '+p.matchDays+' days', a:(700+ff)*p.umpires*p.matchDays, s:'2-B'});
+        lines.push({h:'Scorer fees', f:'₹'+(500+ff)+' × '+p.scorers+' scorers × '+p.matchDays+' days', a:(500+ff)*p.scorers*p.matchDays, s:'2-B'});
+        if(p.format === 'Multi-day'){
+          lines.push({h:'Man of the Match', f:'₹1,500 × '+p.numMatches+' matches', a:1500*p.numMatches, s:'2-B', n:'Only for multi-day matches'});
+        }
+        // Team prize
+        var openLike = (p.ageGroup === 'Open' || p.ageGroup === 'U-23');
+        var r1 = openLike ? 30000 : 20000;
+        var r2 = openLike ? 20000 : 15000;
+        lines.push({h:'Team prize — Rank 1', f:p.ageGroup+' '+(openLike?'(Open/U-23)':'(other age-group)')+' top District team', a:r1, s:'2-B', n:'Excludes Divisional HQ team'});
+        if(p.numDistricts >= 5){
+          lines.push({h:'Team prize — Rank 2', f:p.ageGroup+' Rank 2 (Division has ≥ 5 Districts)', a:r2, s:'2-B'});
+        }
+        // Per-day ceiling check
+        var subtotal = lines.reduce(function(s,l){ return s + (l.rev?0:l.a); }, 0);
+        var ceilingNote = '';
+        if(perDayCap > 0){
+          var allowed = perDayCap * p.matchDays;
+          ceilingNote = 'Per-day ceiling check: ₹'+perDayCap.toLocaleString('en-IN')+'/match-day × '+p.matchDays+' days = ₹'+allowed.toLocaleString('en-IN')+' (food + accommodation + dinner + misc + travel must fit within this; umpire/scorer/MOM/prize are additional).';
+        }
+        return {lines:lines, notes:[
+          ceilingNote,
+          'Players within 10 km of the venue do not get hotel/dinner — only daily journey cost.',
+          'Coach/manager/trainer fees absorbed within per-day ceiling — no separate slab.',
+          'Submit claim only on COMPLETION of the tournament with all scoresheets + original bills/receipts.'
+        ].filter(Boolean)};
+      }
+    },
+
+    'inter-div-hosting': {
+      label: 'Inter-Divisional Tournament — Hosting', ref: 'MPCA Scheme 2-D', party: 'CLAIM FROM MPCA',
+      fields: [
+        {id:'matchDays', label:'Match days', hlp:'Total match days the tournament runs at this venue', type:'number', def:4, min:1},
+        {id:'numMatches', label:'Number of matches at this venue', type:'number', def:1, min:1},
+        {id:'format', label:'Format', type:'select', opts:['Multi-day','Ltd-overs','T20'], def:'Multi-day'},
+        {id:'campDays', label:'Pre-tournament camp days (max 8)', type:'number', def:6, min:0, max:8},
+        {id:'visitingPax', label:'Visiting team strength (incl. coach/mgr/trainer)', type:'number', def:18, min:15, max:20},
+        {id:'earlyArrival', label:'Visiting team arrives 1 day before?', hlp:'Triggers the ₹630 day-before food package', type:'select', opts:['Yes','No'], def:'Yes'},
+        {id:'hostDistrictPlayers', label:'Host team players from district places', hlp:'Get hotel rooms at the same rate', type:'number', def:0, min:0, max:15},
+        {id:'umpires', label:'Umpires per match (incl. reserve)', type:'number', def:3, min:1, max:5},
+        {id:'observers', label:'Match observers / selectors', type:'number', def:1, min:0, max:4},
+        {id:'roomRate', label:'Room rate incl. tax (₹/night, double-occ)', hlp:'Min ₹1,800 + tax per scheme; reasonable variation allowed', type:'number', def:2000, min:1800},
+        {id:'localJourneys', label:'Local journeys (station/bus-stand transfers)', type:'number', def:2, min:0},
+        {id:'practiceDays', label:'Practice days at venue (between matches)', type:'number', def:1, min:0},
+        {id:'tournamentResult', label:'Tournament outcome (for team-prize)', type:'select', opts:['TBD / Not yet known','Winner','Runner-up','Other (no prize)'], def:'TBD / Not yet known'}
+      ],
+      calc: function(p){
+        var lines = [];
+        var totalDays = p.matchDays + (p.earlyArrival === 'Yes' ? 1 : 0);
+
+        // Accommodation — visiting team
+        var visRooms = Math.ceil(p.visitingPax / 2);
+        lines.push({h:'Accommodation — visiting team', f:'₹'+p.roomRate+' × '+visRooms+' rooms × '+totalDays+' nights'+(p.earlyArrival==='Yes'?' (incl. 1 pre-match night)':''), a:p.roomRate*visRooms*totalDays, s:'2-D', n:'Double occupancy; tariff variation allowed case-to-case'});
+
+        // Accommodation — host district players
+        if(p.hostDistrictPlayers > 0){
+          var hostRooms = Math.ceil(p.hostDistrictPlayers / 2);
+          lines.push({h:'Accommodation — host district players', f:'₹'+p.roomRate+' × '+hostRooms+' rooms × '+p.matchDays+' nights', a:p.roomRate*hostRooms*p.matchDays, s:'2-D'});
+        }
+
+        // Accommodation — umpires & observers (upgraded category implicit in rate)
+        var offCount = p.umpires + p.observers;
+        if(offCount > 0){
+          var offRooms = Math.ceil(offCount / 2);
+          lines.push({h:'Accommodation — umpires &amp; observers', f:'₹'+p.roomRate+' × '+offRooms+' rooms × '+p.matchDays+' nights', a:p.roomRate*offRooms*p.matchDays, s:'2-D', n:'Room category upgraded to suit occupant'});
+        }
+
+        // Ground rent + tent
+        lines.push({h:'Ground rent + match-day misc tent', f:'₹4,500 × '+p.matchDays+' match-days', a:4500*p.matchDays, s:'2-D', n:'Sight screen / tents extra at actual'});
+
+        // Food — day before
+        if(p.earlyArrival === 'Yes'){
+          lines.push({h:'Food day-before (B+L+Eve+D)', f:'₹630 × '+p.visitingPax+' pax × 1 day', a:630*p.visitingPax, s:'2-D'});
+        }
+        // Match-day food
+        var perDayFood = 100*50 + 20*50 + 80*50 + 300*60 + 300*p.visitingPax;
+        lines.push({h:'Match-day food (B+T+Eve+L+D)', f:'(₹100×50 + ₹20×50 + ₹80×50 + ₹300×60 + ₹300×'+p.visitingPax+') × '+p.matchDays+' days', a:perDayFood*p.matchDays, s:'2-D', n:'B/T/Eve/L pool 50–60 pax; dinner for visiting team only'});
+
+        // Coach
+        var coachAmt = 1500*p.matchDays + 1000*p.campDays;
+        lines.push({h:'Coach honorarium', f:'₹1,500 × '+p.matchDays+' match-days + ₹1,000 × '+p.campDays+' camp-days', a:coachAmt, s:'2-D', n:'Empanelled coach only; profile submitted in advance'});
+
+        // Trainer
+        var trainerAmt = 1000*p.matchDays + 750*p.campDays;
+        lines.push({h:'Trainer honorarium', f:'₹1,000 × '+p.matchDays+' match-days + ₹750 × '+p.campDays+' camp-days', a:trainerAmt, s:'2-D', n:'Empanelled trainer only'});
+
+        // Manager
+        lines.push({h:'Manager honorarium', f:'₹1,000 × '+p.matchDays+' match-days', a:1000*p.matchDays, s:'2-D', n:'Any camp role at Division\'s own cost'});
+
+        // MOM
+        var momPerMatch = (p.format === 'Multi-day') ? 5000 : 2500;
+        lines.push({h:'Man of the Match', f:'₹'+momPerMatch.toLocaleString('en-IN')+' × '+p.numMatches+' matches ('+p.format+')', a:momPerMatch*p.numMatches, s:'2-D', n:'Paid in cash; photo to MPCA on priority'});
+
+        // Local conveyance
+        lines.push({h:'Local conveyance — ground use', f:'₹1,500 × '+(p.matchDays + p.practiceDays)+' days (match + practice)', a:1500*(p.matchDays+p.practiceDays), s:'2-D'});
+        if(p.localJourneys > 0){
+          lines.push({h:'Local conveyance — station/bus-stand transfers', f:'₹1,500 × '+p.localJourneys+' journeys', a:1500*p.localJourneys, s:'2-D'});
+        }
+
+        // Match balls — in kind
+        lines.push({h:'Match balls', f:'Provided by MPCA in kind', a:0, s:'2-D', n:'Written request 8 days in advance · NO cash claim'});
+
+        // Team prize
+        if(p.tournamentResult === 'Winner'){
+          var prizeW = (p.format === 'Multi-day') ? 300000 : 150000;
+          var divW = (p.format === 'Multi-day') ? 75000 : 40000;
+          lines.push({h:'Team prize — WINNER', f:p.format+' Winner: Players+Staff pool ₹'+prizeW.toLocaleString('en-IN')+' + Division share ₹'+divW.toLocaleString('en-IN'), a:prizeW+divW, s:'2-D', n:'Distribution: Playing XI 75% (pro-rata), Non-playing 15%, Coach 4%, Other 6%'});
+        } else if(p.tournamentResult === 'Runner-up'){
+          var prizeR = (p.format === 'Multi-day') ? 150000 : 75000;
+          var divR = (p.format === 'Multi-day') ? 35000 : 20000;
+          lines.push({h:'Team prize — RUNNER-UP', f:p.format+' Runner-up: Players+Staff pool ₹'+prizeR.toLocaleString('en-IN')+' + Division share ₹'+divR.toLocaleString('en-IN'), a:prizeR+divR, s:'2-D'});
+        } else if(p.tournamentResult === 'TBD / Not yet known'){
+          lines.push({h:'Team prize — TBD', f:'Depends on tournament result (Winner / Runner-up / no prize)', a:0, s:'2-D', n:'Paid centrally by MPCA on conclusion'});
+        }
+
+        return {lines:lines, notes:[
+          'Refreshments on practice days between matches admissible on reasonable basis.',
+          'Summer extras (lemon water, chaach, salt, ice/cooler) and night ground-staff food allowed reasonably.',
+          'Coach &amp; trainer profiles must be submitted to MPCA in advance.',
+          'Hon. Secretary\'s endorsement required on all claim documents.',
+          'Office Bearers may allow minor variation in pax / charges at their discretion.'
+        ]};
+      }
+    },
+
+    'inter-div-travel': {
+      label: 'Inter-Divisional Tournament — Travel', ref: 'MPCA Scheme 2-C', party: 'CLAIM FROM MPCA',
+      fields: [
+        {id:'pax', label:'Team strength (15 players + coach + mgr + trainer)', type:'number', def:18, min:15, max:20},
+        {id:'oneWayRailFare', label:'III-tier AC rail fare per pax (one-way, ₹)', hlp:'Estimate based on actual fare', type:'number', def:1500, min:0},
+        {id:'altMode', label:'Alternate mode used (rail unavailable)?', type:'select', opts:['No','Yes — with prior MPCA approval'], def:'No'},
+        {id:'altModeFare', label:'If alternate mode: total one-way fare (₹, all pax)', type:'number', def:0, min:0},
+        {id:'joiningPlayers', label:'Players joining from Districts (District-HQ → Div-HQ)', type:'number', def:0, min:0},
+        {id:'joiningFarePerPax', label:'Joining travel per pax (bus / ordinary rail, ₹)', type:'number', def:300, min:0},
+        {id:'medicalEst', label:'Reasonable medical during tour — estimate (₹)', type:'number', def:0, min:0},
+        {id:'tatkalCharge', label:'Tatkal / cancellation charges (₹)', hlp:'Allowed case-to-case', type:'number', def:0, min:0}
+      ],
+      calc: function(p){
+        var lines = [];
+        // Main rail travel
+        if(p.altMode === 'No'){
+          var railTotal = p.oneWayRailFare * p.pax * 2;
+          lines.push({h:'Inter-city travel — III-tier AC rail (to &amp; fro)', f:'₹'+p.oneWayRailFare.toLocaleString('en-IN')+' × '+p.pax+' pax × 2 ways', a:railTotal, s:'2-C', n:'Coach &amp; trainer must be MPCA-empanelled'});
+        } else {
+          var altTotal = p.altModeFare * 2;
+          lines.push({h:'Inter-city travel — alternate mode (to &amp; fro)', f:'₹'+p.altModeFare.toLocaleString('en-IN')+' × 2 ways', a:altTotal, s:'2-C', n:'Requires PRIOR approval from MPCA'});
+        }
+
+        // Misc journey expense
+        lines.push({h:'Misc. journey expense', f:'₹2,500 × 2 one-way journeys', a:5000, s:'2-C', n:'₹2,500 per one-way; covers refreshments en-route'});
+
+        // Joining players
+        if(p.joiningPlayers > 0){
+          lines.push({h:'District-HQ → Division-HQ joining travel', f:'₹'+p.joiningFarePerPax+' × '+p.joiningPlayers+' players × 2 ways', a:p.joiningFarePerPax*p.joiningPlayers*2, s:'2-C', n:'Only for players actually joining the team — not for camp-only players'});
+        }
+
+        // Medical
+        if(p.medicalEst > 0){
+          lines.push({h:'Reasonable medical during tour', f:'Estimate at actual', a:p.medicalEst, s:'2-C'});
+        }
+
+        // Tatkal
+        if(p.tatkalCharge > 0){
+          lines.push({h:'Tatkal / cancellation charges', f:'On actual', a:p.tatkalCharge, s:'2-C', n:'Allowed on merits of the circumstance'});
+        }
+
+        return {lines:lines, notes:[
+          'Submit claim only on COMPLETION of the tournament.',
+          'Claim statement must show match dates, journey dates, team strength, mode &amp; category of journey.',
+          'Photocopy of tickets must be attached.',
+          'Out-of-MP senior guest player travel/lodging/boarding is NOT reimbursed.',
+          'Accommodation, food, local conveyance at venue, umpire/scorer fees etc. are borne by the HOST Division — not claimable here.'
+        ]};
+      }
+    },
+
+    'inter-club': {
+      label: 'Inter-Club ‘A’ Grade Tournament', ref: 'MPCA Scheme 2-E', party: 'CLAIM FROM MPCA',
+      fields: [
+        {id:'clubs', label:'Number of clubs participating', hlp:'Max 10–12 ‘A’-grade clubs', type:'number', def:8, min:2, max:12},
+        {id:'outstationClubs', label:'Outstation clubs', type:'number', def:2, min:0},
+        {id:'matchDays', label:'Total match days', type:'number', def:14, min:2},
+        {id:'numMatches', label:'Number of matches', type:'number', def:7, min:1},
+        {id:'umpires', label:'Umpires per match', type:'number', def:2, min:1, max:3},
+        {id:'scorers', label:'Scorers per match', type:'number', def:1, min:1, max:2},
+        {id:'far', label:'Ground far from city?', type:'select', opts:['No','Yes'], def:'No'},
+        {id:'roomRateClub', label:'Room rate incl. tax (₹/night, triple sharing)', hlp:'Min ₹1,500 + tax per scheme', type:'number', def:1700, min:1500},
+        {id:'travelPerClub', label:'Inter-city travel per outstation club (₹)', hlp:'SL rail / ordinary bus × 16 players', type:'number', def:8000, min:0},
+        {id:'stayNightsPerOutstation', label:'Stay nights per outstation club', type:'number', def:3, min:1}
+      ],
+      calc: function(p){
+        var ff = p.far === 'Yes' ? 100 : 0;
+        var lines = [];
+
+        // Accommodation
+        if(p.outstationClubs > 0){
+          var rooms = Math.ceil(16 / 3); // 16 players, triple sharing
+          var accAmt = p.roomRateClub * rooms * p.stayNightsPerOutstation * p.outstationClubs;
+          lines.push({h:'Accommodation — outstation clubs', f:'₹'+p.roomRateClub+' × '+rooms+' rooms × '+p.stayNightsPerOutstation+' nights × '+p.outstationClubs+' clubs (triple)', a:accAmt, s:'2-E', n:'Local clubs: no accommodation'});
+        }
+
+        // Food
+        if(p.outstationClubs > 0){
+          var foodAmt = 500 * 16 * p.stayNightsPerOutstation * p.outstationClubs;
+          lines.push({h:'Food — outstation clubs', f:'₹500 × 16 members × '+p.stayNightsPerOutstation+' days × '+p.outstationClubs+' clubs', a:foodAmt, s:'2-E', n:'Local clubs: no food'});
+        }
+
+        // Travel
+        if(p.outstationClubs > 0 && p.travelPerClub > 0){
+          lines.push({h:'Inter-city travel — outstation clubs (to &amp; fro)', f:'₹'+p.travelPerClub.toLocaleString('en-IN')+' × '+p.outstationClubs+' clubs', a:p.travelPerClub*p.outstationClubs, s:'2-E'});
+        }
+
+        // Umpire fees
+        lines.push({h:'Umpire fees', f:'₹'+(700+ff)+' × '+p.umpires+' umpires × '+p.matchDays+' days', a:(700+ff)*p.umpires*p.matchDays, s:'2-E'});
+
+        // Scorer fees
+        lines.push({h:'Scorer fees', f:'₹'+(500+ff)+' × '+p.scorers+' scorers × '+p.matchDays+' days', a:(500+ff)*p.scorers*p.matchDays, s:'2-E'});
+
+        // Prizes
+        lines.push({h:'Winner prize', f:'Bank transfer to club a/c only', a:50000, s:'2-E', n:'Subject to TDS · forfeited if not claimed within 6 months'});
+        lines.push({h:'Runner-up prize', f:'Bank transfer to club a/c only', a:30000, s:'2-E', n:'Subject to TDS · forfeited if not claimed within 6 months'});
+
+        return {lines:lines, notes:[
+          'Only competitive ‘A’-grade clubs participate (10-point ranking guideline in scheme).',
+          '2-day matches ONLY; no one-day; no league-cum-knockout.',
+          'Local conveyance is the club\'s OWN responsibility — not reimbursed by MPCA even for outstation clubs.',
+          'Coach / trainer / manager: not sanctioned under this scheme.',
+          'Scores of all matches to be provided to MPCA.',
+          'Prize money paid by bank transfer ONLY to the club\'s account — not to coaches/players/office-bearers, and not in kind.'
+        ]};
+      }
+    },
+
+    'reciprocal': {
+      label: 'Reciprocal Matches Between Divisions', ref: 'MPCA Scheme 3-C', party: 'CLAIM FROM MPCA',
+      fields: [
+        {id:'totalDays', label:'Total days (camp + match)', hlp:'Must be ≤ 8', type:'number', def:6, min:1, max:8},
+        {id:'matchDays', label:'Match days within total', type:'number', def:4, min:1},
+        {id:'campDays', label:'Camp days within total', type:'number', def:2, min:0},
+        {id:'umpires', label:'Umpires per match', type:'number', def:2, min:1},
+        {id:'scorers', label:'Scorers per match', type:'number', def:1, min:1},
+        {id:'far', label:'Ground far from city?', type:'select', opts:['No','Yes'], def:'No'},
+        {id:'sharedWith', label:'Expense-share basis', hlp:'Both Divisions share total expenses', type:'select', opts:['50/50 split','Full claim (host)','Custom'], def:'50/50 split'},
+        {id:'customShare', label:'If Custom: this Division\'s share %', type:'number', def:50, min:0, max:100}
+      ],
+      calc: function(p){
+        var ff = p.far === 'Yes' ? 100 : 0;
+        var lines = [];
+
+        // Per match-day subsidy
+        var subTotal = 11000 * p.matchDays;
+        lines.push({h:'Per match-day subsidy (max ceiling)', f:'₹11,000 × '+p.matchDays+' match-days', a:subTotal, s:'3-C', n:'Subject to actuals on reasonable basis · covers accommodation/food/local etc.'});
+
+        // Coach
+        lines.push({h:'Coach honorarium', f:'₹1,000 × '+p.campDays+' camp-days', a:1000*p.campDays, s:'3-C', n:'Empanelled coach only'});
+
+        // Trainer
+        lines.push({h:'Trainer honorarium', f:'₹750 × '+p.campDays+' camp-days', a:750*p.campDays, s:'3-C'});
+
+        // Umpire & scorer
+        lines.push({h:'Umpire fees', f:'₹'+(700+ff)+' × '+p.umpires+' umpires × '+p.matchDays+' days', a:(700+ff)*p.umpires*p.matchDays, s:'3-C'});
+        lines.push({h:'Scorer fees', f:'₹'+(500+ff)+' × '+p.scorers+' scorers × '+p.matchDays+' days', a:(500+ff)*p.scorers*p.matchDays, s:'3-C'});
+
+        // Apply share
+        var sharePct = 50;
+        if(p.sharedWith === 'Full claim (host)') sharePct = 100;
+        else if(p.sharedWith === 'Custom') sharePct = p.customShare;
+        if(sharePct !== 100){
+          var rawTotal = lines.reduce(function(s,l){ return s+l.a; }, 0);
+          var thisDivClaim = rawTotal * sharePct / 100;
+          lines.push({h:'Share adjustment ('+sharePct+'% of total)', f:'Total ₹'+rawTotal.toLocaleString('en-IN')+' × '+sharePct+'% = this Division\'s share', a:thisDivClaim - rawTotal, s:'3-C', n:'Both Divisions share expenses; other Division claims its share separately', rev:true});
+        }
+
+        return {lines:lines, notes:[
+          'Camp + match days must NOT exceed 8 days in total.',
+          'Both Divisions share total expenses; MPCA must be informed in advance.',
+          'Division should issue a media release (news + photos) covering the endeavour and MPCA\'s support.',
+          'Submit claim form + attested photocopy of scoresheets + original bills/vouchers.'
+        ]};
+      }
+    },
+
+    'pre-tournament-camp': {
+      label: 'Pre-Tournament Camp for Divisional Team', ref: 'MPCA Scheme 3-D', party: 'CLAIM FROM MPCA',
+      fields: [
+        {id:'campDays', label:'Camp days (max 8)', hlp:'Including reporting &amp; departure days', type:'number', def:8, min:1, max:8},
+        {id:'players', label:'Players in camp (18–20)', type:'number', def:18, min:15, max:20},
+        {id:'outstationPlayers', label:'Outstation players (typically 7–8)', type:'number', def:8, min:0, max:20},
+        {id:'medicalEst', label:'Medical — estimate (₹)', type:'number', def:0, min:0}
+      ],
+      calc: function(p){
+        var lines = [];
+
+        // Max daily subsidy
+        var subsidy = 11000 * p.campDays;
+        lines.push({h:'Max daily subsidy (cap)', f:'₹11,000 × '+p.campDays+' camp days', a:subsidy, s:'3-D', n:'Covers accommodation, food, local conveyance etc. Subject to relevant documents.'});
+
+        // Adjustment if more outstation
+        if(p.outstationPlayers > 0){
+          var accomFloor = 500 * p.outstationPlayers * p.campDays + 500 * p.players * p.campDays;
+          if(accomFloor > subsidy){
+            lines.push({h:'Higher-outstation adjustment', f:'Accommodation (₹500 × '+p.outstationPlayers+' outstation) + Boarding (₹500 × '+p.players+' players) × '+p.campDays+' days = ₹'+accomFloor.toLocaleString('en-IN'), a:accomFloor - subsidy, s:'3-D', n:'If Division has more district players, subsidy adjusted on this basis (overrides ₹11,000/day cap)'});
+          }
+        }
+
+        // Coach
+        lines.push({h:'Coach honorarium', f:'₹1,000 × '+p.campDays+' camp-days', a:1000*p.campDays, s:'3-D', n:'From MPCA-empanelled list only'});
+
+        // Trainer
+        lines.push({h:'Trainer honorarium', f:'₹750 × '+p.campDays+' camp-days', a:750*p.campDays, s:'3-D'});
+
+        // Match balls
+        lines.push({h:'Match balls', f:'Provided by MPCA for the camp', a:0, s:'3-D'});
+
+        // Medical
+        if(p.medicalEst > 0){
+          lines.push({h:'Medical (at actual)', f:'Estimate', a:p.medicalEst, s:'3-D'});
+        }
+
+        return {lines:lines, notes:[
+          'Camp duration includes the day of reporting AND departure — no claim for one day before/after.',
+          'Separate camps allowed for League &amp; Knock-out if there is a large gap between the two.',
+          'If tournament is postponed within 8–10 days and camp is already scheduled, additional camp days allowed case-to-case.'
+        ]};
+      }
+    },
+
+    'periodical-camp': {
+      label: 'Periodical Coaching Camp for District Players', ref: 'MPCA Scheme 3-A', party: 'CLAIM FROM MPCA',
+      fields: [
+        {id:'campDays', label:'Camp days (typically 14)', type:'number', def:14, min:1},
+        {id:'players', label:'Number of players', type:'number', def:25, min:5},
+        {id:'outstationPlayers', label:'Outstation players', type:'number', def:15, min:0},
+        {id:'travelEst', label:'Travel — total estimate (₹)', hlp:'Actual ordinary bus / SL rail fare', type:'number', def:8000, min:0}
+      ],
+      calc: function(p){
+        var lines = [];
+
+        // Accommodation (outstation only)
+        if(p.outstationPlayers > 0){
+          lines.push({h:'Accommodation', f:'₹500 × '+p.outstationPlayers+' outstation players × '+p.campDays+' days', a:500*p.outstationPlayers*p.campDays, s:'3-A', n:'Triple occupancy only'});
+        }
+
+        // Food
+        lines.push({h:'Food', f:'₹500 × '+p.players+' players × '+p.campDays+' days', a:500*p.players*p.campDays, s:'3-A'});
+
+        // Travel
+        if(p.travelEst > 0){
+          lines.push({h:'Travel', f:'Actual bus / SL rail fare', a:p.travelEst, s:'3-A'});
+        }
+
+        // Daily conveyance
+        lines.push({h:'Daily conveyance', f:'₹50 × '+p.players+' players × '+p.campDays+' activity days', a:50*p.players*p.campDays, s:'3-A'});
+
+        // Misc
+        lines.push({h:'Misc expenses', f:'Up to ₹15,000 per camp', a:15000, s:'3-A'});
+
+        // Balls
+        lines.push({h:'Match balls', f:'Provided by MPCA', a:0, s:'3-A'});
+
+        return {lines:lines, notes:[
+          'Two groups: up to 18 years AND elder players.',
+          'Daily 2 sessions with one weekly off (MPCA academy model).',
+          'NOT applicable for Divisional pre-tournament camps (use Scheme 3-D instead).',
+          'Inform MPCA in advance: number of players, native places, duration.',
+          'Division should issue a media release covering the camp and MPCA\'s support.'
+        ]};
+      }
+    },
+
+    'vacation-camp': {
+      label: 'Vacation Camp', ref: 'MPCA Scheme 3-B', party: 'CLAIM FROM MPCA',
+      fields: [
+        {id:'campDays', label:'Camp days (typically 14–21)', type:'number', def:18, min:1},
+        {id:'players', label:'Total players', type:'number', def:30, min:5},
+        {id:'outstationPlayers', label:'Outstation players', type:'number', def:10, min:0},
+        {id:'localPlayers', label:'Local players (for refreshment)', type:'number', def:20, min:0},
+        {id:'travelEst', label:'Travel — total estimate (₹)', type:'number', def:5000, min:0}
+      ],
+      calc: function(p){
+        var lines = [];
+
+        if(p.outstationPlayers > 0){
+          lines.push({h:'Accommodation (outstation)', f:'₹500 × '+p.outstationPlayers+' × '+p.campDays+' days', a:500*p.outstationPlayers*p.campDays, s:'3-B', n:'Triple occupancy'});
+          lines.push({h:'Food (outstation)', f:'₹500 × '+p.outstationPlayers+' × '+p.campDays+' days', a:500*p.outstationPlayers*p.campDays, s:'3-B'});
+        }
+
+        if(p.travelEst > 0){
+          lines.push({h:'Inter-city travel', f:'Actual ordinary bus / SL rail', a:p.travelEst, s:'3-B'});
+        }
+
+        if(p.outstationPlayers > 0){
+          lines.push({h:'Local conveyance (outstation)', f:'₹50 × '+p.outstationPlayers+' × '+p.campDays+' days', a:50*p.outstationPlayers*p.campDays, s:'3-B'});
+        }
+
+        if(p.localPlayers > 0){
+          lines.push({h:'Refreshment (local players)', f:'₹50 × '+p.localPlayers+' × '+p.campDays+' days', a:50*p.localPlayers*p.campDays, s:'3-B'});
+        }
+
+        lines.push({h:'Kit &amp; misc', f:'₹15,000 per camp', a:15000, s:'3-B'});
+        lines.push({h:'Match balls', f:'Provided by MPCA on request', a:0, s:'3-B'});
+
+        return {lines:lines, notes:[
+          'Two groups: up to 18 years AND elder players.',
+          'MUST submit Divisional Secretary\'s undertaking that NO fee is charged from players.',
+          'Daily 2 sessions with one weekly off.'
+        ]};
+      }
+    },
+
+    'bcci-hosting': {
+      label: 'BCCI Tournament — Hosting', ref: 'BCCI Staging Guidelines · Section 9', party: 'RECEIVABLE FROM BCCI',
+      fields: [
+        {id:'format', label:'BCCI tournament format', type:'select', opts:['Multi-day RED-ball','Limited-overs WHITE-ball (50 overs / T20)','Limited-overs UNDER LIGHTS'], def:'Multi-day RED-ball'},
+        {id:'matchDays', label:'Match days (multi-day) OR number of matches (ltd-overs)', hlp:'Multi-day: enter match-days; Ltd-overs: enter matches count', type:'number', def:4, min:1},
+        {id:'estOpsExp', label:'Estimated operational expenses (₹)', hlp:'Catering, security, transport, hotel facilitation etc. (these are NOT itemised by BCCI — actuals)', type:'number', def:0, min:0}
+      ],
+      calc: function(p){
+        var lines = [];
+
+        var rate = 0, unit = '';
+        if(p.format === 'Multi-day RED-ball'){ rate = 175000; unit = 'match-day'; }
+        else if(p.format === 'Limited-overs WHITE-ball (50 overs / T20)'){ rate = 350000; unit = 'match'; }
+        else { rate = 450000; unit = 'match'; }
+
+        lines.push({h:'Hosting fees from BCCI', f:'₹'+rate.toLocaleString('en-IN')+' × '+p.matchDays+' '+unit+'s', a:rate*p.matchDays, s:'G-1', n:p.format});
+
+        if(p.estOpsExp > 0){
+          lines.push({h:'Estimated operational expenses (offset)', f:'Catering / security / transport / hotel facilitation etc.', a:-p.estOpsExp, s:'G-1', n:'Borne by Host out of hosting fees', rev:true});
+        }
+
+        return {lines:lines, notes:[
+          'Net receivable = Hosting Fees − Operational Expenses (the latter is what the Host actually spends).',
+          'Match balls are sent by BCCI to the Host Association (no procurement by Host).',
+          'BCCI also dispatches Winner / Runner-up medals before the Final match.',
+          'Match Officials\' hotel invoices are borne directly by BCCI.',
+          'Host must comply with all 23 BCCI staging guidelines in Section 9 of this document.'
+        ]};
+      }
+    },
+
+    'bcci-participation': {
+      label: 'BCCI Tournament — Participation', ref: 'BCCI Staging Guidelines · Section 9', party: 'RECEIVABLE FROM BCCI',
+      fields: [
+        {id:'format', label:'BCCI tournament format', type:'select', opts:['Multi-day RED-ball','Limited-overs WHITE-ball (50 overs / T20)'], def:'Multi-day RED-ball'},
+        {id:'numMatches', label:'Number of matches participated', type:'number', def:8, min:1}
+      ],
+      calc: function(p){
+        var rate = (p.format === 'Multi-day RED-ball') ? 125000 : 75000;
+        var lines = [];
+        lines.push({h:'Participation subsidy from BCCI', f:'₹'+rate.toLocaleString('en-IN')+' × '+p.numMatches+' matches', a:rate*p.numMatches, s:'G-1', n:p.format});
+        return {lines:lines, notes:[
+          'Subsidy paid by BCCI to the participating State Association (MPCA).',
+          'Travelling Squad: max 15 players + 10 support staff (PMOA limit).',
+          'Match fees: Playing XI get 100%, remaining 4 get 50%. Team-India deputee gets fee over &amp; above 15.',
+          'State Association bears its travelling squad\'s billing; Match Officials billed to BCCI.'
+        ]};
+      }
+    }
+
+  };
+
+  // --- Render the dynamic form fields for the selected tournament ---
+  function renderTourForm(){
+    var t = document.getElementById('tourSelect').value;
+    var container = document.getElementById('tourFields');
+    container.innerHTML = '';
+    if(!t || !SCHEMES[t]) return;
+    var scheme = SCHEMES[t];
+
+    // Header strip showing scheme reference
+    var header = document.createElement('div');
+    header.style.cssText = 'background:var(--green-soft);border:1px solid var(--green);border-radius:5px;padding:9px 12px;margin:8px 0 14px;font-size:12px;color:var(--green-dark);';
+    header.innerHTML = '<b>Selected:</b> '+scheme.label+' &nbsp;·&nbsp; <b>Reference:</b> '+scheme.ref+' &nbsp;·&nbsp; <b>Type:</b> '+scheme.party;
+    container.appendChild(header);
+
+    scheme.fields.forEach(function(f){
+      var row = document.createElement('div');
+      row.className = 'calc-row';
+      var lbl = document.createElement('label');
+      lbl.innerHTML = f.label + (f.hlp ? '<span class="hlp">'+f.hlp+'</span>' : '');
+      row.appendChild(lbl);
+
+      var inp;
+      if(f.type === 'select'){
+        inp = document.createElement('select');
+        f.opts.forEach(function(o){
+          var opt = document.createElement('option');
+          opt.value = o; opt.textContent = o;
+          if(o === f.def) opt.selected = true;
+          inp.appendChild(opt);
+        });
+      } else {
+        inp = document.createElement('input');
+        inp.type = f.type;
+        inp.value = f.def !== undefined ? f.def : '';
+        if(f.min !== undefined) inp.min = f.min;
+        if(f.max !== undefined) inp.max = f.max;
+      }
+      inp.id = 'fld_'+f.id;
+      row.appendChild(inp);
+      container.appendChild(row);
+    });
+  }
+
+  // --- Gather form values into a plain object ---
+  function readFormValues(scheme){
+    var p = {};
+    scheme.fields.forEach(function(f){
+      var el = document.getElementById('fld_'+f.id);
+      if(!el) return;
+      p[f.id] = f.type === 'number' ? (Number(el.value) || 0) : el.value;
+    });
+    return p;
+  }
+
+  // --- Calculate & render the budget ---
+  window.__schemeSubtotal = 0;
+
+  function calculateBudget(){
+    var t = document.getElementById('tourSelect').value;
+    if(!t || !SCHEMES[t]){ alert('Please select a tournament first.'); return; }
+    var scheme = SCHEMES[t];
+    var p = readFormValues(scheme);
+    var result = scheme.calc(p);
+    renderBudget(scheme, result, p);
+    updateGrandTotal();
+  }
+
+  function renderBudget(scheme, result, params){
+    var container = document.getElementById('calc-output');
+    var total = 0;
+    var rowsHTML = result.lines.map(function(l){
+      total += l.a;
+      var noteHTML = l.n ? '<br><i>'+l.n+'</i>' : '';
+      return '<tr'+(l.rev?' class="revenue"':'')+'>'+
+        '<td class="head-col">'+l.h+'</td>'+
+        '<td class="formula-col">'+l.f+noteHTML+'</td>'+
+        '<td class="scheme-col">'+(l.s||'')+'</td>'+
+        '<td class="amt-col">'+fmt(l.a)+'</td>'+
+        '</tr>';
+    }).join('');
+    var notesHTML = (result.notes && result.notes.length) ? '<div class="budget-notes"><b>Notes &amp; conditions:</b><ul>'+result.notes.map(function(n){return '<li>'+n+'</li>';}).join('')+'</ul></div>' : '';
+
+    container.innerHTML =
+      '<div class="calc-card" id="budgetCard">'+
+      '<h3>Computed Budget — '+scheme.label+' <span style="background:'+(scheme.party.indexOf('BCCI')>=0?'#a0522d':'var(--green)')+';color:#fff;font-size:10px;padding:3px 9px;border-radius:3px;text-transform:uppercase;letter-spacing:.4px;font-family:Inter;font-weight:700;">'+scheme.party+'</span><span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto;">'+scheme.ref+'</span></h3>'+
+      '<table class="budget-table"><thead><tr><th style="width:24%;">Head</th><th style="width:46%;">Calculation</th><th style="width:10%;">Ref</th><th style="width:20%;text-align:right;">Max Amount (₹)</th></tr></thead>'+
+      '<tbody>'+rowsHTML+'</tbody>'+
+      '<tfoot><tr><td colspan="3" style="text-align:right;">Subtotal — Scheme Heads</td><td class="amt-col">'+fmt(total)+'</td></tr></tfoot>'+
+      '</table>'+notesHTML+'</div>';
+
+    window.__schemeSubtotal = total;
+  }
+
+  // --- Ad-hoc expenses ---
+  function addAdhocRow(){
+    var tbody = document.getElementById('adhocBody');
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="text" placeholder="e.g., Special PA system hire"></td>'+
+      '<td><input type="number" class="adhoc-amt" placeholder="0" min="0" step="any" oninput="updateGrandTotal()"></td>'+
+      '<td><input type="text" placeholder="Reason / why outside scheme"></td>'+
+      '<td><select><option>Pending approval</option><option>Approved</option><option>Conditional</option><option>Rejected</option></select></td>'+
+      '<td><button class="del-adhoc" onclick="this.closest(\'tr\').remove();updateGrandTotal();" title="Remove row">✕</button></td>';
+    tbody.appendChild(tr);
+    updateGrandTotal();
+  }
+
+  function updateGrandTotal(){
+    var adhocTotal = 0;
+    document.querySelectorAll('.adhoc-amt').forEach(function(i){ adhocTotal += Number(i.value) || 0; });
+    var schemeTotal = window.__schemeSubtotal || 0;
+    var grand = schemeTotal + adhocTotal;
+    var container = document.getElementById('grand-total');
+    container.innerHTML =
+      '<div class="budget-summary">'+
+      '<div class="srow"><span class="lbl">Scheme heads subtotal:</span><span class="val">'+fmt(schemeTotal)+'</span></div>'+
+      '<div class="srow"><span class="lbl">Ad-hoc expenses (pending MPCA approval):</span><span class="val" style="color:var(--gold-soft);">'+fmt(adhocTotal)+'</span></div>'+
+      '<div class="srow grand"><span class="lbl">Grand Total</span><span class="val">'+fmt(grand)+'</span></div>'+
+      '</div>';
+  }
+
+  function resetCalc(){
+    if(!confirm('Reset the calculator? All entered values and ad-hoc rows will be cleared.')) return;
+    document.getElementById('tourSelect').value = '';
+    document.getElementById('tourFields').innerHTML = '';
+    document.getElementById('calc-output').innerHTML = '';
+    document.getElementById('adhocBody').innerHTML = '';
+    document.getElementById('grand-total').innerHTML = '';
+    window.__schemeSubtotal = 0;
+  }
+
+  // --- Download the budget as a self-contained HTML sheet ---
+  function downloadBudget(){
+    var t = document.getElementById('tourSelect').value;
+    if(!t || !SCHEMES[t]){ alert('Please calculate a budget first.'); return; }
+    var scheme = SCHEMES[t];
+    var p = readFormValues(scheme);
+
+    var inputsRows = scheme.fields.map(function(f){ return '<tr><td>'+f.label+'</td><td><b>'+p[f.id]+'</b></td></tr>'; }).join('');
+
+    var calcOutput = document.getElementById('calc-output').innerHTML;
+    var adhocRows = '';
+    document.querySelectorAll('#adhocBody tr').forEach(function(tr){
+      var inputs = tr.querySelectorAll('input, select');
+      adhocRows += '<tr><td>'+(inputs[0]?inputs[0].value||'—':'')+'</td><td style="text-align:right;font-weight:700;">'+fmt(Number(inputs[1]?inputs[1].value:0))+'</td><td>'+(inputs[2]?inputs[2].value||'—':'')+'</td><td>'+(inputs[3]?inputs[3].value||'Pending':'')+'</td></tr>';
+    });
+    var adhocHTML = adhocRows ? '<h2 style="font-family:Libre Baskerville,serif;color:#8b4513;font-size:16px;margin-top:24px;">Ad-hoc Expenses <small style="font-size:10.5px;color:#fff;background:#a0522d;padding:2px 8px;border-radius:3px;letter-spacing:.4px;text-transform:uppercase;font-weight:700;">Requires special MPCA approval</small></h2><table class="subtable"><thead><tr><th>Head</th><th style="text-align:right;">Amount</th><th>Reason</th><th>Status</th></tr></thead><tbody>'+adhocRows+'</tbody></table>' : '';
+
+    var grandTotalHTML = document.getElementById('grand-total').innerHTML;
+    var styleBlock = document.querySelector('style').innerHTML;
+
+    var html = '<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'+
+      '<title>Budget — '+scheme.label+'</title>'+
+      '<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">'+
+      '<style>'+styleBlock+' body{padding:24px;}.wrap{max-width:900px;margin:0 auto;}h1{font-family:Libre Baskerville,serif;color:var(--green);font-size:24px;margin:0 0 4px;}h2{font-family:Libre Baskerville,serif;color:var(--green-dark);font-size:16px;margin-top:24px;}</style>'+
+      '</head><body><div class="wrap">'+
+      '<h1>'+scheme.label+' — Budget Estimate</h1>'+
+      '<p style="color:var(--muted);font-size:12.5px;margin:0 0 14px;">Reference: '+scheme.ref+' &nbsp;·&nbsp; Type: '+scheme.party+' &nbsp;·&nbsp; Generated: '+new Date().toLocaleString('en-IN')+'</p>'+
+      '<h2>Input Parameters</h2>'+
+      '<table class="subtable" style="width:auto;min-width:60%;"><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>'+inputsRows+'</tbody></table>'+
+      '<h2>Computed Budget</h2>'+
+      calcOutput+
+      adhocHTML+
+      '<h2>Summary</h2>'+
+      grandTotalHTML+
+      '<p style="font-size:11px;color:var(--muted);margin-top:30px;border-top:1px solid var(--line);padding-top:12px;">This budget sheet is generated by the MPCA Master Document utility. Maximum amounts shown are as per the indicated MPCA scheme / BCCI guideline. Actual claim/receivable is subject to scheme conditions, document submission, and approval. Ad-hoc expenses, if any, require special MPCA approval before payment.</p>'+
+      '</div></body></html>';
+
+    var blob = new Blob([html], {type:'text/html'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'MPCA_Budget_'+t+'_'+new Date().toISOString().slice(0,10)+'.html';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }
+
+  function printBudget(){
+    var t = document.getElementById('tourSelect').value;
+    if(!t){ alert('Please calculate a budget first.'); return; }
+    // Scroll the budget into view and trigger print
+    document.getElementById('budgetCard').scrollIntoView({behavior:'smooth'});
+    setTimeout(function(){ window.print(); }, 400);
+  }
+
+  // --- Back-to-top button visibility ---
+  window.addEventListener('scroll', function(){
+    var b = document.getElementById('backtop');
+    if(window.scrollY > 600) b.classList.add('visible'); else b.classList.remove('visible');
+  });
+
+</script>
+
+</body>
+</html>

@@ -60,7 +60,11 @@ const MemberBulkUploadModal = ({ open, onClose, onDone }) => {
                     <h2 className="font-serif text-3xl text-mpca-green-dark mt-2">Upload Members via CSV</h2>
                     <p className="text-mpca-gray-dark text-sm mt-2">
                         Upload a CSV file to enrol multiple members at once. Required columns:{" "}
-                        <code className="font-mono text-xs text-mpca-oxblood">name, category, address</code>. All other columns are optional.
+                        <code className="font-mono text-xs text-mpca-oxblood">name, category, address</code>.
+                        For <code className="font-mono text-xs text-mpca-oxblood">member_type=Division</code> rows,
+                        also provide <code className="font-mono text-xs text-mpca-oxblood">division</code> +
+                        <code className="font-mono text-xs text-mpca-oxblood"> district</code> (plain names accepted,
+                        e.g. "Indore", "Katni").
                     </p>
                 </div>
 

@@ -332,8 +332,8 @@ _CSV_ALIAS = {
     "contact": "phone",
     "type": "member_type",
     "membership_type": "member_type",
-    "division": "division_body_id",
     "division_id": "division_body_id",
+    "district_id": "body_id",
     "designation": "role",
     "post": "role",
     "member_id": "membership_id",
@@ -361,6 +361,40 @@ def _clean_val(v):
     return v if v else None
 
 
+def _norm_name(s: str) -> str:
+    """Fold to lowercase alphanumerics only — for fuzzy body name matching."""
+    if not s:
+        return ""
+    return "".join(ch for ch in s.lower() if ch.isalnum())
+
+
+async def _build_body_resolver():
+    """Fetch all bodies once and build lookup dicts keyed by normalised names.
+    Returns (div_by_name, dist_by_name, all_by_code)."""
+    docs = await db.bodies.find({}, {"_id": 0}).to_list(500)
+    div_by_name: dict = {}
+    dist_by_name: dict = {}
+    by_code: dict = {}
+    for d in docs:
+        by_code[d["code"]] = d
+        # Match against a set of candidate aliases per body
+        candidates = {d["name"], d["code"]}
+        if d.get("seat"):
+            candidates.add(d["seat"])
+        # Also add short forms: "Indore Division" → "Indore"; "Indore District Cricket Association" → "Indore"
+        n = d["name"]
+        for suffix in [" division", " district cricket association", " dca", " district"]:
+            if n.lower().endswith(suffix):
+                candidates.add(n[: -len(suffix)].strip())
+        target = div_by_name if d["body_type"] == "Division" else (dist_by_name if d["body_type"] == "District" else None)
+        if target is not None:
+            for c in candidates:
+                key = _norm_name(c)
+                if key:
+                    target.setdefault(key, d["code"])
+    return div_by_name, dist_by_name, by_code
+
+
 @api_router.post("/members/bulk-upload", response_model=BulkUploadReport)
 async def bulk_upload_members(
     file: UploadFile = File(...),
@@ -369,10 +403,14 @@ async def bulk_upload_members(
 ):
     """Accepts a CSV file. Recognised (case-insensitive) columns:
     name*, category*, address*, email, phone, member_type (MPCA/Division),
-    division_body_id, role, membership_id, sub_category, membership_date,
+    division (name or code), district (name or code — required for Division type),
+    role, membership_id, sub_category, membership_date,
     status, notes, fee_structure, effectiveness, approving_authority,
     eligibility_factor, representative_name, representative_contact.
     Aliases like 'full_name', 'mobile', 'designation', 'joined' are auto-mapped.
+
+    Name resolution: 'Indore' resolves to DIV-IND (Division) or DIST-INDO-IND (District)
+    depending on the column. Codes are also accepted directly.
     """
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may bulk-upload members.")
@@ -388,6 +426,23 @@ async def bulk_upload_members(
     reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames:
         raise HTTPException(400, "CSV missing header row.")
+
+    # Build a body-name resolver once — used for the whole file
+    div_by_name, dist_by_name, by_code = await _build_body_resolver()
+
+    def _resolve_body(raw_value: Optional[str], expected_type: str) -> Optional[str]:
+        """Return the body code or None. Accepts either a code (DIV-IND/DIST-INDO-IND)
+        or a plain name ('Indore', 'Indore Division', 'Indore District Cricket Association')."""
+        if not raw_value:
+            return None
+        v = raw_value.strip()
+        # Direct code hit
+        if v in by_code and by_code[v]["body_type"] == expected_type:
+            return v
+        # Name lookup
+        key = _norm_name(v)
+        pool = div_by_name if expected_type == "Division" else dist_by_name
+        return pool.get(key)
 
     inserted = 0
     skipped = 0
@@ -418,20 +473,56 @@ async def bulk_upload_members(
         if status not in _VALID_STATUS:
             status = "Active"
 
-        div_body = row.get("division_body_id")
-        if mtype == "Division" and not div_body:
+        # Resolve division & district names → codes
+        div_input = row.get("division") or row.get("division_body_id")
+        dist_input = row.get("district") or row.get("body_id")
+
+        div_code = _resolve_body(div_input, "Division")
+        dist_code = _resolve_body(dist_input, "District")
+
+        if div_input and not div_code:
             skipped += 1
-            errors.append({"row": idx, "name": name, "reason": "member_type=Division requires division_body_id"})
+            errors.append({"row": idx, "name": name, "reason": f"Unknown division '{div_input}'. Use one of {sorted(set(d['name'] for d in by_code.values() if d['body_type']=='Division'))}"})
+            continue
+        if dist_input and not dist_code:
+            skipped += 1
+            errors.append({"row": idx, "name": name, "reason": f"Unknown district '{dist_input}'."})
             continue
 
+        if mtype == "Division":
+            if not div_code:
+                skipped += 1
+                errors.append({"row": idx, "name": name, "reason": "member_type=Division requires 'division' column (name or code)"})
+                continue
+            if not dist_code:
+                skipped += 1
+                errors.append({"row": idx, "name": name, "reason": "member_type=Division requires 'district' column (name or code) — pick a district under " + div_code})
+                continue
+            # Validate that district belongs to the division
+            dist_doc = by_code.get(dist_code) or {}
+            if dist_doc.get("parent_code") != div_code:
+                skipped += 1
+                errors.append({"row": idx, "name": name, "reason": f"District {dist_code} does not belong to Division {div_code}"})
+                continue
+
         address = row.get("address") or "—"
+
+        # For Division members: body_id = district code (so they show on district page);
+        # division_body_id = division code (so they show on division page too).
+        # For MPCA members: body_id = MPCA; no division scoping.
+        if mtype == "Division":
+            resolved_body_id = dist_code
+            resolved_division = div_code
+        else:
+            resolved_body_id = "MPCA"
+            resolved_division = None
 
         payload = {
             "name": name,
             "category": cat,
             "sub_category": row.get("sub_category"),
             "member_type": mtype,
-            "division_body_id": div_body,
+            "division_body_id": resolved_division,
             "role": row.get("role"),
             "membership_id": row.get("membership_id"),
             "address": address,
@@ -446,7 +537,7 @@ async def bulk_upload_members(
             "representative_contact": row.get("representative_contact"),
             "status": status,
             "notes": row.get("notes"),
-            "body_id": div_body if mtype == "Division" and div_body else "MPCA",
+            "body_id": resolved_body_id,
         }
         rows.append(payload)
 
@@ -511,17 +602,33 @@ async def bulk_upload_members(
 async def bulk_upload_template():
     """Return a CSV template as text — the frontend downloads it as a file."""
     headers = [
-        "name", "category", "member_type", "division_body_id", "sub_category",
+        "name", "category", "member_type", "division", "district", "sub_category",
         "role", "membership_id", "address", "email", "phone",
         "membership_date", "status", "fee_structure", "effectiveness", "notes",
     ]
-    sample = [
-        "Shri Ramesh Kumar", "Individual", "MPCA", "", "Life Member",
-        "President", "MPCA-LM-001", "12 Race Course Road, Indore", "ramesh@example.com",
-        "9876543210", "2020-04-01", "Active", "Life Fee Paid", "Lifetime",
-        "Life member since 2020",
+    samples = [
+        # MPCA general body member — no division/district needed
+        [
+            "Shri Ramesh Kumar", "Individual", "MPCA", "", "", "Life Member",
+            "President", "MPCA-LM-001", "12 Race Course Road, Indore", "ramesh@example.com",
+            "9876543210", "2020-04-01", "Active", "Life Fee Paid", "Lifetime",
+            "MPCA HQ life member since 2020",
+        ],
+        # Division-scoped member — division + district (names auto-resolved)
+        [
+            "Smt. Anita Verma", "Individual", "Division", "Indore", "Indore", "Annual Member",
+            "Hon. Secretary", "IND-DCA-042", "23 MG Road, Indore", "anita@example.com",
+            "9812340042", "2023-06-01", "Active", "₹3,000 Annual", "1 year",
+            "Indore District Cricket Association",
+        ],
+        [
+            "Shri Ravi Sharma", "Individual", "Division", "Jabalpur", "Katni", "Life Member",
+            "Hon. Treasurer", "KAT-DCA-007", "Civil Lines, Katni", "ravi@example.com",
+            "9876500007", "2018-04-01", "Active", "Life Fee Paid", "Lifetime",
+            "Katni District under Jabalpur Division",
+        ],
     ]
-    csv_text = ",".join(headers) + "\n" + ",".join(sample) + "\n"
+    csv_text = ",".join(headers) + "\n" + "\n".join(",".join(r) for r in samples) + "\n"
     return {"filename": "mpca_members_template.csv", "content": csv_text, "headers": headers}
 
 

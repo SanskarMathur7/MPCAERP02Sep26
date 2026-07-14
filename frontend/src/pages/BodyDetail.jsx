@@ -38,31 +38,25 @@ const BodyDetail = () => {
         const load = async () => {
             setLoading(true);
             try {
-                const [b, s, act, mems] = await Promise.all([
+                const [b, s, act] = await Promise.all([
                     fetchBody(code),
                     fetchBodySummary(code),
                     fetchBodyChildrenActivity(code).catch(() => null),
-                    fetchMembers({ body_id: code, division_body_id: code }).catch(() => []),
                 ]);
                 if (!alive) return;
                 setBody(b);
                 setSummary(s);
                 setActivity(act);
-                // If body scoping via body_id returned few, also try division-based
-                let combined = mems;
-                if (combined.length === 0) {
-                    try {
-                        const alt = await fetchMembers({ division_body_id: code });
-                        combined = alt;
-                    } catch (_) { /* noop */ }
-                }
-                if (combined.length === 0) {
-                    try {
-                        const alt = await fetchMembers({ body_id: code });
-                        combined = alt;
-                    } catch (_) { /* noop */ }
-                }
-                setMembers(combined);
+                // Scope members by body type:
+                //  · State (MPCA) → member_type=MPCA
+                //  · Division      → division_body_id=code (all districts under it)
+                //  · District      → body_id=code
+                let params;
+                if (b.body_type === "State") params = { member_type: "MPCA" };
+                else if (b.body_type === "Division") params = { division_body_id: code };
+                else params = { body_id: code };
+                const mems = await fetchMembers(params).catch(() => []);
+                if (alive) setMembers(mems);
             } finally {
                 if (alive) setLoading(false);
             }

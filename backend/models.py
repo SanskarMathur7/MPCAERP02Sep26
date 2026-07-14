@@ -10,6 +10,37 @@ MemberStatus = Literal["Active", "Suspended", "Lapsed", "Transferred", "Pending"
 MemberType = Literal["MPCA", "Division"]
 
 
+class MembershipAssignment(BaseModel):
+    """One category / role / committee posting held by a member.
+    A member may hold many of these concurrently (Life Member + Vice President + Managing Committee).
+    Historic (end_date < today) rows stay in the array for audit / tenure history.
+    """
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    category: str  # matches a MemberCategoryDef.name (e.g. "Office Bearer", "Managing Committee")
+    role: Optional[str] = None  # e.g. "Vice President", "Member — West Zone"
+    committee: Optional[str] = None  # optional committee name if the assignment is committee-scoped
+    start_date: Optional[str] = None  # ISO
+    end_date: Optional[str] = None  # ISO — null == open-ended / lifetime
+    is_primary: bool = False  # exactly one row marked primary is used for fee/label
+    term_ref: Optional[str] = None  # e.g. "AGM-2024" or election id
+    notes: Optional[str] = None
+    added_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    added_by: Optional[str] = None  # role_id of who added the assignment
+
+
+class MembershipAssignmentCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    category: str
+    role: Optional[str] = None
+    committee: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    is_primary: bool = False
+    term_ref: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class MemberBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -22,6 +53,7 @@ class MemberBase(BaseModel):
     division_body_id: Optional[str] = None  # required when member_type == "Division"
     role: Optional[str] = None  # e.g. "President", "Vice President", "Member"
     membership_id: Optional[str] = None  # external / legacy membership id from CSV
+    memberships: List[MembershipAssignment] = Field(default_factory=list)  # M6.1 · multi-category
     address: str
     phone: Optional[str] = None
     email: Optional[str] = None

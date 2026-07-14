@@ -222,6 +222,21 @@ const Members = () => {
                                     {m.role ? <span className="text-mpca-brass">{m.role} · </span> : null}
                                     {m.email || m.phone || "—"}
                                 </div>
+                                {(m.memberships || []).filter((a) => !a.end_date || new Date(a.end_date) >= new Date()).length > 1 && (
+                                    <div className="mt-1.5 flex flex-wrap gap-1" data-testid={`positions-${m.uid}`}>
+                                        {(m.memberships || [])
+                                            .filter((a) => !a.end_date || new Date(a.end_date) >= new Date())
+                                            .slice(0, 3)
+                                            .map((a) => (
+                                                <span key={a.id} className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 border ${a.is_primary ? "bg-mpca-brass/10 border-mpca-brass/60 text-mpca-brass" : "border-mpca-brass/25 text-mpca-charcoal"}`}>
+                                                    {a.role || a.category}
+                                                </span>
+                                            ))}
+                                        {(m.memberships || []).filter((a) => !a.end_date || new Date(a.end_date) >= new Date()).length > 3 && (
+                                            <span className="text-[9px] italic text-mpca-gray-dark">+{(m.memberships || []).filter((a) => !a.end_date || new Date(a.end_date) >= new Date()).length - 3} more</span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <div className="col-span-2">
                                 <span className={`pill ${(m.member_type || "MPCA") === "Division" ? "pill-pending" : "pill-active"}`}>

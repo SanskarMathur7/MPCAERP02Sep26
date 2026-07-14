@@ -88,6 +88,22 @@ export const downloadBulkTemplate = async () => {
     return data;
 };
 
+// ---- M6.1 · Membership Assignments (multi-category) ----
+export const addMembershipAssignment = async (memberId, payload) => {
+    const { data } = await api.post(`/members/${memberId}/memberships`, payload);
+    return data;
+};
+
+export const updateMembershipAssignment = async (memberId, assignmentId, payload) => {
+    const { data } = await api.patch(`/members/${memberId}/memberships/${assignmentId}`, payload);
+    return data;
+};
+
+export const removeMembershipAssignment = async (memberId, assignmentId) => {
+    const { data } = await api.delete(`/members/${memberId}/memberships/${assignmentId}`);
+    return data;
+};
+
 export const fetchDisclosures = async (params = {}) => {
     const { data } = await api.get("/disclosures", { params });
     return data;

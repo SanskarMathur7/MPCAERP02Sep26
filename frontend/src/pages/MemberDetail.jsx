@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { fetchMember, deleteMember, updateMember, fetchMemberCategories } from "@/lib/api";
 import { ArrowLeft, Trash2, Mail, Phone, MapPin, Calendar, ShieldCheck, FileSignature, User, IdCard, Wallet, Pencil, Save, X } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
+import MembershipAssignments from "@/components/MembershipAssignments";
 import { useAuth } from "@/context/AuthContext";
 
 const EDITABLE_FIELDS = [
@@ -216,6 +217,22 @@ const MemberDetail = () => {
                             )}
                             <span className="text-xs uppercase tracking-wider text-mpca-gray-dark">{member.category}{member.sub_category ? ` · ${member.sub_category}` : ""}</span>
                         </div>
+                        {/* M6.1 · Multi-category pills for currently held assignments */}
+                        {(member.memberships || []).filter((a) => !a.end_date || new Date(a.end_date) >= new Date()).length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2" data-testid="current-positions-pills">
+                                {(member.memberships || [])
+                                    .filter((a) => !a.end_date || new Date(a.end_date) >= new Date())
+                                    .map((a) => (
+                                        <span
+                                            key={a.id}
+                                            className={`text-[10px] uppercase tracking-wider px-2.5 py-1 border ${a.is_primary ? "bg-mpca-brass/15 border-mpca-brass text-mpca-brass" : "border-mpca-brass/30 text-mpca-charcoal"}`}
+                                            data-testid={`pill-position-${a.id}`}
+                                        >
+                                            {a.category}{a.role ? ` · ${a.role}` : ""}
+                                        </span>
+                                    ))}
+                            </div>
+                        )}
                         <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
                             <div className="flex items-start gap-2 text-mpca-charcoal">
                                 <Calendar size={14} className="text-mpca-brass mt-0.5" strokeWidth={1.5} />
@@ -382,6 +399,17 @@ const MemberDetail = () => {
                             </div>
                         )}
                     </div>
+                </div>
+            )}
+
+            {/* M6.1 · Multi-category positions & tenure history */}
+            {!editMode && (
+                <div className="mt-8">
+                    <MembershipAssignments
+                        member={member}
+                        canManage={isOfficeBearer}
+                        onChange={(updated) => setMember(updated)}
+                    />
                 </div>
             )}
         </div>

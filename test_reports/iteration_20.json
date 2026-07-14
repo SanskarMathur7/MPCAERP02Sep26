@@ -1,0 +1,37 @@
+{
+  "summary": "Sprint M8 (Editable Tournament Calendar + Active Venues/Grounds) tested end-to-end. Backend pytest 8/8 pass — venue+ground snapshot creation, cross-venue ground validation (400), invalid host (400), age_floor>age_cap (400), and seed counts (venues>=5, grounds>=8, bodies>=66). Frontend E2E flow works — office-bearer sees Add Tournament, modal has all 16 fields (5 type options), ground select is disabled until venue picked and then filters correctly by venue, tournament persists with venue+ground snapshot in the list row. Sidebar 'Venues & Grounds' is active under Operations and NOT in Coming Soon; /venues page loads with 5 venue cards. RBAC verified — district-secretary does NOT see the Add Tournament button.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Tournament Create Modal", "issues": ["Host body dropdown lists all Districts as flat siblings under one long alphabetical list — 54 items becomes noisy. Consider grouping by <optgroup> body_type (State / Division / District) for readability."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_tournaments_m8.py",
+    "/app/test_reports/pytest/iter20_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL — Add <optgroup> in TournamentCreateModal host dropdown to group State / Division / District bodies (54+ districts is currently a flat list)."
+  ],
+  "critical_code_review_comments": [
+    "routes/tournaments.py has a duplicate `_next_tournament_no` definition (imported from core.helpers on line 10, then redefined on line 16). The local redefinition wins and is used, but the import is dead code — clean up either the import or the local function to avoid confusion.",
+    "TournamentCreateModal.jsx allows saving with a truthy `form.host_body_id` but the select defaults to 'MPCA'; if bodies fetch fails silently (catch → []) the hostOptions list is empty AND the visible <select> still shows a placeholder 'MPCA' value. The save can go through with host_body_id='MPCA' which then gets validated backend-side — acceptable, but a UI-side error surface when bodies is empty would be friendlier.",
+    "Tournament model has no DELETE endpoint — E2E test tournaments cannot be cleaned via API (had to use direct mongo query). Consider adding DELETE /api/tournaments/{tid} restricted to Draft status for testability and to let users cancel bad entries.",
+    "React warning in console: `<span> cannot be a child of <option>` — the emergent instrumentation wraps dynamic option text (venue category, ground type, host code) in a <span>. Non-blocking (dev-only) but noisy. Consider using plain string interpolation inside <option> or acknowledge as instrumentation artefact."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_tournaments_m8.py"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (all M8 flows verified)"},
+  "test_credentials": "persona-chip-secretary (office bearer) and persona-chip-district-secretary (non-office-bearer RBAC check). See /app/memory/test_credentials.md.",
+  "seed_data_creation": "Backend tests use TEST_M8_* prefixed tournaments (auto-cleaned via mongosh after run). Frontend E2E created 'E2E New Trophy 2026' → cleaned up via mongosh.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests at /app/backend/tests/test_tournaments_m8.py (8 tests, all passing). Key seeded fixtures: 6 venues (Holkar / Aishbagh / Captain Roop Singh / Jabalpur Division / MPCA Indore Academy + 1 more), grounds under Holkar include Main Ground + Practice A + Practice B + Nets + Practice C (Test). host_body_id validation is code-based (bodies.find_one by `code`, not `id`). Note: there is NO DELETE route for tournaments — cleanup must go via direct DB.",
+  "rca of the issue": "N/A — no functional bugs found."
+}

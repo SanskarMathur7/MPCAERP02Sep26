@@ -53,10 +53,29 @@ async def create_tournament(payload: TournamentCreate):
         raise HTTPException(400, f"Host body {payload.host_body_id} does not exist")
     if payload.age_floor_years and payload.age_cap_years and payload.age_floor_years > payload.age_cap_years:
         raise HTTPException(400, "age_floor_years cannot exceed age_cap_years")
+
+    # M8 · Snapshot venue + ground names for quick display; validate linkage.
+    data = payload.model_dump()
+    if payload.venue_id:
+        v = await db.venues.find_one({"id": payload.venue_id}, {"_id": 0})
+        if not v:
+            raise HTTPException(400, f"Venue {payload.venue_id} does not exist")
+        data["venue_name_snapshot"] = v.get("name")
+        if not data.get("venue"):
+            data["venue"] = v.get("name")  # backfill legacy free-text
+    if payload.ground_id:
+        g = await db.grounds.find_one({"id": payload.ground_id}, {"_id": 0})
+        if not g:
+            raise HTTPException(400, f"Ground {payload.ground_id} does not exist")
+        # Ground must belong to the given venue (if venue supplied)
+        if payload.venue_id and g.get("venue_id") != payload.venue_id:
+            raise HTTPException(400, f"Ground {payload.ground_id} does not belong to Venue {payload.venue_id}")
+        data["ground_name_snapshot"] = g.get("name")
+
     t = Tournament(
         tournament_no=await _next_tournament_no(payload.fiscal_cycle),
         status="Draft",
-        **payload.model_dump(),
+        **data,
     )
     await db.tournaments.insert_one(t.model_dump())
     return t

@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { fetchTournaments, fetchTournamentStats } from "@/lib/api";
 import {
-    Trophy, Calendar, MapPin, Users, ChevronRight, Filter, ShieldCheck,
+    Trophy, Calendar, MapPin, Users, ChevronRight, Filter, ShieldCheck, Plus,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
+import TournamentCreateModal from "@/components/TournamentCreateModal";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -88,22 +89,23 @@ const ageLabel = (t) => {
 };
 
 const Tournaments = () => {
-    const { persona } = useAuth();
+    const { persona, isOfficeBearer } = useAuth();
     const navigate = useNavigate();
     const [list, setList] = useState([]);
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("all");
+    const [createOpen, setCreateOpen] = useState(false);
 
-    useEffect(() => {
-        (async () => {
-            try {
-                const [l, s] = await Promise.all([fetchTournaments(), fetchTournamentStats()]);
-                setList(l);
-                setStats(s);
-            } finally { setLoading(false); }
-        })();
-    }, []);
+    const load = async () => {
+        try {
+            const [l, s] = await Promise.all([fetchTournaments(), fetchTournamentStats()]);
+            setList(l);
+            setStats(s);
+        } finally { setLoading(false); }
+    };
+
+    useEffect(() => { load(); }, []);
 
     const filtered = useMemo(() => {
         let r = list;
@@ -140,6 +142,15 @@ const Tournaments = () => {
                         Register; age-caps, guest quotas and Women&apos;s eligibility are enforced.
                     </p>
                 </div>
+                {isOfficeBearer && (
+                    <button
+                        className="btn-heritage-primary"
+                        onClick={() => setCreateOpen(true)}
+                        data-testid="new-tournament-btn"
+                    >
+                        <Plus size={14} strokeWidth={1.5} /> Add Tournament
+                    </button>
+                )}
             </div>
 
             <div className="crest-divider mb-10" />
@@ -208,7 +219,10 @@ const Tournaments = () => {
                                     </div>
                                     <div className="text-[11px] text-mpca-gray-dark mt-1 flex items-center gap-2 flex-wrap">
                                         <Calendar size={11} /> {fmtDate(t.start_date)} → {fmtDate(t.end_date)}
-                                        {t.venue && <><span>·</span><MapPin size={11} /> {t.venue}</>}
+                                        {(t.venue_name_snapshot || t.venue) && (
+                                            <><span>·</span><MapPin size={11} /> {t.venue_name_snapshot || t.venue}{t.ground_name_snapshot ? <span className="text-mpca-brass"> · {t.ground_name_snapshot}</span> : null}</>
+                                        )}
+                                        {t.host_body_id && <span className="font-mono text-mpca-brass">· Host {t.host_body_id}</span>}
                                         {t.trophy_name && <span className="text-mpca-oxblood">· 🏆 {t.trophy_name}</span>}
                                     </div>
                                 </div>
@@ -225,6 +239,12 @@ const Tournaments = () => {
                     })
                 )}
             </div>
+
+            <TournamentCreateModal
+                open={createOpen}
+                onClose={() => setCreateOpen(false)}
+                onDone={() => load()}
+            />
         </div>
     );
 };

@@ -885,7 +885,11 @@ class TournamentBase(BaseModel):
     is_three_team_format: bool = False
     start_date: Optional[str] = None             # ISO YYYY-MM-DD
     end_date: Optional[str] = None
-    venue: Optional[str] = None
+    venue: Optional[str] = None                  # legacy free-text
+    venue_id: Optional[str] = None               # M8: link to Venue.id
+    ground_id: Optional[str] = None              # M8: link to Ground.id (a Venue has multiple Grounds)
+    venue_name_snapshot: Optional[str] = None    # M8: denormalised for quick display
+    ground_name_snapshot: Optional[str] = None
     # M2-A: squad announcement timelines
     timelines: SquadTimeline = Field(default_factory=SquadTimeline)
     # M2-A: portal slot config for this tournament (division-shared registration link)

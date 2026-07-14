@@ -24,6 +24,7 @@ import BankAccountDetail from "@/pages/BankAccountDetail";
 import FinancialPowers from "@/pages/FinancialPowers";
 import MemberProfile from "@/pages/MemberProfile";
 import OrgStructure from "@/pages/OrgStructure";
+import BodyDetail from "@/pages/BodyDetail";
 import Claims from "@/pages/Claims";
 import ClaimNew from "@/pages/ClaimNew";
 import Budgets from "@/pages/Budgets";
@@ -76,6 +77,7 @@ function App() {
                         {/* Protected — Phase 1 */}
                         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
                         <Route path="/org" element={<Protected><OrgStructure /></Protected>} />
+                        <Route path="/org/:code" element={<Protected><BodyDetail /></Protected>} />
                         <Route path="/rulebook" element={<Protected><Rulebook /></Protected>} />
                         <Route path="/members" element={<Protected><Members /></Protected>} />
                         <Route path="/members/new" element={<Protected><MemberNew /></Protected>} />

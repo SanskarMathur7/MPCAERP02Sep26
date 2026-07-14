@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { fetchBodiesTree } from "@/lib/api";
-import { Building2, MapPin, Landmark, ChevronRight, ChevronDown, Users, Coins } from "lucide-react";
+import { Building2, MapPin, Landmark, ChevronRight, ChevronDown, Users, Coins, ArrowUpRight } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 
 const fmtINR = (n) =>
@@ -178,30 +179,44 @@ const OrgStructure = () => {
                         ].filter(Boolean).join(" · ");
 
                         return (
-                            <button
+                            <div
                                 key={node.code}
-                                onClick={() => hasChildren && toggle(node.code)}
                                 data-testid={"org-node-" + node.code}
-                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-mpca-parchment/60 transition-colors text-left border-b border-mpca-brass/15"
+                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-mpca-parchment/60 transition-colors border-b border-mpca-brass/15"
                                 style={{ paddingLeft: (depth * 24 + 16) + "px" }}
                             >
-                                {hasChildren && open && <ChevronDown size={14} className="text-mpca-gray-dark shrink-0" />}
-                                {hasChildren && !open && <ChevronRight size={14} className="text-mpca-gray-dark shrink-0" />}
-                                {!hasChildren && <span className="w-3.5 shrink-0" />}
-                                <span className={"w-2 h-2 rounded-full shrink-0 " + accent.dot} />
-                                <Icon size={15} strokeWidth={1.5} className={"shrink-0 " + accent.text} />
-                                <div className="flex-1 min-w-0">
-                                    <div className="font-serif text-base text-mpca-green-dark leading-tight truncate">
-                                        {node.name}
+                                <button
+                                    onClick={() => hasChildren && toggle(node.code)}
+                                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                                    data-testid={"org-toggle-" + node.code}
+                                >
+                                    {hasChildren && open && <ChevronDown size={14} className="text-mpca-gray-dark shrink-0" />}
+                                    {hasChildren && !open && <ChevronRight size={14} className="text-mpca-gray-dark shrink-0" />}
+                                    {!hasChildren && <span className="w-3.5 shrink-0" />}
+                                    <span className={"w-2 h-2 rounded-full shrink-0 " + accent.dot} />
+                                    <Icon size={15} strokeWidth={1.5} className={"shrink-0 " + accent.text} />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-serif text-base text-mpca-green-dark leading-tight truncate">
+                                            {node.name}
+                                        </div>
+                                        <div className="text-[10px] tracking-[0.2em] uppercase text-mpca-gray-dark mt-0.5 font-mono">
+                                            {meta}
+                                        </div>
                                     </div>
-                                    <div className="text-[10px] tracking-[0.2em] uppercase text-mpca-gray-dark mt-0.5 font-mono">
-                                        {meta}
-                                    </div>
-                                </div>
+                                </button>
                                 <span className={"pill " + accent.text} style={{ borderColor: "currentColor", opacity: 0.85 }}>
                                     {node.body_type}
                                 </span>
-                            </button>
+                                {(node.body_type === "Division" || node.body_type === "District" || node.body_type === "State") && (
+                                    <Link
+                                        to={"/org/" + node.code}
+                                        className="btn-heritage-ghost !py-1 !px-2 !text-[10px] shrink-0"
+                                        data-testid={"org-open-" + node.code}
+                                    >
+                                        Open <ArrowUpRight size={11} strokeWidth={1.5} />
+                                    </Link>
+                                )}
+                            </div>
                         );
                     })}
                 </div>

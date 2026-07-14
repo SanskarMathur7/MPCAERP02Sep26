@@ -254,6 +254,10 @@ export const fetchBodySummary = async (code) => {
     const { data } = await api.get(`/bodies/${code}/summary`);
     return data;
 };
+export const fetchBodyChildrenActivity = async (code) => {
+    const { data } = await api.get(`/bodies/${code}/children-activity`);
+    return data;
+};
 
 // ---------- Phase III.6: Claims & Grant Workflow ----------
 export const fetchClaims = async (params = {}) => {

@@ -27,9 +27,10 @@ import {
 } from "lucide-react";
 
 const DASHBOARD_LINK = { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
+const ORG_LINK = { to: "/org", label: "Organisation", icon: Landmark };
 
 // ═══════════════════════════════════════════════════════════════════
-// User-requested MVP nav — only these 5 top-level tabs are active.
+// User-requested MVP nav — active tabs.
 // Everything else is present but disabled under "Coming Soon", keeping
 // the original groupings visible so nothing looks abandoned.
 // ═══════════════════════════════════════════════════════════════════
@@ -214,6 +215,23 @@ const AppLayout = ({ children }) => {
                             >
                                 <DASHBOARD_LINK.icon size={16} strokeWidth={1.5} />
                                 <span className="tracking-wide">{DASHBOARD_LINK.label}</span>
+                            </NavLink>
+                        </li>
+                        <li>
+                            <NavLink
+                                to={ORG_LINK.to}
+                                data-testid="nav-organisation"
+                                className={({ isActive }) =>
+                                    `group flex items-center gap-3 px-3 py-2.5 text-sm transition-all duration-300 border-l-2 ${
+                                        isActive
+                                            ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
+                                            : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
+                                    }`
+                                }
+                            >
+                                <ORG_LINK.icon size={16} strokeWidth={1.5} />
+                                <span className="tracking-wide">{ORG_LINK.label}</span>
+                                <span className="ml-auto text-[9px] font-mono text-mpca-brass/70 tracking-widest">10·54</span>
                             </NavLink>
                         </li>
                     </ul>

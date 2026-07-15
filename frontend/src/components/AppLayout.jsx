@@ -49,6 +49,8 @@ const NAV_DOMAINS = [
         items: [
             { to: "/tournaments", label: "MPCA Tournament Calendar", icon: TrophyIcon },
             { to: "/venues", label: "Venues & Grounds", icon: MapPinIcon },
+            { to: "/match-officials", label: "Match Officials", icon: ShieldCheck },
+            { to: "/selection-funnel", label: "Selection Funnel", icon: Users },
         ],
     },
 ];
@@ -88,7 +90,6 @@ const COMING_SOON_DOMAINS = [
         domain: "Operations",
         items: [
             { label: "Player Register", icon: TrophyIcon },
-            { label: "Selection Funnel", icon: Users },
             { label: "Fixtures & Rankings", icon: Calendar },
         ],
     },
@@ -109,7 +110,6 @@ const COMING_SOON_DOMAINS = [
     {
         domain: "Future Modules",
         items: [
-            { label: "Match Officials", icon: Trophy },
             { label: "Team Officials", icon: Trophy },
             { label: "Grievance Redressal", icon: AlertTriangle },
             { label: "Constitution Library", icon: BookOpen },

@@ -43,6 +43,7 @@ export const PERSONAS = [
         body_type: "State",
         body_code: "MPCA",
         body_name: "MPCA Headquarters",
+        _disabled: true,
     },
     {
         id: "division-secretary",
@@ -61,14 +62,14 @@ export const PERSONAS = [
         id: "district-secretary",
         title: "District Secretary",
         honorific: "Shri",
-        name: "Anil Sharma",
-        post: "Hon. Secretary, Ujjain District",
-        scope: "Ujjain District — submits claims to Indore Division",
+        name: "Rajesh Kulkarni",
+        post: "Hon. Secretary, Indore District",
+        scope: "Indore District — submits claims to Indore Division",
         privileges: ["Submit Claims", "Manage Local Players", "Sign Receipts"],
         accent: "navy-light",
         body_type: "District",
-        body_code: "DIST-UJJA-UJN",
-        body_name: "Ujjain District",
+        body_code: "DIST-INDO-IND",
+        body_name: "Indore District",
     },
     {
         id: "public",
@@ -82,6 +83,7 @@ export const PERSONAS = [
         body_type: "Public",
         body_code: null,
         body_name: null,
+        _disabled: true,
     },
 ];
 

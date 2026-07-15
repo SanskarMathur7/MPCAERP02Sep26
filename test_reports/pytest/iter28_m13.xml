@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="5" skipped="0" tests="15" time="1.318" timestamp="2026-07-15T08:27:55.488778+00:00" hostname="agent-env-4c7b8162-96d0-4f81-acb9-11f831a40275"><testcase classname="backend.tests.test_m13_match_officials.TestReferenceData" name="test_bodies_count" time="0.172" /><testcase classname="backend.tests.test_m13_match_officials.TestReferenceData" name="test_member_categories_count" time="0.050" /><testcase classname="backend.tests.test_m13_match_officials.TestReferenceData" name="test_transactional_purged[members]" time="0.050"><failure message="AssertionError: Sprint M13 spec expects /api/members to be empty after purge, but got 7 rows. Startup seed is re-populating data — seed.py needs to be disabled or check a purge-guard flag.&#10;assert [{'address': ...l', ...}, ...] == []&#10;  &#10;  Left contains 7 more items, first extra item: {'address': &quot;Patron's Pavilion, Holkar Stadium, Indore&quot;, 'approving_authority': 'Constitutional Patron', 'body_id': 'MPCA', 'category': 'Patron', ...}&#10;  &#10;  Full diff:&#10;  - []&#10;  + [&#10;  +     {...&#10;  &#10;  ...Full output truncated (224 lines hidden), use '-vv' to show">E   AssertionError: Sprint M13 spec expects /api/members to be empty after purge, but got 7 rows. Startup seed is re-populating data — seed.py needs to be disabled or check a purge-guard flag.
+    assert [{'address': ...l', ...}, ...] == []
+      
+      Left contains 7 more items, first extra item: {'address': "Patron's Pavilion, Holkar Stadium, Indore", 'approving_authority': 'Constitutional Patron', 'body_id': 'MPCA', 'category': 'Patron', ...}
+      
+      Full diff:
+      - []
+      + [
+      +     {...
+      
+      ...Full output truncated (224 lines hidden), use '-vv' to show</failure></testcase><testcase classname="backend.tests.test_m13_match_officials.TestReferenceData" name="test_transactional_purged[players]" time="0.046"><failure message="AssertionError: Sprint M13 spec expects /api/players to be empty after purge, but got 7 rows. Startup seed is re-populating data — seed.py needs to be disabled or check a purge-guard flag.&#10;assert [{'aadhaar_la...ne, ...}, ...] == []&#10;  &#10;  Left contains 7 more items, first extra item: {'aadhaar_last4': None, 'address_district': 'Gwalior', 'address_line': None, 'ai_document_validation': None, ...}&#10;  &#10;  Full diff:&#10;  - []&#10;  + [&#10;  +     {...&#10;  &#10;  ...Full output truncated (411 lines hidden), use '-vv' to show">E   AssertionError: Sprint M13 spec expects /api/players to be empty after purge, but got 7 rows. Startup seed is re-populating data — seed.py needs to be disabled or check a purge-guard flag.
+    assert [{'aadhaar_la...ne, ...}, ...] == []
+      
+      Left contains 7 more items, first extra item: {'aadhaar_last4': None, 'address_district': 'Gwalior', 'address_line': None, 'ai_document_validation': None, ...}
+      
+      Full diff:
+      - []
+      + [
+      +     {...
+      
+      ...Full output truncated (411 lines hidden), use '-vv' to show</failure></testcase><testcase classname="backend.tests.test_m13_match_officials.TestReferenceData" name="test_transactional_purged[tournaments]" time="0.058"><failure message="AssertionError: Sprint M13 spec expects /api/tournaments to be empty after purge, but got 23 rows. Startup seed is re-populating data — seed.py needs to be disabled or check a purge-guard flag.&#10;assert [{'acceptance...se, ...}, ...] == []&#10;  &#10;  Left contains 23 more items, first extra item: {'acceptance': {'entries': [], 'required_from': [], 'status': 'Not_Required'}, 'age_cap_years': None, 'age_floor_years': None, 'allows_guests': False, ...}&#10;  &#10;  Full diff:&#10;  - []&#10;  + [&#10;  +     {...&#10;  &#10;  ...Full output truncated (1081 lines hidden), use '-vv' to show">E   AssertionError: Sprint M13 spec expects /api/tournaments to be empty after purge, but got 23 rows. Startup seed is re-populating data — seed.py needs to be disabled or check a purge-guard flag.
+    assert [{'acceptance...se, ...}, ...] == []
+      
+      Left contains 23 more items, first extra item: {'acceptance': {'entries': [], 'required_from': [], 'status': 'Not_Required'}, 'age_cap_years': None, 'age_floor_years': None, 'allows_guests': False, ...}
+      
+      Full diff:
+      - []
+      + [
+      +     {...
+      
+      ...Full output truncated (1081 lines hidden), use '-vv' to show</failure></testcase><testcase classname="backend.tests.test_m13_match_officials.TestReferenceData" name="test_transactional_purged[venues]" time="0.046"><failure message="AssertionError: Sprint M13 spec expects /api/venues to be empty after purge, but got 20 rows. Startup seed is re-populating data — seed.py needs to be disabled or check a purge-guard flag.&#10;assert [{'address_li...L', ...}, ...] == []&#10;  &#10;  Left contains 20 more items, first extra item: {'address_line': 'Aishbagh, Bhopal', 'bcci_approval': 'None', 'bcci_calendar_eligible': True, 'body_id': 'DIV-BPL', ...}&#10;  &#10;  Full diff:&#10;  - []&#10;  + [&#10;  +     {...&#10;  &#10;  ...Full output truncated (360 lines hidden), use '-vv' to show">E   AssertionError: Sprint M13 spec expects /api/venues to be empty after purge, but got 20 rows. Startup seed is re-populating data — seed.py needs to be disabled or check a purge-guard flag.
+    assert [{'address_li...L', ...}, ...] == []
+      
+      Left contains 20 more items, first extra item: {'address_line': 'Aishbagh, Bhopal', 'bcci_approval': 'None', 'bcci_calendar_eligible': True, 'body_id': 'DIV-BPL', ...}
+      
+      Full diff:
+      - []
+      + [
+      +     {...
+      
+      ...Full output truncated (360 lines hidden), use '-vv' to show</failure></testcase><testcase classname="backend.tests.test_m13_match_officials.TestReferenceData" name="test_transactional_purged[grounds]" time="0.054"><failure message="AssertionError: Sprint M13 spec expects /api/grounds to be empty after purge, but got 28 rows. Startup seed is re-populating data — seed.py needs to be disabled or check a purge-guard flag.&#10;assert [{'bcci_appro...7', ...}, ...] == []&#10;  &#10;  Left contains 28 more items, first extra item: {'bcci_approval': 'None', 'boundaries_metres': None, 'created_at': '2026-07-15T08:15:22.352757+00:00', 'ground_no': 'GRD-IND-006', ...}&#10;  &#10;  Full diff:&#10;  - []&#10;  + [&#10;  +     {...&#10;  &#10;  ...Full output truncated (1044 lines hidden), use '-vv' to show">E   AssertionError: Sprint M13 spec expects /api/grounds to be empty after purge, but got 28 rows. Startup seed is re-populating data — seed.py needs to be disabled or check a purge-guard flag.
+    assert [{'bcci_appro...7', ...}, ...] == []
+      
+      Left contains 28 more items, first extra item: {'bcci_approval': 'None', 'boundaries_metres': None, 'created_at': '2026-07-15T08:15:22.352757+00:00', 'ground_no': 'GRD-IND-006', ...}
+      
+      Full diff:
+      - []
+      + [
+      +     {...
+      
+      ...Full output truncated (1044 lines hidden), use '-vv' to show</failure></testcase><testcase classname="backend.tests.test_m13_match_officials.TestMatchOfficialsCRUD" name="test_list_officials_empty_or_list" time="0.044" /><testcase classname="backend.tests.test_m13_match_officials.TestMatchOfficialsCRUD" name="test_create_official_as_division_secretary" time="0.047" /><testcase classname="backend.tests.test_m13_match_officials.TestMatchOfficialsCRUD" name="test_create_official_public_role_forbidden" time="0.043" /><testcase classname="backend.tests.test_m13_match_officials.TestMatchOfficialsCRUD" name="test_create_official_invalid_body_400" time="0.044" /><testcase classname="backend.tests.test_m13_match_officials.TestMatchOfficialsCRUD" name="test_filter_by_body_id" time="0.139" /><testcase classname="backend.tests.test_m13_match_officials.TestMatchOfficialsCRUD" name="test_delete_official_verifies_removal" time="0.140" /><testcase classname="backend.tests.test_m13_match_officials.TestMatchOfficialsCRUD" name="test_delete_official_public_forbidden" time="0.043" /><testcase classname="backend.tests.test_m13_match_officials.TestSelectionFunnelWiring" name="test_selection_funnel_route_uses_tournaments_api" time="0.265" /></testsuite></testsuites>

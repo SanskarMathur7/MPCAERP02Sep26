@@ -84,6 +84,7 @@ const SelectionConsole = () => {
     const [dossierId, setDossierId] = useState(null);
     const [saving, setSaving] = useState(false);
     const [busyAction, setBusyAction] = useState(null);
+    const [officialsPool, setOfficialsPool] = useState([]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -97,8 +98,14 @@ const SelectionConsole = () => {
             setPlayers(ps);
             setSelection(sel);
             if (sel?.voters?.length) setVoters(sel.voters);
+            // Fetch match officials scoped to persona's body (or MPCA for state)
+            try {
+                const bodyScope = persona?.body_code;
+                const { data: pool } = await import("@/lib/api").then((m) => m.api.get("/match-officials", { params: bodyScope ? { body_id: bodyScope, active_only: true } : { active_only: true } }));
+                setOfficialsPool(pool || []);
+            } catch { setOfficialsPool([]); }
         } finally { setLoading(false); }
-    }, [tid]);
+    }, [tid, persona]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -454,18 +461,42 @@ const SelectionConsole = () => {
                     </div>
 
                     <div className="bulletin-card p-3" data-testid="match-officials-block">
-                        <div className="overline mb-2">Match Officials</div>
-                        {[
-                            ["manager", "Manager"], ["coach", "Coach"], ["trainer", "Trainer"], ["physio", "Physio"],
-                            ["umpire_1", "Umpire 1"], ["umpire_2", "Umpire 2"], ["scorer", "Scorer"], ["referee", "Referee"],
-                        ].map(([k, l]) => (
-                            <div key={k} className="mb-1.5">
-                                <div className="text-[10px] uppercase tracking-wider text-mpca-gray-dark">{l}</div>
-                                <input value={selection?.match_officials?.[k] || ""} onChange={(e) => updateOfficials({ [k]: e.target.value })}
-                                    disabled={!canEdit} className="input-heritage !py-1 !text-xs" placeholder="Name & role details"
-                                    data-testid={`official-${k}`} />
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="overline">Match Officials</div>
+                            <Link to="/match-officials" className="text-[10px] text-mpca-brass hover:underline">Manage directory →</Link>
+                        </div>
+                        {officialsPool.length === 0 && (
+                            <div className="text-[10px] text-mpca-oxblood italic mb-2">
+                                No officials on record for your body ({persona?.body_code || "—"}). <Link to="/match-officials" className="underline">Add them here</Link>.
                             </div>
-                        ))}
+                        )}
+                        {[
+                            ["manager", "Manager", ["Manager"]],
+                            ["coach", "Coach", ["Coach"]],
+                            ["trainer", "Trainer", ["Trainer"]],
+                            ["physio", "Physio", ["Physio"]],
+                            ["umpire_1", "Umpire 1", ["Umpire"]],
+                            ["umpire_2", "Umpire 2", ["Umpire"]],
+                            ["scorer", "Scorer", ["Scorer"]],
+                            ["referee", "Referee", ["Referee"]],
+                        ].map(([k, l, allowed]) => {
+                            const opts = officialsPool.filter((o) => allowed.includes(o.role));
+                            const cur = selection?.match_officials?.[k] || "";
+                            return (
+                                <div key={k} className="mb-1.5">
+                                    <div className="text-[10px] uppercase tracking-wider text-mpca-gray-dark">{l}</div>
+                                    <select value={cur} onChange={(e) => updateOfficials({ [k]: e.target.value })}
+                                        disabled={!canEdit} className="input-heritage !py-1 !text-xs"
+                                        data-testid={`official-${k}`}>
+                                        <option value="">— Not assigned —</option>
+                                        {opts.map((o) => (
+                                            <option key={o.id} value={o.full_name}>{o.full_name} · {o.grade.replace(/_/g, " ")} · {o.body_id}</option>
+                                        ))}
+                                        {cur && !opts.some((o) => o.full_name === cur) && <option value={cur}>{cur} (external)</option>}
+                                    </select>
+                                </div>
+                            );
+                        })}
                     </div>
 
                     {warnings.length > 0 && (

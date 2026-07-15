@@ -1,0 +1,47 @@
+{
+  "summary": "Sprint M13 (Match Officials + Selection Funnel activation + data purge + persona trim) tested end-to-end. Backend: 10/15 pytest cases PASSED. Frontend: full E2E flows PASSED (4 persona chips, sidebar promotion of Match Officials + Selection Funnel out of Coming Soon, /match-officials directory with add/filter, /selection-funnel with 4 buckets, deep-link into /tournaments/{id}/selection, RBAC-scoped match-officials dropdowns showing only DIV-IND officials to Division Secretary). CRITICAL SPEC VIOLATION: the data-purge requirement (members/players/tournaments/venues/grounds must return []) is NOT met — the FastAPI startup event calls seed.py which re-populates these collections after any backend restart, defeating /tmp/purge_data.py. Purge script runs, but the moment supervisor restarts (or was already running post-purge) the seed re-inserts ~7 members / 7 players / 23 tournaments / 20 venues / 28 grounds. This must be fixed by main agent.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "startup seed (/app/backend/seed.py invoked from server.py:on_startup)", "issue": "Startup seed re-populates members, players, tournaments, venues, grounds even after /tmp/purge_data.py wipes them. To meet the M13 clean-slate requirement the seed must (a) be disabled/guarded behind a env flag e.g. MPCA_SEED=0 or (b) refactored to seed only bodies + member_categories and skip transactional/reference collections when a `purged` marker doc is set. Currently GET /api/members=7, /players=7, /tournaments=23, /venues=20, /grounds=28.", "priority": "CRITICAL"},
+      {"endpoint": "DELETE /api/tournaments/{id}", "issue": "405 Method Not Allowed — no delete route. Cleanup falls back to direct MongoDB delete. (Same finding as iter27.) Blocks M13 clean-slate requirement even if seed is disabled, since dev cannot delete tournaments via the API.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/tournaments", "issue": "tournament_type Literal only accepts MPCA_InterDivisional / MPCA_Championship / BCCI / Invitational / Other — no 'Division_Championship' variant even though the funnel/console flow now supports division-hosted tournaments. Tests worked around by using MPCA_Championship with host_body_id=DIV-IND; consider adding a Division_* variant."},
+      {"endpoint": "POST /api/tournaments/{id}/acceptance", "issue": "Requires header X-User-Body-Code (not X-Persona-Body-Code) AND body key `action` (not `decision`). Not a bug — just undocumented; may confuse UI devs."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MatchOfficials — add-form body <select>", "issues": ["React hydration warning in console: `<span> cannot be a child of <option>`. Caused by the Emergent DevMode wrapping <option>'s children with an inline <span data-ve-dynamic ...>. This is a devtool overlay artifact, not our code — safe to ignore in production but noisy in devtools."]},
+      {"screen": "SelectionFunnel", "issues": ["Loading of per-tournament selection status is N+1 (one GET /api/tournaments/{id}/selection per row). With 23 tournaments it took ~2s to fully populate the Secretary's funnel. For 100+ tournaments this will feel slow — consider a bulk endpoint /api/selection-funnel that returns tournament+submission_status in one call."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m13_match_officials.py",
+    "/app/test_reports/pytest/iter28_m13.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Gate seed.py behind an env flag (e.g. `if os.environ.get('MPCA_SEED','1')!='0': await seed_data()` in server.py) OR add a `purged=True` sentinel doc in a `system_flags` collection that seed_data() honours to skip repopulating members/players/tournaments/venues/grounds. Without this, /api/{members,players,tournaments,venues,grounds} will NEVER return [] as required by M13.",
+    "Add DELETE /api/tournaments/{id} (secretary+ only) so cleanup does not require direct MongoDB access.",
+    "Consider a Division_Championship / District_Championship value in TournamentType Literal so division-hosted funnels can distinguish tournament types.",
+    "Optional: bulk /selection-funnel endpoint to remove N+1 fetch pattern on the funnel page."
+  ],
+  "critical_code_review_comments": [
+    "backend/server.py:44-46 — on_startup unconditionally invokes seed_data(). This directly contradicts M13 clean-slate spec. seed_data() should be behind a flag or read a system_flags.seed_disabled=True doc.",
+    "backend/routes/match_officials.py:61 — RBAC guard is `if x_role_id and x_role_id not in _ADMIN_ROLES`; if the header is absent entirely, the create/update/delete goes through. Spec says 'POST as public/no-role returns 403'. Currently no-role would succeed. Consider making header REQUIRED (raise 403 when x_role_id is None) to match the spec fully.",
+    "backend/routes/match_officials.py — no body-scope RBAC on create: any of the _ADMIN_ROLES can add an official under ANY body_id. A District Secretary can currently insert an official under DIV-BPL. Consider validating payload.body_id ∈ {persona.body_code, its children} similar to selection console.",
+    "frontend/src/pages/SelectionFunnel.jsx:32 — division-scope filter uses `t.host_body_id.includes('-' + persona.body_code.split('-')[1])` which is fragile (e.g. DIV-IND → matches any host_body_id containing '-IND', so DIST-INDO-IND matches — desired, but DIST-BHIND-BND would also fail-open on the string 'IND' if a code changes). Better: filter by `parent_body_id` chain or an explicit `division_code` field on tournament.",
+    "frontend/src/context/AuthContext.jsx:119 — isOfficeBearer still includes 'treasurer' even though treasurer is _disabled. Harmless (persona can't log in) but dead code; drop 'treasurer' or add 'district-secretary' for consistency (District Sec currently is NOT isOfficeBearer → they can't add match officials from the UI even though the backend allows district-secretary).",
+    "frontend/src/pages/MatchOfficials.jsx — no data-testid on filter buttons follow the label case ('off-filter-Umpire'); consistent but note the 'all' filter is `off-filter-all` (lowercase). Minor inconsistency."
+  ],
+  "updated_files": ["/app/backend/tests/test_m13_match_officials.py (new)"],
+  "success_rate": {"backend": "67% (10/15) — 10 CRUD/RBAC tests all passed; 5 purge-state tests failed due to seed re-population (spec violation)", "frontend": "100% (all M13 E2E flows verified end-to-end)"},
+  "test_credentials": "persona-chip-secretary (MPCA), persona-chip-division-secretary (DIV-IND) used. Both worked correctly.",
+  "seed_data_creation": "Created for testing: 3 match officials (M13 TEST Umpire Ravi/DIV-IND, M13 TEST MPCA Ref/MPCA, M13 BugFix Umpire/DIV-IND) and 1 tournament (M13 BugFix DivIND Trophy/TRN-2025-26-024/DIV-IND). ALL M13-prefixed test data was cleaned up via API + direct Mongo delete at end. Post-cleanup: 0 M13 tournaments, only pre-existing 'Anil Chaudhary' official remains under DIV-IND (which appears to be a seed-inserted or dev-inserted record, NOT created by this test run — verified by its created_at 08:19:44 while purge_data.py ran at 08:11).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Match Officials + Selection Funnel modules are functionally complete and RBAC-scoped correctly. The ONLY blocker is the seed re-population issue — once main agent gates seed_data() behind a flag and re-runs /tmp/purge_data.py (or sets a system_flags.seed_disabled=True marker), the 5 currently-failing purge tests should flip to green. All other 10 tests will continue passing. Frontend has been fully validated — no re-run needed there unless AppLayout/AuthContext/MatchOfficials.jsx/SelectionFunnel.jsx are modified. The persistent 'Anil Chaudhary' DIV-IND official on match_officials appears to have been created manually — main agent may want to purge it too as part of clean slate.",
+  "rca of the issue": "Root cause: server.py:on_startup unconditionally calls seed_data() from /app/backend/seed.py. seed_data() checks `if await db.<coll>.count_documents({}) == 0` for many collections and inserts if empty. Because the M13 purge deletes rows leaving counts=0, the very NEXT backend startup (via supervisor auto-restart on any code change) re-seeds everything. Reproduction: (1) run /tmp/purge_data.py → all target counts=0. (2) `sudo supervisorctl restart backend`. (3) GET /api/tournaments → returns 23 rows again. Mitigation: (a) short-term, patch server.py:on_startup to `if os.environ.get('MPCA_SEED','1') != '0': await seed_data()` and set MPCA_SEED=0 in backend/.env; (b) long-term, seed should honour a `system_flags` doc that operations can toggle."
+}

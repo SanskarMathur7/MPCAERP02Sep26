@@ -315,7 +315,7 @@ const Login = () => {
 
                     {/* Persona quick-access grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" data-testid="persona-quick-grid">
-                        {PERSONAS.map((p) => (
+                        {PERSONAS.filter((p) => !p._disabled).map((p) => (
                             <PersonaChip
                                 key={p.id}
                                 persona={p}

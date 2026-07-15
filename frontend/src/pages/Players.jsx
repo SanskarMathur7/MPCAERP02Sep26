@@ -605,11 +605,24 @@ const Players = () => {
     }, []);
 
     const filtered = useMemo(() => {
+        // Sprint T-RIM · body-scope by persona (default): MPCA/State sees all;
+        // Division sees its own DIV code + all DIST-*-{suffix} children;
+        // District sees only its own DIST code.
         let r = players;
+        if (persona) {
+            if (persona.body_type === "District") {
+                r = r.filter((p) => p.body_id === persona.body_code);
+            } else if (persona.body_type === "Division") {
+                const divSuffix = persona.body_code.replace(/^DIV-/, "").toUpperCase(); // e.g. "IND"
+                r = r.filter((p) =>
+                    p.body_id === persona.body_code ||
+                    (p.body_id?.startsWith("DIST-") && p.body_id.toUpperCase().endsWith(`-${divSuffix}`))
+                );
+            }
+            // State (MPCA) sees ALL players — no scope filter
+        }
         if (filter === "mine" && persona) {
-            if (persona.body_type === "District") r = r.filter((p) => p.body_id === persona.body_code);
-            else if (persona.body_type === "Division") r = r.filter((p) => p.body_id.endsWith(persona.body_code.slice(-3)));
-            // State sees all
+            // Legacy "mine" filter is now a no-op since default is already scoped
         } else if (["Local_MP", "Born_Outside", "Guest"].includes(filter)) {
             r = r.filter((p) => p.category === filter);
         } else if (["Active", "Pending", "Under_Division_Review", "Discrepancy_Raised", "Division_Approved", "Suspended"].includes(filter)) {
@@ -648,9 +661,31 @@ const Players = () => {
                 )}
             </div>
 
-            <div className="crest-divider mb-10" />
+            <div className="crest-divider mb-6" />
 
-            {stats && (
+            {/* Sprint T-RIM · Scope indicator */}
+            {persona && (
+                <div className="mb-8 flex items-center gap-3 text-[11px]" data-testid="scope-banner">
+                    <span className="overline">Viewing Scope</span>
+                    <span className={`px-2.5 py-1 border font-semibold tracking-widest uppercase text-[10px] ${
+                        persona.body_type === "State"
+                            ? "border-mpca-green-dark bg-mpca-green-dark text-mpca-ivory"
+                            : persona.body_type === "Division"
+                            ? "border-mpca-brass text-mpca-brass"
+                            : "border-mpca-oxblood text-mpca-oxblood"
+                    }`}>
+                        {persona.body_type === "State"
+                            ? "MPCA — All Players (10 Divisions)"
+                            : persona.body_type === "Division"
+                            ? `${persona.body_name} + child Districts`
+                            : persona.body_name}
+                    </span>
+                    <span className="text-mpca-gray-dark">·</span>
+                    <span className="font-mono text-mpca-green-dark" data-testid="scope-count">{filtered.length} players visible</span>
+                </div>
+            )}
+
+            {stats && persona?.body_type === "State" && (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10" data-testid="player-stats">
                     <StatTile icon={UserIcon} label="Total Players" value={stats.total_players} sub="All bodies · all categories" accent="navy" />
                     <StatTile icon={CheckCircle2} label="Active" value={stats.active_players} sub="Eligible to be selected" accent="marigold" />
@@ -675,8 +710,7 @@ const Players = () => {
             <div className="flex flex-wrap items-center gap-3 mb-6">
                 <Filter size={12} className="text-mpca-gray-dark" />
                 {[
-                    ["all", "All"],
-                    ["mine", "My Scope"],
+                    ["all", "All (in scope)"],
                     ["Active", "Active"],
                     ["Pending", "Pending"],
                     ["Under_Division_Review", "In Review"],

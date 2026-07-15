@@ -9,7 +9,7 @@ import {
     Trophy, Calendar, MapPin, Users, ChevronLeft, Plus, X, ShieldCheck, AlertTriangle, Crown, BadgeCheck,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
-import TournamentOps from "@/pages/TournamentOps";
+import { Wallet, ArrowRight } from "lucide-react";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
@@ -223,8 +223,28 @@ const TournamentDetail = () => {
                 </div>
             )}
 
-            {/* Phase T1-T4 · Tournament Operations */}
-            <TournamentOps tournament={t} persona={persona} onChanged={load} />
+            {/* Sprint T-RIM · Finance moved to dedicated console */}
+            <div className="mt-8 border-2 border-mpca-brass/40 bg-mpca-cream/40 p-5 flex items-center justify-between gap-4" data-testid="finance-cta-card">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 flex items-center justify-center bg-mpca-brass/20 text-mpca-oxblood">
+                        <Wallet size={24} />
+                    </div>
+                    <div>
+                        <div className="overline text-[9px]">Financial Operations</div>
+                        <div className="font-serif text-xl text-mpca-green-dark mt-1">Tournament Reimbursement Matrix</div>
+                        <div className="text-[11px] text-mpca-gray-dark mt-1 max-w-xl">
+                            Budget sheet from MPCA schemes, invoices with AI extraction &amp; multi-head allocation, extra-expense approvals, and reimbursement claim submission — all in one console.
+                        </div>
+                    </div>
+                </div>
+                <button
+                    onClick={() => navigate(`/tournaments/${t.id}/finance`)}
+                    className="btn-heritage-primary shrink-0"
+                    data-testid="open-finance-console-btn"
+                >
+                    Open Finance Console <ArrowRight size={12} />
+                </button>
+            </div>
 
             {/* New squad dialog */}
             {newSquad.open && (

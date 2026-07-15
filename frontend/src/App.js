@@ -58,6 +58,8 @@ import { ReimbursementClaimsList, ReimbursementClaimDetail } from "@/pages/Reimb
 import MyDAForms from "@/pages/MyDAForms";
 import SquadReview from "@/pages/SquadReview";
 import CampsPage from "@/pages/Camps";
+import SchemesMaster from "@/pages/SchemesMaster";
+import GrantClaims from "@/pages/GrantClaims";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -163,6 +165,9 @@ function App() {
                         <Route path="/my-da-forms" element={<Protected><MyDAForms /></Protected>} />
                         <Route path="/squads/:sid/review" element={<Protected><SquadReview /></Protected>} />
                         <Route path="/camps" element={<Protected><CampsPage /></Protected>} />
+                        <Route path="/schemes" element={<Protected><SchemesMaster /></Protected>} />
+                        <Route path="/grant-claims" element={<Protected><GrantClaims /></Protected>} />
+                        <Route path="/grant-claims/new" element={<Protected><GrantClaims /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

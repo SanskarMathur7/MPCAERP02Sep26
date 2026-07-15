@@ -1865,20 +1865,25 @@ class ReimbursementSchemeHead(BaseModel):
     model_config = ConfigDict(extra="ignore")
     code: str                                     # "ACCOMMODATION", "UMPIRE_FEES" etc.
     label: str                                    # Display label
-    unit: str                                     # "per_day", "per_person_per_day" etc.
-    rate_inr: float                               # Base rate from scheme
+    unit: str = "at_actuals"                      # "per_day", "per_person_per_day" etc.
+    rate_inr: float = 0.0                         # Base rate from scheme (0 for lump/varies)
+    rate_display: Optional[str] = None            # Human-readable rate ("₹5,000 / day")
 
 
 class ReimbursementScheme(BaseModel):
-    """Master data: MPCA reimbursement scheme with budget heads (from HTML seed)."""
+    """Master data: MPCA reimbursement/grant scheme with budget heads (from HTML seed)."""
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    scheme_code: str                              # "2-A", "2-D" etc. — unique
+    scheme_code: str                              # "1-A", "2-D", "6-A" etc. — unique
     name: str
     description: Optional[str] = None
+    scheme_type: str = "Reimbursement"            # "Reimbursement" | "Annual_Grant" | "Award" | "Camp" | "Welfare" | "Infrastructure"
+    eligible_bodies: List[str] = ["All"]          # ["Division"], ["District"], ["All"]
     categories: List[str] = []                    # ["Open", "U-23"] etc.
     heads: List[ReimbursementSchemeHead] = []
-    conditions: List[str] = []
+    conditions: List[str] = []                    # eligibility_conditions
+    required_documents: List[str] = []            # docs to submit for claim
+    frequency: str = "Annual"                     # "Annual" | "One_time" | "Per_tournament" | "Half_yearly" | "Monthly"
     is_active: bool = True
     fiscal_cycle: str = "2025-26"
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

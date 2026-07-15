@@ -47,6 +47,8 @@ const NAV_DOMAINS = [
     {
         domain: "Financial",
         items: [
+            { to: "/schemes", label: "MPCA Schemes Register", icon: BookOpen },
+            { to: "/grant-claims", label: "Grant Claims", icon: HandCoins },
             { to: "/tournament-finance", label: "Tournament Reimbursement Matrix", icon: Wallet },
             { to: "/reimbursement-claims", label: "Reimbursement Claims", icon: HandCoins },
         ],
@@ -143,6 +145,7 @@ const COMING_SOON_DOMAINS = [
 
 import { MpcaEmblem as MPCACrest } from "@/components/MpcaEmblem";
 import NotificationBell from "@/components/NotificationBell";
+import AIAssistantPanel from "@/components/AIAssistantPanel";
 
 const AppLayout = ({ children }) => {
     const { persona, logout } = useAuth();
@@ -346,6 +349,7 @@ const AppLayout = ({ children }) => {
             <main className="flex-1 overflow-y-auto" data-testid="app-main">
                 {children}
             </main>
+            <AIAssistantPanel />
         </div>
     );
 };

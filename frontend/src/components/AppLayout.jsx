@@ -222,6 +222,7 @@ const AppLayout = ({ children }) => {
 
                 {/* Primary nav */}
                 <nav className="flex-1 px-4 py-6 overflow-y-auto">
+                    {persona?.id !== "match-official" && (
                     <ul className="space-y-0.5 mb-6">
                         <li>
                             <NavLink
@@ -257,6 +258,7 @@ const AppLayout = ({ children }) => {
                             </NavLink>
                         </li>
                     </ul>
+                    )}
 
                     {(persona?.id === "match-official" ? OFFICIAL_NAV_DOMAINS : NAV_DOMAINS).map((group) => (
                         <div key={group.domain} className="mb-6">

@@ -324,7 +324,10 @@ async def budget_tracker(bid: str):
             allocs = i.get("allocations") or []
             if allocs:
                 for a in allocs:
-                    if (a.get("head_label") == head_label) or ((a.get("head_code") or "").upper() == code):
+                    # match by label first (preferred), otherwise by code — never double-count
+                    if a.get("head_label") == head_label:
+                        spent += float(a.get("amount_inr") or 0)
+                    elif (a.get("head_code") or "").upper() == code:
                         spent += float(a.get("amount_inr") or 0)
             else:
                 if (i.get("budget_head_code") or "").upper() == code:

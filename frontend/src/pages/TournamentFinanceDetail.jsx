@@ -92,19 +92,24 @@ const TournamentFinanceDetail = () => {
         try {
             const sch = allSchemes.find((s) => s.scheme_code === scheme_code);
             if (!sch) return;
-            // Update tournament scheme_code (via generic patch — assuming exists) — fallback: skip persist and use only for budget
             try { await api.patch(`/tournaments/${id}`, { scheme_code }); } catch (_) { /* not fatal */ }
 
-            // Create budget from scheme heads
-            const head_allocations = sch.heads.map((h) => ({ head: h.label, limit_inr: h.rate_inr }));
+            // Exclude lump-sum prize heads from budget ceiling (they're one-time payouts, not spend caps)
+            const isPrizeLump = (h) => /prize|winner|runner|award/i.test(h.label) || /lump/i.test(h.unit || "");
+            const operationalHeads = sch.heads.filter((h) => !isPrizeLump(h));
+            const prizeHeads = sch.heads.filter(isPrizeLump);
+            const head_allocations = operationalHeads.map((h) => ({ head: h.label, limit_inr: h.rate_inr }));
             const totalCeiling = head_allocations.reduce((s, h) => s + (h.limit_inr || 0), 0);
+            const prizeNote = prizeHeads.length > 0
+                ? ` · Prize pool (excluded from ceiling): ${prizeHeads.map((h) => `${h.label} ₹${h.rate_inr.toLocaleString('en-IN')}`).join(', ')}`
+                : "";
             const payload = {
                 tournament_id: id,
                 body_id: tournament.host_body_id || "MPCA",
                 fiscal_cycle: tournament.fiscal_cycle || "2025-26",
                 total_ceiling_inr: totalCeiling,
                 head_allocations,
-                notes: `Auto-created from scheme ${scheme_code} — ${sch.name}`,
+                notes: `Auto-created from scheme ${scheme_code} — ${sch.name}${prizeNote}`,
                 created_by: persona?.name,
             };
             await api.post("/tournament-budgets", payload);

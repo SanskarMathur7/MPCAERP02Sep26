@@ -24,37 +24,29 @@ async def _next_tournament_no(cycle: str) -> str:
 
 
 def _tournament_scope_query(scope) -> dict:
-    """M13: Divisions/Districts see MPCA/BCCI-hosted tournaments (Championship,
-    Inter_Divisional, Invitational, State) PLUS their own body's tournaments PLUS
-    tournaments where their body is on the acceptance-required list."""
+    """M13: Divisions/Districts see ONLY:
+    - Their own body's tournaments (hosted by their body_code)
+    - Tournaments hosted by their child bodies (Division → children Districts)
+    - Tournaments where their body is on the acceptance-required list
+    They do NOT see MPCA-hosted tournaments unless required to accept them."""
     if scope.is_state or not scope.body_code:
         return {}
     if scope.is_division:
         suffix = scope.division_suffix
         return {"$or": [
-            {"host_body_id": {"$in": ["MPCA", "BCCI"]}},
-            {"scope": "State"},
             {"host_body_id": scope.body_code},
             {"host_body_id": {"$regex": f"^DIST-.+-{suffix}$"}},
             {"acceptance.required_from": scope.body_code},
             {"acceptance.required_from": {"$regex": f"^DIST-.+-{suffix}$"}},
         ]}
     if scope.is_district:
-        # District sees MPCA + parent Division + own
-        # Compute parent division suffix from own code (DIST-XXX-YYY → DIV-YYY)
-        parts = scope.body_code.split("-")
-        parent_div = f"DIV-{parts[-1]}" if len(parts) >= 3 else None
-        or_clauses = [
-            {"host_body_id": {"$in": ["MPCA", "BCCI"]}},
-            {"scope": {"$in": ["State", "Division"]}},
+        return {"$or": [
             {"host_body_id": scope.body_code},
             {"acceptance.required_from": scope.body_code},
-        ]
-        if parent_div:
-            or_clauses.append({"host_body_id": parent_div})
-        return {"$or": or_clauses}
+        ]}
     if scope.is_official:
-        return {}  # officials see all tournaments (they may be assigned to any)
+        # Match officials see all — they may be assigned to any tournament
+        return {}
     return {}
 
 

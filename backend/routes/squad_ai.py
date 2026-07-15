@@ -242,6 +242,30 @@ async def squad_recommendation(sid: str):
     if role_mix.get("spin", 0) + role_mix.get("pace", 0) < 4:
         ai_notes.append("⚠ Bowling attack thin — fewer than 4 specialist bowlers.")
 
+    # Sprint M15 · Overall PASS/FAIL verdict
+    # Fail if: (a) KYC gaps present, (b) role mix broken, (c) severe bias, (d) very low quality
+    critical_issues = []
+    if kyc_gap_count > 0:
+        critical_issues.append(f"{kyc_gap_count} KYC gap(s)")
+    if role_mix.get("keeper", 0) == 0:
+        critical_issues.append("no wicket-keeper")
+    if role_mix.get("spin", 0) + role_mix.get("pace", 0) < 4:
+        critical_issues.append("thin bowling attack")
+    if bias.get("top_body_pct", 0) >= 85:
+        critical_issues.append(f"severe body bias ({bias.get('top_body_pct')}%)")
+    if quality_score < 70:
+        critical_issues.append(f"quality score {quality_score} below 70")
+
+    if not critical_issues:
+        overall_verdict = "PASS"
+        verdict_reason = "Squad meets all critical checks — KYC, role balance, quality, and body spread are all within acceptable thresholds."
+    elif len(critical_issues) == 1 and kyc_gap_count > 0 and kyc_gap_count <= 5:
+        overall_verdict = "PASS_WITH_REMARKS"
+        verdict_reason = f"Minor KYC gaps ({kyc_gap_count}) — approve with a directive to resolve pending documents before departure."
+    else:
+        overall_verdict = "FAIL"
+        verdict_reason = f"Squad has {len(critical_issues)} critical issue(s): {', '.join(critical_issues)}. Recommend Division to revise selection or provide clarifications."
+
     return {
         "squad_id": sid,
         "tournament_name": tournament.get("name"),
@@ -256,6 +280,9 @@ async def squad_recommendation(sid: str):
         "avg_selected_score": avg_selected_score,
         "avg_recommended_score": avg_recommended_score,
         "ai_notes": ai_notes,
+        "overall_verdict": overall_verdict,
+        "verdict_reason": verdict_reason,
+        "critical_issues": critical_issues,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "algorithm": "deterministic_v1",
     }

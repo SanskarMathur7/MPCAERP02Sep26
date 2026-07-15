@@ -87,33 +87,68 @@ const TournamentFinanceDetail = () => {
 
     useEffect(() => { load(); }, [id]);
 
-    // ─── Scheme assignment: create budget from scheme heads ───
-    const assignScheme = async (scheme_code) => {
-        try {
-            const sch = allSchemes.find((s) => s.scheme_code === scheme_code);
-            if (!sch) return;
-            try { await api.patch(`/tournaments/${id}`, { scheme_code }); } catch (_) { /* not fatal */ }
+    // ─── Scheme assignment: create budget from scheme heads using calculator ───
+    const [schemePickerStep, setSchemePickerStep] = useState("choose"); // choose | inputs
+    const [schemeInputSpec, setSchemeInputSpec] = useState(null);
+    const [calcInputs, setCalcInputs] = useState({});
+    const [computedBudget, setComputedBudget] = useState(null);
+    const [computing, setComputing] = useState(false);
 
-            // Exclude lump-sum prize heads from budget ceiling (they're one-time payouts, not spend caps)
-            const isPrizeLump = (h) => /prize|winner|runner|award/i.test(h.label) || /lump/i.test(h.unit || "");
-            const operationalHeads = sch.heads.filter((h) => !isPrizeLump(h));
-            const prizeHeads = sch.heads.filter(isPrizeLump);
-            const head_allocations = operationalHeads.map((h) => ({ head: h.label, limit_inr: h.rate_inr }));
-            const totalCeiling = head_allocations.reduce((s, h) => s + (h.limit_inr || 0), 0);
-            const prizeNote = prizeHeads.length > 0
-                ? ` · Prize pool (excluded from ceiling): ${prizeHeads.map((h) => `${h.label} ₹${h.rate_inr.toLocaleString('en-IN')}`).join(', ')}`
-                : "";
+    const chooseScheme = async (scheme_code) => {
+        setComputing(true);
+        try {
+            const { data: spec } = await api.get(`/schemes/${scheme_code}/input-spec`);
+            setSchemeInputSpec(spec);
+            const defaults = {};
+            (spec.input_variables || []).forEach((v) => { defaults[v.key] = v.default; });
+            setCalcInputs(defaults);
+            // Auto-compute with defaults immediately
+            const { data: computed } = await api.post(`/schemes/${scheme_code}/compute-budget`, { inputs: defaults });
+            setComputedBudget(computed);
+            setSchemePickerStep("inputs");
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setComputing(false); }
+    };
+
+    const recompute = async (newInputs) => {
+        if (!schemeInputSpec) return;
+        setComputing(true);
+        try {
+            const { data } = await api.post(`/schemes/${schemeInputSpec.scheme_code}/compute-budget`, { inputs: newInputs });
+            setComputedBudget(data);
+        } catch (e) { console.error(e); }
+        finally { setComputing(false); }
+    };
+
+    const setInput = (k, v) => {
+        const next = { ...calcInputs, [k]: v };
+        setCalcInputs(next);
+        // Debounced recompute
+        clearTimeout(setInput._t);
+        setInput._t = setTimeout(() => recompute(next), 300);
+    };
+
+    const assignScheme = async () => {
+        try {
+            if (!computedBudget || !schemeInputSpec) return;
+            const scheme_code = schemeInputSpec.scheme_code;
+            try { await api.patch(`/tournaments/${id}`, { scheme_code }); } catch (_) { /* not fatal */ }
             const payload = {
                 tournament_id: id,
                 body_id: tournament.host_body_id || "MPCA",
                 fiscal_cycle: tournament.fiscal_cycle || "2025-26",
-                total_ceiling_inr: totalCeiling,
-                head_allocations,
-                notes: `Auto-created from scheme ${scheme_code} — ${sch.name}${prizeNote}`,
+                total_ceiling_inr: computedBudget.total_ceiling_inr,
+                head_allocations: computedBudget.head_allocations.map((h) => ({
+                    head: h.head, limit_inr: h.limit_inr, notes: h.formula,
+                })),
+                notes: `Auto-computed from scheme ${scheme_code} — ${schemeInputSpec.scheme_name}. Inputs: ${JSON.stringify(calcInputs)}`,
                 created_by: persona?.name,
             };
             await api.post("/tournament-budgets", payload);
             setShowSchemePicker(false);
+            setSchemePickerStep("choose");
+            setSchemeInputSpec(null);
+            setComputedBudget(null);
             await load();
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
@@ -394,25 +429,81 @@ const TournamentFinanceDetail = () => {
                         </div>
                     )}
 
-                    {/* Scheme picker modal */}
+                    {/* Scheme picker modal with inputs + auto-compute */}
                     {showSchemePicker && (
-                        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6" onClick={() => setShowSchemePicker(false)}>
-                            <div className="bulletin-card p-6 max-w-3xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="scheme-picker-modal">
-                                <div className="font-serif text-2xl text-mpca-green-dark mb-4">Choose Reimbursement Scheme</div>
-                                <div className="space-y-2">
-                                    {allSchemes.map((s) => (
-                                        <button key={s.scheme_code} onClick={() => assignScheme(s.scheme_code)} className="w-full text-left p-3 border border-mpca-brass/30 hover:border-mpca-oxblood hover:bg-mpca-cream/40 transition-colors" data-testid={`scheme-opt-${s.scheme_code}`}>
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <div className="font-serif text-base text-mpca-green-dark">Scheme {s.scheme_code} · {s.name}</div>
-                                                    <div className="text-[11px] text-mpca-gray-dark mt-1">{s.description}</div>
-                                                    <div className="text-[10px] text-mpca-brass mt-1">{s.heads.length} budget heads · {s.categories.join(", ")}</div>
-                                                </div>
-                                                <ChevronRightIcon />
+                        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6" onClick={() => { setShowSchemePicker(false); setSchemePickerStep("choose"); }}>
+                            <div className="bulletin-card p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="scheme-picker-modal">
+                                {schemePickerStep === "choose" ? (
+                                    <>
+                                        <div className="font-serif text-2xl text-mpca-green-dark mb-4">① Choose Reimbursement Scheme</div>
+                                        <div className="space-y-2">
+                                            {allSchemes.filter((s) => ["Reimbursement", "Camp"].includes(s.scheme_type) || ["2-A","2-B","2-C","2-D","2-E","3-A","3-B","3-C","3-D","9-BCCI"].includes(s.scheme_code)).map((s) => (
+                                                <button key={s.scheme_code} onClick={() => chooseScheme(s.scheme_code)} disabled={computing} className="w-full text-left p-3 border border-mpca-brass/30 hover:border-mpca-oxblood hover:bg-mpca-cream/40 transition-colors" data-testid={`scheme-opt-${s.scheme_code}`}>
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <div className="font-serif text-base text-mpca-green-dark">Scheme {s.scheme_code} · {s.name}</div>
+                                                            <div className="text-[11px] text-mpca-gray-dark mt-1">{s.description}</div>
+                                                            <div className="text-[10px] text-mpca-brass mt-1">{s.heads.length} budget heads · {(s.categories || []).join(", ")}</div>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div>
+                                                <div className="overline text-[9px]">Step 2</div>
+                                                <div className="font-serif text-2xl text-mpca-green-dark">② Tournament Parameters</div>
+                                                <div className="text-[11px] text-mpca-brass mt-1 font-mono">Scheme {schemeInputSpec?.scheme_code} · {schemeInputSpec?.scheme_name}</div>
                                             </div>
-                                        </button>
-                                    ))}
-                                </div>
+                                            <button className="text-[11px] text-mpca-brass uppercase tracking-widest" onClick={() => setSchemePickerStep("choose")}>← Back</button>
+                                        </div>
+                                        {schemeInputSpec?.input_variables?.length > 0 ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                                                {schemeInputSpec.input_variables.map((v) => (
+                                                    <label key={v.key} className="block">
+                                                        <div className="overline text-[9px] mb-1">{v.label}{v.unit && <span className="text-mpca-gray-dark ml-1">({v.unit})</span>}</div>
+                                                        {v.type === "select" ? (
+                                                            <select className="input-heritage" value={calcInputs[v.key] ?? v.default} onChange={(e) => setInput(v.key, e.target.value)} data-testid={`calc-${v.key}`}>
+                                                                {(v.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+                                                            </select>
+                                                        ) : (
+                                                            <input type="number" className="input-heritage" value={calcInputs[v.key] ?? v.default ?? 0} onChange={(e) => setInput(v.key, e.target.value)} data-testid={`calc-${v.key}`} />
+                                                        )}
+                                                        {v.hint && <div className="text-[9px] text-mpca-gray-dark mt-0.5">{v.hint}</div>}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="mb-4 p-3 border border-mpca-brass/30 text-[11px] text-mpca-gray-dark italic">
+                                                No input formula defined for this scheme. Budget will use scheme base rates as head limits.
+                                            </div>
+                                        )}
+                                        {computedBudget && (
+                                            <div className="bulletin-card p-4">
+                                                <div className="flex justify-between items-center mb-3">
+                                                    <div className="overline text-[9px]">Computed Budget {computing && <span className="ml-2 text-mpca-brass">recalculating...</span>}</div>
+                                                    <div className="font-serif text-2xl text-mpca-oxblood" data-testid="computed-total">₹{Math.round(computedBudget.total_ceiling_inr).toLocaleString("en-IN")}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    {computedBudget.head_allocations.map((h, i) => (
+                                                        <div key={i} className="grid grid-cols-12 gap-2 items-center text-xs border-b border-mpca-brass/10 pb-1" data-testid={`computed-head-${i}`}>
+                                                            <div className="col-span-6 text-mpca-green-dark">{h.head}</div>
+                                                            <div className="col-span-4 text-[10px] text-mpca-brass font-mono truncate">{h.formula}</div>
+                                                            <div className="col-span-2 text-right font-mono text-mpca-green-dark">₹{Math.round(h.limit_inr).toLocaleString("en-IN")}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="mt-4 flex justify-end gap-2">
+                                            <button className="btn-heritage-secondary" onClick={() => { setShowSchemePicker(false); setSchemePickerStep("choose"); }}>Cancel</button>
+                                            <button className="btn-heritage-primary" onClick={assignScheme} disabled={!computedBudget || computing} data-testid="assign-scheme-btn">Assign Scheme &amp; Create Budget</button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     )}

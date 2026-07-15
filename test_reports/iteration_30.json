@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 30 · Verified all 7 bug fixes end-to-end (backend + UI). Backend: 10/10 pytest cases PASSED in test_iter30_seven_bugs.py covering tournament scoping (State/DIV/DIST), match officials merge, scheme calculator (2-B/2-D input-spec + compute-budget), and squad AI verdict. UI: all 7 bugs visually validated with Playwright. Bug 1 — DIV-IND persona sees only 1 tournament (Vijay Merchant Trophy hosted by DIV-IND) while MPCA sees all 33; scoping headers X-Body-Code + X-Body-Type work correctly via /core/scoping.py. Bug 2 — Division persona on CT Sarwate Trophy Selection Console shows NO approve/reject/AI-review buttons (submit-mpca-btn is visible instead). Bug 3 — Match Officials Umpire 1 dropdown includes 'Umesh Bharadwaj · State Panel · MPCA' + 'Anil Chaudhary · State Panel · DIV-IND' — merged pool works. Bug 4 — /api/schemes/2-D/compute-budget with the spec's inputs returns total_ceiling_inr=₹2,89,340 with 9 head allocations including formulas like '₹1,800 × 20 rooms × 6 days'; 2-B computes 9 head allocations. Bug 5 — /squads/{sid}/review shows a prominent 'OVERALL AI VERDICT ✗ FAIL' banner with critical-issues count=3 and full verdict reason. Bug 6 — MPCA persona on rejected claim GRC-2025-26-0001 sees NO submit-claim-btn (only rejection reason panel); Division persona on same claim sees submit-claim-btn (canSubmit gate correctly excludes MPCA). Bug 7 — On /schemes as Division, Scheme 2-B (Reimbursement) shows the read-only tournament-matrix notice WITHOUT claim-scheme-btn; Scheme 1-A (Annual_Grant) shows claim-scheme-btn correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "SelectionConsole (officials dropdown)", "issues": ["React hydration console warning: 'In HTML, <span> cannot be a child of <option>' — cosmetic only, no functional impact. Likely originates in the officials <select> option children or a similar select elsewhere on the page. Low priority."]},
+      {"screen": "Grant Claim rejection (MPCA)", "issues": ["Rejection reason field shows 'ljn' (test input) — data-quality issue only, not a code bug."]},
+      {"screen": "Grant Claim documents (MPCA)", "issues": ["Each uploaded doc shows 'AI flag · AI verification error: expected str, bytes or os.PathLike object, not NoneType' — the AI verification pipeline is throwing NoneType errors on all four docs of GRC-2025-26-0001. This is a pre-existing backend defect (invoice/doc AI verification), NOT one of the 7 bugs. Consider a follow-up ticket."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter30_seven_bugs.py",
+    "/app/test_reports/pytest/iter30_bugs.xml"
+  ],
+  "action_items": [
+    "Optional (not blocking): fix pre-existing AI verification NoneType error on grant claim docs (unrelated to the 7 bugs in scope).",
+    "Optional: silence 'span cannot be a child of option' hydration warning in SelectionConsole select options."
+  ],
+  "critical_code_review_comments": [
+    "backend/routes/tournaments.py::_tournament_scope_query — clean $or scope with 4 branches (own body, child DIST-*-{SUFFIX}, own body on required_from, child on required_from). Correctly returns {} for state / official personas.",
+    "backend/routes/scheme_calc.py — deterministic formulae for 2-A, 2-B, 2-C, 2-D, 3-A, 3-D. 2-D total for the spec's inputs = ₹289,340 (matches expected ~289,340). Rounding to 2 decimals is fine but could be integer-only for INR heads.",
+    "backend/routes/squad_ai.py — new fields overall_verdict, verdict_reason, critical_issues added; verdict logic well-guarded (PASS if no issues, PASS_WITH_REMARKS only if the SINGLE issue is a small KYC gap ≤ 5, else FAIL).",
+    "frontend/src/pages/SchemesMaster.jsx::TOURNAMENT_SCHEME_CODES — the set is comprehensive but the isTournamentScheme predicate also OR-matches scheme_type==='Reimbursement'. That's a broader net than the 8 explicit codes. Confirm no legit non-tournament Reimbursement schemes exist in seed (currently OK since the 8 codes match 1-1 with Reimbursement schemes, but adding a non-tournament Reimbursement scheme later would incorrectly hide the claim button).",
+    "frontend/src/pages/SelectionConsole.jsx:104-118 — match-officials pool merges MPCA + persona-body correctly and dedupes by id. Good defensive fallback with .catch(() => ({data: []})).",
+    "frontend/src/pages/GrantClaims.jsx:103 — canSubmit = !isMPCA && [Draft, Documents_Pending, Rejected] && allDocsUploaded. Correct."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter30_seven_bugs.py (new — 10 pytest tests covering Bugs 1, 3, 4, 5)"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 pytest cases passed)",
+    "frontend": "100% (all 7 bug fixes visually verified)"
+  },
+  "test_credentials": "persona-chip-secretary (MPCA), persona-chip-division-secretary (DIV-IND), persona-chip-district-secretary (DIST-INDO-IND) — all working. Login requires clicking chip THEN 'Sign in to the Registrar' button (not chip alone).",
+  "seed_data_creation": "No new seed data created. Used existing: CT Sarwate Trophy (id 89847570-56c9-4253-9340-044ddbd6695f, MPCA-hosted), Vijay Merchant Trophy (TRN-2025-26-033, DIV-IND-hosted), Squad 622016e0-6bab-40cc-a22f-db47d9dfa84f (FAIL verdict — 45 KYC gaps + thin bowling + 100% DIV-IND bias), Grant Claim 2c658ea8-0a43-4f92-b757-4b708421ef41 (GRC-2025-26-0001, Rejected).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 7 bugs are cleanly fixed. Backend + UI validated for both DIV-IND (scoped) and MPCA (unrestricted) personas. Verdict banner on /squads/:sid/review shows PASS/FAIL/PASS_WITH_REMARKS correctly. Scheme calculator supports 2-A, 2-B, 2-C, 2-D, 3-A, 3-D with deterministic formulae. Tournament-scheme claim button correctly hidden on /schemes for Div/Dist. If further edits are needed, note that (a) login sequence requires TWO clicks (chip + Sign-in button), (b) Grant Claims uses a single-page master-detail (no separate /grant-claims/:id route — click the claim-row inline), (c) Selection Console has a small hydration warning re: <span> in <option> that is cosmetic.",
+  "rca of the issue": "N/A — all 7 bugs are resolved. Root causes for each fix: (1) Scoping — was previously showing MPCA broadcast; now _tournament_scope_query returns a strict $or filter of own+children+required_from. (2) RBAC on SelectionConsole — button conditions now check persona.body_type === 'State' vs !== 'State'. (3) Officials pool — SelectionConsole now merges MPCA + body_scope pools. (4) Budget calculator — new scheme_calc.py provides deterministic per-scheme formulae from input variables. (5) Verdict — squad_ai.py now emits PASS/PASS_WITH_REMARKS/FAIL derived from KYC gaps + role balance + quality score + body bias. (6) canSubmit — added !isMPCA gate. (7) Tournament schemes — new TOURNAMENT_SCHEME_CODES set + isTournamentScheme helper hides claim-scheme-btn."
+}

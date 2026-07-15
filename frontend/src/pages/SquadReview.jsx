@@ -64,6 +64,35 @@ const SquadReview = () => {
                 </button>
             </div>
 
+            {/* Sprint M15 · Overall PASS/FAIL verdict banner */}
+            <div className={`mb-6 p-5 border-2 ${
+                verdict.overall_verdict === "PASS" ? "border-mpca-green-dark bg-mpca-green-dark/10" :
+                verdict.overall_verdict === "PASS_WITH_REMARKS" ? "border-mpca-brass bg-mpca-brass/10" :
+                "border-mpca-oxblood bg-mpca-oxblood/10"
+            }`} data-testid="verdict-banner">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
+                        <div className="overline text-[9px]">Overall AI Verdict</div>
+                        <div className={`font-serif text-3xl mt-1 ${
+                            verdict.overall_verdict === "PASS" ? "text-mpca-green-dark" :
+                            verdict.overall_verdict === "PASS_WITH_REMARKS" ? "text-mpca-brass" :
+                            "text-mpca-oxblood"
+                        }`} data-testid="verdict-text">
+                            {verdict.overall_verdict === "PASS" ? "✓ PASS" :
+                             verdict.overall_verdict === "PASS_WITH_REMARKS" ? "⚠ PASS WITH REMARKS" :
+                             "✗ FAIL"}
+                        </div>
+                        <div className="text-sm text-mpca-green-dark mt-2 max-w-2xl">{verdict.verdict_reason}</div>
+                    </div>
+                    {verdict.critical_issues?.length > 0 && (
+                        <div className="text-right">
+                            <div className="overline text-[9px]">Critical Issues</div>
+                            <div className="font-serif text-4xl text-mpca-oxblood">{verdict.critical_issues.length}</div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* Scorecard strip */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 <div className="bulletin-card p-4" data-testid="stat-quality">

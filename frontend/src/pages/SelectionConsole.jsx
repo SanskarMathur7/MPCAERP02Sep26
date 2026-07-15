@@ -98,11 +98,23 @@ const SelectionConsole = () => {
             setPlayers(ps);
             setSelection(sel);
             if (sel?.voters?.length) setVoters(sel.voters);
-            // Fetch match officials scoped to persona's body (or MPCA for state)
+            // Fetch match officials — include MPCA state-panel + persona body's officials
             try {
                 const bodyScope = persona?.body_code;
-                const { data: pool } = await import("@/lib/api").then((m) => m.api.get("/match-officials", { params: bodyScope ? { body_id: bodyScope, active_only: true } : { active_only: true } }));
-                setOfficialsPool(pool || []);
+                const apiMod = await import("@/lib/api");
+                // Pull all active officials (MPCA + body-specific) — the dropdown works better with a
+                // wider pool since officials at MPCA level can officiate any tournament.
+                const [{ data: mpcaPool }, { data: bodyPool }] = await Promise.all([
+                    apiMod.api.get("/match-officials", { params: { body_id: "MPCA", active_only: true } }).catch(() => ({ data: [] })),
+                    bodyScope && bodyScope !== "MPCA"
+                        ? apiMod.api.get("/match-officials", { params: { body_id: bodyScope, active_only: true } }).catch(() => ({ data: [] }))
+                        : Promise.resolve({ data: [] }),
+                ]);
+                const merged = [...(mpcaPool || []), ...(bodyPool || [])];
+                // Dedupe by id
+                const seen = new Set();
+                const pool = merged.filter((o) => (seen.has(o.id) ? false : (seen.add(o.id), true)));
+                setOfficialsPool(pool);
             } catch { setOfficialsPool([]); }
         } finally { setLoading(false); }
     }, [tid, persona]);
@@ -300,7 +312,7 @@ const SelectionConsole = () => {
                             <Send size={12} /> {busyAction === "submit" ? "Submitting…" : "Submit to MPCA"}
                         </button>
                     )}
-                    {submissionStatus === "Awaiting_MPCA_Approval" && isOfficeBearer && (
+                    {submissionStatus === "Awaiting_MPCA_Approval" && persona?.body_type === "State" && (
                         <>
                             <Link to={`/squads/${selection?.id}/review`} className="btn-heritage-secondary" data-testid="ai-review-btn">
                                 <Sparkles size={12} /> AI Review

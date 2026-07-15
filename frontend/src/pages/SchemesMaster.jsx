@@ -9,6 +9,14 @@ const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 
 const SCHEME_TYPES = ["All", "Annual_Grant", "Reimbursement", "Camp", "Award", "Welfare", "Infrastructure", "Revenue_Share"];
 
+// Sprint M15 · Tournament-specific schemes (handled by Tournament Reimbursement Matrix, not Grant Claims)
+const TOURNAMENT_SCHEME_CODES = new Set([
+    "2-A", "2-B", "2-C", "2-D", "2-E",      // Tournament reimbursement schemes
+    "3-C", "3-D",                           // Reciprocal & Pre-tournament camps (tied to tournaments)
+    "9-BCCI",                               // BCCI hosting
+]);
+const isTournamentScheme = (s) => s && (TOURNAMENT_SCHEME_CODES.has(s.scheme_code) || s.scheme_type === "Reimbursement" || (s.frequency || "").toLowerCase().includes("tournament"));
+
 const SchemesMaster = () => {
     const { persona } = useAuth();
     const [schemes, setSchemes] = useState([]);
@@ -219,11 +227,18 @@ const SchemesMaster = () => {
                                 </div>
                             )}
 
-                            {/* Claim button for Div/Dist */}
-                            {!isMPCA && !editing && (
+                            {/* Claim button for Div/Dist — only for non-tournament schemes.
+                                Tournament schemes (2-* series, 3-C, 3-D, 9-BCCI) are handled
+                                exclusively via the Tournament Reimbursement Matrix. */}
+                            {!isMPCA && !editing && !isTournamentScheme(cur) && (
                                 <Link to={`/grant-claims/new?scheme=${cur.scheme_code}`} className="btn-heritage-primary inline-flex mt-2" data-testid="claim-scheme-btn">
                                     <IndianRupee size={12} /> Claim under this scheme
                                 </Link>
+                            )}
+                            {!isMPCA && isTournamentScheme(cur) && (
+                                <div className="mt-2 p-3 border border-mpca-brass/30 bg-mpca-cream/40 text-[11px] text-mpca-gray-dark">
+                                    <span className="font-semibold text-mpca-green-dark">Tournament scheme · read-only.</span> Claims under this scheme flow through the Tournament Reimbursement Matrix — create a tournament with scheme <span className="font-mono">{cur.scheme_code}</span> assigned, then upload invoices and submit at completion.
+                                </div>
                             )}
                         </>
                     )}

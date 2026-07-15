@@ -99,7 +99,8 @@ const GrantClaims = () => {
     if (loading) return <CricketLoader label="Loading grant claims..." />;
 
     const allDocsUploaded = selected && (selected.documents || []).every((d) => d.file_url);
-    const canSubmit = selected && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status) && allDocsUploaded;
+    // Only Division/District (non-MPCA) can submit; MPCA is approval authority only
+    const canSubmit = !isMPCA && selected && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status) && allDocsUploaded;
     const canReview = isMPCA && selected && ["Submitted", "Under_Review"].includes(selected.status);
     const scheme = selected ? schemes.find((s) => s.scheme_code === selected.scheme_code) : null;
 

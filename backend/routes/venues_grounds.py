@@ -82,8 +82,18 @@ def _normalise_venue_payload(data: dict) -> dict:
 
 @api_router.post("/venues", response_model=Venue)
 async def create_venue(payload: VenueCreate):
-    data = _normalise_venue_payload(payload.model_dump())
-    # Validate owner + manager bodies exist
+    # M9 · Detect which of body_id / owner_body_id was explicitly set by the client
+    # via exclude_unset — Pydantic defaults would otherwise mask the intent.
+    explicit = payload.model_dump(exclude_unset=True)
+    data = payload.model_dump()
+    if "owner_body_id" in explicit:
+        data["owner_body_id"] = explicit["owner_body_id"]
+        data["body_id"] = explicit["owner_body_id"]
+    elif "body_id" in explicit:
+        data["owner_body_id"] = explicit["body_id"]
+        data["body_id"] = explicit["body_id"]
+    # else both defaulted → both stay 'MPCA'
+    data = _normalise_venue_payload(data)
     owner = await db.bodies.find_one({"code": data["owner_body_id"]}, {"_id": 0})
     if not owner:
         raise HTTPException(400, f"Owner body {data['owner_body_id']} does not exist")
@@ -107,9 +117,18 @@ async def get_venue(vid: str):
 
 @api_router.patch("/venues/{vid}", response_model=Venue)
 async def update_venue(vid: str, payload: VenueCreate):
-    if not await db.venues.find_one({"id": vid}, {"_id": 0}):
+    existing = await db.venues.find_one({"id": vid}, {"_id": 0})
+    if not existing:
         raise HTTPException(404, "Venue not found")
-    data = _normalise_venue_payload(payload.model_dump())
+    explicit = payload.model_dump(exclude_unset=True)
+    data = payload.model_dump()
+    if "owner_body_id" in explicit:
+        data["owner_body_id"] = explicit["owner_body_id"]
+        data["body_id"] = explicit["owner_body_id"]
+    elif "body_id" in explicit:
+        data["owner_body_id"] = explicit["body_id"]
+        data["body_id"] = explicit["body_id"]
+    data = _normalise_venue_payload(data)
     if data.get("owner_body_id"):
         owner = await db.bodies.find_one({"code": data["owner_body_id"]}, {"_id": 0})
         if not owner:

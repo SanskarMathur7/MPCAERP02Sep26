@@ -249,6 +249,137 @@ class TestUnknownBodyRejection:
         assert "XYZ-999" in r.text
 
 
+# ─────────── Supplementary: iteration_24 explicit-intent sync cases ───────────
+
+class TestExplicitIntentSync:
+    """Covers the model_dump(exclude_unset=True) branches added in iteration_24."""
+
+    def test_neither_set_defaults_to_mpca(self, api):
+        """Neither owner_body_id nor body_id sent → both stay 'MPCA'."""
+        payload = {
+            "name": "M9 neither set",
+            "category": "MPCA_State",
+            "city": "Indore",
+        }
+        r = api.post(f"{BASE_URL}/api/venues", json=payload)
+        assert r.status_code in (200, 201), r.text
+        d = r.json()
+        _CREATED_IDS.append(d["id"])
+        assert d["owner_body_id"] == "MPCA"
+        assert d["body_id"] == "MPCA"
+
+    def test_both_set_owner_wins(self, api):
+        """owner_body_id='DIV-IND' + body_id='WRONG' → owner wins for BOTH fields."""
+        payload = {
+            "name": "M9 both-set owner-wins",
+            "category": "MPCA_State",
+            "city": "Indore",
+            "owner_body_id": "DIV-IND",
+            "body_id": "WRONG",
+        }
+        r = api.post(f"{BASE_URL}/api/venues", json=payload)
+        assert r.status_code in (200, 201), r.text
+        d = r.json()
+        _CREATED_IDS.append(d["id"])
+        assert d["owner_body_id"] == "DIV-IND", (
+            f"owner_body_id must win when both are sent; got owner={d['owner_body_id']!r}"
+        )
+        assert d["body_id"] == "DIV-IND", (
+            f"body_id must be force-synced to owner_body_id; got body_id={d['body_id']!r}"
+        )
+
+    def test_patch_only_body_id_syncs_owner(self, api):
+        """PATCH with body_id only (still incl. required fields) → owner_body_id follows body_id."""
+        # First create a baseline MPCA-owned venue
+        create = api.post(f"{BASE_URL}/api/venues", json={
+            "name": "M9 patch-only-body baseline",
+            "category": "MPCA_State",
+            "city": "Jabalpur",
+            "owner_body_id": "MPCA",
+        })
+        assert create.status_code in (200, 201), create.text
+        vid = create.json()["id"]
+        _CREATED_IDS.append(vid)
+
+        # PATCH with body_id explicit, owner_body_id NOT provided
+        patch_payload = {
+            "name": "M9 patch-only-body baseline",
+            "category": "MPCA_State",
+            "city": "Jabalpur",
+            "body_id": "DIV-JBP",
+        }
+        r = api.patch(f"{BASE_URL}/api/venues/{vid}", json=patch_payload)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["owner_body_id"] == "DIV-JBP", (
+            f"BUG: PATCH with only body_id should back-fill owner_body_id; got owner={d['owner_body_id']!r}"
+        )
+        assert d["body_id"] == "DIV-JBP"
+
+        # Verify persisted
+        g = api.get(f"{BASE_URL}/api/venues/{vid}")
+        gd = g.json()
+        assert gd["owner_body_id"] == "DIV-JBP"
+        assert gd["body_id"] == "DIV-JBP"
+
+    def test_patch_only_owner_body_id_syncs_body(self, api):
+        """PATCH with owner_body_id only → body_id follows owner_body_id."""
+        create = api.post(f"{BASE_URL}/api/venues", json={
+            "name": "M9 patch-only-owner baseline",
+            "category": "MPCA_State",
+            "city": "Bhopal",
+            "owner_body_id": "MPCA",
+        })
+        assert create.status_code in (200, 201), create.text
+        vid = create.json()["id"]
+        _CREATED_IDS.append(vid)
+
+        patch_payload = {
+            "name": "M9 patch-only-owner baseline",
+            "category": "MPCA_State",
+            "city": "Bhopal",
+            "owner_body_id": "DIV-BPL",
+        }
+        r = api.patch(f"{BASE_URL}/api/venues/{vid}", json=patch_payload)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["owner_body_id"] == "DIV-BPL"
+        assert d["body_id"] == "DIV-BPL", (
+            f"BUG: PATCH must force-sync body_id ← owner_body_id; got body_id={d['body_id']!r}"
+        )
+
+        g = api.get(f"{BASE_URL}/api/venues/{vid}")
+        gd = g.json()
+        assert gd["owner_body_id"] == "DIV-BPL"
+        assert gd["body_id"] == "DIV-BPL"
+
+
+# ─────────── Regression: bcci_calendar_eligible mirrors bcci_approval ───────────
+
+class TestBcciCalendarMirror:
+    @pytest.mark.parametrize("bcci,expected", [
+        ("Domestic", True),
+        ("International", True),
+        ("None", False),
+    ])
+    def test_calendar_eligible_matches_bcci_approval(self, api, bcci, expected):
+        payload = {
+            "name": f"M9 bcci-{bcci}",
+            "category": "MPCA_State",
+            "city": "Indore",
+            "owner_body_id": "MPCA",
+            "bcci_approval": bcci,
+        }
+        r = api.post(f"{BASE_URL}/api/venues", json=payload)
+        assert r.status_code in (200, 201), r.text
+        d = r.json()
+        _CREATED_IDS.append(d["id"])
+        assert d["bcci_approval"] == bcci
+        assert d["bcci_calendar_eligible"] is expected, (
+            f"bcci_approval={bcci!r} should yield eligible={expected}; got {d['bcci_calendar_eligible']!r}"
+        )
+
+
 # ─────────── Cleanup: delete every venue whose name starts with 'M9 ' ───────────
 
 def test_zzz_cleanup_m9_venues(api):

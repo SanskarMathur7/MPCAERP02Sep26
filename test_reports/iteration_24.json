@@ -1,0 +1,31 @@
+{
+  "summary": "Sprint M9 · Venues ownership sync — 2nd bug retest. Extended /app/backend/tests/test_venues_m9_retest.py with 7 new tests covering the model_dump(exclude_unset=True) branches added by main agent (POST both-set-owner-wins, POST neither-set, PATCH only-body_id, PATCH only-owner_body_id, and BCCI calendar-eligible mirror parametrised over Domestic/International/None). All 24 tests pass (100%). Bug is CONFIRMED FIXED.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_venues_m9_retest.py",
+    "/app/test_reports/pytest/iter24_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/venues_grounds.py update_venue accepts full VenueCreate (requires name/category/city). A true PATCH semantic would be more idiomatic via a VenueUpdate model with all-Optional fields — currently the endpoint is more like a full-replace. Not a blocker (tests still assert correct sync), but worth revisiting for next sprint.",
+    "_normalise_venue_payload is now partly redundant since the endpoints already force-sync body_id ← owner in the explicit-intent branch. It only helps as a defensive net when both branches fall through (i.e., both defaulted). Consider adding a code comment or unifying the logic to avoid dual sources of truth."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_venues_m9_retest.py"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "not tested (per request)"},
+  "test_credentials": "not required — venues endpoints are unauthenticated in this build",
+  "seed_data_creation": "8 M9-prefixed venues were created in-flight and all cleaned up by test_zzz_cleanup_m9_venues; verified 0 M9 venues remain post-run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iteration_24 confirms M9 owner/body sync bug from iteration_22/23 is fixed. The retest file /app/backend/tests/test_venues_m9_retest.py now covers 24 cases: 4 create-mirror, 3 patch-mirror, 5 seeded regression, 2 filter regression, 2 unknown-body 400, 4 explicit-intent sync (neither/both/patch-body/patch-owner), 3 bcci_calendar mirror, 1 cleanup. Total /api/venues seeded=5 (Holkar, Aishbagh, Jabalpur, Captain Roop Singh, MPCA Indore Academy). Frontend was NOT re-tested per E1 note (passed in iteration_22).",
+  "rca of the issue": "Fix verified. RCA (already resolved by E1): The old create/update endpoints called _normalise_venue_payload which only filled MISSING keys — so when a client sent owner_body_id='DIV-IND', body_id still carried the Pydantic default 'MPCA' and the normaliser saw body_id as 'set' and refused to overwrite it. E1's fix distinguishes explicitly-set fields via payload.model_dump(exclude_unset=True) and force-syncs the counterpart: owner-only ⇒ body_id ← owner; body_id-only ⇒ owner ← body_id; both ⇒ owner wins; neither ⇒ both default MPCA. All four branches are now covered by tests."
+}

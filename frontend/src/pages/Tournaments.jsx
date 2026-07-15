@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { fetchTournaments, fetchTournamentStats } from "@/lib/api";
+import { fetchTournaments, fetchTournamentStats, fetchBodies } from "@/lib/api";
 import {
-    Trophy, Calendar, MapPin, Users, ChevronRight, Filter, ShieldCheck, Plus,
+    Trophy, Calendar, MapPin, Users, ChevronRight, Filter, ShieldCheck, Plus, LayoutList, LayoutGrid,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentCreateModal from "@/components/TournamentCreateModal";
+import TournamentCalendarView from "@/components/TournamentCalendarView";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -93,15 +94,22 @@ const Tournaments = () => {
     const navigate = useNavigate();
     const [list, setList] = useState([]);
     const [stats, setStats] = useState(null);
+    const [bodies, setBodies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("all");
     const [createOpen, setCreateOpen] = useState(false);
+    const [viewMode, setViewMode] = useState("list"); // 'list' | 'calendar'
 
     const load = async () => {
         try {
-            const [l, s] = await Promise.all([fetchTournaments(), fetchTournamentStats()]);
+            const [l, s, b] = await Promise.all([
+                fetchTournaments(),
+                fetchTournamentStats(),
+                fetchBodies().catch(() => []),
+            ]);
             setList(l);
             setStats(s);
+            setBodies(b);
         } finally { setLoading(false); }
     };
 
@@ -165,8 +173,25 @@ const Tournaments = () => {
                 </div>
             )}
 
-            {/* Filter chips */}
+            {/* View toggle + Filter chips */}
             <div className="flex flex-wrap items-center gap-2 mb-6">
+                <div className="inline-flex border border-mpca-brass/40 mr-3" data-testid="trn-view-toggle">
+                    <button
+                        onClick={() => setViewMode("list")}
+                        className={`px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-semibold flex items-center gap-1.5 ${viewMode === "list" ? "bg-mpca-green-dark text-mpca-ivory" : "text-mpca-green-dark hover:bg-mpca-parchment"}`}
+                        data-testid="trn-view-list"
+                    >
+                        <LayoutList size={12} strokeWidth={1.5} /> List
+                    </button>
+                    <button
+                        onClick={() => setViewMode("calendar")}
+                        className={`px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-semibold flex items-center gap-1.5 border-l border-mpca-brass/40 ${viewMode === "calendar" ? "bg-mpca-green-dark text-mpca-ivory" : "text-mpca-green-dark hover:bg-mpca-parchment"}`}
+                        data-testid="trn-view-calendar"
+                    >
+                        <LayoutGrid size={12} strokeWidth={1.5} /> Calendar
+                    </button>
+                </div>
+
                 <Filter size={12} className="text-mpca-gray-dark" />
                 {[
                     ["all",                  "All"],
@@ -193,6 +218,9 @@ const Tournaments = () => {
                 ))}
             </div>
 
+            {viewMode === "calendar" ? (
+                <TournamentCalendarView tournaments={filtered} bodies={bodies} />
+            ) : (
             <div className="bulletin-card overflow-hidden" data-testid="trn-list">
                 {filtered.length === 0 ? (
                     <div className="p-12 text-center text-mpca-gray-dark italic font-serif">No tournaments match this filter.</div>
@@ -239,6 +267,7 @@ const Tournaments = () => {
                     })
                 )}
             </div>
+            )}
 
             <TournamentCreateModal
                 open={createOpen}

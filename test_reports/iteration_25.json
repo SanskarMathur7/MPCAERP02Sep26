@@ -1,0 +1,44 @@
+{
+  "summary": "Frontend-only testing of Sprint M10 Tournament Calendar view. All acceptance criteria verified: view toggle, month grid, prev/next/today navigation, scope filter chips (All/State/Division/District), body-specific dropdown (11 divisions, 2 State opts, 55 districts), undated bucket (9 cards), colour-coded chips per type, and regression on list view + Add Tournament button + Venues page. All flows working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Tournament Calendar view", "issues": ["Minor: dev-mode console hydration warning 'span cannot be a child of option' originates from Emergent's runtime instrumentation wrapping <option> text — not a real code bug (goes away in prod build). No action needed unless it appears in production build."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL cleanup: 5 TEST_* tournaments (TEST_StatusFlow, TEST_CancelFlow, TEST_CapacityTournament, TEST_LockedTournament, TEST_StatusFlow) remain in the undated bucket from previous iteration test data. Safe to delete via /api/tournaments/{id} to keep the calendar cleaner."
+  ],
+  "critical_code_review_comments": [
+    "TournamentCalendarView.jsx (line 195): `toISODate(now)` uses .toISOString() which converts to UTC — for timezones east of UTC (like IST +5:30), late-evening dates may misalign. Consider using a local-date formatter for the 'today' highlight. Non-blocking but could confuse users after 6:30pm IST.",
+    "TournamentCalendarView.jsx (line 87): `goToday` captures `now` from component init — if the user leaves the tab open across midnight, 'Today' still points to the day the component mounted. Minor edge case.",
+    "The `tournamentsForDate` filter runs on every cell render (up to 42 cells × N tournaments). For very large tournament lists this could get slow; consider pre-grouping tournaments by ISO date inside a useMemo. Non-blocking for current data volumes (34 tournaments)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only per request)", "frontend": "100%"},
+  "test_credentials": "persona-chip-secretary (Hon. Secretary, MPCA) — client-side persona login, no password.",
+  "seed_data_creation": "None. Existing seed of 34 tournaments (25 dated, 9 undated) was sufficient — 4 BCCI multi-day tournaments (Ranji, U-23 CK Nayudu, U-19 Cooch Behar, Holkar) span into Jan 2026 and were used to verify chip rendering.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sprint M10 calendar view is fully working. All data-testids resolve correctly: trn-view-toggle, trn-view-list, trn-view-calendar, tournament-calendar-view, cal-title, cal-prev-btn, cal-next-btn, cal-today-btn, cal-scope-{all|state|division|district}, cal-body-select, cal-grid, cal-month-count, cal-cell-<YYYY-MM-DD>, cal-trn-<id>, cal-undated, cal-undated-<id>. System date at test time was 2026-07-15; calendar defaulted to July 2026 with 0 dated tournaments in month (expected — seed data spans mid-2025 through early 2026). Verified 4 tournaments render in January 2026 (multi-day BCCI trophies). Undated section shows all 9 undated tournaments (includes 5 stale TEST_* entries from prior iterations that may be worth cleaning). Sprint M9 venues page still renders Owner/Mgr/BCCI pills correctly (case: uppercase OWNER).",
+  "verified_flows": [
+    "Secretary login → /tournaments loads",
+    "trn-view-toggle present with List (default active) + Calendar buttons",
+    "Switch to calendar → tournament-calendar-view + cal-title + weekday header (Mon..Sun) + cal-grid all render",
+    "cal-prev-btn moves back one month, cal-next-btn forward, cal-today-btn returns to current",
+    "cal-month-count updates with month/scope changes",
+    "Scope=All hides cal-body-select; Scope=State shows dropdown with 2 opts (all + MPCA); Scope=Division shows 11 opts (all + 10 divisions incl. DIV-IND); Scope=District shows 55 opts",
+    "Selecting DIV-IND filters chips and updates month/total counts",
+    "9 undated tournaments listed under cal-undated with cal-undated-<id> testids",
+    "Regression: switching to trn-view-list re-renders 34 rows",
+    "Regression: new-tournament-btn opens create modal (no console errors)",
+    "Regression: /venues page renders venue cards with Owner/Mgr/BCCI pills"
+  ],
+  "rca of the issue": "N/A — no bugs found."
+}

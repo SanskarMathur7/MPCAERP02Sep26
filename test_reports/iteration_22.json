@@ -1,0 +1,42 @@
+{
+  "summary": "Sprint M9 · Venues/Grounds ownership + BCCI approval — full stack test. Backend: 14/16 pytest passing. All 5 seeded venues carry correct owner_body_id / managed_by_body_id / bcci_approval after migration (Holkar MPCA/MPCA/International, Aishbagh MPCA/DIV-BPL/Domestic, Jabalpur DIV-JBP/DIV-JBP/None, MPCA Indore Academy MPCA/DIV-IND/None, Captain Roop Singh MPCA/DIV-GWL/International). Filters ?owner_body_id / ?managed_by_body_id / ?bcci_approval work. POST/PATCH validate owner + manager bodies and return 400 on unknown code. Grounds carry new bcci_approval + managed_by_body_id fields. Frontend: /venues page renders OWNER/MGR/BCCI pills correctly on all 5 cards; VenueForm has venue-owner-select, venue-manager-select (default '— Same as owner —'), venue-bcci-approval-select (3 options); GroundForm has ground-bcci-approval-select and ground-manager-select (default '— Inherit from venue —'). E2E create+delete of a DIV-IND-owned Domestic-BCCI venue and a None-BCCI Practice ground both succeeded via UI. One backend bug found (see backend_issues.critical).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/venues",
+        "issue": "body_id is NOT mirrored to owner_body_id when a client sends owner_body_id but relies on the Pydantic default body_id='MPCA'. Repro: POST {name, category, city, owner_body_id:'DIV-IND'} → response has owner_body_id='DIV-IND' but body_id='MPCA'. Root cause: routes/venues_grounds.py::_normalise_venue_payload only fills missing keys ('if data.get(X) and not data.get(Y)'), but VenueBase.body_id has default 'MPCA' so both keys are always truthy after model_dump() and no mirroring happens. Contradicts the review-request contract 'body_id mirrors owner_body_id' and the docstring 'Keep body_id and owner_body_id in sync'. Frontend accidentally works because the UI explicitly sends body_id = form.owner_body_id, but any direct API caller (or a PATCH that omits body_id but the model still supplies its default) will get de-synchronised legacy body_id, which may leak into every downstream query that still uses the legacy body_id filter (list_venues 'body_id' branch matches either body_id OR owner_body_id, so reads are OK, but stored data is wrong).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_venues_m9.py",
+    "/app/test_reports/pytest/iter22_results.xml"
+  ],
+  "action_items": [
+    "Fix _normalise_venue_payload in /app/backend/routes/venues_grounds.py so owner_body_id ALWAYS overwrites body_id (or vice-versa when only body_id is provided). Suggested one-liner: if data.get('owner_body_id'): data['body_id'] = data['owner_body_id']  (and analogous fallback for legacy callers). Then re-run test_venues_m9.py::TestVenueCreateUpdate::test_create_venue_with_new_fields and ::test_patch_updates_fields_and_validates — both currently RED only because of this bug (the second one only fails as a cascade of the first)."
+  ],
+  "critical_code_review_comments": [
+    "Bug (HIGH): _normalise_venue_payload mirroring is dead code for both create and patch because Pydantic's default body_id='MPCA' + owner_body_id='MPCA' means both dict keys are always truthy. Either drop the defaults in VenueBase (make body_id/owner_body_id Optional[str]=None) or unconditionally overwrite body_id from owner_body_id.",
+    "Nit: /api/venues PATCH accepts VenueCreate (a full-object model), not a partial patch. Any field the client omits gets silently reset to its Pydantic default — matches the wider pattern in this codebase but is easy to miss. Called out for awareness; not fixed as part of this test.",
+    "The console still emits the pre-existing '<span> cannot be a child of <option>' hydration warning inside VenueForm's select options — same emergent-instrumentation artefact flagged in iterations 20 & 21. Not blocking.",
+    "Good: BCCI = 'None' pill correctly falls back to 'Not BCCI-approved' visual; when managed_by_body_id differs from owner, the MGR pill is rendered in oxblood accent — nice differentiation on MPCA Indore Academy (MGR · DIV-IND) and Aishbagh (MGR · DIV-BPL).",
+    "Nice-to-have: GroundForm has no delete button on ground rows on the Grounds tab; test relied on API DELETE for cleanup. If E2E deletion of grounds is expected via UI, add del-ground-{id} in a follow-up."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_venues_m9.py (new)"
+  ],
+  "success_rate": {"backend": "87.5% (14/16)", "frontend": "100% (all pill assertions, both create flows, delete-via-UI)"},
+  "test_credentials": "persona-chip-secretary (Shri Sanjeev Rao). Per /app/memory/test_credentials.md.",
+  "seed_data_creation": "Created 'M9 Test Venue' (owner=DIV-IND, mgr=DIV-IND, BCCI=Domestic) + 'M9 Practice A' ground under it. Both cleaned up (venue via UI del-venue-{id}, ground via API DELETE — no UI delete button on ground rows).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After the _normalise_venue_payload fix lands, just re-run: pytest /app/backend/tests/test_venues_m9.py -v — all 16 tests should be GREEN. Frontend does not need retesting; all pills/modals/E2E flows already verified passing on iteration 22. Login flow: click persona-chip-secretary → login-submit-btn → wait_for_url('**/dashboard**') → page.goto('/venues'). Pill text is CSS-uppercased via `uppercase tracking-wider`, so assert on '.toUpperCase()' or use case-insensitive matches when reading innerText.",
+  "rca of the issue": "POST /api/venues with owner_body_id='DIV-IND' returns body_id='MPCA' instead of 'DIV-IND'. _normalise_venue_payload uses `if data.get('body_id') and not data.get('owner_body_id')` guards, but VenueBase declares body_id='MPCA' (default) and owner_body_id='MPCA' (default), so model_dump() always produces both keys with truthy values, making both branches dead. Fix: unconditionally set `data['body_id'] = data['owner_body_id']` when owner_body_id is present (this is the direction the spec calls for — 'body_id mirrors owner_body_id')."
+}

@@ -1220,6 +1220,12 @@ VenueCategory = Literal[
     "Private",              # private grounds hired on need basis
 ]
 
+# M9 · Ownership vs management model
+# A ground/venue can be OWNED by one body (usually MPCA HQ) but MANAGED day-to-day
+# by another (usually a Division). BCCI approval is a separate accreditation dimension
+# — a venue may hold approval for Domestic-only or International matches.
+BCCIApproval = Literal["None", "Domestic", "International"]
+
 GroundType = Literal["Main", "Practice_A", "Practice_B", "Net_Practice", "Other"]
 
 
@@ -1227,13 +1233,17 @@ class VenueBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     name: str
     category: VenueCategory
-    body_id: str = "MPCA"                  # owning body
+    body_id: str = "MPCA"                  # deprecated alias — kept for back-compat, mirrors owner_body_id
+    # M9 · explicit ownership + management
+    owner_body_id: str = "MPCA"            # who OWNS the venue (usually MPCA HQ)
+    managed_by_body_id: Optional[str] = None  # who MANAGES it day-to-day. None ⇒ same as owner.
+    bcci_approval: BCCIApproval = "None"   # rolled up from grounds; also editable at venue level
     address_line: Optional[str] = None
     city: str
     pincode: Optional[str] = None
     capacity_seats: Optional[int] = None
     floodlights: bool = False
-    bcci_calendar_eligible: bool = False   # tagged from BCCI norms
+    bcci_calendar_eligible: bool = False   # legacy boolean — retained; equivalent to bcci_approval != "None"
     notes: Optional[str] = None
 
 
@@ -1265,6 +1275,9 @@ class GroundBase(BaseModel):
     pitch_type: Optional[str] = None       # "Red Soil", "Black Soil", "Turf", "Matting"
     boundaries_metres: Optional[int] = None
     suitable_formats: List[TournamentFormat] = []  # which formats this ground supports
+    # M9 · per-ground BCCI accreditation + optional override of managing body.
+    bcci_approval: BCCIApproval = "None"
+    managed_by_body_id: Optional[str] = None  # None ⇒ inherit from venue.managed_by_body_id
     is_active: bool = True
     notes: Optional[str] = None
 

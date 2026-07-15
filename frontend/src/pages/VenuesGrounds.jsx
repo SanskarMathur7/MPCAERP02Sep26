@@ -5,7 +5,7 @@ import {
     fetchGrounds, createGround, deleteGround, addGroundStaff, removeGroundStaff,
     fetchGroundExpenses, createGroundExpense, submitGroundExpense,
     approveGroundExpense, rejectGroundExpense, deleteGroundExpense,
-    fetchGroundExpenseStats, fetchGroundPayroll,
+    fetchGroundExpenseStats, fetchGroundPayroll, fetchBodies,
 } from "@/lib/api";
 import {
     MapPin, Plus, Trash2, Users, Wallet, Calendar, ChevronRight, Send,
@@ -53,9 +53,10 @@ const Pill = ({ tone, label, testId }) => (
 );
 
 // ─────────── Venue form ───────────
-const VenueForm = ({ open, onClose, onSaved, persona }) => {
+const VenueForm = ({ open, onClose, onSaved, persona, bodies }) => {
     const [form, setForm] = useState({
-        name: "", category: "MPCA_State", body_id: "MPCA",
+        name: "", category: "MPCA_State",
+        owner_body_id: "MPCA", managed_by_body_id: "", bcci_approval: "None",
         city: "", address_line: "", pincode: "",
         capacity_seats: "", floodlights: false, bcci_calendar_eligible: false,
     });
@@ -67,7 +68,9 @@ const VenueForm = ({ open, onClose, onSaved, persona }) => {
         try {
             const v = await createVenue({
                 ...form,
-                body_id: form.body_id || persona.body_code || "MPCA",
+                body_id: form.owner_body_id || persona.body_code || "MPCA",
+                owner_body_id: form.owner_body_id || persona.body_code || "MPCA",
+                managed_by_body_id: form.managed_by_body_id || null,
                 capacity_seats: form.capacity_seats ? parseInt(form.capacity_seats, 10) : null,
             });
             onSaved(v);
@@ -78,6 +81,7 @@ const VenueForm = ({ open, onClose, onSaved, persona }) => {
             setBusy(false);
         }
     };
+    const bodyOptions = (bodies || []).filter((b) => ["State", "Division", "District"].includes(b.body_type));
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" data-testid="venue-form">
             <form onSubmit={submit} className="bg-mpca-ivory border-2 border-mpca-brass max-w-xl w-full max-h-[90vh] overflow-y-auto">
@@ -102,6 +106,48 @@ const VenueForm = ({ open, onClose, onSaved, persona }) => {
                             <input required value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} className="input-heritage" data-testid="venue-city" />
                         </div>
                     </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="label-heritage">Owner Body *</label>
+                            <select
+                                value={form.owner_body_id}
+                                onChange={(e) => setForm((f) => ({ ...f, owner_body_id: e.target.value }))}
+                                className="input-heritage"
+                                data-testid="venue-owner-select"
+                            >
+                                {bodyOptions.map((b) => (
+                                    <option key={b.code} value={b.code}>[{b.body_type}] {b.name} ({b.code})</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="label-heritage">Managed By (optional)</label>
+                            <select
+                                value={form.managed_by_body_id}
+                                onChange={(e) => setForm((f) => ({ ...f, managed_by_body_id: e.target.value }))}
+                                className="input-heritage"
+                                data-testid="venue-manager-select"
+                            >
+                                <option value="">— Same as owner —</option>
+                                {bodyOptions.map((b) => (
+                                    <option key={b.code} value={b.code}>[{b.body_type}] {b.name} ({b.code})</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="label-heritage">BCCI Approval</label>
+                        <select
+                            value={form.bcci_approval}
+                            onChange={(e) => setForm((f) => ({ ...f, bcci_approval: e.target.value, bcci_calendar_eligible: e.target.value !== "None" }))}
+                            className="input-heritage"
+                            data-testid="venue-bcci-approval-select"
+                        >
+                            <option value="None">Not Approved</option>
+                            <option value="Domestic">BCCI · Domestic (Ranji / Vijay Hazare / etc.)</option>
+                            <option value="International">BCCI · International (Test / ODI / T20I)</option>
+                        </select>
+                    </div>
                     <div>
                         <label className="label-heritage">Address</label>
                         <input value={form.address_line} onChange={(e) => setForm((f) => ({ ...f, address_line: e.target.value }))} className="input-heritage" />
@@ -117,7 +163,6 @@ const VenueForm = ({ open, onClose, onSaved, persona }) => {
                         </div>
                         <div className="flex flex-col gap-2 pt-5 text-xs">
                             <label className="flex items-center gap-1"><input type="checkbox" checked={form.floodlights} onChange={(e) => setForm((f) => ({ ...f, floodlights: e.target.checked }))} /> Floodlights</label>
-                            <label className="flex items-center gap-1"><input type="checkbox" checked={form.bcci_calendar_eligible} onChange={(e) => setForm((f) => ({ ...f, bcci_calendar_eligible: e.target.checked }))} data-testid="venue-bcci-eligible" /> BCCI Calendar</label>
                         </div>
                     </div>
                 </div>
@@ -133,10 +178,11 @@ const VenueForm = ({ open, onClose, onSaved, persona }) => {
 };
 
 // ─────────── Ground form ───────────
-const GroundForm = ({ open, onClose, onSaved, venues }) => {
+const GroundForm = ({ open, onClose, onSaved, venues, bodies }) => {
     const [form, setForm] = useState({
         venue_id: "", name: "", type: "Main", pitch_type: "Red Soil",
         boundaries_metres: "", is_active: true,
+        bcci_approval: "None", managed_by_body_id: "",
         suitable_formats: [],
     });
     const [busy, setBusy] = useState(false);
@@ -152,6 +198,7 @@ const GroundForm = ({ open, onClose, onSaved, venues }) => {
             const g = await createGround({
                 ...form,
                 boundaries_metres: form.boundaries_metres ? parseInt(form.boundaries_metres, 10) : null,
+                managed_by_body_id: form.managed_by_body_id || null,
                 ground_staff: [],
             });
             onSaved(g);
@@ -162,6 +209,7 @@ const GroundForm = ({ open, onClose, onSaved, venues }) => {
             setBusy(false);
         }
     };
+    const bodyOptions = (bodies || []).filter((b) => ["State", "Division", "District"].includes(b.body_type));
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" data-testid="ground-form">
             <form onSubmit={submit} className="bg-mpca-ivory border-2 border-mpca-brass max-w-xl w-full max-h-[90vh] overflow-y-auto">
@@ -197,6 +245,35 @@ const GroundForm = ({ open, onClose, onSaved, venues }) => {
                         <div>
                             <label className="label-heritage">Boundaries (m)</label>
                             <input type="number" value={form.boundaries_metres} onChange={(e) => setForm((f) => ({ ...f, boundaries_metres: e.target.value }))} className="input-heritage" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="label-heritage">BCCI Approval (this ground)</label>
+                            <select
+                                value={form.bcci_approval}
+                                onChange={(e) => setForm((f) => ({ ...f, bcci_approval: e.target.value }))}
+                                className="input-heritage"
+                                data-testid="ground-bcci-approval-select"
+                            >
+                                <option value="None">Not Approved</option>
+                                <option value="Domestic">BCCI · Domestic</option>
+                                <option value="International">BCCI · International</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="label-heritage">Managed By (override venue)</label>
+                            <select
+                                value={form.managed_by_body_id}
+                                onChange={(e) => setForm((f) => ({ ...f, managed_by_body_id: e.target.value }))}
+                                className="input-heritage"
+                                data-testid="ground-manager-select"
+                            >
+                                <option value="">— Inherit from venue —</option>
+                                {bodyOptions.map((b) => (
+                                    <option key={b.code} value={b.code}>[{b.body_type}] {b.name} ({b.code})</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
                     <div>
@@ -303,6 +380,7 @@ export default function VenuesGrounds() {
     const [grounds, setGrounds] = useState([]);
     const [expenses, setExpenses] = useState([]);
     const [expStats, setExpStats] = useState(null);
+    const [bodies, setBodies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [venueFormOpen, setVenueFormOpen] = useState(false);
     const [groundFormOpen, setGroundFormOpen] = useState(false);
@@ -313,10 +391,11 @@ export default function VenuesGrounds() {
     const reload = async () => {
         setLoading(true);
         try {
-            const [v, g, e, s] = await Promise.all([
+            const [v, g, e, s, b] = await Promise.all([
                 fetchVenues(), fetchGrounds(), fetchGroundExpenses(), fetchGroundExpenseStats(),
+                fetchBodies().catch(() => []),
             ]);
-            setVenues(v); setGrounds(g); setExpenses(e); setExpStats(s);
+            setVenues(v); setGrounds(g); setExpenses(e); setExpStats(s); setBodies(b);
         } finally {
             setLoading(false);
         }
@@ -437,12 +516,29 @@ export default function VenuesGrounds() {
                                 </div>
                                 <div className="text-sm text-mpca-gray-dark space-y-1">
                                     <div className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {v.city}{v.address_line ? ` · ${v.address_line}` : ""}</div>
-                                    <div className="flex items-center gap-3 text-xs">
+                                    <div className="flex items-center gap-3 text-xs flex-wrap">
                                         {v.capacity_seats ? <span>👥 {v.capacity_seats.toLocaleString("en-IN")} seats</span> : null}
                                         {v.floodlights && <span>💡 Floodlights</span>}
-                                        {v.bcci_calendar_eligible && <span className="text-mpca-saffron font-semibold">★ BCCI Calendar</span>}
                                     </div>
-                                    <div className="text-xs">{(groundsByVenue[v.id] || []).length} ground(s) registered</div>
+                                    {/* M9 · Ownership & BCCI approval */}
+                                    <div className="flex flex-wrap items-center gap-2 pt-2 text-[10px] font-mono uppercase tracking-wider">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 border border-mpca-brass/40 text-mpca-charcoal">
+                                            Owner · {v.owner_body_id || v.body_id || "—"}
+                                        </span>
+                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 border ${v.managed_by_body_id && v.managed_by_body_id !== (v.owner_body_id || v.body_id) ? "border-mpca-oxblood/50 text-mpca-oxblood" : "border-mpca-brass/40 text-mpca-charcoal"}`}>
+                                            Mgr · {v.managed_by_body_id || v.owner_body_id || v.body_id || "—"}
+                                        </span>
+                                        {v.bcci_approval && v.bcci_approval !== "None" ? (
+                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 ${v.bcci_approval === "International" ? "bg-mpca-oxblood text-mpca-ivory" : "bg-mpca-brass/20 text-mpca-brass border border-mpca-brass/50"}`} data-testid={`bcci-${v.id}`}>
+                                                ★ BCCI · {v.bcci_approval}
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 border border-mpca-gray/30 text-mpca-gray-dark">
+                                                Not BCCI-approved
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-xs pt-1">{(groundsByVenue[v.id] || []).length} ground(s) registered</div>
                                 </div>
                                 {canEdit && (
                                     <div className="flex gap-2 pt-2 border-t border-mpca-brass/30">
@@ -478,6 +574,22 @@ export default function VenuesGrounds() {
                                                 {g.boundaries_metres && <span>Boundaries: {g.boundaries_metres}m</span>}
                                                 <span>Staff: {(g.ground_staff || []).length}</span>
                                                 <span>Formats: {(g.suitable_formats || []).length}</span>
+                                            </div>
+                                            <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-mono uppercase tracking-wider">
+                                                {g.bcci_approval && g.bcci_approval !== "None" ? (
+                                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 ${g.bcci_approval === "International" ? "bg-mpca-oxblood text-mpca-ivory" : "bg-mpca-brass/20 text-mpca-brass border border-mpca-brass/50"}`} data-testid={`ground-bcci-${g.id}`}>
+                                                        ★ BCCI · {g.bcci_approval}
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 border border-mpca-gray/30 text-mpca-gray-dark">
+                                                        Not BCCI-approved
+                                                    </span>
+                                                )}
+                                                {g.managed_by_body_id && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 border border-mpca-oxblood/50 text-mpca-oxblood">
+                                                        Mgr · {g.managed_by_body_id}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                         <ChevronRight className={"w-5 h-5 text-mpca-gray-dark transition-transform " + (open ? "rotate-90" : "")} />
@@ -607,8 +719,8 @@ export default function VenuesGrounds() {
                 </div>
             )}
 
-            <VenueForm open={venueFormOpen} onClose={() => setVenueFormOpen(false)} onSaved={() => reload()} persona={persona || {}} />
-            <GroundForm open={groundFormOpen} onClose={() => setGroundFormOpen(false)} onSaved={() => reload()} venues={venues} />
+            <VenueForm open={venueFormOpen} onClose={() => setVenueFormOpen(false)} onSaved={() => reload()} persona={persona || {}} bodies={bodies} />
+            <GroundForm open={groundFormOpen} onClose={() => setGroundFormOpen(false)} onSaved={() => reload()} venues={venues} bodies={bodies} />
             <ExpenseForm open={expFormOpen} onClose={() => setExpFormOpen(false)} onSaved={() => reload()} grounds={grounds} persona={persona || {}} />
         </div>
     );

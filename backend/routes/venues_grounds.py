@@ -42,21 +42,56 @@ async def _next_ge_no(cycle: str) -> str:
 # ──────────────────── Venues ────────────────────
 
 @api_router.get("/venues", response_model=List[Venue])
-async def list_venues(category: Optional[VenueCategory] = None, body_id: Optional[str] = None, city: Optional[str] = None):
+async def list_venues(
+    category: Optional[VenueCategory] = None,
+    body_id: Optional[str] = None,
+    owner_body_id: Optional[str] = None,
+    managed_by_body_id: Optional[str] = None,
+    bcci_approval: Optional[str] = None,
+    city: Optional[str] = None,
+):
     q: dict = {}
     if category:
         q["category"] = category
     if body_id:
-        q["body_id"] = body_id
+        # Legacy filter — kept for back-compat. Matches either owner or (legacy) body_id.
+        q["$or"] = [{"body_id": body_id}, {"owner_body_id": body_id}]
+    if owner_body_id:
+        q["owner_body_id"] = owner_body_id
+    if managed_by_body_id:
+        q["managed_by_body_id"] = managed_by_body_id
+    if bcci_approval:
+        q["bcci_approval"] = bcci_approval
     if city:
         q["city"] = {"$regex": city, "$options": "i"}
     return await db.venues.find(q, {"_id": 0}).sort("name", 1).to_list(1000)
 
 
+def _normalise_venue_payload(data: dict) -> dict:
+    """M9 · Keep body_id and owner_body_id in sync; validate BCCI approval; default manager to owner."""
+    if data.get("owner_body_id") and not data.get("body_id"):
+        data["body_id"] = data["owner_body_id"]
+    if data.get("body_id") and not data.get("owner_body_id"):
+        data["owner_body_id"] = data["body_id"]
+    # bcci_calendar_eligible mirrors bcci_approval for legacy readers
+    if data.get("bcci_approval") and data["bcci_approval"] != "None":
+        data["bcci_calendar_eligible"] = True
+    return data
+
+
 @api_router.post("/venues", response_model=Venue)
 async def create_venue(payload: VenueCreate):
+    data = _normalise_venue_payload(payload.model_dump())
+    # Validate owner + manager bodies exist
+    owner = await db.bodies.find_one({"code": data["owner_body_id"]}, {"_id": 0})
+    if not owner:
+        raise HTTPException(400, f"Owner body {data['owner_body_id']} does not exist")
+    if data.get("managed_by_body_id"):
+        mgr = await db.bodies.find_one({"code": data["managed_by_body_id"]}, {"_id": 0})
+        if not mgr:
+            raise HTTPException(400, f"Managing body {data['managed_by_body_id']} does not exist")
     venue_no = await _next_venue_no()
-    venue = Venue(venue_no=venue_no, **payload.model_dump())
+    venue = Venue(venue_no=venue_no, **data)
     await db.venues.insert_one(venue.model_dump())
     return venue
 
@@ -73,7 +108,16 @@ async def get_venue(vid: str):
 async def update_venue(vid: str, payload: VenueCreate):
     if not await db.venues.find_one({"id": vid}, {"_id": 0}):
         raise HTTPException(404, "Venue not found")
-    await db.venues.update_one({"id": vid}, {"$set": payload.model_dump()})
+    data = _normalise_venue_payload(payload.model_dump())
+    if data.get("owner_body_id"):
+        owner = await db.bodies.find_one({"code": data["owner_body_id"]}, {"_id": 0})
+        if not owner:
+            raise HTTPException(400, f"Owner body {data['owner_body_id']} does not exist")
+    if data.get("managed_by_body_id"):
+        mgr = await db.bodies.find_one({"code": data["managed_by_body_id"]}, {"_id": 0})
+        if not mgr:
+            raise HTTPException(400, f"Managing body {data['managed_by_body_id']} does not exist")
+    await db.venues.update_one({"id": vid}, {"$set": data})
     return await db.venues.find_one({"id": vid}, {"_id": 0})
 
 

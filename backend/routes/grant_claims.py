@@ -161,11 +161,13 @@ async def _ai_verify_document(doc: dict) -> dict:
         file_url = doc.get("file_url") or ""
         if file_url.startswith("/api/uploads/"):
             upload_id = file_url.rsplit("/", 1)[-1]
-            up = await db.uploads.find_one({"id": upload_id}, {"_id": 0})
+            up = await db.uploads.find_one({"id": upload_id})   # need full doc incl. _path
             if not up:
                 return {"ai_verified": False, "ai_confidence": 0.0, "ai_notes": "Upload record not found"}
-            local_path = up.get("storage_path")
-            mime = mimetypes.guess_type(up.get("original_name") or "")[0] or "application/pdf"
+            local_path = up.get("_path") or up.get("storage_path")
+            if not local_path:
+                return {"ai_verified": False, "ai_confidence": 0.0, "ai_notes": "Upload path missing on record"}
+            mime = up.get("mime_type") or mimetypes.guess_type(up.get("original_name") or "")[0] or "application/pdf"
         else:
             return {"ai_verified": False, "ai_confidence": 0.0, "ai_notes": "Unrecognised file URL"}
 

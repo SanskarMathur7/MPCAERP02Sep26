@@ -34,8 +34,8 @@ export const PERSONAS = [
     {
         id: "treasurer",
         title: "Hon. Treasurer",
-        honorific: "Smt.",
-        name: "Meera Verma",
+        honorific: "Shri",
+        name: "Naveen Mittal",
         post: "Honorary Treasurer, MPCA",
         scope: "State bank operations, grants, audit",
         privileges: ["Financial Powers", "Approve Grants", "Bank Signatory"],
@@ -43,7 +43,6 @@ export const PERSONAS = [
         body_type: "State",
         body_code: "MPCA",
         body_name: "MPCA Headquarters",
-        _disabled: true,
     },
     {
         id: "division-secretary",

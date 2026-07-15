@@ -9,7 +9,7 @@ import {
 } from "@/lib/api";
 import {
     ArrowLeft, User, FileText, ShieldCheck, ClipboardList, Upload, X, CheckCircle2, AlertTriangle,
-    Ban, Loader2, ExternalLink, Trash2, Edit3, Save, Gavel, ScrollText, Sparkles, ShieldAlert,
+    Ban, Loader2, ExternalLink, Trash2, Edit3, Save, Gavel, ScrollText, Sparkles, ShieldAlert, Award,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 
@@ -82,6 +82,11 @@ const DocSlot = ({ slot, existing, playerId, persona, locked, onChanged }) => {
             const record = await res.json();
             const updated = await addPlayerDocument(playerId, slot.key, record.url, record.original_name);
             onChanged(updated);
+            // Sprint M16 · Auto-run AI KYC validation after upload
+            try {
+                const aiUpdated = await aiValidatePlayerDocuments(playerId);
+                onChanged(aiUpdated);
+            } catch (_) { /* non-fatal — user can retry manually */ }
         } catch (e) {
             setError(e.message || "Upload failed");
         } finally {
@@ -674,6 +679,137 @@ const SanctionsTab = ({ player, persona, onChanged }) => {
     );
 };
 
+/*
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SECTION 4.5 · PERFORMANCE TAB (Sprint M16 · rich player workbook)
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const PerformanceTab = ({ player }) => {
+    const meta = player.selection_meta || {};
+    const records = meta.season_records || [];
+    const stats = meta.stats || {};
+    const cf = meta.career_figures || {};
+
+    // Group records by season
+    const bySeason = records.reduce((acc, r) => {
+        (acc[r.season] = acc[r.season] || []).push(r);
+        return acc;
+    }, {});
+    const seasons = Object.keys(bySeason).sort();
+
+    // Career totals from stats
+    const totals = ["fc", "la", "t20"].reduce((acc, k) => {
+        const s = stats[k] || [];
+        acc[k] = { m: s[0] || 0, runs: s[1] || 0, avg: s[3] || 0, sr: s[4] || 0, hundreds: s[6] || 0, fifties: s[7] || 0 };
+        return acc;
+    }, {});
+    const totalMatches = totals.fc.m + totals.la.m + totals.t20.m;
+    const totalRuns = totals.fc.runs + totals.la.runs + totals.t20.runs;
+    const battingAvg = totalMatches > 0 ? ((totals.fc.runs + totals.la.runs + totals.t20.runs) / Math.max(1, totalMatches)).toFixed(1) : "0.0";
+
+    return (
+        <div data-testid="performance-tab" className="space-y-8">
+            {/* Overview stat cards */}
+            <div>
+                <div className="overline mb-3">Career Overview</div>
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                    <StatCard label="Matches" value={totalMatches} />
+                    <StatCard label="Runs" value={totalRuns.toLocaleString("en-IN")} />
+                    <StatCard label="Batting Avg" value={battingAvg} />
+                    <StatCard label="FC Avg" value={totals.fc.avg} tone="green" />
+                    <StatCard label="Quality Index" value={meta.quality_index ? Math.round(meta.quality_index * 100) : "—"} tone="brass" />
+                    <StatCard label="Yo-Yo" value={meta.yo_yo || "—"} />
+                </div>
+            </div>
+
+            {/* Format-wise stats */}
+            <div>
+                <div className="overline mb-3">Format-wise Career</div>
+                <div className="border border-mpca-brass/20 overflow-hidden">
+                    <div className="grid grid-cols-8 gap-2 px-3 py-2 bg-mpca-green-dark text-mpca-gold-light text-[9px] uppercase tracking-widest">
+                        <div>Format</div>
+                        <div className="text-right">Career figs</div>
+                        <div className="text-right">M</div>
+                        <div className="text-right">Runs</div>
+                        <div className="text-right">Avg</div>
+                        <div className="text-right">SR</div>
+                        <div className="text-right">100s</div>
+                        <div className="text-right">50s</div>
+                    </div>
+                    {[["Multi-day", "fc", cf.fc], ["List A", "la", cf.la], ["T20", "t20", cf.t20]].map(([label, key, careerFig]) => (
+                        <div key={key} className="grid grid-cols-8 gap-2 px-3 py-2 items-center border-b border-mpca-brass/10 text-xs" data-testid={`stat-row-${key}`}>
+                            <div className="font-serif text-mpca-green-dark">{label}</div>
+                            <div className="text-right font-mono text-mpca-brass">{careerFig ?? "—"}</div>
+                            <div className="text-right font-mono">{totals[key].m}</div>
+                            <div className="text-right font-mono">{totals[key].runs}</div>
+                            <div className="text-right font-mono">{totals[key].avg}</div>
+                            <div className="text-right font-mono">{totals[key].sr}</div>
+                            <div className="text-right font-mono">{totals[key].hundreds}</div>
+                            <div className="text-right font-mono">{totals[key].fifties}</div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Season-wise records table */}
+            <div>
+                <div className="overline mb-3">Season-by-Season Record · {records.length} entries across {seasons.length} seasons</div>
+                {records.length === 0 ? (
+                    <div className="p-10 border border-mpca-brass/30 text-center text-mpca-gray-dark italic font-serif">No season records available.</div>
+                ) : (
+                    <div className="space-y-4">
+                        {seasons.map((s) => (
+                            <div key={s} className="border border-mpca-brass/20 overflow-hidden">
+                                <div className="px-3 py-2 bg-mpca-oxblood text-mpca-ivory font-serif text-sm">Season {s}</div>
+                                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-mpca-cream/40 text-[9px] uppercase tracking-widest text-mpca-gray-dark">
+                                    <div className="col-span-3">Tournament</div>
+                                    <div className="text-right">M</div>
+                                    <div className="text-right">INN</div>
+                                    <div className="text-right">NO</div>
+                                    <div className="text-right">RUNS</div>
+                                    <div className="text-right">HS</div>
+                                    <div className="text-right">100</div>
+                                    <div className="text-right">50</div>
+                                    <div className="text-right">OV</div>
+                                    <div className="text-right">WKT</div>
+                                    <div className="text-right">B.AVG</div>
+                                </div>
+                                {bySeason[s].map((r, i) => (
+                                    <div key={i} className="grid grid-cols-12 gap-2 px-3 py-1.5 items-center border-b border-mpca-brass/10 text-xs" data-testid={`record-${s}-${r.tournament_code}`}>
+                                        <div className="col-span-3">
+                                            <div className="font-serif text-mpca-green-dark">{r.tournament_name}</div>
+                                            <div className="text-[9px] font-mono text-mpca-brass">{r.tournament_code}</div>
+                                        </div>
+                                        <div className="text-right font-mono">{r.m}</div>
+                                        <div className="text-right font-mono">{r.inn}</div>
+                                        <div className="text-right font-mono">{r.no}</div>
+                                        <div className="text-right font-mono text-mpca-oxblood font-semibold">{r.runs}</div>
+                                        <div className="text-right font-mono">{r.hs}</div>
+                                        <div className="text-right font-mono">{r.hundreds}</div>
+                                        <div className="text-right font-mono">{r.fifties}</div>
+                                        <div className="text-right font-mono">{r.ov}</div>
+                                        <div className="text-right font-mono">{r.wkt}</div>
+                                        <div className="text-right font-mono">{r.b_avg || "—"}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const StatCard = ({ label, value, tone }) => (
+    <div className="border border-mpca-brass/20 p-3 bg-mpca-cream/20">
+        <div className="text-[9px] uppercase tracking-widest text-mpca-gray-dark">{label}</div>
+        <div className={`font-serif text-2xl mt-1 ${tone === "green" ? "text-mpca-green-dark" : tone === "brass" ? "text-mpca-brass" : "text-mpca-oxblood"}`}>{value}</div>
+    </div>
+);
+
+
+
 const AuditTab = ({ player }) => (
     <div data-testid="audit-tab">
         <div className="overline mb-4">Audit Trail · {(player.audit_trail || []).length} events</div>
@@ -846,14 +982,18 @@ const PlayerDetail = () => {
             <div className="max-w-7xl mx-auto px-8 md:px-12">
                 <div className="flex gap-6 border-b border-mpca-brass/30">
                     {[
-                        ["overview",  "Overview",           User],
-                        ["documents", "KYC & Documents",    FileText],
-                        ["sanctions", "Sanctions",          Gavel],
-                        ["audit",     "Audit Trail",        ClipboardList],
+                        ["overview",    "Overview",           User],
+                        ["performance", "Performance",        Award],
+                        ["documents",   "KYC & Documents",    FileText],
+                        ["sanctions",   "Sanctions",          Gavel],
+                        ["audit",       "Audit Trail",        ClipboardList],
                     ].map(([k, l, I]) => (
                         <button key={k} onClick={() => setTab(k)} data-testid={`tab-${k}`}
                             className={"pb-3 pt-6 flex items-center gap-2 text-[13px] uppercase tracking-wider font-semibold transition-colors " + (tab === k ? "text-mpca-oxblood border-b-2 border-mpca-oxblood -mb-px" : "text-mpca-gray-dark hover:text-mpca-green-dark")}>
                             <I size={13} /> {l}
+                            {k === "performance" && player.selection_meta?.season_records?.length > 0 && (
+                                <span className="ml-1 px-1.5 py-0.5 rounded bg-mpca-brass text-mpca-green-dark text-[10px] font-mono">{player.selection_meta.season_records.length}</span>
+                            )}
                             {k === "documents" && (player.documents?.length > 0) && (
                                 <span className="ml-1 px-1.5 py-0.5 rounded bg-mpca-parchment text-mpca-brass text-[10px] font-mono">{player.documents.length}</span>
                             )}
@@ -864,10 +1004,11 @@ const PlayerDetail = () => {
                     ))}
                 </div>
                 <div className="py-10">
-                    {tab === "overview"  && <OverviewTab   player={player} persona={persona} locked={player.submission_locked} onChanged={setPlayer} />}
-                    {tab === "documents" && <DocumentsTab  player={player} persona={persona} onChanged={setPlayer} />}
-                    {tab === "sanctions" && <SanctionsTab  player={player} persona={persona} onChanged={setPlayer} />}
-                    {tab === "audit"     && <AuditTab      player={player} />}
+                    {tab === "overview"    && <OverviewTab    player={player} persona={persona} locked={player.submission_locked} onChanged={setPlayer} />}
+                    {tab === "performance" && <PerformanceTab player={player} />}
+                    {tab === "documents"   && <DocumentsTab   player={player} persona={persona} onChanged={setPlayer} />}
+                    {tab === "sanctions"   && <SanctionsTab   player={player} persona={persona} onChanged={setPlayer} />}
+                    {tab === "audit"       && <AuditTab       player={player} />}
                 </div>
             </div>
         </div>

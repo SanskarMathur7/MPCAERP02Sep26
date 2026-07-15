@@ -1,0 +1,29 @@
+{
+  "summary": "Bug-fix retest for the empty Host Body dropdown race condition in the New Tournament modal. All 6 targeted assertions PASSED: (1) Modal opens with trn-host-select showing 'Loading bodies…' placeholder (never blank), (2) trn-venue-select shows 'Loading venues…' initially, (3) trn-save-btn is disabled while refsLoading=true, (4) after ~2.5s fetch host has 65 options with visible '[State] Madhya Pradesh Cricket Association (MPCA)' as the default, (5) venue has 6 options (— None / TBD — + 5 real venues), (6) full E2E create flow (DIV-IND host + Holkar Stadium + Main Ground + 'BugFix Retest Trophy') submits successfully → modal closes → tournament appears in list. Backend regression from Sprint M8 was NOT re-run per main-agent instruction (targeted retest only), but the E2E create flow itself round-trips through POST /api/tournaments with venue+ground+host validation and returned 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_tournaments_m8.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix is clean: refsLoading correctly gates both the placeholder <option value='MPCA'>Loading bodies…</option> and the disabled state on the select + save button. useEffect resets bodies/venues/grounds and form before fetch so a re-open of the modal doesn't flash stale data.",
+    "Pre-existing React hydration warning '<span> cannot be a child of <option>' is still emitted from emergent instrumentation wrapping dynamic option text (host body_type, venue category, ground type). Confirmed by main agent as unrelated instrumentation artefact — not blocking, but noisy in console. Same finding as iteration_20.",
+    "Nice-to-have: hostOptions is sorted alphabetically across all body types, so the first 3 options after MPCA is selected are still 'Agar Malwa District…' / 'Alirajpur District…' — a large flat list. Prior iteration_20 already flagged this as an optional <optgroup> improvement; not related to this bug fix."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not re-tested (targeted frontend retest)", "frontend": "100% (6/6 assertions passed)"},
+  "test_credentials": "persona-chip-secretary (Shri Sanjeev Rao, Hon. Secretary). See /app/memory/test_credentials.md.",
+  "seed_data_creation": "Created 'BugFix Retest Trophy' via UI during E2E, then cleaned up via mongosh (deletedCount: 1).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix for race condition on TournamentCreateModal.jsx is verified. Login flow: persona-chip-secretary → login-submit-btn lands on /dashboard first — you MUST wait_for_url('**/dashboard**') and then page.goto('/tournaments') because localStorage-based persona is only committed after the submit button click. Modal now guarantees a non-empty visible select even before fetch — assert visibleText, not just value, to catch the original bug.",
+  "rca of the issue": "Verified fix — original RCA (form.host_body_id='MPCA' default rendered before bodies[] arrived, producing an empty visible <select>) is resolved by (a) rendering an explicit <option value='MPCA'>Loading bodies…</option> when refsLoading=true, (b) disabling the select + save button during load, (c) resetting bodies=[]/venues=[]/grounds=[] on each modal open to prevent stale-state flash. Same treatment applied to the venue select. No regression on the successful create path."
+}

@@ -69,21 +69,30 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
     const [grounds, setGrounds] = useState([]);
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState(null);
+    const [refsLoading, setRefsLoading] = useState(true);
 
     useEffect(() => {
         if (!open) return;
-        (async () => {
-            const [b, v, g] = await Promise.all([
-                fetchBodies().catch(() => []),
-                fetchVenues().catch(() => []),
-                fetchGrounds().catch(() => []),
-            ]);
-            setBodies(b);
-            setVenues(v);
-            setGrounds(g);
-        })();
+        setRefsLoading(true);
+        setBodies([]);
+        setVenues([]);
+        setGrounds([]);
         setForm(emptyForm);
         setErr(null);
+        (async () => {
+            try {
+                const [b, v, g] = await Promise.all([
+                    fetchBodies().catch(() => []),
+                    fetchVenues().catch(() => []),
+                    fetchGrounds().catch(() => []),
+                ]);
+                setBodies(b || []);
+                setVenues(v || []);
+                setGrounds(g || []);
+            } finally {
+                setRefsLoading(false);
+            }
+        })();
     }, [open]);
 
     const hostOptions = useMemo(() => {
@@ -227,14 +236,18 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                     <label className="block">
                         <div className="overline text-[9px] mb-1 flex items-center gap-2">
                             <Landmark size={11} /> Host Body *
+                            {refsLoading && <span className="text-[9px] text-mpca-brass italic normal-case tracking-normal">loading…</span>}
                         </div>
                         <select
                             className="input-heritage"
                             value={form.host_body_id}
                             onChange={(e) => setForm({ ...form, host_body_id: e.target.value })}
+                            disabled={refsLoading || hostOptions.length === 0}
                             data-testid="trn-host-select"
                         >
-                            {hostOptions.map((b) => (
+                            {refsLoading && <option value="MPCA">Loading bodies…</option>}
+                            {!refsLoading && hostOptions.length === 0 && <option value="">No bodies available</option>}
+                            {!refsLoading && hostOptions.map((b) => (
                                 <option key={b.code} value={b.code}>
                                     [{b.body_type}] {b.name} ({b.code})
                                 </option>
@@ -249,15 +262,17 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                         <label className="block">
                             <div className="overline text-[9px] mb-1 flex items-center gap-2">
                                 <MapPin size={11} /> Venue
+                                {refsLoading && <span className="text-[9px] text-mpca-brass italic normal-case tracking-normal">loading…</span>}
                             </div>
                             <select
                                 className="input-heritage"
                                 value={form.venue_id}
                                 onChange={(e) => setForm({ ...form, venue_id: e.target.value, ground_id: "" })}
+                                disabled={refsLoading}
                                 data-testid="trn-venue-select"
                             >
-                                <option value="">— None / TBD —</option>
-                                {venues.map((v) => (
+                                <option value="">{refsLoading ? "Loading venues…" : "— None / TBD —"}</option>
+                                {!refsLoading && venues.map((v) => (
                                     <option key={v.id} value={v.id}>{v.name} ({v.city}) · {v.category}</option>
                                 ))}
                             </select>
@@ -371,7 +386,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                         <button
                             className="btn-heritage-primary"
                             onClick={handleSave}
-                            disabled={busy || !form.name || !form.host_body_id}
+                            disabled={busy || refsLoading || !form.name || !form.host_body_id}
                             data-testid="trn-save-btn"
                         >
                             <Save size={14} strokeWidth={1.5} /> {busy ? "Saving…" : "Add to Calendar"}

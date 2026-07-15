@@ -1,0 +1,37 @@
+{
+  "summary": "Sprint M9 backend retest of body_id ← owner_body_id mirror bug. 16/17 pytests PASS. The primary iteration_22 bug is FIXED (POST with only owner_body_id='DIV-IND' now correctly returns body_id='DIV-IND'; PATCH force-syncs both directions; bcci_calendar_eligible flips both ways with bcci_approval). ONE new bug found by the exact scenario listed in the review request: the LEGACY reverse-fill (client sends body_id='DIV-GWL' with NO owner_body_id) still returns owner_body_id='MPCA'. Same class of defect as the original bug: VenueCreate.owner_body_id has default 'MPCA', so `data.get('owner_body_id') or data.get('body_id')` in _normalise_venue_payload short-circuits on the default before ever falling back to legacy body_id. All 5 seeded venues intact; filters ?owner_body_id=MPCA and ?bcci_approval=International return correct sets; 400 on unknown owner/manager body_id. All M9-prefixed test venues cleaned up.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/venues",
+        "issue": "LEGACY shape not honoured. When client sends only {body_id:'DIV-GWL'} (no owner_body_id), response has owner_body_id='MPCA' (not 'DIV-GWL' as required by the review-request contract). Root cause: routes/venues_grounds.py::_normalise_venue_payload line 73 → `owner = data.get('owner_body_id') or data.get('body_id') or 'MPCA'`. Because VenueBase.owner_body_id has default='MPCA', model_dump() always emits owner_body_id='MPCA' → the `or data.get('body_id')` fallback is dead. Same class of defect as the iteration_22 bug (Pydantic defaults masking the fallback). Fix: distinguish 'client explicitly sent MPCA' from 'MPCA was the default'; e.g. accept a `dict` from `payload.model_dump(exclude_unset=True)` on the create/patch entry points instead of the full dump, or make owner_body_id/body_id Optional[str]=None in VenueBase and default them in the normaliser only.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_venues_m9_retest.py",
+    "/app/test_reports/pytest/iter23_results.xml"
+  ],
+  "action_items": [
+    "Fix legacy-body_id back-fill in _normalise_venue_payload: use payload.model_dump(exclude_unset=True) at the /api/venues POST + PATCH entry points OR redeclare VenueBase.body_id / owner_body_id as Optional[str]=None so the `or` fallback in the normaliser actually fires. Currently the reverse mirror is still dead code because both fields carry a 'MPCA' default.",
+    "Optional hardening: after `owner = data.get('owner_body_id') or data.get('body_id') or 'MPCA'`, also detect the specific case where the caller passed body_id but not owner_body_id and honour that even when owner_body_id came in as the model default. Simplest: compare against `payload.model_fields_set` before dumping."
+  ],
+  "critical_code_review_comments": [
+    "The M9 fix in _normalise_venue_payload correctly force-syncs body_id ← owner_body_id (forward direction), but the reverse fallback for legacy callers is still dead code for the same reason the original bug existed: Pydantic default 'MPCA' on owner_body_id makes the `or data.get('body_id')` unreachable. Move to `model_dump(exclude_unset=True)` in the route handler OR drop the default in VenueBase.",
+    "bcci_calendar_eligible ↔ bcci_approval mirroring now works both ways on POST and PATCH — verified in tests.",
+    "PATCH still uses the full VenueCreate body (not a partial); any client-omitted field is silently reset to its Pydantic default. Pre-existing concern flagged in iteration_22; not regressed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_venues_m9_retest.py (new — 17 focused tests for the mirror bug)"
+  ],
+  "success_rate": { "backend": "94.1% (16/17)", "frontend": "not tested per review request" },
+  "test_credentials": "N/A — pure HTTP retest, no persona headers required by /api/venues.",
+  "seed_data_creation": "Created 6 'M9 …' venues during the test run; all cleaned up in the final test_zzz_cleanup_m9_venues step (verified 0 remaining).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After the legacy back-fill fix lands, just re-run: pytest /app/backend/tests/test_venues_m9_retest.py -v . All 17 tests should be green. The single failing test is TestBodyIdMirrorOnCreate::test_legacy_body_id_only_div_gwl. Everything else — including the primary iteration_22 repro (test_owner_only_div_ind), PATCH force-sync, bcci flips, seeded regression, filter regression, and 400 on unknown body — already passes. iteration_22 also has the /app/backend/tests/test_venues_m9.py file (16 tests) which is unchanged and should also all pass now.",
+  "rca of the issue": "POST /api/venues with legacy shape {body_id:'DIV-GWL'} → response owner_body_id='MPCA' (should be 'DIV-GWL'). The M9 fix replaced the old dead-code guards with `owner = data.get('owner_body_id') or data.get('body_id') or 'MPCA'`, but VenueBase.owner_body_id is declared `= 'MPCA'` in /app/backend/models.py:1238. Therefore payload.model_dump() ALWAYS emits owner_body_id='MPCA' when the client does not send it, the first `or` clause evaluates truthy, and the legacy body_id fallback never runs. The forward direction (owner set explicitly → body_id force-synced on line 75) works because it runs unconditionally, which is why the primary iteration_22 bug is fixed. Fix suggestions: (a) use `payload.model_dump(exclude_unset=True)` in create_venue and update_venue so unspecified fields don't appear in `data`; or (b) redeclare both `body_id` and `owner_body_id` as `Optional[str] = None` in VenueBase and default them in the normaliser only."
+}

@@ -68,14 +68,15 @@ async def list_venues(
 
 
 def _normalise_venue_payload(data: dict) -> dict:
-    """M9 · Keep body_id and owner_body_id in sync; validate BCCI approval; default manager to owner."""
-    if data.get("owner_body_id") and not data.get("body_id"):
-        data["body_id"] = data["owner_body_id"]
-    if data.get("body_id") and not data.get("owner_body_id"):
-        data["owner_body_id"] = data["body_id"]
-    # bcci_calendar_eligible mirrors bcci_approval for legacy readers
+    """M9 · owner_body_id is the source of truth. body_id (legacy) always mirrors owner.
+    Managing body defaults to owner if not set. bcci_calendar_eligible mirrors bcci_approval."""
+    owner = data.get("owner_body_id") or data.get("body_id") or "MPCA"
+    data["owner_body_id"] = owner
+    data["body_id"] = owner  # force-sync — legacy field always matches owner
     if data.get("bcci_approval") and data["bcci_approval"] != "None":
         data["bcci_calendar_eligible"] = True
+    elif data.get("bcci_approval") == "None":
+        data["bcci_calendar_eligible"] = False
     return data
 
 

@@ -1,0 +1,36 @@
+{
+  "summary": "Sprint M11 tournament host-body acceptance workflow — comprehensive backend + frontend testing. All 13 backend pytest cases PASSED (creation auto-seed for Division/District/State hosts, auth/validation guards, 2-body district flow with intermediate Pending state, idempotency guard, sticky-reject behaviour, pending-acceptance listing with route-order verification). Frontend E2E as Hon. Secretary → Division Secretary passed end-to-end: create DIV-IND-hosted tournament → Awaiting/DIV-IND pill appears → switch persona to Division Secretary → inline Accept/Reject buttons show → Awaiting My Acceptance filter lists the row → click Accept → row updates without reload (buttons vanish, ✓ DIV-IND, status→Upcoming) → row disappears from Awaiting filter. All M11 seed tournaments cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TournamentCreateModal", "issues": ["Pre-existing dev-mode hydration warning '<span> cannot be a child of <option>' originates from Emergent's runtime instrumentation wrapping <option> text — same as reported in iteration_25. Not a real code bug; disappears in production build."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m11_tournament_acceptance.py",
+    "/app/test_reports/pytest/iter26_m11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/tournaments.py:116 — `status='Draft' if acceptance.status == 'Pending' else 'Draft'` is a redundant ternary; both branches return 'Draft'. Not a bug (State-hosted tournaments correctly stay Draft awaiting the older Awaiting_Approval flow), but the ternary should be simplified to just `status='Draft'`.",
+    "backend/routes/tournaments.py — Reject is sticky/permanent (once rejected, subsequent accepts cannot revert to Accepted). This matches the spec but there is NO endpoint to reset the acceptance flow after a reject, so a rejected tournament is effectively stuck in Draft+Rejected forever unless the DB is edited directly. Consider adding a reset/re-allot flow for MPCA to reissue.",
+    "backend/routes/tournaments.py — No DELETE /tournaments/{id} endpoint exists; test cleanup had to go through MongoDB directly. If this is intentional (audit trail), fine; otherwise, an admin delete would be handy for test data hygiene.",
+    "backend PATCH /tournaments/{id} is untouched (per spec), which means an operator could bypass acceptance by directly PATCHing status='Upcoming'. Documented in the review request but worth noting as a soft-authorisation gap.",
+    "frontend Tournaments.jsx — window.prompt() is used for rejection notes; consider a proper modal for consistency with the rest of the app's UX."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m11_tournament_acceptance.py (new)"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (all E2E steps passed)"},
+  "test_credentials": "Client-side personas (no password). Used localStorage injection: secretary (body_code=MPCA) and division-secretary (body_code=DIV-IND). District-secretary (DIST-UJJA-UJN) is in a different division so the 2-body district flow was verified via direct API calls with X-User-Body-Code=DIV-UJN.",
+  "seed_data_creation": "13 'M11 ...' tournaments created during backend testing + 1 'M11 UITest DivHost ...' during frontend testing. ALL deleted at cleanup via direct MongoDB delete (no DELETE /tournaments endpoint exists). Post-cleanup verified 0 M11 tournaments remain.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "M11 is fully working — no bugs. Route order is correct (GET /tournaments/pending-acceptance registered BEFORE /tournaments/{tid}). Backend auto-populates acceptance.required_from correctly from the bodies collection (District → district + parent Division). Frontend inline Accept/Reject buttons only render when persona.body_code is in required_from AND persona has not yet acted AND acceptance.status is Pending. State-hosted tournaments (MPCA) get acceptance.status='Not_Required' and do not show the strip. Test data was cleaned up via mongo delete (no DELETE endpoint available). Backend tests preserved at /app/backend/tests/test_m11_tournament_acceptance.py for regression.",
+  "rca of the issue": "N/A — no bugs found."
+}

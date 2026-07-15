@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { fetchTournaments, fetchTournamentStats, fetchBodies } from "@/lib/api";
+import { fetchTournaments, fetchTournamentStats, fetchBodies, actOnTournamentAcceptance } from "@/lib/api";
 import {
     Trophy, Calendar, MapPin, Users, ChevronRight, Filter, ShieldCheck, Plus, LayoutList, LayoutGrid,
 } from "lucide-react";
@@ -99,6 +99,21 @@ const Tournaments = () => {
     const [filter, setFilter] = useState("all");
     const [createOpen, setCreateOpen] = useState(false);
     const [viewMode, setViewMode] = useState("list"); // 'list' | 'calendar'
+    const [accBusy, setAccBusy] = useState(null); // tournament id being acted on
+
+    const handleAcceptance = async (tid, action) => {
+        const note = action === "reject" ? window.prompt("Optional note explaining the rejection (leave blank if none):") : null;
+        if (action === "reject" && note === null) return; // user cancelled
+        setAccBusy(tid);
+        try {
+            const updated = await actOnTournamentAcceptance(tid, action, note || null);
+            setList((prev) => prev.map((x) => x.id === tid ? updated : x));
+        } catch (e) {
+            alert(e?.response?.data?.detail || e.message);
+        } finally {
+            setAccBusy(null);
+        }
+    };
 
     const load = async () => {
         try {
@@ -127,11 +142,18 @@ const Tournaments = () => {
             r = r.filter((t) => t.is_womens);
         } else if (filter === "three_team") {
             r = r.filter((t) => t.is_three_team_format);
+        } else if (filter === "pending_my_accept") {
+            r = r.filter((t) => {
+                const acc = t.acceptance || {};
+                if (!persona?.body_code || acc.status !== "Pending") return false;
+                if (!(acc.required_from || []).includes(persona.body_code)) return false;
+                return !(acc.entries || []).some((e) => e.body_code === persona.body_code);
+            });
         } else if (["Multi_Day", "One_Day", "T20", "Pink_Ball"].includes(filter)) {
             r = r.filter((t) => t.format === filter);
         }
         return r;
-    }, [list, filter]);
+    }, [list, filter, persona]);
 
     if (loading) return <div className="p-16" data-testid="trn-loading"><CricketLoader size="lg" label="Loading tournament catalogue…" /></div>;
 
@@ -195,6 +217,7 @@ const Tournaments = () => {
                 <Filter size={12} className="text-mpca-gray-dark" />
                 {[
                     ["all",                  "All"],
+                    ["pending_my_accept",    "⏳ Awaiting My Acceptance"],
                     ["MPCA_InterDivisional", "MPCA Inter-Div"],
                     ["MPCA_Championship",    "Championships"],
                     ["BCCI",                 "BCCI"],
@@ -230,12 +253,17 @@ const Tournaments = () => {
                         const sc = SCOPE_META[t.scope] || { label: t.scope, tone: "lapsed" };
                         const tm = TYPE_META[t.tournament_type] || { label: t.tournament_type, tone: "lapsed" };
                         const st = STATUS_META[t.status] || { label: t.status, tone: "lapsed" };
+                        const acc = t.acceptance || {};
+                        const required = acc.required_from || [];
+                        const alreadyActed = (acc.entries || []).some((e) => e.body_code === persona?.body_code);
+                        const iMustAccept = persona?.body_code && required.includes(persona.body_code) && !alreadyActed && acc.status === "Pending";
+                        const accepting = accBusy === t.id;
                         return (
-                            <button
+                            <div
                                 key={t.id}
-                                onClick={() => navigate(`/tournaments/${t.id}`)}
                                 data-testid={"trn-row-" + t.tournament_no}
-                                className="ledger-row w-full text-left flex flex-wrap items-center gap-4 px-6 py-4"
+                                className="ledger-row w-full flex flex-wrap items-center gap-4 px-6 py-4 cursor-pointer"
+                                onClick={() => navigate(`/tournaments/${t.id}`)}
                             >
                                 <div className="w-10 h-10 rounded-full bg-mpca-green-dark text-mpca-gold-light flex items-center justify-center shrink-0">
                                     <Trophy size={16} strokeWidth={1.5} />
@@ -253,6 +281,30 @@ const Tournaments = () => {
                                         {t.host_body_id && <span className="font-mono text-mpca-brass">· Host {t.host_body_id}</span>}
                                         {t.trophy_name && <span className="text-mpca-oxblood">· 🏆 {t.trophy_name}</span>}
                                     </div>
+                                    {/* M11 · Acceptance status + required-from strip */}
+                                    {acc.status && acc.status !== "Not_Required" && (
+                                        <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[10px] font-mono uppercase tracking-wider" data-testid={"trn-acc-" + t.tournament_no}>
+                                            <span className={
+                                                acc.status === "Accepted"  ? "px-2 py-0.5 bg-mpca-green/15 border border-mpca-green/50 text-mpca-green" :
+                                                acc.status === "Rejected"  ? "px-2 py-0.5 bg-mpca-oxblood/15 border border-mpca-oxblood/50 text-mpca-oxblood" :
+                                                                             "px-2 py-0.5 bg-mpca-brass/15 border border-mpca-brass/50 text-mpca-brass"
+                                            }>
+                                                {acc.status === "Pending" ? "Awaiting" : acc.status}
+                                            </span>
+                                            {required.map((bc) => {
+                                                const acted = (acc.entries || []).filter((e) => e.body_code === bc)[0];
+                                                return (
+                                                    <span key={bc} className={
+                                                        !acted ? "text-mpca-gray-dark border border-mpca-gray/30 px-1.5 py-0.5" :
+                                                        acted.action === "accept" ? "text-mpca-green border border-mpca-green/40 px-1.5 py-0.5" :
+                                                                                    "text-mpca-oxblood border border-mpca-oxblood/40 px-1.5 py-0.5"
+                                                    }>
+                                                        {acted?.action === "accept" ? "✓ " : acted?.action === "reject" ? "✗ " : "· "}{bc}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                                 <span className="font-mono text-[11px] text-mpca-gray-dark uppercase tracking-wider w-20 text-right">{ageLabel(t)}</span>
                                 <Pill tone={tm.tone} label={tm.label} testId={"trn-type-" + t.tournament_type} />
@@ -261,8 +313,28 @@ const Tournaments = () => {
                                 {t.is_womens && <span className="pill bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/50" data-testid={"trn-womens-" + t.tournament_no}>Women&apos;s</span>}
                                 {t.allows_guests && <span className="pill bg-mpca-brass/15 text-mpca-gold border-mpca-brass/50">+ Guest</span>}
                                 <Pill tone={st.tone} label={st.label} testId={"trn-status-" + t.status} />
+                                {iMustAccept && (
+                                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            onClick={() => handleAcceptance(t.id, "accept")}
+                                            disabled={accepting}
+                                            className="px-3 py-1 text-[10px] uppercase tracking-widest bg-mpca-green text-mpca-ivory hover:bg-mpca-green-dark transition disabled:opacity-50"
+                                            data-testid={"trn-accept-" + t.tournament_no}
+                                        >
+                                            ✓ Accept
+                                        </button>
+                                        <button
+                                            onClick={() => handleAcceptance(t.id, "reject")}
+                                            disabled={accepting}
+                                            className="px-3 py-1 text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory hover:opacity-90 transition disabled:opacity-50"
+                                            data-testid={"trn-reject-" + t.tournament_no}
+                                        >
+                                            ✗ Reject
+                                        </button>
+                                    </div>
+                                )}
                                 <ChevronRight size={14} className="text-mpca-gray" />
-                            </button>
+                            </div>
                         );
                     })
                 )}

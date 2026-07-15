@@ -897,6 +897,25 @@ class TournamentBase(BaseModel):
     notes: Optional[str] = None
 
 
+class TournamentAcceptanceEntry(BaseModel):
+    """M11 · One acceptance/rejection stamp per required body."""
+    model_config = ConfigDict(extra="ignore")
+    body_code: str                        # e.g. "DIV-IND" or "DIST-INDO-IND"
+    action: Literal["accept", "reject"]
+    by_role_id: Optional[str] = None      # persona.id who acted (division-secretary / district-secretary)
+    by_name: Optional[str] = None
+    at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    note: Optional[str] = None
+
+
+class TournamentAcceptance(BaseModel):
+    """M11 · Rolled-up acceptance state on a Tournament allotted to a Division/District."""
+    model_config = ConfigDict(extra="ignore")
+    required_from: List[str] = []                     # body codes that must accept
+    entries: List[TournamentAcceptanceEntry] = []     # every accept/reject stamp (audit log)
+    status: Literal["Not_Required", "Pending", "Accepted", "Rejected"] = "Not_Required"
+
+
 class Tournament(TournamentBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     tournament_no: str                           # "TRN-2025-26-001"
@@ -910,6 +929,8 @@ class Tournament(TournamentBase):
     auto_budget_id: Optional[str] = None         # linked TournamentBudget auto-generated
     # T5: expense events — log of every extra-expense request + action
     expense_events: List[ApprovalStep] = []
+    # M11: Division/District host-acceptance workflow
+    acceptance: TournamentAcceptance = Field(default_factory=TournamentAcceptance)
     created_by: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

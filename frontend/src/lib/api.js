@@ -17,6 +17,8 @@ api.interceptors.request.use((config) => {
             config.headers = config.headers || {};
             if (p?.id) config.headers["X-Role-Id"] = p.id;
             if (p?.email) config.headers["X-User-Email"] = p.email;
+            if (p?.body_code) config.headers["X-User-Body-Code"] = p.body_code;
+            if (p?.name) config.headers["X-User-Name"] = p.name;
         }
     } catch (_) { /* noop */ }
     return config;
@@ -491,6 +493,15 @@ export const removePlayerFromSquad = async (squadId, playerId) => {
 // ---------- Phase T1-T4 · Tournament Plan · Grant Scheme · Invoices · DA ----------
 export const fetchTournamentStats = async () => {
     const { data } = await api.get("/tournaments-stats/summary");
+    return data;
+};
+// M11 · Tournament acceptance
+export const actOnTournamentAcceptance = async (tid, action, note) => {
+    const { data } = await api.post(`/tournaments/${tid}/acceptance`, { action, note });
+    return data;
+};
+export const fetchPendingAcceptance = async () => {
+    const { data } = await api.get("/tournaments/pending-acceptance");
     return data;
 };
 export const fetchGrantRates = async (params = {}) => {

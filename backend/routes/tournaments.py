@@ -2,12 +2,16 @@
 from datetime import datetime, timezone, date
 from typing import List, Optional, Literal
 import uuid
-from fastapi import HTTPException
+from fastapi import HTTPException, Header
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
-from models import Tournament, TournamentCreate, TournamentStatus, Squad, SquadCreate, SquadAddPlayer, SquadMember, Body, Player, TournamentFormat, TournamentScope
+from models import Tournament, TournamentCreate, TournamentStatus, Squad, SquadCreate, SquadAddPlayer, SquadMember, Body, Player, TournamentFormat, TournamentScope, TournamentAcceptance, TournamentAcceptanceEntry
 from core.helpers import _next_tournament_no, _check_player_against_tournament, _age_years
+
+
+# M11 · Persona role IDs that may accept a tournament on behalf of their body
+_ACCEPTANCE_ROLES = {"division-secretary", "district-secretary", "president", "secretary"}
 
 
 # ---------------- Routes: Tournaments (Phase IV.2 — M2) ----------------
@@ -36,6 +40,24 @@ async def list_tournaments(
         query["format"] = format
     docs = await db.tournaments.find(query, {"_id": 0}).sort("start_date", 1).to_list(200)
     return docs
+
+
+@api_router.get("/tournaments/pending-acceptance", response_model=List[Tournament])
+async def list_pending_acceptance(x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code")):
+    """List tournaments where the caller's body is on the required-acceptance list AND has NOT yet acted.
+    Registered BEFORE the generic /tournaments/{tid} route to avoid tid='pending-acceptance' collision."""
+    if not x_body_code:
+        raise HTTPException(400, "X-User-Body-Code header is required.")
+    docs = await db.tournaments.find({
+        "acceptance.status": "Pending",
+        "acceptance.required_from": x_body_code,
+    }, {"_id": 0}).sort("created_at", -1).to_list(500)
+    out = []
+    for d in docs:
+        acted = any(e.get("body_code") == x_body_code for e in (d.get("acceptance") or {}).get("entries") or [])
+        if not acted:
+            out.append(d)
+    return out
 
 
 @api_router.get("/tournaments/{tid}", response_model=Tournament)
@@ -72,13 +94,108 @@ async def create_tournament(payload: TournamentCreate):
             raise HTTPException(400, f"Ground {payload.ground_id} does not belong to Venue {payload.venue_id}")
         data["ground_name_snapshot"] = g.get("name")
 
+    # M11 · Auto-seed the host-body acceptance workflow when MPCA allots a tournament
+    # to a Division or a District. Division-hosted → division must accept.
+    # District-hosted → BOTH district AND its parent division must accept.
+    acceptance = TournamentAcceptance()
+    if host["body_type"] == "Division":
+        acceptance.required_from = [host["code"]]
+        acceptance.status = "Pending"
+    elif host["body_type"] == "District":
+        req = [host["code"]]
+        parent_code = host.get("parent_code")
+        if parent_code:
+            req.append(parent_code)
+        acceptance.required_from = req
+        acceptance.status = "Pending"
+    # else: State-hosted (MPCA) → no acceptance flow needed (Not_Required)
+    data["acceptance"] = acceptance.model_dump()
+
     t = Tournament(
         tournament_no=await _next_tournament_no(payload.fiscal_cycle),
-        status="Draft",
+        status="Draft" if acceptance.status == "Pending" else "Draft",
         **data,
     )
     await db.tournaments.insert_one(t.model_dump())
     return t
+
+
+# ---------------- Routes: Tournament Acceptance (M11) ----------------
+
+
+class TournamentAcceptancePayload(BaseModel):
+    action: Literal["accept", "reject"]
+    note: Optional[str] = None
+
+
+@api_router.post("/tournaments/{tid}/acceptance", response_model=Tournament)
+async def act_on_tournament_acceptance(
+    tid: str,
+    payload: TournamentAcceptancePayload,
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+):
+    """A Division or District secretary accepts (or rejects) a tournament that
+    MPCA has allotted to their body. When ALL required bodies have accepted →
+    acceptance.status becomes 'Accepted' and the tournament moves from 'Draft'
+    → 'Upcoming'. If any required body rejects → status becomes 'Rejected'."""
+    if not x_role_id or x_role_id not in _ACCEPTANCE_ROLES:
+        raise HTTPException(403, "Only Division / District secretaries (or MPCA officers on their behalf) may act on acceptance.")
+    if not x_body_code:
+        raise HTTPException(400, "X-User-Body-Code header is required — indicates which body you are acting on behalf of.")
+
+    doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Tournament not found")
+
+    acc = doc.get("acceptance") or {"required_from": [], "entries": [], "status": "Not_Required"}
+    required = acc.get("required_from") or []
+    if x_body_code not in required:
+        raise HTTPException(403, f"Body '{x_body_code}' is not on the required-acceptance list for this tournament ({required}).")
+
+    # Guard: same body cannot double-act if an accept already stands (idempotent-ish).
+    already_accepted = any(
+        e.get("body_code") == x_body_code and e.get("action") == "accept"
+        for e in acc.get("entries") or []
+    )
+    if already_accepted and payload.action == "accept":
+        raise HTTPException(400, f"Body '{x_body_code}' has already accepted this tournament.")
+
+    entry = TournamentAcceptanceEntry(
+        body_code=x_body_code,
+        action=payload.action,
+        by_role_id=x_role_id,
+        by_name=x_user_name,
+        note=payload.note,
+    )
+    entries = acc.get("entries") or []
+    entries.append(entry.model_dump())
+    acc["entries"] = entries
+
+    # Recompute rolled-up status
+    if payload.action == "reject":
+        acc["status"] = "Rejected"
+        new_status = "Draft"  # keep as Draft; MPCA can re-allot
+    else:
+        # Consider it fully accepted only if every required body has an accept entry AND none rejected.
+        accepted_bodies = {e["body_code"] for e in acc["entries"] if e["action"] == "accept"}
+        rejected_bodies = {e["body_code"] for e in acc["entries"] if e["action"] == "reject"}
+        if rejected_bodies:
+            acc["status"] = "Rejected"
+            new_status = "Draft"
+        elif set(required).issubset(accepted_bodies):
+            acc["status"] = "Accepted"
+            new_status = "Upcoming"
+        else:
+            acc["status"] = "Pending"
+            new_status = doc.get("status", "Draft")
+
+    await db.tournaments.update_one({"id": tid}, {"$set": {"acceptance": acc, "status": new_status}})
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+
+
 
 
 @api_router.post("/tournaments/{tid}/submit-for-approval", response_model=Tournament)

@@ -67,7 +67,9 @@ async def list_venues(
             q["managed_by_body_id"] = managed_by_body_id
     else:
         # Sprint M13: auto-scope by persona body — a Division/District sees only venues
-        # they own or manage; MPCA sees all.
+        # they own or manage; MPCA sees all. MPCA-owned state venues (grounds) are
+        # always visible to sub-bodies because they represent the shared pool used
+        # for hosting Inter-Divisional / Inter-District tournaments.
         scope = get_scope(request)
         owner_q = body_scope(scope, field="owner_body_id")
         mgr_q = body_scope(scope, field="managed_by_body_id")
@@ -81,6 +83,9 @@ async def list_venues(
                     parts.extend(sq["$or"])
                 else:
                     parts.append(sq)
+            # Sub-bodies also see MPCA-owned venues (shared state pool)
+            if scope and scope.body_code and scope.body_code != "MPCA":
+                parts.append({"owner_body_id": "MPCA"})
             if parts:
                 q["$or"] = parts
     if bcci_approval:

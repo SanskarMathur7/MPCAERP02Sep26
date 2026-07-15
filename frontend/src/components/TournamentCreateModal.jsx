@@ -114,18 +114,24 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
             .sort((a, b) => a.body_type.localeCompare(b.body_type) || a.name.localeCompare(b.name));
     }, [bodies]);
 
-    // Fix 4: Filter venues by host body.
-    // MPCA (State) → all venues.
-    // Division/District → venues owned/managed by that body OR its parent MPCA.
+    // Fix 4: Filter venues by host body's HQ city.
+    // MPCA (State) → all venues. Division/District → venues in the same city as the
+    // body's seat, plus any venue explicitly owned/managed by that body.
+    const hostBody = useMemo(
+        () => bodies.find((b) => b.code === form.host_body_id) || null,
+        [bodies, form.host_body_id],
+    );
     const filteredVenues = useMemo(() => {
         if (!form.host_body_id || form.host_body_id === "MPCA") return venues;
-        return venues.filter((v) =>
-            v.owner_body_id === form.host_body_id ||
-            v.managed_by_body_id === form.host_body_id ||
-            v.body_id === form.host_body_id ||
-            v.owner_body_id === "MPCA" // MPCA-owned venues usable by all
-        );
-    }, [venues, form.host_body_id]);
+        const seat = (hostBody?.seat || hostBody?.name || "").replace(/\s+(Division|District)$/i, "").trim().toLowerCase();
+        return venues.filter((v) => {
+            if (v.owner_body_id === form.host_body_id) return true;
+            if (v.managed_by_body_id === form.host_body_id) return true;
+            if (v.body_id === form.host_body_id) return true;
+            if (seat && (v.city || "").toLowerCase().includes(seat)) return true;
+            return false;
+        });
+    }, [venues, form.host_body_id, hostBody]);
 
     const groundsForVenue = useMemo(() => {
         if (!form.venue_id) return [];

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { fetchTournaments, fetchTournamentStats, fetchBodies, actOnTournamentAcceptance } from "@/lib/api";
 import {
@@ -313,6 +313,16 @@ const Tournaments = () => {
                                 {t.is_womens && <span className="pill bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/50" data-testid={"trn-womens-" + t.tournament_no}>Women&apos;s</span>}
                                 {t.allows_guests && <span className="pill bg-mpca-brass/15 text-mpca-gold border-mpca-brass/50">+ Guest</span>}
                                 <Pill tone={st.tone} label={st.label} testId={"trn-status-" + t.status} />
+                                {(acc.status === "Accepted" || acc.status === "Not_Required") && (
+                                    <Link
+                                        to={`/tournaments/${t.id}/selection`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="px-3 py-1 text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory hover:bg-mpca-green transition inline-flex items-center gap-1"
+                                        data-testid={"trn-select-" + t.tournament_no}
+                                    >
+                                        <Users size={11} strokeWidth={1.5} /> Select
+                                    </Link>
+                                )}
                                 {iMustAccept && (
                                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                         <button

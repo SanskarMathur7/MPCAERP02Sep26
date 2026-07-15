@@ -788,6 +788,8 @@ class Player(PlayerBase):
     eligibility_notes: List[str] = []             # human-readable validator output
     tw3_verified: bool = False                    # TW3 maturity check (for Guests)
     submission_locked: bool = False               # no edits after submission unless reopened
+    # M12 · Selection Console — rich stats bundle (yo-yo, form, index components, career splits)
+    selection_meta: Optional[dict] = None
 
 
 class PlayerCreate(PlayerBase):
@@ -947,8 +949,35 @@ class SquadMember(BaseModel):
     role: str
     guest_subtype: Optional[str] = None          # snapshot for quota enforcement
     is_captain: bool = False
+    is_vice_captain: bool = False                # M12
     is_keeper: bool = False
     added_on: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# M12 · Selection Console models
+class MatchOfficials(BaseModel):
+    """Officials assigned to a tournament fixture by the Division at squad-submit."""
+    model_config = ConfigDict(extra="ignore")
+    manager: Optional[str] = None
+    coach: Optional[str] = None
+    trainer: Optional[str] = None
+    physio: Optional[str] = None
+    umpire_1: Optional[str] = None
+    umpire_2: Optional[str] = None
+    scorer: Optional[str] = None
+    referee: Optional[str] = None
+
+
+SquadSubmissionStatus = Literal["Draft", "Awaiting_MPCA_Approval", "Approved", "Rejected"]
+
+
+class SquadWaiver(BaseModel):
+    """Recorded waiver for a player selected despite a red-flag (e.g. NOC missing)."""
+    model_config = ConfigDict(extra="ignore")
+    player_id: str
+    reason: str
+    recorded_by: Optional[str] = None
+    recorded_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class Squad(BaseModel):
@@ -959,6 +988,20 @@ class Squad(BaseModel):
     team_name: str
     members: List[SquadMember] = []
     eligibility_warnings: List[str] = []         # accumulated validator output
+    # M12 · Selection console state
+    shortlist_ids: List[str] = []                # players moved from Pool → Shortlist
+    votes: dict = Field(default_factory=dict)    # {player_id: [voter_role_id,...]}
+    voters: List[str] = []                       # committee member role ids present
+    match_officials: MatchOfficials = Field(default_factory=MatchOfficials)
+    waivers: List[SquadWaiver] = []
+    notes: Optional[str] = None
+    submission_status: SquadSubmissionStatus = "Draft"
+    submitted_at: Optional[str] = None
+    submitted_by: Optional[str] = None
+    submitted_by_body: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    review_note: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 

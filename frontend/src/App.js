@@ -38,6 +38,7 @@ import Players from "@/pages/Players";
 import PlayerDetail from "@/pages/PlayerDetail";
 import Tournaments from "@/pages/Tournaments";
 import TournamentDetail from "@/pages/TournamentDetail";
+import SelectionConsole from "@/pages/SelectionConsole";
 import Fixtures from "@/pages/Fixtures";
 import AuditLog from "@/pages/AuditLog";
 import Rulebook from "@/pages/Rulebook";
@@ -126,6 +127,7 @@ function App() {
                         <Route path="/fixtures" element={<Protected><Fixtures /></Protected>} />
                         <Route path="/audit-log" element={<Protected><AuditLog /></Protected>} />
                         <Route path="/tournaments/:id" element={<Protected><TournamentDetail /></Protected>} />
+                        <Route path="/tournaments/:id/selection" element={<Protected><SelectionConsole /></Protected>} />
 
                         {/* Protected — Sprint 1: Finance Rails */}
                         <Route path="/division-grants" element={<Protected><DivisionGrants /></Protected>} />

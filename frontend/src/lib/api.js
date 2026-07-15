@@ -495,6 +495,24 @@ export const fetchTournamentStats = async () => {
     const { data } = await api.get("/tournaments-stats/summary");
     return data;
 };
+// ---- M12 · Selection Console ----
+export const fetchSelection = async (tid) => {
+    const { data } = await api.get(`/tournaments/${tid}/selection`);
+    return data;
+};
+export const patchSelection = async (tid, payload) => {
+    const { data } = await api.patch(`/tournaments/${tid}/selection`, payload);
+    return data;
+};
+export const submitSelection = async (tid, note) => {
+    const { data } = await api.post(`/tournaments/${tid}/selection/submit`, { note });
+    return data;
+};
+export const reviewSelection = async (tid, action, note) => {
+    const { data } = await api.post(`/tournaments/${tid}/selection/review`, { action, note });
+    return data;
+};
+
 // M11 · Tournament acceptance
 export const actOnTournamentAcceptance = async (tid, action, note) => {
     const { data } = await api.post(`/tournaments/${tid}/acceptance`, { action, note });

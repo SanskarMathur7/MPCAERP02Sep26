@@ -6,9 +6,10 @@ comments, approves (with optional lowered amount) or rejects.
 """
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from core.infra import db, api_router
+from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 from models import (
     TournamentReimbursementClaim, TournamentReimbursementCreate,
@@ -126,6 +127,7 @@ async def _compute_summary(tournament_id: str, body_id: str) -> dict:
 
 @api_router.get("/reimbursement-claims", response_model=List[TournamentReimbursementClaim])
 async def list_claims(
+    request: Request,
     tournament_id: Optional[str] = None,
     body_id: Optional[str] = None,
     status: Optional[TournamentReimbursementStatus] = None,
@@ -134,6 +136,9 @@ async def list_claims(
     q: dict = {}
     if tournament_id: q["tournament_id"] = tournament_id
     if body_id: q["body_id"] = body_id
+    else:
+        # M13: MPCA sees all claims (they need to review), lower bodies see their own only
+        q.update(body_scope(get_scope(request)))
     if status: q["status"] = status
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
     docs = await db.tournament_reimbursement_claims.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)

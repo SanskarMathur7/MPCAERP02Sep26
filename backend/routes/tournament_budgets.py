@@ -11,9 +11,10 @@ independently of the overall budget approval.
 """
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from core.infra import db, api_router
+from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 from models import (
     TournamentBudget, TournamentBudgetCreate, TournamentBudgetAction,
@@ -82,6 +83,7 @@ async def _notify_for_tb(doc: dict, new_status: str, actor_name: Optional[str]) 
 
 @api_router.get("/tournament-budgets", response_model=List[TournamentBudget])
 async def list_tournament_budgets(
+    request: Request,
     tournament_id: Optional[str] = None,
     body_id: Optional[str] = None,
     status: Optional[TournamentBudgetStatus] = None,
@@ -92,6 +94,9 @@ async def list_tournament_budgets(
         q["tournament_id"] = tournament_id
     if body_id:
         q["body_id"] = body_id
+    else:
+        # Sprint M13: auto-scope
+        q.update(body_scope(get_scope(request)))
     if status:
         q["status"] = status
     if fiscal_cycle:

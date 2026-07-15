@@ -2,10 +2,11 @@
 from datetime import datetime, timezone, date
 from typing import List, Optional, Literal
 import uuid
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Request
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
+from core.scoping import get_scope
 from models import Tournament, TournamentCreate, TournamentStatus, Squad, SquadCreate, SquadAddPlayer, SquadMember, Body, Player, TournamentFormat, TournamentScope, TournamentAcceptance, TournamentAcceptanceEntry
 from core.helpers import _next_tournament_no, _check_player_against_tournament, _age_years
 
@@ -22,8 +23,44 @@ async def _next_tournament_no(cycle: str) -> str:
     return f"TRN-{cycle}-{count + 1:03d}"
 
 
+def _tournament_scope_query(scope) -> dict:
+    """M13: Divisions/Districts see MPCA/BCCI-hosted tournaments (Championship,
+    Inter_Divisional, Invitational, State) PLUS their own body's tournaments PLUS
+    tournaments where their body is on the acceptance-required list."""
+    if scope.is_state or not scope.body_code:
+        return {}
+    if scope.is_division:
+        suffix = scope.division_suffix
+        return {"$or": [
+            {"host_body_id": {"$in": ["MPCA", "BCCI"]}},
+            {"scope": "State"},
+            {"host_body_id": scope.body_code},
+            {"host_body_id": {"$regex": f"^DIST-.+-{suffix}$"}},
+            {"acceptance.required_from": scope.body_code},
+            {"acceptance.required_from": {"$regex": f"^DIST-.+-{suffix}$"}},
+        ]}
+    if scope.is_district:
+        # District sees MPCA + parent Division + own
+        # Compute parent division suffix from own code (DIST-XXX-YYY → DIV-YYY)
+        parts = scope.body_code.split("-")
+        parent_div = f"DIV-{parts[-1]}" if len(parts) >= 3 else None
+        or_clauses = [
+            {"host_body_id": {"$in": ["MPCA", "BCCI"]}},
+            {"scope": {"$in": ["State", "Division"]}},
+            {"host_body_id": scope.body_code},
+            {"acceptance.required_from": scope.body_code},
+        ]
+        if parent_div:
+            or_clauses.append({"host_body_id": parent_div})
+        return {"$or": or_clauses}
+    if scope.is_official:
+        return {}  # officials see all tournaments (they may be assigned to any)
+    return {}
+
+
 @api_router.get("/tournaments", response_model=List[Tournament])
 async def list_tournaments(
+    request: Request,
     status: Optional[TournamentStatus] = None,
     scope: Optional[TournamentScope] = None,
     fiscal_cycle: Optional[str] = None,
@@ -38,6 +75,14 @@ async def list_tournaments(
         query["fiscal_cycle"] = fiscal_cycle
     if format:
         query["format"] = format
+    # Sprint M13: merge scope filter (works with $or already in query)
+    req_scope = get_scope(request)
+    scope_q = _tournament_scope_query(req_scope)
+    if scope_q:
+        if "$or" in query:
+            query["$and"] = [{"$or": query.pop("$or")}, scope_q]
+        else:
+            query.update(scope_q)
     docs = await db.tournaments.find(query, {"_id": 0}).sort("start_date", 1).to_list(200)
     return docs
 

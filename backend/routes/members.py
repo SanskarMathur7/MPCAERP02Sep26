@@ -3,9 +3,10 @@ import csv
 import io
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import HTTPException, UploadFile, File, Form, Header
+from fastapi import HTTPException, UploadFile, File, Form, Header, Request
 
 from core.infra import db, api_router
+from core.scoping import get_scope, body_scope
 from models import (
     Member,
     MemberCreate,
@@ -33,13 +34,15 @@ def _actor(role_id: Optional[str], email: Optional[str]) -> dict:
 
 @api_router.get("/members", response_model=List[Member])
 async def list_members(
+    request: Request,
     category: Optional[MemberCategory] = None,
     member_type: Optional[str] = None,
     division_body_id: Optional[str] = None,
     search: Optional[str] = None,
     body_id: Optional[str] = None,
 ):
-    query = {}
+    scope = get_scope(request)
+    query: dict = {}
     if category:
         query["category"] = category
     if member_type:
@@ -48,14 +51,22 @@ async def list_members(
         query["division_body_id"] = division_body_id
     if body_id:
         query["body_id"] = body_id
+    else:
+        # Sprint M13: auto-scope by persona body (State sees all)
+        query.update(body_scope(scope))
     if search:
-        query["$or"] = [
+        search_or = [
             {"name": {"$regex": search, "$options": "i"}},
             {"uid": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}},
             {"membership_id": {"$regex": search, "$options": "i"}},
             {"role": {"$regex": search, "$options": "i"}},
         ]
+        if "$or" in query:
+            existing_or = query.pop("$or")
+            query["$and"] = [{"$or": existing_or}, {"$or": search_or}]
+        else:
+            query["$or"] = search_or
     docs = await db.members.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
     return docs
 

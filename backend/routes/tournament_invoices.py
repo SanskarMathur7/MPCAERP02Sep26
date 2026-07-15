@@ -4,9 +4,10 @@ import re
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from core.infra import db, api_router
+from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 from models import (
     TournamentInvoice, TournamentInvoiceCreate, TournamentInvoiceStatus,
@@ -132,6 +133,7 @@ async def ai_extract_invoice(file_url: str):
 
 @api_router.get("/tournament-invoices", response_model=List[TournamentInvoice])
 async def list_invoices(
+    request: Request,
     tournament_id: Optional[str] = None,
     body_id: Optional[str] = None,
     budget_id: Optional[str] = None,
@@ -140,6 +142,9 @@ async def list_invoices(
     q: dict = {}
     if tournament_id: q["tournament_id"] = tournament_id
     if body_id: q["body_id"] = body_id
+    else:
+        # Sprint M13: auto-scope by persona body (invoices tied to spending body)
+        q.update(body_scope(get_scope(request)))
     if budget_id: q["budget_id"] = budget_id
     if status: q["status"] = status
     docs = await db.tournament_invoices.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)

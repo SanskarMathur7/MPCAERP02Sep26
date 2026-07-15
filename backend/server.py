@@ -19,7 +19,7 @@ from routes import (  # noqa: F401
     venues_grounds, selection, fixtures, tournament_plan, tournament_invoices, extra_expense, shared,
     division_grants, vouchers, ledger, purchase_orders, vendor_kyc,
     assets, hr_payroll, dms, compliance, audit_pack, selection_console, match_officials,
-    reimbursement_schemes, reimbursement_claims,
+    reimbursement_schemes, reimbursement_claims, camps, squad_ai,
 )
 from seed import seed_data
 

@@ -17,9 +17,13 @@ api.interceptors.request.use((config) => {
             const p = JSON.parse(raw);
             config.headers = config.headers || {};
             if (p?.id) config.headers["X-Role-Id"] = p.id;
+            if (p?.id) config.headers["X-Persona-Id"] = p.id;
             if (p?.email) config.headers["X-User-Email"] = p.email;
             if (p?.body_code) config.headers["X-User-Body-Code"] = p.body_code;
+            if (p?.body_code) config.headers["X-Body-Code"] = p.body_code;
+            if (p?.body_type) config.headers["X-Body-Type"] = p.body_type;
             if (p?.name) config.headers["X-User-Name"] = p.name;
+            if (p?.name) config.headers["X-Persona-Name"] = p.name;
         }
     } catch (_) { /* noop */ }
     return config;

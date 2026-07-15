@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, Star, X, Users, Award, ShieldCheck, FileText, Download, Send, Check, ArrowRight } from "lucide-react";
-import { fetchTournament, fetchPlayers, fetchSelection, patchSelection, submitSelection, reviewSelection } from "@/lib/api";
+import { ArrowLeft, Search, Star, X, Users, Award, ShieldCheck, FileText, Download, Send, Check, ArrowRight, Sparkles } from "lucide-react";
+import { fetchTournament, fetchPlayers, fetchSelection, patchSelection, submitSelection, reviewSelection, api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import PlayerDossierDrawer from "@/components/PlayerDossierDrawer";
@@ -205,7 +205,11 @@ const SelectionConsole = () => {
         try {
             const updated = await submitSelection(tid, null);
             setSelection(updated);
-            alert("Submitted to MPCA for approval.");
+            // Sprint M13-C: notify MPCA Secretary with AI verdict summary
+            if (updated?.id) {
+                try { await api.post(`/squads/${updated.id}/notify-ai-review`); } catch (_) { /* non-fatal */ }
+            }
+            alert("Submitted to MPCA for approval. AI verdict summary has been sent.");
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
         finally { setBusyAction(null); }
     };
@@ -298,6 +302,9 @@ const SelectionConsole = () => {
                     )}
                     {submissionStatus === "Awaiting_MPCA_Approval" && isOfficeBearer && (
                         <>
+                            <Link to={`/squads/${selection?.id}/review`} className="btn-heritage-secondary" data-testid="ai-review-btn">
+                                <Sparkles size={12} /> AI Review
+                            </Link>
                             <button className="btn-heritage-primary" onClick={() => doReview("approve")} disabled={busyAction === "approve"} data-testid="approve-btn"><Check size={12} /> Approve</button>
                             <button className="btn-heritage-secondary !bg-mpca-oxblood !text-mpca-ivory" onClick={() => doReview("reject")} disabled={busyAction === "reject"} data-testid="reject-btn"><X size={12} /> Reject</button>
                         </>

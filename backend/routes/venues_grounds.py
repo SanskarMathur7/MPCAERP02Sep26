@@ -11,6 +11,7 @@ from typing import List, Optional
 from fastapi import HTTPException
 
 from core.infra import db, api_router
+from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 from models import (
     Venue, VenueCreate, VenueCategory,
@@ -19,6 +20,7 @@ from models import (
     GroundExpenseType, GroundExpenseStatus,
     TournamentFormat, ApprovalStep,
 )
+from fastapi import Request
 
 
 # ──────────────────── Helpers ────────────────────
@@ -43,6 +45,7 @@ async def _next_ge_no(cycle: str) -> str:
 
 @api_router.get("/venues", response_model=List[Venue])
 async def list_venues(
+    request: Request,
     category: Optional[VenueCategory] = None,
     body_id: Optional[str] = None,
     owner_body_id: Optional[str] = None,
@@ -56,10 +59,30 @@ async def list_venues(
     if body_id:
         # Legacy filter — kept for back-compat. Matches either owner or (legacy) body_id.
         q["$or"] = [{"body_id": body_id}, {"owner_body_id": body_id}]
-    if owner_body_id:
-        q["owner_body_id"] = owner_body_id
-    if managed_by_body_id:
-        q["managed_by_body_id"] = managed_by_body_id
+    elif owner_body_id or managed_by_body_id:
+        # explicit body-owner filter
+        if owner_body_id:
+            q["owner_body_id"] = owner_body_id
+        if managed_by_body_id:
+            q["managed_by_body_id"] = managed_by_body_id
+    else:
+        # Sprint M13: auto-scope by persona body — a Division/District sees only venues
+        # they own or manage; MPCA sees all.
+        scope = get_scope(request)
+        owner_q = body_scope(scope, field="owner_body_id")
+        mgr_q = body_scope(scope, field="managed_by_body_id")
+        if owner_q or mgr_q:
+            # OR the two scopes together
+            parts = []
+            for sq in (owner_q, mgr_q):
+                if not sq:
+                    continue
+                if "$or" in sq:
+                    parts.extend(sq["$or"])
+                else:
+                    parts.append(sq)
+            if parts:
+                q["$or"] = parts
     if bcci_approval:
         q["bcci_approval"] = bcci_approval
     if city:

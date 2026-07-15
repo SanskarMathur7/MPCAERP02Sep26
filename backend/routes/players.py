@@ -1,10 +1,11 @@
 """Routes · Player Module (M1)."""
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import Response
 
 from core.infra import db, api_router
+from core.scoping import get_scope, body_scope
 from models import (
     Player, PlayerCreate, DisqualificationFlag, PlayerStatus, PlayerCategory,
     PlayerDocument, PlayerAuditEvent, PlayerReviewAction, PLAYER_DOC_TYPES,
@@ -29,6 +30,7 @@ async def _append_audit(player_id: str, event: PlayerAuditEvent) -> None:
 
 @api_router.get("/players", response_model=List[Player])
 async def list_players(
+    request: Request,
     body_id: Optional[str] = None,
     category: Optional[PlayerCategory] = None,
     status: Optional[PlayerStatus] = None,
@@ -37,9 +39,14 @@ async def list_players(
     season_year: Optional[str] = None,
     court_order_only: Optional[bool] = None,
 ):
+    scope = get_scope(request)
     query: dict = {}
+    # Explicit body_id filter wins (used by admin/service calls)
     if body_id:
         query["body_id"] = body_id
+    else:
+        # Sprint M13: auto-scope by persona body
+        query.update(body_scope(scope))
     if category:
         query["category"] = category
     if status:
@@ -51,12 +58,18 @@ async def list_players(
     if court_order_only:
         query["court_order_flag"] = True
     if search:
-        query["$or"] = [
+        search_or = [
             {"full_name": {"$regex": search, "$options": "i"}},
             {"player_id": {"$regex": search, "$options": "i"}},
             {"player_display_id": {"$regex": search, "$options": "i"}},
             {"contact_email": {"$regex": search, "$options": "i"}},
         ]
+        # If scope already put an $or (Division scope), $and them together
+        if "$or" in query:
+            existing_or = query.pop("$or")
+            query["$and"] = [{"$or": existing_or}, {"$or": search_or}]
+        else:
+            query["$or"] = search_or
     docs = await db.players.find(query, {"_id": 0}).sort("registered_on", -1).to_list(2000)
     return docs
 

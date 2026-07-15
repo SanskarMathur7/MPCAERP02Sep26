@@ -5,9 +5,10 @@ Every action is logged on tournament.expense_events (append-only ApprovalStep li
 """
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from core.infra import db, api_router
+from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 from core.shared_services import write_audit_log, next_code
 from models import (
@@ -31,6 +32,7 @@ async def _log_expense_event(tid: str, step: ApprovalStep) -> None:
 
 @api_router.get("/extra-expense-requests", response_model=List[ExtraExpenseRequest])
 async def list_extra_expense_requests(
+    request: Request,
     tournament_id: Optional[str] = None,
     body_id: Optional[str] = None,
     status: Optional[ExtraExpenseStatus] = None,
@@ -38,6 +40,13 @@ async def list_extra_expense_requests(
     q: dict = {}
     if tournament_id: q["tournament_id"] = tournament_id
     if body_id: q["body_id"] = body_id
+    else:
+        # M13: auto-scope. MPCA Secretary must ALSO see submitted requests from Divisions.
+        scope = get_scope(request)
+        if scope.is_state:
+            pass  # sees all
+        else:
+            q.update(body_scope(scope))
     if status: q["status"] = status
     docs = await db.extra_expense_requests.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return docs

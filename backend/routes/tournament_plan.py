@@ -1,9 +1,10 @@
 """Routes · Phase T1-T4 — Tournament Plan, Grant Scheme, Auto-Budget, Match Official DA."""
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from core.infra import db, api_router
+from core.scoping import get_scope
 from core.helpers import _create_notification
 from models import (
     Tournament, TournamentPlan, TournamentPlanAction, TournamentPlanStatus,
@@ -387,12 +388,16 @@ async def _prebuild_da_forms(tournament: dict) -> int:
 
 
 @api_router.get("/match-official-da", response_model=List[MatchOfficialDA])
-async def list_da_forms(tournament_id: Optional[str] = None, status: Optional[DAStatus] = None, official_name: Optional[str] = None):
+async def list_da_forms(request: Request, tournament_id: Optional[str] = None, status: Optional[DAStatus] = None, official_name: Optional[str] = None):
     q: dict = {}
     if tournament_id:
         q["tournament_id"] = tournament_id
     if status:
         q["status"] = status
+    # Sprint M13: match-official persona sees only own DA forms
+    scope = get_scope(request)
+    if scope.is_official and scope.name and not official_name:
+        official_name = scope.name
     if official_name:
         q["official_name"] = {"$regex": official_name, "$options": "i"}
     docs = await db.match_official_da.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)

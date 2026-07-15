@@ -111,6 +111,7 @@ const SchemesMaster = () => {
                 <div className="space-y-2" data-testid="scheme-list">
                     {filtered.map((s) => {
                         const reco = recos?.recommendations?.find((r) => r.scheme_code === s.scheme_code);
+                        const isTrn = isTournamentScheme(s);
                         return (
                             <button key={s.scheme_code} onClick={() => { setSelected(s); setEditing(null); }}
                                 className={`w-full text-left p-3 border transition-colors ${cur?.scheme_code === s.scheme_code ? "border-mpca-oxblood bg-mpca-cream/40" : "border-mpca-brass/30 hover:bg-mpca-cream/30"}`}
@@ -120,13 +121,25 @@ const SchemesMaster = () => {
                                         <div className="flex items-center gap-2">
                                             <span className="font-mono text-[10px] text-mpca-brass">Scheme {s.scheme_code}</span>
                                             {reco?.state === "already_claimed" && <span className="text-[9px] uppercase text-mpca-green-dark tracking-widest">Claimed</span>}
+                                            {isTrn && <span className="text-[9px] uppercase text-mpca-brass tracking-widest">Tournament</span>}
                                         </div>
                                         <div className="font-serif text-sm text-mpca-green-dark mt-0.5">{s.name}</div>
                                         <div className="text-[10px] text-mpca-gray-dark mt-1">
                                             <span className="capitalize">{(s.scheme_type || "").replace(/_/g, " ")}</span> · {s.frequency} · {(s.eligible_bodies || []).join("/")}
                                         </div>
                                     </div>
-                                    <ChevronRight size={14} className="text-mpca-brass shrink-0" />
+                                    {!isMPCA && !isTrn ? (
+                                        <Link
+                                            to={`/grant-claims/new?scheme=${s.scheme_code}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="shrink-0 text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2.5 py-1.5 hover:bg-mpca-burgundy-dark inline-flex items-center gap-1"
+                                            data-testid={`claim-row-${s.scheme_code}`}
+                                        >
+                                            <IndianRupee size={10} /> Claim
+                                        </Link>
+                                    ) : (
+                                        <ChevronRight size={14} className="text-mpca-brass shrink-0" />
+                                    )}
                                 </div>
                             </button>
                         );

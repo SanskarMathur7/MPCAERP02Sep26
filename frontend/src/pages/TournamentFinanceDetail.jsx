@@ -284,6 +284,21 @@ const TournamentFinanceDetail = () => {
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
 
+    // ─── Budget submit workflow (Fix 6) ───
+    const submitBudgetSheet = async () => {
+        if (!budget) return;
+        if (!window.confirm(`Submit budget ${budget.budget_no} to MPCA Treasurer for approval?`)) return;
+        try {
+            await api.post(`/tournament-budgets/${budget.id}/submit`, {
+                actor_name: persona?.name,
+                actor_post: persona?.post || "Division Secretary",
+                actor_body_id: persona?.body_code,
+                notes: `Submitted from Tournament Finance console for ${tournament.name}`,
+            });
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
     // ─── Reimbursement claim submission ───
     const submitClaim = async () => {
         try {
@@ -316,6 +331,9 @@ const TournamentFinanceDetail = () => {
     const isOfficeBearer = ["president", "secretary", "treasurer", "division-secretary", "district-secretary"].includes(persona?.id);
     const canSubmitClaim = ["division-secretary", "district-secretary"].includes(persona?.id) && (!claim || claim.status === "Draft" || claim.status === "Rejected");
     const budgetHeads = budget ? (budget.approved_head_allocations?.length ? budget.approved_head_allocations : budget.head_allocations) : [];
+    // Fix 6: Division/District can submit budget sheet to MPCA when Draft or Returned.
+    const canSubmitBudget = budget && ["Draft", "Returned"].includes(budget.status) &&
+        ["division-secretary", "district-secretary"].includes(persona?.id);
 
     return (
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="tournament-finance-detail-page">
@@ -404,6 +422,30 @@ const TournamentFinanceDetail = () => {
                                     <div className="font-mono text-2xl text-mpca-green-dark" data-testid="budget-total">
                                         {fmt(budget.approved_total_inr || budget.total_ceiling_inr)}
                                     </div>
+                                    {canSubmitBudget && (
+                                        <button
+                                            className="btn-heritage-primary mt-3 !py-1.5 !px-3 !text-[11px]"
+                                            onClick={submitBudgetSheet}
+                                            data-testid="submit-budget-btn"
+                                        >
+                                            <Send size={11} /> Submit Budget to MPCA
+                                        </button>
+                                    )}
+                                    {budget.status === "Submitted" && (
+                                        <div className="mt-3 text-[10px] uppercase tracking-widest bg-mpca-brass/20 border border-mpca-brass text-mpca-brass px-2 py-1 inline-block" data-testid="budget-submitted-badge">
+                                            Awaiting MPCA Approval
+                                        </div>
+                                    )}
+                                    {budget.status === "Approved" && (
+                                        <div className="mt-3 text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory px-2 py-1 inline-block" data-testid="budget-approved-badge">
+                                            Approved by MPCA
+                                        </div>
+                                    )}
+                                    {budget.status === "Returned" && (
+                                        <div className="mt-3 text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 inline-block" data-testid="budget-returned-badge">
+                                            Returned — please revise
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="grid grid-cols-12 gap-3 px-4 py-2 bg-mpca-green-dark text-mpca-gold-light text-[10px] uppercase tracking-widest">
@@ -638,7 +680,7 @@ const TournamentFinanceDetail = () => {
                                     </div>
                                     {invForm.allocations.length === 0 && (
                                         <div className="p-3 border border-dashed border-mpca-brass/30 text-[11px] text-mpca-gray-dark italic">
-                                            No head allocations yet. If skipped, entire amount will be classified under "Unallocated".
+                                            No head allocations yet. If skipped, entire amount will be classified under &quot;Unallocated&quot;.
                                         </div>
                                     )}
                                     {invForm.allocations.map((a, i) => (
@@ -813,8 +855,8 @@ const TournamentFinanceDetail = () => {
                             {canSubmitClaim && (
                                 <div className="mt-6 p-5 border-2 border-mpca-brass/40 bg-mpca-cream/40">
                                     <div className="font-serif text-lg text-mpca-green-dark mb-2">Ready to Claim Reimbursement?</div>
-                                    <p className="text-[11px] text-mpca-gray-dark mb-3">
-                                        Once the tournament is complete and all invoices are uploaded, submit the reimbursement claim to MPCA. A summary sheet will be auto-generated and sent to the MPCA Secretary for review.
+                                <p className="text-sm text-mpca-gray-dark mt-2 max-w-2xl">
+                                    Once the tournament is complete and all invoices are uploaded, submit the reimbursement claim to MPCA. A summary sheet will be auto-generated and sent to the MPCA Secretary for review.
                                     </p>
                                     <button className="btn-heritage-primary" onClick={submitClaim} data-testid="submit-claim-bva-btn">
                                         <Send size={12} /> Submit Reimbursement Claim to MPCA

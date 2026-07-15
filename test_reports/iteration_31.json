@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 31 · Verified 6 UI refinements end-to-end on the running preview. Results: BUG-3 Persona names ALL 5 chips correct on /login (Mahanaryaman Scindia · President, Sanjeev Dua · Secretary, Devashish Nilosey · Division-Secretary, Rajesh Kulkarni · District-Secretary, Chandrakant Pandit · Match-Official). BUG-2 Player Performance tab: all 6 stat cards (matches/runs/avg/fc-avg/quality/yoyo), both filters (season + format inside perf-filters), all 4 Recharts (chart-runs-per-season / chart-progression / chart-format-dist / chart-matches-per-season) render; changing season 'All' → '2021-22' recomputes record count 15→3 and re-renders table. BUG-1 Schemes claim chip: 21 schemes; claim-row-* chip correctly present on all 13 non-tournament schemes and absent on all 8 tournament schemes (2-A..2-E, 3-C, 3-D, 9-BCCI). Clicking claim-row-1-A navigates to /grant-claims/new?scheme=1-A, opens new-claim-modal with scheme pre-selected; modal dropdown lists 14 non-tournament schemes with zero tournament leaks. BUG-4 Tournament create — scheme dropdown lists ONLY 10 reimbursement/tournament schemes (2-A..2-E, 3-A..3-D, 9-BCCI). Selecting scheme 2-D shows trn-budget-preview + trn-budget-total = ₹2,89,340 (deterministic 2-D calc). Save with Host=DIV-IND, Format=Multi_Day, name='TEST_Auto-Budget Trophy Iter31' → tournament created (id f74daff6-...) AND draft budget TB-2025-26-012 with total_ceiling_inr=289340 auto-created. BUG-6 Submit Budget Sheet: on /tournaments/{id}/finance as Division Secretary the submit-budget-btn is visible with budget-total ₹2,89,340; clicking triggers confirm dialog, POST /api/tournament-budgets/{bid}/submit succeeds, budget flips to Submitted status, button disappears and budget-submitted-badge renders. As MPCA Secretary on the same tournament, submit-budget-btn is correctly hidden. BUG-5 Venue filter has issues (see below).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/venues (persona-scoped)", "issue": "For a Division persona (X-Body-Code=DIV-IND), the endpoint scopes venues to only owner_body_id==DIV-IND OR managed_by_body_id==DIV-IND. Since ALL 310 seeded venues have owner_body_id='MPCA', a Division Secretary sees 0 venues. In the Tournament create modal, the Venue dropdown therefore has ONLY the placeholder '— None / TBD —' regardless of Host Body. This breaks the venue-picking UX for Division Secretaries. Consider auto-including MPCA-owned venues in the persona-scoping OR routing tournament venue picker through an unscoped endpoint."},
+      {"endpoint": "POST /api/tournament-budgets/{bid}/submit", "issue": "After successful submit the budget status flips to 'Submitted' but the returned document has submitted_at=null. Minor audit-trail gap; UI still updates correctly."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TournamentCreateModal · Venue filter (BUG-5)", "issue": "The intended 'Showing X of Y venues' helper (line 390-394) never renders because (a) as Division persona the fetched venues list is 0 so filteredVenues.length == venues.length == 0 (see backend issue), and (b) as MPCA persona the fallback `v.owner_body_id === 'MPCA'` (line 126) matches ALL 310 seeded venues, so filteredVenues.length is never < venues.length even when Host is set to DIV-IND / DIST-INDO-IND. Net effect: the venue list neither shrinks nor shows the filter helper. The venue-filter feature is currently a no-op in production seed.", "selector": "trn-venue-select", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Grant Claims + Tournament create modal", "issues": ["Pre-existing React hydration console warning: 'In HTML, <span> cannot be a child of <option>'. Originates from Emergent's automated data-ve-dynamic tracking wrappers injected into <option> children. Cosmetic only. Noted in iter30 as well."]},
+      {"screen": "Budget Sheet (Scheme 2-D auto-budget)", "issues": ["'Man of the Match (fd-overs)' head shows ₹0 in the head allocations (default input for that variable is 0). Not a bug, but consider adding an 'omit-if-zero' filter so the head is hidden rather than shown as ₹0."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_31.json"
+  ],
+  "action_items": [
+    "BUG-5 · Fix venue scoping so Division/District personas can see MPCA-owned venues when creating tournaments. Options: (a) modify /api/venues auto-scope to include MPCA-owned venues in the OR ($or += {owner_body_id: 'MPCA'}), or (b) frontend calls /api/venues with an explicit `owner_body_id` bypass / new query param to include-mpca-fallback.",
+    "BUG-5 · Refine TournamentCreateModal filteredVenues logic — either drop the 'v.owner_body_id === MPCA' fallback and rely on backend scoping, OR gate the fallback behind a 'show MPCA venues too' toggle so the shrink is observable when the user picks a Division/District host.",
+    "Optional · surface submitted_at timestamp when a tournament budget is submitted (POST /tournament-budgets/{bid}/submit response currently has submitted_at=null even after Status flips to Submitted).",
+    "Optional · silence the '<span> cannot be a child of <option>' hydration warning (cosmetic, pre-existing)."
+  ],
+  "critical_code_review_comments": [
+    "frontend/src/components/TournamentCreateModal.jsx:120-128 — filteredVenues logic contains a design contradiction: the last OR clause `v.owner_body_id === 'MPCA'` makes ALL MPCA-owned venues pass regardless of host. Since 310/310 seeded venues are MPCA-owned, no filtering ever occurs. Either remove that clause or make the intended behaviour a runtime toggle.",
+    "backend/routes/venues_grounds.py:68-85 — auto-scoping does NOT include MPCA-owned venues for Division/District personas. Correct for read-only browsing but wrong for the tournament-creation use case where a Division typically hosts at MPCA-owned venues. Consider adding `{owner_body_id: 'MPCA'}` as a public/fallback branch.",
+    "frontend/src/components/TournamentCreateModal.jsx:180-192 — the auto-created draft budget is a fire-and-forget try/catch that swallows failures silently. If the budget POST fails, the user will not know and later Submit Budget flows will crash on load. Consider surfacing a non-blocking toast.",
+    "frontend/src/pages/SchemesMaster.jsx:13-18 — TOURNAMENT_SCHEME_CODES is well scoped; predicate correctly ORs with scheme_type==='Reimbursement' to catch any future tournament-only schemes. Good.",
+    "frontend/src/pages/PlayerDetail.jsx:691-800 — PerformanceTab computes recordFormat via string-suffix heuristic (T20/LA/OD/50). Deterministic but brittle if a tournament_code like 'T2010' were introduced. Consider explicit r.format field on records.",
+    "frontend/src/pages/TournamentFinanceDetail.jsx:335-336 — canSubmitBudget gate correctly restricts to division-secretary + district-secretary AND budget.status in {Draft, Returned}. Correctly hides for MPCA/Secretary."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only iteration)",
+    "frontend": "5/6 bugs fully PASS · BUG-5 (venue filter) partially fails due to backend scoping + frontend fallback interplay"
+  },
+  "test_credentials": "persona-chip-division-secretary (Devashish Nilosey · DIV-IND), persona-chip-secretary (Sanjeev Dua · MPCA), all working. Login flow: click chip → click 'Sign in to the Registrar' button.",
+  "seed_data_creation": "Created 1 tournament via UI: 'TEST_Auto-Budget Trophy Iter31' (id f74daff6-8055-43bb-a684-c2ae3734c641, host DIV-IND, scheme 2-D). Auto-created budget TB-2025-26-012 (id 441dadf4-5f8c-4395-94ca-f02950b103f7, ₹2,89,340, Draft → Submitted during test). These are safe to leave (TEST_ prefix) or clean up.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "5 of the 6 fixes are cleanly done. BUG-5 (venue filter in Tournament create modal) needs a targeted fix: Division personas see 0 venues because backend /api/venues scoping excludes MPCA-owned venues; MPCA persona never sees the venue list shrink because the frontend's 'MPCA-owned fallback' catches every seeded venue. Fixing either backend scope (include MPCA-owned venues in the OR) or removing the frontend fallback will resolve. The exact route used is /tournaments/:id/finance (NOT /tournament-finance/:id). Tournament create scheme dropdown uses backend /api/schemes/{code}/input-spec + /compute-budget — deterministic ₹2,89,340 for 2-D. All persona names, Player Performance charts + filters, Grant Claim chips, submit-budget-btn RBAC gate work correctly.",
+  "rca of the issue": "BUG-5 root cause: two-layer scoping mismatch. Backend layer: routes/venues_grounds.py:68-85 auto-scopes venues by persona body_scope, excluding MPCA-owned venues for Division personas. Frontend layer: TournamentCreateModal.jsx:120-128 filteredVenues has fallback `v.owner_body_id === 'MPCA'` which lets ALL MPCA-owned venues through regardless of host. In the current seed (310/310 venues owned by MPCA), the frontend fallback nullifies the intended shrink behaviour for MPCA persona, and the backend scoping empties the list entirely for Division persona. Neither exhibits the 'Showing X of Y venues' helper. Mitigation: add {owner_body_id:'MPCA'} to backend auto-scope OR align frontend filter with intended semantics (drop MPCA fallback + rely on backend)."
+}

@@ -7,6 +7,10 @@ import CricketLoader from "@/components/CricketLoader";
 
 const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 
+// Tournament schemes flow through Tournament Reimbursement Matrix, not Grant Claims.
+const TOURNAMENT_SCHEME_CODES = new Set(["2-A", "2-B", "2-C", "2-D", "2-E", "3-C", "3-D", "9-BCCI"]);
+const isTournamentScheme = (s) => s && (TOURNAMENT_SCHEME_CODES.has(s.scheme_code) || s.scheme_type === "Reimbursement" || (s.frequency || "").toLowerCase().includes("tournament"));
+
 const GrantClaims = () => {
     const { persona } = useAuth();
     const navigate = useNavigate();
@@ -240,7 +244,7 @@ const GrantClaims = () => {
                                 <div className="overline text-[9px] mb-1">Scheme *</div>
                                 <select className="input-heritage" value={newClaim.scheme_code} onChange={(e) => setNewClaim({ ...newClaim, scheme_code: e.target.value })} data-testid="new-claim-scheme">
                                     <option value="">Select scheme...</option>
-                                    {schemes.map((s) => <option key={s.scheme_code} value={s.scheme_code}>Scheme {s.scheme_code} · {s.name}</option>)}
+                                    {schemes.filter((s) => !isTournamentScheme(s)).map((s) => <option key={s.scheme_code} value={s.scheme_code}>Scheme {s.scheme_code} · {s.name}</option>)}
                                 </select>
                             </label>
                             <label>

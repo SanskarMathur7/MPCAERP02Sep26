@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, Trophy, Save, MapPin, Landmark } from "lucide-react";
+import { X, Trophy, Save, MapPin, Landmark, BookOpen } from "lucide-react";
 import {
     createTournament,
     fetchBodies,
     fetchVenues,
     fetchGrounds,
 } from "@/lib/api";
+import { api } from "@/lib/api";
 
 const TYPE_OPTIONS = [
     { value: "MPCA_InterDivisional", label: "MPCA · Inter-Divisional (MY Memorial, Madhavrao Scindia, JN Bhaya…)" },
@@ -50,6 +51,7 @@ const emptyForm = {
     scope: "Inter_Divisional",
     fiscal_cycle: "2025-26",
     host_body_id: "MPCA",
+    scheme_code: "",
     start_date: "",
     end_date: "",
     venue_id: "",
@@ -62,11 +64,17 @@ const emptyForm = {
     notes: "",
 };
 
+// Tournament-eligible scheme codes (reimbursement matrix). Non-tournament grants excluded.
+const TOURNAMENT_SCHEME_CODES = new Set(["2-A", "2-B", "2-C", "2-D", "2-E", "3-A", "3-B", "3-C", "3-D", "9-BCCI"]);
+
 const TournamentCreateModal = ({ open, onClose, onDone }) => {
     const [form, setForm] = useState(emptyForm);
     const [bodies, setBodies] = useState([]);
     const [venues, setVenues] = useState([]);
     const [grounds, setGrounds] = useState([]);
+    const [schemes, setSchemes] = useState([]);
+    const [budgetPreview, setBudgetPreview] = useState(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState(null);
     const [refsLoading, setRefsLoading] = useState(true);
@@ -77,18 +85,22 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
         setBodies([]);
         setVenues([]);
         setGrounds([]);
+        setSchemes([]);
         setForm(emptyForm);
+        setBudgetPreview(null);
         setErr(null);
         (async () => {
             try {
-                const [b, v, g] = await Promise.all([
+                const [b, v, g, s] = await Promise.all([
                     fetchBodies().catch(() => []),
                     fetchVenues().catch(() => []),
                     fetchGrounds().catch(() => []),
+                    api.get("/reimbursement-schemes", { params: { active_only: true } }).then((r) => r.data).catch(() => []),
                 ]);
                 setBodies(b || []);
                 setVenues(v || []);
                 setGrounds(g || []);
+                setSchemes((s || []).filter((x) => TOURNAMENT_SCHEME_CODES.has(x.scheme_code) || x.scheme_type === "Reimbursement"));
             } finally {
                 setRefsLoading(false);
             }
@@ -102,10 +114,44 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
             .sort((a, b) => a.body_type.localeCompare(b.body_type) || a.name.localeCompare(b.name));
     }, [bodies]);
 
+    // Fix 4: Filter venues by host body.
+    // MPCA (State) → all venues.
+    // Division/District → venues owned/managed by that body OR its parent MPCA.
+    const filteredVenues = useMemo(() => {
+        if (!form.host_body_id || form.host_body_id === "MPCA") return venues;
+        return venues.filter((v) =>
+            v.owner_body_id === form.host_body_id ||
+            v.managed_by_body_id === form.host_body_id ||
+            v.body_id === form.host_body_id ||
+            v.owner_body_id === "MPCA" // MPCA-owned venues usable by all
+        );
+    }, [venues, form.host_body_id]);
+
     const groundsForVenue = useMemo(() => {
         if (!form.venue_id) return [];
         return grounds.filter((g) => g.venue_id === form.venue_id);
     }, [grounds, form.venue_id]);
+
+    // Fix 5: Live budget preview when scheme is selected (uses backend calc with defaults).
+    useEffect(() => {
+        if (!form.scheme_code) { setBudgetPreview(null); return; }
+        let cancelled = false;
+        setPreviewLoading(true);
+        (async () => {
+            try {
+                const spec = await api.get(`/schemes/${form.scheme_code}/input-spec`).then((r) => r.data);
+                const defaults = {};
+                (spec.input_variables || []).forEach((v) => { defaults[v.key] = v.default; });
+                const computed = await api.post(`/schemes/${form.scheme_code}/compute-budget`, { inputs: defaults }).then((r) => r.data);
+                if (!cancelled) setBudgetPreview(computed);
+            } catch (_) {
+                if (!cancelled) setBudgetPreview(null);
+            } finally {
+                if (!cancelled) setPreviewLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [form.scheme_code]);
 
     if (!open) return null;
 
@@ -121,12 +167,31 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                 end_date: form.end_date || null,
                 venue_id: form.venue_id || null,
                 ground_id: form.ground_id || null,
+                scheme_code: form.scheme_code || null,
                 age_cap_years: form.age_cap_years ? Number(form.age_cap_years) : null,
                 age_floor_years: form.age_floor_years ? Number(form.age_floor_years) : null,
                 max_squad_size: Number(form.max_squad_size) || 18,
                 notes: form.notes || null,
             };
             const t = await createTournament(payload);
+
+            // If a scheme was chosen, auto-create a draft budget for the tournament
+            // so the Division Secretary can immediately submit for MPCA approval.
+            if (form.scheme_code && budgetPreview) {
+                try {
+                    await api.post("/tournament-budgets", {
+                        tournament_id: t.id,
+                        body_id: form.host_body_id,
+                        fiscal_cycle: form.fiscal_cycle,
+                        total_ceiling_inr: budgetPreview.total_ceiling_inr,
+                        head_allocations: (budgetPreview.head_allocations || []).map((h) => ({
+                            head: h.head, limit_inr: h.limit_inr, notes: h.formula,
+                        })),
+                        notes: `Auto-created from scheme ${form.scheme_code} at tournament creation.`,
+                    });
+                } catch (_) { /* non-fatal — user can create budget manually later */ }
+            }
+
             onDone?.(t);
             onClose();
         } catch (e) {
@@ -258,6 +323,52 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                         </div>
                     </label>
 
+                    {/* Fix 5: MPCA Reimbursement Scheme with live auto-budget preview */}
+                    <label className="block">
+                        <div className="overline text-[9px] mb-1 flex items-center gap-2">
+                            <BookOpen size={11} /> MPCA Reimbursement Scheme
+                            {previewLoading && <span className="text-[9px] text-mpca-brass italic normal-case tracking-normal">computing budget…</span>}
+                        </div>
+                        <select
+                            className="input-heritage"
+                            value={form.scheme_code}
+                            onChange={(e) => setForm({ ...form, scheme_code: e.target.value })}
+                            disabled={refsLoading || schemes.length === 0}
+                            data-testid="trn-scheme-select"
+                        >
+                            <option value="">— No scheme / attach later —</option>
+                            {schemes.map((s) => (
+                                <option key={s.scheme_code} value={s.scheme_code}>
+                                    Scheme {s.scheme_code} · {s.name}
+                                </option>
+                            ))}
+                        </select>
+                        <div className="text-[10px] text-mpca-gray-dark mt-1 italic">
+                            Pick the applicable scheme (e.g. 2-D for Inter-Divisional Hosting) — a draft budget will be auto-created and available for the Division Secretary to submit.
+                        </div>
+                        {budgetPreview && (
+                            <div className="mt-2 border border-mpca-brass/40 bg-mpca-parchment/40 p-3" data-testid="trn-budget-preview">
+                                <div className="flex justify-between items-center">
+                                    <div className="overline text-[9px]">Auto-Budget Preview (default inputs)</div>
+                                    <div className="font-mono text-lg text-mpca-oxblood" data-testid="trn-budget-total">
+                                        ₹{Math.round(budgetPreview.total_ceiling_inr || 0).toLocaleString("en-IN")}
+                                    </div>
+                                </div>
+                                <div className="mt-2 space-y-0.5">
+                                    {(budgetPreview.head_allocations || []).slice(0, 6).map((h, i) => (
+                                        <div key={i} className="flex justify-between text-[10px] font-mono">
+                                            <span className="text-mpca-green-dark truncate">{h.head}</span>
+                                            <span className="text-mpca-brass">₹{Math.round(h.limit_inr || 0).toLocaleString("en-IN")}</span>
+                                        </div>
+                                    ))}
+                                    {(budgetPreview.head_allocations || []).length > 6 && (
+                                        <div className="text-[10px] text-mpca-gray-dark italic">+ {budgetPreview.head_allocations.length - 6} more heads</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </label>
+
                     <div className="grid md:grid-cols-2 gap-4">
                         <label className="block">
                             <div className="overline text-[9px] mb-1 flex items-center gap-2">
@@ -272,10 +383,15 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                                 data-testid="trn-venue-select"
                             >
                                 <option value="">{refsLoading ? "Loading venues…" : "— None / TBD —"}</option>
-                                {!refsLoading && venues.map((v) => (
+                                {!refsLoading && filteredVenues.map((v) => (
                                     <option key={v.id} value={v.id}>{v.name} ({v.city}) · {v.category}</option>
                                 ))}
                             </select>
+                            {!refsLoading && form.host_body_id !== "MPCA" && filteredVenues.length < venues.length && (
+                                <div className="text-[10px] text-mpca-brass mt-1 italic">
+                                    Showing {filteredVenues.length} of {venues.length} venues — filtered to your host body.
+                                </div>
+                            )}
                         </label>
                         <label className="block">
                             <div className="overline text-[9px] mb-1">Ground (under selected venue)</div>

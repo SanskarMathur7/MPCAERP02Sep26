@@ -12,6 +12,10 @@ import {
     Ban, Loader2, ExternalLink, Trash2, Edit3, Save, Gavel, ScrollText, Sparkles, ShieldAlert, Award,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
+import {
+    BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
+    Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -690,14 +694,33 @@ const PerformanceTab = ({ player }) => {
     const stats = meta.stats || {};
     const cf = meta.career_figures || {};
 
+    // Filters
+    const [seasonFilter, setSeasonFilter] = useState("All");
+    const [formatFilter, setFormatFilter] = useState("All"); // All | Multi-Day | List A | T20
+
     // Group records by season
     const bySeason = records.reduce((acc, r) => {
         (acc[r.season] = acc[r.season] || []).push(r);
         return acc;
     }, {});
-    const seasons = Object.keys(bySeason).sort();
+    const allSeasons = Object.keys(bySeason).sort();
 
-    // Career totals from stats
+    // Format detection heuristic: tournament_code suffix or format field
+    const recordFormat = (r) => {
+        const s = ((r.format || r.tournament_code || "") + "").toUpperCase();
+        if (s.includes("T20")) return "T20";
+        if (s.includes("LA") || s.includes("OD") || s.includes("50")) return "List A";
+        return "Multi-Day";
+    };
+
+    const filteredRecords = records.filter((r) =>
+        (seasonFilter === "All" || r.season === seasonFilter) &&
+        (formatFilter === "All" || recordFormat(r) === formatFilter)
+    );
+
+    const filteredSeasons = Array.from(new Set(filteredRecords.map((r) => r.season))).sort();
+
+    // Career totals from stats  [m, runs, ballsFaced?, avg, sr, hs, 100s, 50s]
     const totals = ["fc", "la", "t20"].reduce((acc, k) => {
         const s = stats[k] || [];
         acc[k] = { m: s[0] || 0, runs: s[1] || 0, avg: s[3] || 0, sr: s[4] || 0, hundreds: s[6] || 0, fifties: s[7] || 0 };
@@ -707,20 +730,139 @@ const PerformanceTab = ({ player }) => {
     const totalRuns = totals.fc.runs + totals.la.runs + totals.t20.runs;
     const battingAvg = totalMatches > 0 ? ((totals.fc.runs + totals.la.runs + totals.t20.runs) / Math.max(1, totalMatches)).toFixed(1) : "0.0";
 
+    // ─────────── Chart data ───────────
+    // Runs / Wickets per season (from filtered records)
+    const seasonAgg = filteredSeasons.map((s) => {
+        const rows = filteredRecords.filter((r) => r.season === s);
+        const runs = rows.reduce((a, r) => a + (r.runs || 0), 0);
+        const wkt = rows.reduce((a, r) => a + (r.wkt || 0), 0);
+        const matches = rows.reduce((a, r) => a + (r.m || 0), 0);
+        return { season: s, runs, wkt, matches };
+    });
+
+    // Format distribution (career totals)
+    const formatDist = [
+        { name: "Multi-Day", value: totals.fc.runs, color: "#5b2223" },
+        { name: "List A", value: totals.la.runs, color: "#c99a2e" },
+        { name: "T20", value: totals.t20.runs, color: "#1f4c37" },
+    ].filter((f) => f.value > 0);
+
+    // Career progression (cumulative runs over seasons)
+    let cum = 0;
+    const cumProgression = seasonAgg.map((s) => {
+        cum += s.runs;
+        return { season: s.season, cumulative: cum, seasonRuns: s.runs };
+    });
+
+    // Group filtered records by season (for the table)
+    const filteredBySeason = filteredRecords.reduce((acc, r) => {
+        (acc[r.season] = acc[r.season] || []).push(r);
+        return acc;
+    }, {});
+
     return (
         <div data-testid="performance-tab" className="space-y-8">
             {/* Overview stat cards */}
             <div>
                 <div className="overline mb-3">Career Overview</div>
                 <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                    <StatCard label="Matches" value={totalMatches} />
-                    <StatCard label="Runs" value={totalRuns.toLocaleString("en-IN")} />
-                    <StatCard label="Batting Avg" value={battingAvg} />
-                    <StatCard label="FC Avg" value={totals.fc.avg} tone="green" />
-                    <StatCard label="Quality Index" value={meta.quality_index ? Math.round(meta.quality_index * 100) : "—"} tone="brass" />
-                    <StatCard label="Yo-Yo" value={meta.yo_yo || "—"} />
+                    <StatCard label="Matches" value={totalMatches} testId="stat-matches" />
+                    <StatCard label="Runs" value={totalRuns.toLocaleString("en-IN")} testId="stat-runs" />
+                    <StatCard label="Batting Avg" value={battingAvg} testId="stat-avg" />
+                    <StatCard label="FC Avg" value={totals.fc.avg} tone="green" testId="stat-fc-avg" />
+                    <StatCard label="Quality Index" value={meta.quality_index ? Math.round(meta.quality_index * 100) : "—"} tone="brass" testId="stat-quality" />
+                    <StatCard label="Yo-Yo" value={meta.yo_yo || "—"} testId="stat-yoyo" />
                 </div>
             </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-3 items-end border-t border-mpca-brass/20 pt-6" data-testid="perf-filters">
+                <div>
+                    <div className="overline text-[9px] mb-1">Filter Season</div>
+                    <select value={seasonFilter} onChange={(e) => setSeasonFilter(e.target.value)}
+                        className="input-heritage !py-1.5 !text-xs" data-testid="filter-season">
+                        <option value="All">All Seasons</option>
+                        {allSeasons.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <div className="overline text-[9px] mb-1">Filter Format</div>
+                    <select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value)}
+                        className="input-heritage !py-1.5 !text-xs" data-testid="filter-format">
+                        <option value="All">All Formats</option>
+                        <option value="Multi-Day">Multi-Day</option>
+                        <option value="List A">List A (50-ov)</option>
+                        <option value="T20">T20</option>
+                    </select>
+                </div>
+                <div className="ml-auto text-[10px] text-mpca-gray-dark uppercase tracking-widest font-mono">
+                    {filteredRecords.length} record(s) · {filteredSeasons.length} season(s)
+                </div>
+            </div>
+
+            {/* Charts */}
+            {seasonAgg.length > 0 && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Runs per season */}
+                    <div className="border border-mpca-brass/20 p-4 bg-mpca-cream/10" data-testid="chart-runs-per-season">
+                        <div className="overline mb-3">Runs · Season-wise</div>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <BarChart data={seasonAgg}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#d7c9a3" />
+                                <XAxis dataKey="season" tick={{ fontSize: 10, fill: "#5b2223" }} />
+                                <YAxis tick={{ fontSize: 10, fill: "#5b2223" }} />
+                                <Tooltip contentStyle={{ background: "#faf6ec", border: "1px solid #b58a3a", fontSize: 11 }} />
+                                <Legend wrapperStyle={{ fontSize: 10 }} />
+                                <Bar dataKey="runs" fill="#5b2223" name="Runs" radius={[3, 3, 0, 0]} />
+                                <Bar dataKey="wkt" fill="#c99a2e" name="Wickets" radius={[3, 3, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    {/* Career progression (cumulative) */}
+                    <div className="border border-mpca-brass/20 p-4 bg-mpca-cream/10" data-testid="chart-progression">
+                        <div className="overline mb-3">Career Progression · Cumulative Runs</div>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <LineChart data={cumProgression}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#d7c9a3" />
+                                <XAxis dataKey="season" tick={{ fontSize: 10, fill: "#5b2223" }} />
+                                <YAxis tick={{ fontSize: 10, fill: "#5b2223" }} />
+                                <Tooltip contentStyle={{ background: "#faf6ec", border: "1px solid #b58a3a", fontSize: 11 }} />
+                                <Line type="monotone" dataKey="cumulative" stroke="#1f4c37" strokeWidth={2} dot={{ fill: "#c99a2e", r: 3 }} name="Cumulative Runs" />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    {/* Format distribution */}
+                    {formatDist.length > 0 && (
+                        <div className="border border-mpca-brass/20 p-4 bg-mpca-cream/10" data-testid="chart-format-dist">
+                            <div className="overline mb-3">Runs by Format · Career</div>
+                            <ResponsiveContainer width="100%" height={220}>
+                                <PieChart>
+                                    <Pie data={formatDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={(e) => `${e.name}: ${e.value}`}>
+                                        {formatDist.map((entry, idx) => <Cell key={idx} fill={entry.color} />)}
+                                    </Pie>
+                                    <Tooltip contentStyle={{ background: "#faf6ec", border: "1px solid #b58a3a", fontSize: 11 }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    )}
+
+                    {/* Matches per season */}
+                    <div className="border border-mpca-brass/20 p-4 bg-mpca-cream/10" data-testid="chart-matches-per-season">
+                        <div className="overline mb-3">Matches Played · Season-wise</div>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <BarChart data={seasonAgg}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#d7c9a3" />
+                                <XAxis dataKey="season" tick={{ fontSize: 10, fill: "#5b2223" }} />
+                                <YAxis tick={{ fontSize: 10, fill: "#5b2223" }} />
+                                <Tooltip contentStyle={{ background: "#faf6ec", border: "1px solid #b58a3a", fontSize: 11 }} />
+                                <Bar dataKey="matches" fill="#1f4c37" name="Matches" radius={[3, 3, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            )}
 
             {/* Format-wise stats */}
             <div>
@@ -753,12 +895,12 @@ const PerformanceTab = ({ player }) => {
 
             {/* Season-wise records table */}
             <div>
-                <div className="overline mb-3">Season-by-Season Record · {records.length} entries across {seasons.length} seasons</div>
-                {records.length === 0 ? (
-                    <div className="p-10 border border-mpca-brass/30 text-center text-mpca-gray-dark italic font-serif">No season records available.</div>
+                <div className="overline mb-3">Season-by-Season Record · {filteredRecords.length} entries across {filteredSeasons.length} seasons</div>
+                {filteredRecords.length === 0 ? (
+                    <div className="p-10 border border-mpca-brass/30 text-center text-mpca-gray-dark italic font-serif">No records match the selected filters.</div>
                 ) : (
                     <div className="space-y-4">
-                        {seasons.map((s) => (
+                        {filteredSeasons.map((s) => (
                             <div key={s} className="border border-mpca-brass/20 overflow-hidden">
                                 <div className="px-3 py-2 bg-mpca-oxblood text-mpca-ivory font-serif text-sm">Season {s}</div>
                                 <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-mpca-cream/40 text-[9px] uppercase tracking-widest text-mpca-gray-dark">
@@ -774,7 +916,7 @@ const PerformanceTab = ({ player }) => {
                                     <div className="text-right">WKT</div>
                                     <div className="text-right">B.AVG</div>
                                 </div>
-                                {bySeason[s].map((r, i) => (
+                                {filteredBySeason[s].map((r, i) => (
                                     <div key={i} className="grid grid-cols-12 gap-2 px-3 py-1.5 items-center border-b border-mpca-brass/10 text-xs" data-testid={`record-${s}-${r.tournament_code}`}>
                                         <div className="col-span-3">
                                             <div className="font-serif text-mpca-green-dark">{r.tournament_name}</div>
@@ -801,8 +943,8 @@ const PerformanceTab = ({ player }) => {
     );
 };
 
-const StatCard = ({ label, value, tone }) => (
-    <div className="border border-mpca-brass/20 p-3 bg-mpca-cream/20">
+const StatCard = ({ label, value, tone, testId }) => (
+    <div className="border border-mpca-brass/20 p-3 bg-mpca-cream/20" data-testid={testId}>
         <div className="text-[9px] uppercase tracking-widest text-mpca-gray-dark">{label}</div>
         <div className={`font-serif text-2xl mt-1 ${tone === "green" ? "text-mpca-green-dark" : tone === "brass" ? "text-mpca-brass" : "text-mpca-oxblood"}`}>{value}</div>
     </div>

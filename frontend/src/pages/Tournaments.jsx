@@ -323,6 +323,14 @@ const Tournaments = () => {
                                         <Users size={11} strokeWidth={1.5} /> Select
                                     </Link>
                                 )}
+                                <Link
+                                    to={`/tournaments/${t.id}/finance`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="px-3 py-1 text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-green-dark hover:bg-mpca-brass/80 transition inline-flex items-center gap-1"
+                                    data-testid={"trn-finance-" + t.tournament_no}
+                                >
+                                    ₹ Finance
+                                </Link>
                                 {iMustAccept && (
                                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                         <button

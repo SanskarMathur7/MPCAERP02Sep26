@@ -68,6 +68,19 @@ async def get_tournament(tid: str):
     return doc
 
 
+@api_router.patch("/tournaments/{tid}", response_model=Tournament)
+async def patch_tournament(tid: str, patch: dict):
+    """Partial update — Sprint T-RIM: primarily used to attach scheme_code."""
+    doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Tournament not found")
+    allowed = {"scheme_code", "notes", "trophy_name", "status", "start_date", "end_date", "venue_id", "ground_id", "venue_name_snapshot", "ground_name_snapshot"}
+    updates = {k: v for k, v in (patch or {}).items() if k in allowed}
+    if updates:
+        await db.tournaments.update_one({"id": tid}, {"$set": updates})
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+
 @api_router.post("/tournaments", response_model=Tournament)
 async def create_tournament(payload: TournamentCreate):
     host = await db.bodies.find_one({"code": payload.host_body_id}, {"_id": 0})

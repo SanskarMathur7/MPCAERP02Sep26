@@ -45,12 +45,35 @@ const NAV_DOMAINS = [
         ],
     },
     {
+        domain: "Financial",
+        items: [
+            { to: "/tournament-finance", label: "Tournament Reimbursement Matrix", icon: Wallet },
+            { to: "/reimbursement-claims", label: "Reimbursement Claims", icon: HandCoins },
+        ],
+    },
+    {
         domain: "Operations",
         items: [
             { to: "/tournaments", label: "MPCA Tournament Calendar", icon: TrophyIcon },
             { to: "/venues", label: "Venues & Grounds", icon: MapPinIcon },
             { to: "/match-officials", label: "Match Officials", icon: ShieldCheck },
             { to: "/selection-funnel", label: "Selection Funnel", icon: Users },
+        ],
+    },
+];
+
+// Match Official persona sees a simplified nav
+const OFFICIAL_NAV_DOMAINS = [
+    {
+        domain: "My Portal",
+        items: [
+            { to: "/my-da-forms", label: "My DA / TA Forms", icon: FileCheck },
+        ],
+    },
+    {
+        domain: "Reference",
+        items: [
+            { to: "/tournaments", label: "Tournament Calendar", icon: TrophyIcon },
         ],
     },
 ];
@@ -70,7 +93,6 @@ const COMING_SOON_DOMAINS = [
         items: [
             { label: "Budget Ledger", icon: Coins },
             { label: "Budget vs Actual", icon: Coins },
-            { label: "Tournament Budgets", icon: Wallet },
             { label: "Division Grants", icon: HandCoins },
             { label: "Grant Claims", icon: HandCoins },
             { label: "General Ledger", icon: BookOpen },
@@ -236,7 +258,7 @@ const AppLayout = ({ children }) => {
                         </li>
                     </ul>
 
-                    {NAV_DOMAINS.map((group) => (
+                    {(persona?.id === "match-official" ? OFFICIAL_NAV_DOMAINS : NAV_DOMAINS).map((group) => (
                         <div key={group.domain} className="mb-6">
                             <div
                                 className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2"
@@ -267,6 +289,7 @@ const AppLayout = ({ children }) => {
                         </div>
                     ))}
 
+                    {persona?.id !== "match-official" && (
                     <div className="border-t border-mpca-brass/15 pt-4">
                         <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
                             Coming Soon
@@ -297,6 +320,7 @@ const AppLayout = ({ children }) => {
                             </div>
                         ))}
                     </div>
+                    )}
                 </nav>
 
                 {/* Logout */}

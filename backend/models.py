@@ -892,6 +892,8 @@ class TournamentBase(BaseModel):
     ground_id: Optional[str] = None              # M8: link to Ground.id (a Venue has multiple Grounds)
     venue_name_snapshot: Optional[str] = None    # M8: denormalised for quick display
     ground_name_snapshot: Optional[str] = None
+    # T-RIM: MPCA reimbursement scheme code (e.g. "2-D" for Inter-Divisional Hosting)
+    scheme_code: Optional[str] = None
     # M2-A: squad announcement timelines
     timelines: SquadTimeline = Field(default_factory=SquadTimeline)
     # M2-A: portal slot config for this tournament (division-shared registration link)
@@ -1692,6 +1694,16 @@ class TournamentPlanAction(BaseModel):
 TournamentInvoiceStatus = Literal["Draft", "Submitted", "Approved", "Rejected"]
 
 
+class InvoiceHeadAllocation(BaseModel):
+    """Sprint T-RIM: one invoice can span multiple budget heads (e.g. hotel bill →
+    Accommodation + Food + GST). Each allocation row records the amount going to a head."""
+    model_config = ConfigDict(extra="ignore")
+    head_code: str
+    head_label: str
+    amount_inr: float
+    notes: Optional[str] = None
+
+
 class AIInvoiceExtraction(BaseModel):
     """Full AI extraction output stored for audit."""
     model_config = ConfigDict(extra="ignore")
@@ -1713,7 +1725,8 @@ class TournamentInvoiceBase(BaseModel):
     tournament_id: str
     body_id: str                                 # spending body (usually a Division)
     budget_id: Optional[str] = None              # linked TournamentBudget
-    budget_head_code: Optional[str] = None       # head from GrantSchemeRate
+    budget_head_code: Optional[str] = None       # legacy: single head (kept for back-compat)
+    allocations: List[InvoiceHeadAllocation] = []  # NEW · multi-head splits (Sprint T-RIM)
     vendor_name: Optional[str] = None
     invoice_no: Optional[str] = None
     invoice_date: Optional[str] = None
@@ -1841,3 +1854,108 @@ class ExtraExpenseAction(BaseModel):
     notes: Optional[str] = None
     approved_amount_inr: Optional[float] = None  # MPCA can sanction less
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Sprint T-RIM · Tournament Reimbursement Matrix (Feb 2026)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ---------- Reimbursement Scheme (from MPCA Master Document) ----------
+class ReimbursementSchemeHead(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    code: str                                     # "ACCOMMODATION", "UMPIRE_FEES" etc.
+    label: str                                    # Display label
+    unit: str                                     # "per_day", "per_person_per_day" etc.
+    rate_inr: float                               # Base rate from scheme
+
+
+class ReimbursementScheme(BaseModel):
+    """Master data: MPCA reimbursement scheme with budget heads (from HTML seed)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    scheme_code: str                              # "2-A", "2-D" etc. — unique
+    name: str
+    description: Optional[str] = None
+    categories: List[str] = []                    # ["Open", "U-23"] etc.
+    heads: List[ReimbursementSchemeHead] = []
+    conditions: List[str] = []
+    is_active: bool = True
+    fiscal_cycle: str = "2025-26"
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ---------- Tournament Reimbursement Claim ----------
+# Division submits at tournament completion — bundles all invoices +
+# extra-expense approvals into a single claim to MPCA. MPCA Secretary
+# reviews with commentary, approves or rejects.
+
+TournamentReimbursementStatus = Literal[
+    "Draft", "Submitted", "Under_Review", "Approved", "Rejected",
+]
+
+
+class ReimbursementComment(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    author_name: str
+    author_role: str                              # "MPCA Secretary" / "Division Secretary"
+    author_body_id: str
+    text: str
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class TournamentReimbursementClaimBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    tournament_id: str
+    body_id: str                                  # Division submitting the claim
+    fiscal_cycle: str = "2025-26"
+    scheme_code: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class TournamentReimbursementClaim(TournamentReimbursementClaimBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    claim_ref: str                                # "TRC-2025-26-0001"
+    tournament_name: Optional[str] = None         # snapshot
+    body_name: Optional[str] = None
+    status: TournamentReimbursementStatus = "Draft"
+
+    # Auto-generated summary sheet (computed at submit)
+    summary: dict = Field(default_factory=dict)
+    # Structure:
+    # {
+    #   "budget_total_inr": float, "invoiced_total_inr": float, "eligible_total_inr": float,
+    #   "over_budget_inr": float, "invoice_count": int,
+    #   "heads": [{"head":..,"limit_inr":..,"spent_inr":..,"over_inr":..}],
+    #   "extra_expense_approved_inr": float
+    # }
+
+    invoice_ids: List[str] = []                   # snapshot of tournament_invoices referenced
+    extra_expense_ids: List[str] = []
+
+    submitted_by: Optional[str] = None
+    submitted_at: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    approved_amount_inr: Optional[float] = None   # MPCA can sanction lower than eligible
+    comments: List[ReimbursementComment] = []
+    approval_chain: List[ApprovalStep] = []
+
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class TournamentReimbursementCreate(TournamentReimbursementClaimBase):
+    submitted_by: Optional[str] = None
+
+
+class TournamentReimbursementAction(BaseModel):
+    """Payload for submit / approve / reject / add-comment."""
+    model_config = ConfigDict(extra="ignore")
+    actor_name: str
+    actor_role: str
+    actor_body_id: str
+    notes: Optional[str] = None
+    approved_amount_inr: Optional[float] = None
+    comment_text: Optional[str] = None

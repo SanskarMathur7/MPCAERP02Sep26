@@ -19,6 +19,7 @@ from routes import (  # noqa: F401
     venues_grounds, selection, fixtures, tournament_plan, tournament_invoices, extra_expense, shared,
     division_grants, vouchers, ledger, purchase_orders, vendor_kyc,
     assets, hr_payroll, dms, compliance, audit_pack, selection_console, match_officials,
+    reimbursement_schemes, reimbursement_claims,
 )
 from seed import seed_data
 
@@ -48,6 +49,9 @@ async def on_startup():
     from core.shared_services import upsert_workflow_config, ALL_REFERENCE_WORKFLOWS
     for wf in ALL_REFERENCE_WORKFLOWS:
         await upsert_workflow_config(wf)
+    # Sprint T-RIM: seed reimbursement schemes from MPCA Master Document
+    from routes.reimbursement_schemes import seed_reimbursement_schemes
+    await seed_reimbursement_schemes()
 
 
 @app.on_event("shutdown")

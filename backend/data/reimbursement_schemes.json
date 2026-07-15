@@ -1,0 +1,209 @@
+{
+  "schemes": [
+    {
+      "scheme_code": "2-A",
+      "name": "Inter-School Tournament",
+      "description": "Covers match balls, ground rent (if any), trophies, umpire/scorer fees for inter-school tournaments.",
+      "categories": ["School"],
+      "heads": [
+        {"code": "PER_DAY_GRANT", "label": "Per-day grant (balls/ground/trophies)", "unit": "per_day", "rate_inr": 5000},
+        {"code": "UMPIRE_FEES", "label": "Umpire fees", "unit": "per_official_per_match", "rate_inr": 700},
+        {"code": "SCORER_FEES", "label": "Scorer fees", "unit": "per_official_per_match", "rate_inr": 500}
+      ],
+      "conditions": [
+        "Grant is ₹5,000 per day regardless of matches played",
+        "Entry fee ₹1,500 per school must be declared as offset",
+        "No accommodation/food/travel — local schools only"
+      ]
+    },
+    {
+      "scheme_code": "2-B",
+      "name": "Inter-District Tournament",
+      "description": "Reimbursement for accommodation, food, umpire/scorer fees, travel, and team prizes for inter-district tournaments.",
+      "categories": ["Open", "U-23", "U-18", "U-15", "U-13"],
+      "heads": [
+        {"code": "ACCOMMODATION", "label": "Accommodation — outstation members", "unit": "per_person_per_day", "rate_inr": 500},
+        {"code": "FOOD_MATCH_DAY", "label": "Food (lunch + tea) — match days", "unit": "per_person_per_day", "rate_inr": 350},
+        {"code": "DINNER_OUTSTATION", "label": "Dinner — outstation only", "unit": "per_person_per_day", "rate_inr": 150},
+        {"code": "MISC_EXPENSES", "label": "Miscellaneous expenses", "unit": "per_day", "rate_inr": 3600},
+        {"code": "TEAM_TRAVEL", "label": "Visiting team inter-city travel", "unit": "per_team_lump", "rate_inr": 5000},
+        {"code": "UMPIRE_FEES", "label": "Umpire fees", "unit": "per_official_per_day", "rate_inr": 700},
+        {"code": "SCORER_FEES", "label": "Scorer fees", "unit": "per_official_per_day", "rate_inr": 500},
+        {"code": "MOM_MATCH", "label": "Man of the Match (multi-day)", "unit": "per_match", "rate_inr": 1500},
+        {"code": "PRIZE_WINNER", "label": "Team prize — Winner", "unit": "per_team_lump", "rate_inr": 30000},
+        {"code": "PRIZE_RUNNERUP", "label": "Team prize — Runner-up", "unit": "per_team_lump", "rate_inr": 20000}
+      ],
+      "conditions": [
+        "Max 16 pax if one team outstation; 32 pax if both outstation",
+        "Not paid if ground within 10 km of city",
+        "Per-day ceiling ₹28,000 (one team outstation) / ₹39,000 (both)",
+        "Prize varies: ₹30,000/₹20,000 for Open-U23; ₹20,000/₹15,000 other age-groups",
+        "Runner-up prize applicable only if Division has ≥5 Districts"
+      ]
+    },
+    {
+      "scheme_code": "2-C",
+      "name": "Inter-Divisional Tournament — Travel",
+      "description": "Reimbursement for travel costs for teams participating in inter-divisional tournaments.",
+      "categories": ["Senior", "U-23", "U-22"],
+      "heads": [
+        {"code": "RAIL_FARE", "label": "Inter-city travel — III-tier AC rail (to & fro)", "unit": "per_person_round_trip", "rate_inr": 3000},
+        {"code": "MISC_JOURNEY", "label": "Misc journey expense (refreshments en route)", "unit": "per_round_trip", "rate_inr": 5000},
+        {"code": "JOINING_TRAVEL", "label": "District-HQ → Division-HQ joining travel", "unit": "per_person_round_trip", "rate_inr": 600},
+        {"code": "MEDICAL_TOUR", "label": "Reasonable medical during tour", "unit": "at_actuals", "rate_inr": 0},
+        {"code": "TATKAL_CANCEL", "label": "Tatkal / cancellation charges", "unit": "at_actuals", "rate_inr": 0}
+      ],
+      "conditions": [
+        "Max 18 pax (15 players + coach + manager + trainer)",
+        "Coach & trainer must be MPCA-empanelled",
+        "Photocopy of tickets must be attached",
+        "Accommodation/food/local conveyance borne by HOST Division"
+      ]
+    },
+    {
+      "scheme_code": "2-D",
+      "name": "Inter-Divisional Tournament — Hosting",
+      "description": "Reimbursement for hosting visiting teams in inter-divisional tournaments.",
+      "categories": ["Multi-day", "Limited-overs", "T20"],
+      "heads": [
+        {"code": "ACCOM_VISITING", "label": "Accommodation — visiting team (Double Occ)", "unit": "per_room_night", "rate_inr": 1800},
+        {"code": "ACCOM_HOST", "label": "Accommodation — host district players (max 15)", "unit": "per_room_night", "rate_inr": 1800},
+        {"code": "ACCOM_UMPIRES", "label": "Accommodation — umpires & observers", "unit": "per_room_night", "rate_inr": 1800},
+        {"code": "GROUND_RENT", "label": "Ground rent + match-day tent", "unit": "per_match_day", "rate_inr": 4500},
+        {"code": "FOOD_DAY_BEFORE", "label": "Food day-before (B+L+Eve+D)", "unit": "per_person_per_day", "rate_inr": 630},
+        {"code": "COACH_HON_MATCH", "label": "Coach honorarium (match-day)", "unit": "per_day", "rate_inr": 1500},
+        {"code": "COACH_HON_CAMP", "label": "Coach honorarium (camp-day)", "unit": "per_day", "rate_inr": 1000},
+        {"code": "TRAINER_HON_MATCH", "label": "Trainer honorarium (match-day)", "unit": "per_day", "rate_inr": 1000},
+        {"code": "TRAINER_HON_CAMP", "label": "Trainer honorarium (camp-day)", "unit": "per_day", "rate_inr": 750},
+        {"code": "MANAGER_HON", "label": "Manager honorarium", "unit": "per_match_day", "rate_inr": 1000},
+        {"code": "MOM_MULTIDAY", "label": "Man of the Match (multi-day)", "unit": "per_match", "rate_inr": 5000},
+        {"code": "MOM_LTDOVERS", "label": "Man of the Match (ltd-overs/T20)", "unit": "per_match", "rate_inr": 2500},
+        {"code": "LOCAL_CONVEY_GROUND", "label": "Local conveyance — ground use", "unit": "per_day", "rate_inr": 1500},
+        {"code": "LOCAL_CONVEY_TRANSFER", "label": "Local conveyance — station/bus-stand transfers", "unit": "per_journey", "rate_inr": 1500},
+        {"code": "PRIZE_WINNER_MULTIDAY", "label": "Team prize — Winner (multi-day)", "unit": "per_team_lump", "rate_inr": 375000},
+        {"code": "PRIZE_RUNNERUP_MULTIDAY", "label": "Team prize — Runner-up (multi-day)", "unit": "per_team_lump", "rate_inr": 185000}
+      ],
+      "conditions": [
+        "Match balls provided by MPCA in kind",
+        "Hon. Secretary endorsement required on all claim documents",
+        "Coach & trainer profiles must be submitted to MPCA in advance",
+        "Office Bearers may allow minor variation in pax / charges"
+      ]
+    },
+    {
+      "scheme_code": "2-E",
+      "name": "Inter-Club 'A' Grade Tournament",
+      "description": "Reimbursement for hosting inter-club 'A' grade tournaments (2-day matches only).",
+      "categories": ["A-Grade Clubs"],
+      "heads": [
+        {"code": "ACCOM_OUTSTATION", "label": "Accommodation — outstation clubs (Triple Sharing)", "unit": "per_room_night", "rate_inr": 1500},
+        {"code": "FOOD_OUTSTATION", "label": "Food — outstation clubs", "unit": "per_person_per_day", "rate_inr": 500},
+        {"code": "CLUB_TRAVEL", "label": "Inter-city travel — outstation clubs", "unit": "per_club_lump", "rate_inr": 8000},
+        {"code": "UMPIRE_FEES", "label": "Umpire fees", "unit": "per_official_per_day", "rate_inr": 700},
+        {"code": "SCORER_FEES", "label": "Scorer fees", "unit": "per_official_per_day", "rate_inr": 500},
+        {"code": "PRIZE_WINNER", "label": "Winner prize", "unit": "per_club_lump", "rate_inr": 50000},
+        {"code": "PRIZE_RUNNERUP", "label": "Runner-up prize", "unit": "per_club_lump", "rate_inr": 30000}
+      ],
+      "conditions": [
+        "Only 'A'-grade clubs (10-point ranking guideline) participate",
+        "2-day matches ONLY; no one-day / no league-cum-knockout",
+        "Local conveyance is club's own responsibility",
+        "No coach/trainer/manager fees under this scheme",
+        "Prize money by bank transfer to club account only (subject to TDS)"
+      ]
+    },
+    {
+      "scheme_code": "3-A",
+      "name": "Periodical Coaching Camp for District Players",
+      "description": "Subsidy for periodical coaching camps at district level (U-18 and elder).",
+      "categories": ["District Players U-18+"],
+      "heads": [
+        {"code": "ACCOM_OUTSTATION", "label": "Accommodation (Triple Occupancy)", "unit": "per_person_per_day", "rate_inr": 500},
+        {"code": "FOOD", "label": "Food", "unit": "per_person_per_day", "rate_inr": 500},
+        {"code": "TRAVEL", "label": "Travel (ordinary bus / SL rail)", "unit": "at_actuals", "rate_inr": 8000},
+        {"code": "DAILY_CONVEYANCE", "label": "Daily conveyance", "unit": "per_person_per_day", "rate_inr": 50},
+        {"code": "MISC_EXPENSES", "label": "Misc expenses", "unit": "per_camp_lump", "rate_inr": 15000}
+      ],
+      "conditions": [
+        "Camp duration typically 2 weeks, once a year",
+        "Daily 2 sessions with one weekly off",
+        "Not applicable for Divisional pre-tournament camps",
+        "Media release covering the camp & MPCA support required"
+      ]
+    },
+    {
+      "scheme_code": "3-B",
+      "name": "Vacation Camps",
+      "description": "Subsidy for vacation camps during summer holidays (U-18+).",
+      "categories": ["Players U-18+"],
+      "heads": [
+        {"code": "ACCOM_OUTSTATION", "label": "Accommodation (outstation, Triple Occ)", "unit": "per_person_per_day", "rate_inr": 500},
+        {"code": "FOOD_OUTSTATION", "label": "Food (outstation)", "unit": "per_person_per_day", "rate_inr": 500},
+        {"code": "TRAVEL", "label": "Inter-city travel (bus/SL rail)", "unit": "at_actuals", "rate_inr": 5000},
+        {"code": "LOCAL_CONVEYANCE", "label": "Local conveyance (outstation)", "unit": "per_person_per_day", "rate_inr": 50},
+        {"code": "REFRESHMENT_LOCAL", "label": "Refreshment (local players)", "unit": "per_person_per_day", "rate_inr": 50},
+        {"code": "KIT_MISC", "label": "Kit & misc", "unit": "per_camp_lump", "rate_inr": 15000}
+      ],
+      "conditions": [
+        "Camp duration 2-3 weeks during summer vacation",
+        "Divisional Secretary's undertaking: no fee charged from players",
+        "Match balls provided by MPCA on request"
+      ]
+    },
+    {
+      "scheme_code": "3-C",
+      "name": "Reciprocal Matches Between Divisions",
+      "description": "Subsidy for reciprocal matches played between Divisions.",
+      "categories": ["Divisional"],
+      "heads": [
+        {"code": "PER_MATCH_DAY", "label": "Per match-day subsidy (accom+food+conveyance)", "unit": "per_match_day", "rate_inr": 11000},
+        {"code": "COACH_HON", "label": "Coach honorarium", "unit": "per_camp_day", "rate_inr": 1000},
+        {"code": "TRAINER_HON", "label": "Trainer honorarium", "unit": "per_camp_day", "rate_inr": 750},
+        {"code": "UMPIRE_FEES", "label": "Umpire fees", "unit": "per_official_per_day", "rate_inr": 700},
+        {"code": "SCORER_FEES", "label": "Scorer fees", "unit": "per_official_per_day", "rate_inr": 500}
+      ],
+      "conditions": [
+        "Both Divisions share total expenses",
+        "MPCA must be informed in advance",
+        "Camp + match days must not exceed 8 days"
+      ]
+    },
+    {
+      "scheme_code": "3-D",
+      "name": "Pre-Tournament Camp for Divisional Teams",
+      "description": "Subsidy for pre-tournament camps for Divisional teams before MPCA Inter-Divisional Tournaments.",
+      "categories": ["Divisional Teams"],
+      "heads": [
+        {"code": "DAILY_SUBSIDY", "label": "Daily subsidy (accom+food+conveyance)", "unit": "per_day", "rate_inr": 11000},
+        {"code": "OUTSTATION_EXTRA", "label": "Higher-outstation adjustment", "unit": "per_person_per_day", "rate_inr": 1000},
+        {"code": "COACH_HON", "label": "Coach honorarium", "unit": "per_camp_day", "rate_inr": 1000},
+        {"code": "TRAINER_HON", "label": "Trainer honorarium", "unit": "per_camp_day", "rate_inr": 750},
+        {"code": "MEDICAL", "label": "Medical", "unit": "at_actuals", "rate_inr": 0}
+      ],
+      "conditions": [
+        "Camp duration max 8 days (including reporting & departure)",
+        "Camp strength typically 18-20 players",
+        "If tournament postponed within 8-10 days, extra camp days allowed case-to-case"
+      ]
+    },
+    {
+      "scheme_code": "9-BCCI",
+      "name": "BCCI Tournament — Hosting + Participation",
+      "description": "Hosting fees and participation subsidy by BCCI for domestic tournaments.",
+      "categories": ["Senior", "Junior", "Men", "Women"],
+      "heads": [
+        {"code": "HOST_MULTIDAY_RED", "label": "Hosting fee — Multi-day RED-ball", "unit": "per_match_day", "rate_inr": 175000},
+        {"code": "HOST_LTDOVERS_WHITE", "label": "Hosting fee — Limited-overs WHITE-ball", "unit": "per_match", "rate_inr": 350000},
+        {"code": "HOST_LTDOVERS_LIGHTS", "label": "Hosting fee — Limited-overs Under Lights", "unit": "per_match", "rate_inr": 450000},
+        {"code": "PART_SUB_MULTIDAY", "label": "Participation subsidy — Multi-day RED-ball", "unit": "per_match", "rate_inr": 125000},
+        {"code": "PART_SUB_LTDOVERS", "label": "Participation subsidy — Limited-overs WHITE-ball", "unit": "per_match", "rate_inr": 75000}
+      ],
+      "conditions": [
+        "Host arranges local security, 2 practice sessions, separate washrooms, anti-doping room",
+        "Squad size max 25 (15 players + 10 support staff)",
+        "Playing XI eligible for 100% match fee; remaining 4 non-playing eligible for 50%",
+        "Match officials' hotel invoices borne directly by BCCI"
+      ]
+    }
+  ]
+}

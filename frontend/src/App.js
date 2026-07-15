@@ -52,6 +52,10 @@ import AssetRegister from "@/pages/AssetRegister";
 import Payroll from "@/pages/Payroll";
 import DMS from "@/pages/DMS";
 import Compliance from "@/pages/Compliance";
+import TournamentFinance from "@/pages/TournamentFinance";
+import TournamentFinanceDetail from "@/pages/TournamentFinanceDetail";
+import { ReimbursementClaimsList, ReimbursementClaimDetail } from "@/pages/ReimbursementClaims";
+import MyDAForms from "@/pages/MyDAForms";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -148,6 +152,13 @@ function App() {
                         {/* Protected — Sprint 4: Governance & Compliance */}
                         <Route path="/dms" element={<Protected><DMS /></Protected>} />
                         <Route path="/compliance" element={<Protected><Compliance /></Protected>} />
+
+                        {/* Protected — Sprint T-RIM: Tournament Reimbursement Matrix */}
+                        <Route path="/tournament-finance" element={<Protected><TournamentFinance /></Protected>} />
+                        <Route path="/tournaments/:id/finance" element={<Protected><TournamentFinanceDetail /></Protected>} />
+                        <Route path="/reimbursement-claims" element={<Protected><ReimbursementClaimsList /></Protected>} />
+                        <Route path="/reimbursement-claims/:id" element={<Protected><ReimbursementClaimDetail /></Protected>} />
+                        <Route path="/my-da-forms" element={<Protected><MyDAForms /></Protected>} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

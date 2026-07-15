@@ -316,12 +316,19 @@ async def budget_tracker(bid: str):
     grand_over = 0.0
     for h in heads_ref:
         code = _code(h)
+        head_label = h.get("head")
         limit = float(h.get("limit_inr") or 0)
-        spent = sum(
-            (i.get("total_inr") or 0)
-            for i in invoices
-            if (i.get("budget_head_code") or "").upper() == code
-        )
+        # spent = sum of (a) allocation amounts matching this head + (b) legacy single-head totals matching code
+        spent = 0.0
+        for i in invoices:
+            allocs = i.get("allocations") or []
+            if allocs:
+                for a in allocs:
+                    if (a.get("head_label") == head_label) or ((a.get("head_code") or "").upper() == code):
+                        spent += float(a.get("amount_inr") or 0)
+            else:
+                if (i.get("budget_head_code") or "").upper() == code:
+                    spent += float(i.get("total_inr") or 0)
         over = max(0.0, spent - limit)
         eligible = min(spent, limit)
         rows.append({

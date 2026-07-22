@@ -282,10 +282,13 @@ const SelectionConsole = () => {
 
     if (!acceptanceOK) {
         return (
-            <div className="p-16 text-center">
-                <div className="font-serif text-3xl text-mpca-green-dark">🔒 Locked</div>
-                <p className="text-mpca-gray-dark mt-3">The host body must accept this tournament before squad selection can begin. Current acceptance: <b>{tournament?.acceptance?.status}</b></p>
-                <Link to={`/tournaments`} className="btn-heritage-secondary mt-6 inline-flex"><ArrowLeft size={14} /> Back to Calendar</Link>
+            <div className="page-enter px-6 md:px-10 py-8 max-w-[1600px] mx-auto" data-testid="selection-console-locked">
+                <TournamentSubTabs tournamentId={tournament.id} active="squad" />
+                <div className="p-16 text-center">
+                    <div className="font-serif text-3xl text-mpca-green-dark">🔒 Locked</div>
+                    <p className="text-mpca-gray-dark mt-3">The host body must accept this tournament before squad selection can begin. Current acceptance: <b>{tournament?.acceptance?.status}</b></p>
+                    <Link to={`/tournaments`} className="btn-heritage-secondary mt-6 inline-flex"><ArrowLeft size={14} /> Back to Tournaments</Link>
+                </div>
             </div>
         );
     }

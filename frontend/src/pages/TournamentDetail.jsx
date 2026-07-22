@@ -9,6 +9,7 @@ import {
     Trophy, Calendar, MapPin, Users, ChevronLeft, Plus, X, ShieldCheck, AlertTriangle, Crown, BadgeCheck,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
+import TournamentSubTabs from "@/components/TournamentSubTabs";
 import { Wallet, ArrowRight } from "lucide-react";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
@@ -97,6 +98,7 @@ const TournamentDetail = () => {
 
     return (
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="trn-detail-page">
+            <TournamentSubTabs tournamentId={id} active="overview" />
             <button onClick={() => navigate("/tournaments")} className="btn-heritage-ghost mb-6" data-testid="trn-back">
                 <ChevronLeft size={14} /> Back to Tournaments
             </button>
@@ -107,7 +109,7 @@ const TournamentDetail = () => {
                 <h1 className="font-serif text-4xl md:text-5xl text-mpca-ivory mt-3 leading-tight">
                     {t.name}
                 </h1>
-                {t.short_name && <div className="text-xs tracking-[0.3em] uppercase text-mpca-gold-light mt-2">"{t.short_name}"</div>}
+                {t.short_name && <div className="text-xs tracking-[0.3em] uppercase text-mpca-gold-light mt-2">&ldquo;{t.short_name}&rdquo;</div>}
                 <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5 mt-7 text-mpca-ivory/90">
                     <div className="flex items-start gap-2">
                         <Calendar size={16} className="text-mpca-gold-light mt-0.5" />

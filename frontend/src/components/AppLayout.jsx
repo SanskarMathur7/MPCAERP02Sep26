@@ -49,19 +49,16 @@ const NAV_DOMAINS = [
         items: [
             { to: "/schemes", label: "MPCA Schemes Register", icon: BookOpen },
             { to: "/grant-claims", label: "Grant Claims", icon: HandCoins },
-            { to: "/tournament-finance", label: "Tournament Reimbursement Matrix", icon: Wallet },
-            { to: "/reimbursement-claims", label: "Reimbursement Claims", icon: HandCoins },
         ],
     },
     {
         domain: "Operations",
         items: [
-            { to: "/tournaments", label: "MPCA Tournament Calendar", icon: TrophyIcon },
+            { to: "/tournaments", label: "Tournaments", icon: TrophyIcon },
+            { to: "/tournament-calendar", label: "Tournament Calendar", icon: Calendar },
             { to: "/venues", label: "Venues & Grounds", icon: MapPinIcon },
-            { to: "/camps", label: "Camps & Coaching", icon: Calendar },
             { to: "/players", label: "Player Register", icon: Users },
             { to: "/match-officials", label: "Match Officials", icon: ShieldCheck },
-            { to: "/selection-funnel", label: "Selection Funnel", icon: Users },
         ],
     },
 ];
@@ -77,7 +74,7 @@ const OFFICIAL_NAV_DOMAINS = [
     {
         domain: "Reference",
         items: [
-            { to: "/tournaments", label: "Tournament Calendar", icon: TrophyIcon },
+            { to: "/tournament-calendar", label: "Tournament Calendar", icon: TrophyIcon },
         ],
     },
 ];

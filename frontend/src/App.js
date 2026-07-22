@@ -60,6 +60,7 @@ import SquadReview from "@/pages/SquadReview";
 import CampsPage from "@/pages/Camps";
 import SchemesMaster from "@/pages/SchemesMaster";
 import GrantClaims from "@/pages/GrantClaims";
+import TournamentCalendarPage from "@/pages/TournamentCalendarPage";
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -133,6 +134,7 @@ function App() {
 
                         {/* Protected — Phase IV.2: Tournament Module */}
                         <Route path="/tournaments" element={<Protected><Tournaments /></Protected>} />
+                        <Route path="/tournament-calendar" element={<Protected><TournamentCalendarPage /></Protected>} />
                         <Route path="/fixtures" element={<Protected><Fixtures /></Protected>} />
                         <Route path="/audit-log" element={<Protected><AuditLog /></Protected>} />
                         <Route path="/tournaments/:id" element={<Protected><TournamentDetail /></Protected>} />

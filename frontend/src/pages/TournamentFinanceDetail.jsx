@@ -4,6 +4,7 @@ import { ArrowLeft, Upload, Sparkles, Plus, Trash2, FileText, Send, CheckCircle2
 import { api, BACKEND_URL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
+import TournamentSubTabs from "@/components/TournamentSubTabs";
 
 const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 const TABS = ["Budget Sheet", "Invoices", "Extra Expense", "Budget vs Actual"];
@@ -337,8 +338,9 @@ const TournamentFinanceDetail = () => {
 
     return (
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="tournament-finance-detail-page">
-            <button className="text-[11px] text-mpca-brass uppercase tracking-widest mb-4 flex items-center gap-1" onClick={() => navigate("/tournament-finance")} data-testid="back-to-finance">
-                <ArrowLeft size={12} /> Back to Tournament Finance
+            <TournamentSubTabs tournamentId={id} active="finance" />
+            <button className="text-[11px] text-mpca-brass uppercase tracking-widest mb-4 flex items-center gap-1" onClick={() => navigate("/tournaments")} data-testid="back-to-finance">
+                <ArrowLeft size={12} /> Back to Tournaments
             </button>
 
             {/* Header */}

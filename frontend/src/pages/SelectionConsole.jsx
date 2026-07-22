@@ -5,6 +5,7 @@ import { fetchTournament, fetchPlayers, fetchSelection, patchSelection, submitSe
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import PlayerDossierDrawer from "@/components/PlayerDossierDrawer";
+import TournamentSubTabs from "@/components/TournamentSubTabs";
 
 // ─────── Role bucketing (mirrors HTML console) ───────
 const ROLE_BUCKETS = [
@@ -294,8 +295,9 @@ const SelectionConsole = () => {
 
     return (
         <div className="page-enter px-6 md:px-10 py-8 max-w-[1600px] mx-auto" data-testid="selection-console">
+            <TournamentSubTabs tournamentId={tournament.id} active="squad" />
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                <Link to={`/tournaments`} className="btn-heritage-ghost"><ArrowLeft size={14} /> Back to Calendar</Link>
+                <Link to={`/tournaments`} className="btn-heritage-ghost"><ArrowLeft size={14} /> Back to Tournaments</Link>
                 <div className="flex-1 min-w-[200px]">
                     <div className="overline">Article VII · Selection Console</div>
                     <h1 className="font-serif text-3xl text-mpca-green-dark leading-tight">{tournament.name}</h1>

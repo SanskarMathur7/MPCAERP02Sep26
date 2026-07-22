@@ -1,331 +1,222 @@
 # MPCA ERP — Production-Readiness Audit
 
 **Date:** 2026-07-22
-**Auditor:** Automated code audit (read-only; no source files were modified)
-**Target profile:** 200–300 users/day, low latency, zero-downtime deploys
-**Scope:** `/app/backend` (FastAPI + MongoDB/motor, 47 route modules, ~17k LOC) and `/app/frontend` (CRA/craco + React 19, ~28k LOC, 123 files)
+**Target load:** 200–300 users/day, low latency, zero downtime after deploy
+**Scope:** `/app/backend` (FastAPI + MongoDB/motor), `/app/frontend` (React 19 / CRA+CRACO)
+**Method:** Static analysis of source, config, dependency graph, and live checks (build, pip-audit, yarn audit, test collection). Some live runs (full pytest, mypy) were cut short by a transient pod outage — noted where relevant.
 
 ---
 
-## Verdict (summary)
+## VERDICT: 🔴 NO-GO for production
 
-🔴 **NO-GO for production.** The application has **no authentication and no server-side authorization of any kind** — identity and role are taken from client-supplied HTTP headers and request-body fields, and the login screen never verifies the password. Any visitor can act as the MPCA President, drain the association bank account through the claim-disbursement workflow, forge election results, and read all PII. On top of that, the database has **zero indexes** and the AI gatekeeper runs **inline on the request path with no timeout**, so the app will not hold up at the target traffic even if access control is fixed. Full reasoning and the release gate are in the final section.
-
----
-
-## How to read this report
-
-Findings are grouped by phase and rated **CRITICAL / HIGH / MEDIUM / LOW**. Each carries a `file:line` reference, why it matters *at this traffic level*, and the recommended fix. CRITICAL + HIGH are listed in full below and also summarized up top in the chat message that accompanies this file. MEDIUM/LOW appear here and in the prioritized TODO at the end with effort estimates.
-
-**Environment note / limitations of this run:**
-- Backend Python dependencies are **not installed** in the audit environment (`fastapi`, `pymongo`, etc. missing) and **no MongoDB is running**, so the backend and its test suite **could not be executed here**. Test findings are from reading all 26 test files.
-- Declared linters/type-checkers (`ruff`, `flake8`, `mypy`) are in `requirements.txt` but **not installed**, so a full lint/type pass could not be run. The frontend eslint ran as part of the build.
-- The **frontend production build was executed and succeeds** (`yarn build` → exit 0, 29.5s) — see PERF-FE-1 for the resulting bundle metrics and the CI caveat.
+This is a financial/governance ERP (bank balances, payroll, vendor KYC, grants, elections) with **no real authentication**, served in production by a **development server**, pointed at an **ephemeral preview backend**. Any one of the five CRITICAL findings below is a deployment blocker on its own. The good news: the codebase is well-organized and many building blocks are correct (upload validation, AI-failure fallbacks, idempotent seed), so the blockers are fixable in days, not weeks. Re-audit after CRITICAL + HIGH items are closed.
 
 ---
 
-# Phase 2 — Security (highest-impact section)
+## 1. CRITICAL and HIGH issues (summary list)
 
-## CRITICAL
+### CRITICAL (deployment blockers)
+- **C1 — No server-side authentication; RBAC is spoofable client headers, and the default is "see everything."** `core/scoping.py`, all 368 endpoints.
+- **C2 — Unauthenticated access to and mutation of sensitive data** (bank balances, payroll salaries, vendor KYC, member hard-deletes). `bank.py`, `hr_payroll.py`, `members.py`, `vendor_kyc.py`.
+- **C3 — Production is served by the React dev server (`yarn start`), not the built bundle.** `/etc/supervisor/conf.d/supervisord.conf:16`.
+- **C4 — Frontend hard-wired to an ephemeral preview backend URL baked into the bundle.** `frontend/.env`.
+- **C5 — Hardcoded LLM API key in `backend/.env` (plaintext, in the working tree).**
 
-### SEC-1 — No authentication or authorization anywhere; identity is client-controlled
-**Files:** `backend/server.py` (whole), `backend/core/scoping.py:49-78`, `frontend/src/pages/Login.jsx:96-108`, `frontend/src/context/AuthContext.jsx:102-136`, `frontend/src/lib/api.js:13-30`
+### HIGH
+- **H1 — CORS `allow_origins=["*"]` with `allow_credentials=True`** — misconfigured and insecure. `server.py:38-43`.
+- **H2 — Known-CVE dependencies:** starlette 0.37.2 (9 advisories), litellm 1.80.0 (8 advisories); frontend 280 npm advisories (4 critical / 144 high) from EOL `react-scripts@5.0.1`.
+- **H3 — No MongoDB indexes anywhere** — every query on every endpoint is a full collection scan.
+- **H4 — Blocking work on the async event loop** (in-request LLM calls, openpyxl/reportlab report generation, sync file I/O) with a single worker — one slow request stalls all users.
+- **H5 — Money stored and computed as `float`** (55 fields, zero `Decimal`) across bank, payroll, budgets, grants.
+- **H6 — Non-atomic balance read-modify-write and counter-based reference numbers** — lost updates and duplicate IDs under concurrency.
+- **H7 — Backend runs with dev flags `--workers 1 --reload`** — not a production server configuration.
+- **H8 — No React ErrorBoundary or global rejection handler** — any render error white-screens the whole SPA.
+- **H9 — Uploaded files stored on ephemeral pod disk** — lost on every redeploy/restart.
 
-There are **zero** `Depends`, no `OAuth2`/`HTTPBearer`, no session, no JWT, and no login endpoint in the entire backend (`grep` confirms). "RBAC" works like this: the frontend stores a chosen persona in `localStorage.mpca_persona` and the axios interceptor attaches it as plain headers on every request:
-
-```js
-// frontend/src/lib/api.js:18-26
-if (p?.id) config.headers["X-Role-Id"] = p.id;
-if (p?.body_code) config.headers["X-Body-Code"] = p.body_code;
-if (p?.body_type) config.headers["X-Body-Type"] = p.body_type;
-```
-
-The backend trusts those headers verbatim (`core/scoping.py:49-63` — `X-Body-Type: state` returns an empty filter = sees everything), and state-changing endpoints trust `actor_role` / `actor_name` / `actor_body_id` from the **request body**. The login form never checks the password:
-
-```js
-// frontend/src/pages/Login.jsx:96
-const handleSubmit = (e) => {
-  if (!email.trim() || !password.trim()) { setError(...); return; }
-  proceedWith(selectedPersona);   // password never verified
-};
-```
-
-**Why it matters at 200–300 users/day:** any visitor can open DevTools (or `curl` with headers) and become the President/Treasurer of any body. This is the root cause of SEC-2 through SEC-6 below. **No per-endpoint patch fixes it** — it requires a real auth layer (server-issued signed token/session, verified credentials) with role/body derived server-side from that token, plus a default-deny posture.
-**Fix:** Implement authentication (password hashing with bcrypt/argon2 — both `bcrypt` and `passlib` are already in `requirements.txt` but unused; issue a signed JWT or session cookie with `Secure`/`HttpOnly`/`SameSite`), and add a FastAPI dependency that resolves the current user + role on every route. Never read identity from client headers/body.
-
-### SEC-2 — Claim approval chain is fully bypassable → drain the bank account
-**File:** `backend/routes/claims.py:173-361` (`submit → recommend → sanction → disburse`)
-
-The four-stage financial approval is a status-only state machine; each transition records but never verifies `actor_post`/`actor_name`/`actor_body_id`. A single anonymous caller can POST the four endpoints in sequence to reach `disburse_claim`, which writes a `Debit` `BankTransaction` and decrements `bank_accounts.current_balance` (`claims.py:349-352`). The two-signatory control (`claims.py:293`) is defeated by sending `co_signatory_post`/`co_signatory_name` strings (`claims.py:321-323`). No maker≠checker separation.
-**Why it matters:** direct, unauthenticated exfiltration of association funds plus a forged, fully "signed" audit trail. Highest-impact issue in the app.
-**Fix:** enforce per-stage role+body checks from the authenticated identity (SEC-1); enforce separation of duties (creator ≠ sanctioner ≠ disburser).
-
-### SEC-3 — Player transfer (NOC) chain bypassable; reassign any player
-**File:** `backend/routes/transfers.py:60-114`
-
-`approve_from` / `approve_to` / `approve_mpca` / `complete` accept `ClaimAction` and only check the previous status — never that the caller is the releasing body, receiving body, or MPCA. One caller can walk all stages; `complete_transfer` (`transfers.py:109-112`) reassigns the player's `body_id`.
-**Fix:** bind each stage to the authenticated body identity.
-
-### SEC-4 — Procurement award: zero authz, trivial self-dealing
-**File:** `backend/routes/procurement.py:50-133`
-
-No actor is even collected. A caller creates a PR, posts three attacker-authored quotations (`procurement.py:66-85`), and awards to any of them (`procurement.py:88-133`); the L1-justification bypass is just a >10-char `notes` string (`procurement.py:114`). Combined with SEC-2 this manufactures a complete fake procurement→disbursement trail.
-**Fix:** authenticate the awarding officer; validate vendors against the vendor master; require independent quote provenance.
-
-### SEC-5 — Elections: anyone can conclude elections and vote as any member
-**File:** `backend/routes/elections.py:38-114`
-
-`conclude_election` (`:100-114`) takes no actor and sets the winner; `add_candidate` (`:54-65`) and `update_election` (`:38-45`) are unauthenticated; `cast_vote` (`:68-97`) accepts `voter_uid` in the body with no proof the caller is that voter (one-vote-per-uid is the only guard). Governance integrity is unenforceable.
-**Fix:** bind voter identity to the authenticated session; restrict conclude/candidate management to a Returning Officer role.
-
-## HIGH
-
-### SEC-6 — CORS wildcard combined with `allow_credentials=True`
-**File:** `backend/server.py:36-42`; `backend/.env` ships `CORS_ORIGINS="*"`
-
-`allow_origins=["*"]` + `allow_credentials=True` + `allow_headers=["*"]` lets any origin make cross-origin calls and set the custom identity headers the app uses for "auth." A malicious page a user visits can invoke the money/governance endpoints above.
-**Fix:** explicit origin allowlist in prod; never pair `*` with credentials.
-
-### SEC-7 — Members RBAC gate bypassed by omitting the header; self-role escalation
-**File:** `backend/routes/members.py:139,159,193,223,255`; `backend/models.py:95`
-
-The guard `if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:` is skipped entirely when `X-Role-Id` is **absent** (documented in the code comment at `members.py:131-132`). `MemberUpdate` includes a `role` field, so a caller editing "their own" record can set `role: "President"`. `delete_member` is likewise open when the header is omitted.
-**Fix:** default-deny when identity is missing; derive role from a verified session; strip `role` from self-service update payloads.
-
-### SEC-8 — Direct, unauthenticated bank-ledger writes
-**File:** `backend/routes/bank.py:19,44`
-
-Anyone can `POST /bank/accounts` and `POST /bank/transactions` (arbitrary Debit/Credit) with no actor check, corrupting the ledger independently of the claims workflow.
-**Fix:** restrict to authenticated Treasurer/bank-signatory role.
-
-### SEC-9 — Unauthenticated serving of PII documents; client-trusted content-type
-**File:** `backend/routes/uploads.py:51-53,56,101-113`
-
-`GET /uploads/{file_id}` serves any file to anyone holding the UUID, with no ownership/scope check — KYC docs (Aadhaar, PAN, birth certificates) included. `file.content_type` is client-supplied and echoed back on download (`uploads.py:109-113`) with no magic-byte validation. *(Positive: filenames are server-generated UUIDs, so no path traversal on upload or download.)*
-**Fix:** require auth + body-scope ownership on download; validate real content type; serve user files with `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`.
-
-### SEC-10 — No rate limiting / brute-force protection anywhere
-**Evidence:** no `slowapi`/limiter/throttle anywhere in the codebase.
-
-At target traffic this enables: (a) cost-exhaustion of the LLM key via the AI endpoints (`claims` submit, `routes/grant_claims.py:352` chat); (b) member-UID enumeration on election endpoints; (c) cheap DoS via the unescaped `$regex` scans (SEC-11).
-**Fix:** add per-IP/per-identity limits (e.g. `slowapi`) on AI, search, and any future auth endpoints.
-
-### SEC-11 — Regex injection / ReDoS via unescaped user input in `$regex`
-**Files:** `players.py:62-65`, `members.py:59-63,566`, `dms.py:109-111`, `vendor_bills.py:101-103`, `venues_grounds.py:94`, `tournament_plan.py:402`, `fixtures.py:263`, `ledger.py:45-46`
-
-User search/name/city values are interpolated straight into `{"$regex": <value>, "$options": "i"}` with no `re.escape`. A crafted catastrophic-backtracking pattern (`(a+)+$`) pins a CPU core — a cheap DoS, made worse because these scans are already un-indexed (see PERF-BE-5). `members.py:566` uses `^{email}$` unescaped in the bulk-upload dedupe.
-**Fix:** `re.escape()` all user input in `$regex`; cap input length; prefer anchored/text-index search.
-
-## MEDIUM / LOW (security)
-
-- **MEDIUM — No security headers.** No `X-Frame-Options`, `Content-Security-Policy`, `HSTS`, `X-Content-Type-Options`, or `TrustedHostMiddleware` (backend). Add a headers middleware. *(server.py)*
-- **MEDIUM — Endpoints accept raw `dict` bodies (unvalidated values).** `camps.py:111`, `grant_claims.py:406` (keys allowlisted, values not); `grant_claims.py:239,261` take approver identity + `approved_amount_inr` as bare params with no bound check. Use Pydantic partial-update models. *(also Phase 1 validation)*
-- **MEDIUM — Live LLM key in plaintext `backend/.env`** (`EMERGENT_LLM_KEY=sk-emergent-…`). *Positive:* verified **never committed** to git history (`git log -S 'sk-emergent'` empty) and `.env` is git-ignored. Still: rotate it, move to a secrets manager, keep it out of build artifacts.
-- **MEDIUM — Frontend leaks identifiers to third parties.** `MemberCard.jsx:21` sends member UIDs to `api.qrserver.com`; `Landing.jsx:37-169` pulls full-res Unsplash/emergent images; `public/index.html:103-110` runs PostHog **session recording** (records finance UI) with no consent gate. Generate QR client-side; self-host images; gate/mask recording.
-- **LOW — Prompt injection into the AI gatekeeper.** `core/ai_validator.py:123-143,167-170` concatenates claim text and OCR'd upload contents into the LLM prompt. Impact bounded — verdict is advisory/allowlisted and "never disburses" — but a coerced verdict weakens the fraud screen. Keep AI advisory + human gate.
-- **LOW — `frontend/.env` note:** contains no secrets (only `REACT_APP_BACKEND_URL`, etc.) and is git-ignored — good. Remember `REACT_APP_*` is baked into the public bundle; never put secrets there.
+Full detail, file:line, rationale, and fixes below.
 
 ---
 
-# Phase 3 — Performance & Latency
+## 2. Detailed findings
 
-## CRITICAL
+Legend: **CRITICAL** = blocks deploy · **HIGH** = fix before real users · **MEDIUM** = fix soon after · **LOW** = hygiene/tech-debt.
 
-### PERF-BE-1 — Zero database indexes exist anywhere
-**Evidence:** `grep -rn "create_index"` across the whole backend returns nothing.
+---
 
-Every collection is queried only by Mongo's default `_id` index. The app looks records up by a custom string `id` field (UUID), so even `find_one({"id": ...})` on nearly every write path (`claims.py:176,191`, `shared_services.py:124,197`) is a **full collection scan**. Every `find({"body_id": ...})`, `count_documents(...)`, and `sort("created_at", -1)` scans the whole collection; an unindexed in-memory sort aborts at 32MB.
-**Why it matters:** append-only collections (`audit_log`, `claims`, `players`, `notifications`) grow unbounded; latency degrades linearly and the dashboard (PERF-BE-4) gets slowest exactly under concurrency.
-**Fix:** add an `ensure_indexes()` coroutine at startup: unique `{id:1}` on every collection; compound indexes for hot paths, e.g. `claims {body_id:1, status:1, created_at:-1}`, `audit_log {module:1, record_id:1, timestamp:-1}`, `notifications {recipient_role_id:1, recipient_body_id:1, created_at:-1}`, `members {body_id:1, status:1}`.
+### CRITICAL
 
-### PERF-BE-2 — LLM call runs inline on the request path with no timeout
-**Files:** `backend/core/ai_validator.py:161-173`; called synchronously from `routes/claims.py:196`, `routes/players.py:445`, `routes/ai_claims.py:43`
-
+#### C1 — No real authentication; RBAC trusts client-supplied headers and defaults to full access
+**Where:** `backend/core/scoping.py` (whole file); enforced ad-hoc in routes via `Header(..., alias="X-Role-Id")` etc.; frontend sets them in `frontend/src/lib/api.js:12-30`.
+**What:** There is no login, session, or token anywhere (`grep` for `Depends`, `jwt`, `OAuth2`, `HTTPBearer`, `Authorization` → **zero hits** across 368 endpoints). "RBAC" is implemented by the frontend putting the current persona into request headers (`X-Role-Id`, `X-Persona-Id`, `X-Body-Code`, `X-Body-Type`, `X-User-Email`) which the backend reads verbatim:
 ```python
-# core/ai_validator.py:172 — no timeout; the try/except catches errors, not hangs
-raw = await chat.send_message(msg)   # Gemini call, uploads document files
+# core/scoping.py
+def get_scope(request):
+    h = request.headers
+    return RequestScope(persona_id=h.get("x-persona-id"),
+                        body_code=h.get("x-body-code"),
+                        body_type=h.get("x-body-type"), ...)
+
+def body_scope(scope, field="body_id"):
+    if scope.is_state or not scope.body_code or not scope.body_type:
+        return {}      # <-- no filter: returns EVERYTHING
 ```
+**Why it's critical:** Any client can set `X-Body-Type: state` (or simply omit the headers) and the query filter collapses to `{}` — unrestricted read of every division/district's data. There is nothing to verify the caller actually holds that persona. The scoping is also read-only; mutating endpoints (deletes, approvals) apply no scope at all. For an org of 200–300 users handling money and elections, this is a total authz bypass.
+**Fix:** Introduce real authentication (server-issued session or signed JWT with short expiry, `httpOnly`+`Secure` cookie or Authorization bearer). Derive persona/body/role from the verified principal server-side — never from client headers. Add a FastAPI dependency (`Depends(require_user)`) applied globally, and an explicit allow-list for any truly public route. Enforce authorization on writes, not just reads.
 
-No `asyncio.wait_for`, no `BackgroundTasks`, no queue. If Gemini is slow/stalled, the user's "submit claim" request blocks for the whole round-trip, holding an event-loop task and a connection. Under load this exhausts the pool and stalls unrelated requests.
-**Why it matters:** single biggest end-user latency risk; one slow upstream degrades the whole app.
-**Fix:** wrap in `asyncio.wait_for(..., timeout=20)` **and** move AI validation off the request path — return immediately with status `AI_Pending` and update the claim asynchronously (the code already tolerates a deferred verdict via `_apply_ai_verdict`).
+#### C2 — Unauthenticated exposure and mutation of sensitive data (IDOR everywhere)
+**Where (examples):**
+- `backend/routes/bank.py:15` `list_bank_accounts`, `:28` `get_bank_account/{id}`, `:36` `list_transactions` — all balances and ledgers, no auth.
+- `backend/routes/hr_payroll.py:134` `list_employees` (`.to_list(1000)`), `get_employee/{eid}` — salaries, TDS, HRA.
+- `backend/routes/members.py:154` `delete_member`, `:320` category delete, `:249` membership delete — **unauthenticated hard deletes by id**.
+- `backend/routes/vendor_kyc.py:135` `find({}).to_list(1000)` — GSTIN, bank details of all vendors.
+- `backend/routes/dashboard.py:31` — aggregate financials exposed on an open endpoint.
+**Why it's critical:** Consequence of C1. Anyone who can reach the API URL can enumerate salaries and bank balances and can permanently delete members/records. Data breach + data-loss risk.
+**Fix:** Same as C1 (auth + server-side scoping on every read *and* write). Additionally, prefer soft-delete for governance records.
 
-### PERF-BE-3 — No health / liveness / readiness endpoint
-**Evidence:** only `GET /api/` (`server.py:29-31`) — a static dict touching no DB.
+#### C3 — Production served by the CRA development server
+**Where:** `/etc/supervisor/conf.d/supervisord.conf:16` → `command=yarn start` (`craco start`, webpack-dev-server) in `/app/frontend`. A working `build` script exists (`"build": "craco build"`, verified to succeed in 18.3s → `432 kB` gzip main chunk) and `frontend/build/` is present, but nothing serves it.
+**Why it's critical:** webpack-dev-server is single-process, unminified, keeps an HMR websocket open, is memory-heavy, and is explicitly documented as unsuitable for production. Under concurrent load it will be slow and unstable, and ships dev-only tooling (`@emergentbase/visual-edits`) to end users. This alone fails the "low latency / zero downtime" requirement.
+**Fix:** Build once (`yarn build`) and serve the static `build/` via nginx (already installed on the pod) or `serve -s build`. Update the supervisor `frontend` program accordingly. Set `GENERATE_SOURCEMAP=false` (see M8).
 
-For zero-downtime deploys a readiness probe must confirm the pod can serve (DB reachable, startup finished). The static root returns 200 even while Mongo is down or the long startup seed (PERF-BE-6) is still running, so traffic routes to not-ready pods and users get errors during every deploy.
-**Fix:** `GET /api/health` (liveness, static) + `GET /api/ready` doing `await db.command("ping")` with a short timeout, returning 503 until seeding completes.
+#### C4 — Backend URL is an ephemeral preview host, baked into the bundle at build time
+**Where:** `frontend/.env` → `REACT_APP_BACKEND_URL=https://nice-aryabhata-4.preview.emergentagent.com`.
+**Why it's critical:** `*.preview.emergentagent.com` is a disposable preview environment that can rotate or expire. Because CRA inlines env vars at build time, every API call for every user breaks the moment that host changes — an unannounced, total outage.
+**Fix:** Point `REACT_APP_BACKEND_URL` at a stable production domain (with TLS) before building, and rebuild. Document it in `.env.example`.
 
-## HIGH
-
-### PERF-BE-4 — N+1 query fan-out on dashboard/body endpoints
-**Files:** `routes/dashboard.py:64-65` (loops `_division_score` per division; each fires ~8 unindexed queries + a Python loop over up to 1000 claims — `core/helpers.py:132-201`), `routes/bodies.py:92-141` (~6–7 queries per child body).
-
-For ~10 divisions that is ~80 unindexed queries on the endpoint hit on every login/landing.
-**Fix:** replace per-item loops with a single aggregation pipeline (`$group`/`$facet`) per collection; pair with PERF-BE-1 indexes.
-
-### PERF-BE-5 — Unbounded queries; no pagination; full-collection exports
-**Evidence:** large hard caps and **zero `.skip()`** anywhere. `to_list(5000)`: `ledger.py:51`, `reimbursement_claims.py:392`, `tournament_budgets.py:123`, `vendor_bills.py:418`, `venues_grounds.py:391`. `to_list(3000)`: `assets.py:273`, `audit_pack.py:84`, `dms.py:201`. `to_list(2000)`: `members.py:70`, `players.py:73`, `scoping.py:21`, and more.
-
-List endpoints return thousands of full documents in one un-indexed scan with no page/offset; caps like 5000 silently truncate once data grows.
-**Fix:** add `skip`/`limit` (default 50–100) with indexed sort; stream xlsx exports as a background job.
-
-### PERF-BE-6 — Full data seed runs on every boot, blocking readiness
-**File:** `backend/server.py:45-54` → `seed.py` (~20 sub-seeders, `migrate_body_ids`, unconditional `update_many` at `seed.py:821`, vendor-KYC backfill scan at `seed.py:1033`)
-
-Seeding is `await`ed before uvicorn serves, so every deploy pays a serial, unindexed DB cost before the pod is ready — directly against zero-downtime. (Sub-seeders are guarded by `count_documents > 0`, so mostly idempotent, but the guards and several unconditional statements still run each boot.)
-**Fix:** gate behind `SEED_ON_STARTUP=false` in prod / run as a one-shot migration job; never seed demo data in the serving process.
-
-### PERF-BE-7 — Blocking CPU/file work on the async event loop
-**Files:** `routes/ledger.py:117-140+` (openpyxl xlsx build inline), `core/pdf_generator.py:160,242` (reportlab `doc.build` inline), `routes/uploads.py:71` (synchronous `out.write` in async handler), `routes/audit_pack.py:30` (234-line inline PDF build)
-
-Synchronous CPU/disk work freezes the single event loop for its whole duration, stalling every concurrent request.
-**Fix:** `await asyncio.to_thread(...)` for PDF/xlsx; `aiofiles`/`run_in_threadpool` for the upload write.
-
-### PERF-FE-1 — No code-splitting: single 432 kB gzipped JS chunk
-**Files:** `frontend/src/App.js:5-62` (all pages eagerly imported; no `React.lazy`/`Suspense` anywhere)
-
-Verified from the executed build: one `main.*.js` of **1.81 MB raw / 432 kB gzipped**. A visitor hitting `/login` or the public `/verify/:uid` downloads and parses the code for all 40+ authenticated pages before first paint — a multi-second penalty on slower networks for every daily user.
-**Fix:** convert route elements to `React.lazy(() => import(...))` and wrap `<Routes>` in `<Suspense>`. Mechanical change, no craco config needed; the highest-value quick win for perceived latency.
-
-## MEDIUM
-
-- **PERF-BE-8 — Motor client has no pool/timeout tuning.** `core/infra.py:13` `AsyncIOMotorClient(mongo_url)` — a Mongo blip hangs requests ~30s (default server-selection) before failing. Set `maxPoolSize`, `serverSelectionTimeoutMS=5000`, `connectTimeoutMS`, `socketTimeoutMS`.
-- **PERF-BE-9 — Case-insensitive `$regex` cannot use an index** even once indexes exist (same sites as SEC-11). Use `$text` or a normalized lowercase field with anchored prefix regex.
-- **PERF-BE-10 — Approval-matrix file read on every AI call.** `ai_validator.py:37` `read_text()` synchronously per request. Cache at startup.
-- **PERF-FE-2 — Long lists render un-virtualized; index keys on mutable lists.** `Members.jsx:204`, and `key={idx}` used 63× across pages incl. editable rows (`ClaimNew.jsx:324`) — subtle row-state bleed after delete. Use stable ids; add `react-window` before data grows.
-- **PERF-FE-3 — FileUpload bypasses the shared axios client** (`FileUpload.jsx:55-58` uses raw `fetch`) → no timeout, a stalled upload hangs forever. Route through `api.post`.
+#### C5 — Hardcoded LLM API key in `backend/.env`
+**Where:** `backend/.env` → `EMERGENT_LLM_KEY=sk-emergent-3F4F7762cA3D53aEf4`.
+**Why it's critical:** A live secret in plaintext in the working tree. `.env` is gitignored (good) and no secret was found committed to git history, but the key is present on disk and readable, and this is the pattern the team is using for secrets. A leaked key means quota abuse / cost and potential data exposure via the LLM provider.
+**Fix:** Rotate the key now (assume it is compromised). Inject secrets via the platform's secret manager / environment at runtime, never a file in the repo. Add `.env.example` with placeholder values (see M11). Note: `supervisord.conf` also carries a `code-server` password `3c1d23ae` — infra base image, read-only, lower priority, but rotate if this pod is internet-reachable.
 
 ---
 
-# Phase 4 — Reliability & Deployment Readiness
+### HIGH
 
-## HIGH
+#### H1 — CORS wildcard with credentials
+**Where:** `backend/server.py:38-43` — `allow_origins=os.environ.get("CORS_ORIGINS","*").split(",")` (env is `CORS_ORIGINS="*"`), `allow_credentials=True`, `allow_methods=["*"]`, `allow_headers=["*"]`.
+**Why:** `*` + credentials is an invalid combination (browsers refuse to send credentials to a wildcard origin) and, more importantly, signals an intent to accept any origin. Combined with C1 it widens CSRF/abuse surface.
+**Fix:** Set `CORS_ORIGINS` to the explicit production frontend origin(s); keep `allow_credentials=True` only with a concrete origin list. Restrict methods/headers to what's used.
 
-### REL-1 — No React error boundary; one render error white-screens the app
-**Files:** `frontend/src/App.js`, `frontend/src/index.js:6-11` (no `ErrorBoundary`/`componentDidCatch` anywhere)
+#### H2 — Dependency vulnerabilities (backend CVEs + EOL frontend toolchain)
+**Backend** (`pip-audit -r requirements.txt` → 19 advisories in 4 packages; cross-checked vs installed):
+- **starlette 0.37.2** (transitive via `fastapi==0.110.1`) — 9 advisories incl. multipart/form-data DoS (fixed ≥0.40.0). **Bump `fastapi` so starlette ≥0.40.0.**
+- **litellm 1.80.0** (transitive via `emergentintegrations==0.1.0`) — 8 advisories (fixed ≥1.84.0). **Bump `emergentintegrations`.**
+- **pymongo 4.5.0** (pinned) — PYSEC-2026-1826 (BSON OOB read). **→ 4.6.3.** (MEDIUM)
+- **ecdsa 0.19.2** (via unused `python-jose`) — PYSEC-2026-1325, *no fix available*. Eliminated by removing `python-jose` (see L1).
+**Frontend** (`yarn audit`): **280 advisories — 4 critical / 144 high / 112 moderate / 20 low**, dominated by EOL `react-scripts@5.0.1` build-chain deps.
+**Why:** Known-exploitable DoS in the request path (starlette multipart) is directly reachable at this traffic level; the EOL toolchain will keep accumulating advisories with no upstream fixes.
+**Fix:** Bump fastapi/starlette and emergentintegrations/litellm and pymongo; re-run pip-audit to confirm. For the frontend, triage runtime vs build-only advisories and plan migration off `react-scripts` (e.g. Vite) — this also fixes C3/M1/M8 cleanly.
 
-Any uncaught render exception (e.g. an API returns an unexpected shape) unmounts the whole tree to a blank page for every user, with no recovery.
-**Fix:** wrap `<Routes>` in an error boundary with a fallback + reload and error logging.
+#### H3 — No database indexes
+**Where:** Entire backend — `grep create_index|ensure_index` → **0 occurrences**. Startup runs `seed_data()` but creates no indexes.
+**Why:** Every `find`/`find_one` (queries on `id`, `body_id`, `status`, `cycle`, regex search, etc.) is a full collection scan. Fine on seed data, but collections grow daily; at 200–300 users/day latency degrades within weeks and the single event loop spends CPU on scans. This is the top *latency* risk.
+**Fix:** Create indexes on every field used in queries/sorts — at minimum `{id:1}` (unique) on each collection, plus `body_id`, `status`, `cycle`, and compound indexes for the common list filters. Add an `ensure_indexes()` coroutine to startup. Add unique indexes to back H6.
 
-### REL-2 — API failures silently swallowed; users see blank "no data" pages
-**Files:** 14 page loaders with no `catch` — e.g. `Bank.jsx:14-24` (`try { … } finally { setLoading(false) }`), `Meetings.jsx:28-37`, `Dashboard.jsx:194,208` (`catch (_) {}`)
+#### H4 — Blocking operations on the async event loop
+**Where:**
+- In-request LLM calls: `core/ai_validator.py:171` (`await chat.send_message` on claim submit), `routes/grant_claims.py:174` & `:395`, `routes/tournament_invoices.py:85`, `routes/squad_ai.py:333`. Seconds-to-tens-of-seconds each. **No explicit timeout is set on these calls** (the code catches errors and degrades to HOLD, which is good, but a hang holds the request).
+- CPU-bound report generation: `routes/ledger.py:118` (openpyxl xlsx), `routes/ledger.py:194` & `routes/audit_pack.py:37` (reportlab PDF) — pure-Python, blocks the loop for the whole render.
+- Sync file write in async handler: `routes/uploads.py:71` (`with open(target_path,"wb")`).
+**Why:** With `--workers 1` (H7), the event loop is shared by all users. A handful of concurrent claim submits or a PDF export freezes every other request → latency spikes and apparent downtime.
+**Fix:** Offload CPU/blocking work to a threadpool (`await run_in_executor` / `asyncio.to_thread`) or a background task/queue; add explicit timeouts (and a fallback) to every external LLM/HTTP call; stream large exports. Run multiple workers (H7).
 
-On a 500/network drop/20s timeout the spinner disappears and the page looks empty — indistinguishable from genuinely-empty data, with no error or retry.
-**Fix:** add an `error` state + retry UI per loader; add a global axios **response interceptor** in `api.js` to normalize 401/403/5xx/timeout and toast (the app already ships `sonner`).
+#### H5 — Monetary values stored and computed as `float`
+**Where:** `backend/models.py` — 55 `float` money fields, 0 `Decimal`. Arithmetic in `bank.py:50` (`round(balance + delta, 2)`), `vendor_bills.py:320`, `hr_payroll.py:172-198` (gross/TDS), `ledger.py:58-69`, `reimbursement_claims.py:62-113` (limit-eligibility comparisons), `extra_expense.py:147-174` (ceiling top-ups), `claims.py:95-98`.
+**Why:** Floating-point rounding causes paisa-level drift and, worse, wrong over-budget / eligibility decisions when comparing against ceilings — unacceptable in a financial ERP subject to audit.
+**Fix:** Store and compute money as `Decimal` (or integer paise). Convert at the Pydantic boundary; keep JSON serialization as string or fixed-scale number.
 
-### REL-3 — Business IDs generated by `count()+1` → duplicates under concurrency
-**File:** `backend/core/helpers.py:22,85,92,431,439,459,549,556,603`
+#### H6 — Non-atomic balance updates and counter-based reference numbers
+**Where:** `routes/bank.py:44` `add_transaction` reads `current_balance`, computes in Python, then `$set`s it (same in `vendor_bills.py:319-320`). Reference numbers use `count_documents(...) + 1`: `procurement.py:18`, `tournament_invoices.py:75`, `tournament_plan.py:333`, and helpers `next_uid`/`_next_claim_no` in `core/helpers.py`.
+**Why:** Two concurrent transactions on one account → **lost update** (one debit silently overwritten → wrong balance). Two concurrent creates → **duplicate PR/INV/claim numbers** (no unique index to catch it). Both are realistic at this concurrency and corrupt financial records.
+**Fix:** Use atomic `$inc` for balances (`find_one_and_update`). For sequences, use an atomic counters collection (`find_one_and_update` with `$inc`) or a unique index + retry. Add the unique indexes from H3.
 
-```python
-# helpers.py:91 — read-then-write, not atomic
-count = await db.claims.count_documents({"fiscal_cycle": cycle})
-return f"CLM-{cycle}-{count + 1:03d}"
-```
+#### H7 — Backend run configuration uses development flags
+**Where:** `/etc/supervisor/conf.d/supervisord.conf` → `uvicorn server:app --host 0.0.0.0 --port 8001 --workers 1 --reload`.
+**Why:** `--reload` watches the filesystem and is a dev-only feature (extra memory, restarts on file changes → dropped requests). `--workers 1` gives zero CPU parallelism; combined with H4 the app serializes on any slow request.
+**Fix:** Remove `--reload`; run under gunicorn+uvicorn workers (e.g. `gunicorn -k uvicorn.workers.UvicornWorker -w 2..4 server:app`) sized to CPU. Keep `stopsignal=TERM`/`stopwaitsecs` (already set — graceful drain is fine).
 
-Two concurrent submissions (plausible at this traffic, or during bulk member import `members.py:559`) mint the **same** claim/member/invoice number — a correctness + audit-integrity bug in a financial system. Note `core/shared_services.next_code:44` already does this correctly with atomic `find_one_and_update({$inc})`.
-**Fix:** route all sequence generation through the atomic `code_counters` pattern; delete the count-based generators.
+#### H8 — No React ErrorBoundary and no global error/rejection handler
+**Where:** `frontend/src/` — zero `ErrorBoundary`/`componentDidCatch`/`getDerivedStateFromError`; `src/index.js` renders `<App/>` bare. No `window.addEventListener('unhandledrejection'|'error')`. Some `fetch` calls don't check `res.ok` (`components/NotificationBell.jsx:56/69/103/114`, `components/FileUpload.jsx:55`, `pages/PlayerDetail.jsx:81`, `pages/TournamentOps.jsx:327`).
+**Why:** A render-time throw in any of 60 pages blanks the entire SPA (white screen) with no recovery — a single-user "downtime." Silent promise rejections hide failures.
+**Fix:** Wrap the router in an ErrorBoundary with a fallback UI (ideally per-route); add a global `unhandledrejection`/`error` handler; route the raw `fetch` calls through the axios instance (which centralizes error handling) and check `res.ok`.
 
-## MEDIUM
-
-- **REL-4 — Deprecated lifecycle hooks; shutdown doesn't drain in-flight work.** `server.py:45,57` use `on_event`; `on_shutdown` just `client.close()`. No `--timeout-graceful-shutdown` configured (no Dockerfile/Procfile/uvicorn config in repo). SIGTERM behavior is undefined; closing the client before requests finish errors them. Migrate to `lifespan`; configure graceful shutdown.
-- **REL-5 — No global exception handler / structured 500s.** No `@app.exception_handler`. FastAPI's default means an unhandled error fails only that request (process does **not** crash — good), but there's no centralized logging/correlation. Add a global handler that logs with a request id and returns a clean JSON 500.
-- **REL-6 — Silent exception swallowing.** ~22 `except Exception:` blocks in non-test code with bare `pass`/`return`, e.g. `assets.py:109,116,202`, `dms.py:122,182,216`, `vendor_kyc.py:153`, `bodies.py:131`, `helpers.py:167,416,452,479,507`, `audit_pack.py:26`. Real failures vanish undiagnosably. Catch specific exceptions; `logger.exception(...)` before continuing.
-- **REL-7 — Config hardcoding; no `.env.example`.** `core/infra.py:24-25` hardcodes `/app/memory/APPROVAL_MATRIX.md` and `MPCA_MEETING_AGENDA.md`; `.env` ships `DB_NAME="test_database"` (footgun in prod); no `.env.example`/`.env.sample` anywhere; `frontend/src/lib/api.js:3` has no fallback (undefined env → `"undefined/api"` and every request 404s). Add `.env.example` for both; move paths to env; assert the backend URL at build time.
-- **REL-8 — Build is green but eslint-fragile.** `yarn build` succeeds (exit 0) but emits many `react-hooks/exhaustive-deps` warnings. It passed because it was run with `CI=false`; a standard CI pipeline sets `CI=true`, under which CRA treats warnings as errors and **the build fails**. Fix the warnings or explicitly set `CI=false` in the deploy pipeline (and know the trade-off).
-
-## LOW
-
-- **REL-9 — Logging.** `core/infra.py:18` `basicConfig(level=INFO)` is noisy (seed logs every boot). No secret logging found, but AI reasoning text (potentially containing PII from claims) is persisted to notifications/logs. Consider `WARNING` in prod and scrubbing PII. No unbounded in-process caches/module-level mutable state found (no memory-leak-grade issues).
-
----
-
-# Phase 1 — Code Quality & Tests
-
-## CRITICAL / HIGH
-
-### TEST-1 (CRITICAL) — The entire test suite runs against a live shared DB, with a hardcoded remote fallback
-**Files:** all 26 `backend/tests/test_*.py`; e.g. `test_mpca_api.py:34-41` (best-effort cleanup that swallows delete failures), `test_phase2_api.py:236,292` (casts real votes, concludes elections with no rollback), `test_m1_m2_enhancements.py:9` (`BASE_URL = os.environ.get("REACT_APP_BACKEND_URL") or "https://nice-aryabhata-4.preview.emergentagent.com"`)
-
-Every test is a black-box HTTP integration test firing `requests` at a **running server** against **whatever real MongoDB it is wired to** — several open a second direct `pymongo` connection (`test_m12_selection_console.py:19` hardcodes `localhost:27017`). There are **no unit tests, no `TestClient`, no `conftest.py`, no `pytest.ini`**. If the env var is unset the suite writes test data into a **live hosted preview environment over the internet**. Cleanup is partial and swallows errors, so the suite pollutes data and is order-dependent/flaky.
-**Why it matters:** "passing tests" say nothing reliable about the code, and the suite itself is a data-integrity/security risk. There is no safe automated regression gate.
-**Fix:** add `conftest.py` with a disposable scratch-DB fixture (create/drop per module) and a shared client; fail fast if the URL is unset; never let tests touch a serving DB or a remote host.
-
-### CQ-1 (HIGH) — `models.py` is a 1,966-line god file (83 models); statuses are stringly-typed
-**File:** `backend/models.py`
-
-83 `BaseModel` classes for every domain in one file; the `id = Field(default_factory=lambda: str(uuid.uuid4()))` line is copy-pasted 39×; state machines use plain strings (no `Enum`), so statuses are unvalidated.
-**Fix:** split into a `models/` package by domain; add a shared `MongoDoc` base for the `id` factory; use `str, Enum` for status fields.
-
-### CQ-2 (HIGH) — Duplicated notify / recipient / approval-chain logic across modules
-**Files:** `core/helpers.py:257,308,370`, `tournament_budgets.py:42,52`, `vendor_bills.py:37,51`; `approval_chain` handling spread across ~15 route files
-
-Near-identical `title_map`/`severity_map`/`msg`/`_create_notification` skeletons reimplemented per module.
-**Fix:** one generic `notify_status_change(entity_type, doc, new_status, actor_name)` driven by a per-entity config table.
-
-## MEDIUM / LOW
-
-- **CQ-3 (MEDIUM) — Overly long functions.** `audit_pack.py:30` (234 lines), `members.py:444` (169-line CSV importer), `claims.py:60` (114) / `:388` (104) / `:280` (85), `squad_ai.py:182` (109), `ai_validator.py:196` (109), `helpers.py:132` (106). Extract helpers; split row-validation into pure functions.
-- **CQ-4 (MEDIUM) — Inconsistent return contracts.** Some handlers use `response_model` (`vendor_bills.py:85`), many return ad-hoc dicts (17 `{"ok": True}` sites; `grant_claims.py` 10, `tournaments.py` 6); error handling mixes `raise HTTPException(404)` with `200 + {"valid": False}` (`verify` endpoint). Standardize on `response_model` + one error envelope.
-- **TEST-2 (MEDIUM) — Coverage gaps.** No dedicated endpoint tests for `camps`, `grant_claims`, `tournament_plan`; thin/indirect coverage for `scheme_calc`, `squad_ai`, `hr_payroll`, `ai_claims`; **no auth tests** (no auth exists); shallow error-path coverage (no concurrency, malformed-payload, or 500-handling tests). Coverage was **not measurable** in this environment (deps/DB absent).
-- **CQ-5 (LOW) — Dead code / cruft.** `models.py:1302` deprecated `body_id` alias kept indefinitely; `/app/tests/` is an empty `__init__.py`; `/app/test_result.md` is agent-protocol scaffolding, not results; `frontend/src/pages/TournamentOps.jsx` (984 LOC) appears unrouted in `App.js` (likely dead page); `ProtectedShell`/`Protected` wrapper in `App.js:64-72` is redundant indirection.
-- **CQ-6 (LOW) — Linters/type-checkers declared but unrun.** `ruff`/`flake8`/`mypy` are in `requirements.txt` but not installed here; no CI config invokes them. Wire them into CI.
+#### H9 — Uploaded files stored on ephemeral pod disk
+**Where:** `core/infra.py` `UPLOAD_ROOT = /app/backend/uploads`; `routes/uploads.py:64-71` writes files there; `serve_upload` reads by stored `_path`.
+**Why:** Pod-local disk is ephemeral. On redeploy/restart, all uploaded claim/KYC/grant documents are lost while the DB still references them (`serve_upload` then 410s). Contradicts "zero downtime / data durability." (The upload code itself is otherwise solid — MIME allow-list, 20 MB cap, UUID filenames, no path traversal.)
+**Fix:** Store uploads in durable object storage (S3/GCS — `boto3` is already a dependency) and keep only the object key in Mongo.
 
 ---
 
-# Prioritized TODO — MEDIUM / LOW items (with effort estimates)
+### MEDIUM
 
-Effort key: **S** ≤ half a day · **M** ≈ 1–3 days · **L** ≈ 1 week+
+- **M1 — No pagination; hard caps silently truncate.** No `to_list(None)` (good), but every list endpoint uses a fixed cap with no `skip`/client `limit`: `.to_list(3000)` (`audit_pack.py:84`, `dms.py:201`), `.to_list(2000)` (`members.py`), `.to_list(1000)` (`hr_payroll.py:134`/`:222`, `vendor_kyc.py:135`, `venues_grounds.py:95/194`, `vouchers.py:99`, `camps.py:153`, `division_grants.py:242`, `dms.py:113`), `.to_list(500)` (~25 endpoints). Only `bank.py:36` accepts a caller `limit`. As collections pass the caps, the UI silently drops rows and every call does a large unindexed read. **Fix:** add `skip`/`limit` params with a sane max and return a total count; pairs with H3.
+- **M2 — Unescaped user input used as MongoDB `$regex` (ReDoS + unindexed scans).** Search params passed raw: `members.py:59-63`, `players.py:62-65`, `dms.py:109-111`, `vendor_bills.py:101-103`, `venues_grounds.py:94`, `tournament_plan.py:402`; also the division-suffix regex in `scoping.py:body_scope`. A crafted pattern (e.g. `(a+)+$`) pins the single event-loop CPU. **Fix:** `re.escape()` input, cap its length, prefer anchored/prefix match with a text index.
+- **M3 — Untyped `dict` request bodies without value validation.** PATCH/PUT handlers whitelist keys (so no mass-assignment) but don't type-check values: `tournament_invoices.py:191` (money fields accept strings/negatives), `camps.py:111`, `tournaments.py:109`, `grant_claims.py:406`, `players.py:294` (raw `status` bypasses the enum). **Fix:** replace `patch: dict` with explicit all-Optional Pydantic `*Update` models and `Field(ge=0)` on money — the pattern already used correctly in `bank.py:19/44`.
+- **M4 — Swallowed exceptions hide stale governance state.** `except Exception: pass` around date parsing in `dms.py:122/182`, `vendor_kyc.py:153`, `assets.py:109/116/202` — a malformed stored date leaves a KYC/compliance doc showing "Active" instead of "Expired" (`dms.py:118-123` never flips status). Not a crash, but a correctness/compliance bug. **Fix:** `logging.warning` the parse failure so bad data is discoverable; consider failing closed (mark for review) rather than silently "Active."
+- **M5 — `@app.on_event` startup/shutdown are deprecated** (`server.py:45,57`) and startup runs `seed_data()` + workflow-config upsert + reimbursement-scheme seed on every boot. Seeds are idempotent (guarded by `count_documents(...) > 0`), so no data loss, but they add startup latency and delay readiness on each deploy. **Fix:** migrate to the FastAPI `lifespan` context manager; gate seeding behind an explicit flag/CLI rather than every boot.
+- **M6 — pymongo 4.5.0 CVE** (PYSEC-2026-1826) → bump to **4.6.3** (also see H2).
+- **M7 — pytest collection error.** `backend/tests/test_members_m6.py:17` does `os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")` → `AttributeError` when the var is unset, aborting collection for that module (634 tests collected, 1 collection error). Tests are HTTP integration tests requiring a live server + env var, so CI can't run them hermetically. **Fix:** guard the env read with a default; provide a test config; consider unit tests that don't need a live server.
+- **M8 — Production source maps likely shipped.** No `GENERATE_SOURCEMAP=false` in `frontend/.env`; CRA emits `.map` files by default, exposing full readable source. **Fix:** set `GENERATE_SOURCEMAP=false` for prod builds.
+- **M9 — No code-splitting; single 432 kB gzip bundle.** `src/App.js` statically imports all ~60 pages (no `React.lazy`/`Suspense`). Every user downloads the entire app (finance, payroll, elections, tournaments) to see the landing page. **Fix:** route-level `React.lazy` + `Suspense`; split heavy deps (`recharts`, `react-markdown`, `embla-carousel`, full Radix set).
+- **M10 — 20 s axios timeout, no retry/backoff.** `frontend/src/lib/api.js:7-9`. A 20 s hang is a long user-facing stall. **Fix:** lower the timeout, add a centralized response-error interceptor with user feedback and optional retry for idempotent GETs.
+- **M11 — No `.env.example` / config documentation.** Neither backend nor frontend ships a template; onboarding and correct deploy config are undocumented. **Fix:** add `.env.example` for both with placeholders and comments.
+- **M12 — No dedicated readiness health check.** `GET /api/` returns `{"status":"ok"}` and works as a liveness probe, but it doesn't verify DB connectivity, and `ENABLE_HEALTH_CHECK=false` is set in `frontend/.env`. **Fix:** add `/api/health` that pings Mongo (`await db.command("ping")`) and wire the platform probe to it.
+
+---
+
+### LOW
+
+- **L1 — Unused JWT libraries inflate the CVE surface.** `python-jose` and `pyjwt` are in `requirements.txt` but never imported (`grep` → 0). `python-jose` drags in the unfixable `ecdsa` PYSEC-2026-1325. **Fix:** remove both — eliminates that CVE for free.
+- **L2 — `python-multipart` pin hygiene.** `>=0.0.9` allows a DoS-vulnerable version (CVE-2024-53981, fixed 0.0.18); installed is 0.0.28 (safe), but tighten the pin to `>=0.0.18`.
+- **L3 — Linter drift.** `.ruff_cache` exists but `ruff` is not installed on the pod and there is no ruff config; `mypy>=1.8.0` is declared (2.1.0 installed) but no clean run was captured. **Fix:** pin ruff + a `[tool.ruff]` config and run both in CI.
+- **L4 — No frontend tests.** `"test": "craco test"` exists but there are zero `*.test.*`/`*.spec.*` files under `frontend/src`. **Fix:** add smoke tests for critical flows (login/persona switch, claim submit).
+- **L5 — Benign swallowed exceptions in `core/helpers.py`** (`:167`, `:416`, `:452`, `:479`, `:507`) and `core/ai_validator._parse_ai_response` — defensive date/JSON parsing fallbacks; acceptable, but a debug-level log would aid diagnosis.
+- **L6 — `backend/.env_fix`** is a tracked, empty file — remove it (leftover).
+
+---
+
+## 3. Prioritized MEDIUM / LOW TODO with effort estimates
 
 | # | Item | Sev | Effort |
 |---|------|-----|--------|
-| 1 | Add DB pool/timeout tuning to motor client (PERF-BE-8) | MED | S |
-| 2 | Add `.env.example` for backend + frontend; env-fallback for `API_BASE`; move hardcoded `/app/memory` paths to env (REL-7) | MED | S |
-| 3 | Global FastAPI exception handler + request-id logging (REL-5) | MED | S |
-| 4 | Log swallowed exceptions instead of silent `pass` (REL-6, ~22 sites) | MED | S–M |
-| 5 | Migrate to `lifespan` + configure `--timeout-graceful-shutdown` (REL-4) | MED | S |
-| 6 | Fix eslint `exhaustive-deps` warnings or pin `CI=false` in deploy (REL-8) | MED | S–M |
-| 7 | Cache approval-matrix at startup; stop per-call file read (PERF-BE-10) | MED | S |
-| 8 | Add security-headers middleware (CSP/HSTS/X-Frame-Options) | MED | S |
-| 9 | Replace raw-`dict` endpoints with Pydantic partial-update models (SEC MED) | MED | M |
-| 10 | Rotate LLM key; move to secrets manager | MED | S |
-| 11 | Generate QR client-side; self-host landing images; gate/mask PostHog recording (SEC MED) | MED | M |
-| 12 | Convert `$regex` search to `$text`/normalized-field (PERF-BE-9, ties to SEC-11) | MED | M |
-| 13 | Route FileUpload through shared axios client (PERF-FE-3) | MED | S |
-| 14 | Virtualize large registers; replace index keys on mutable lists (PERF-FE-2) | MED | M |
-| 15 | Split `models.py` into package; introduce status Enums (CQ-1) | MED | M–L |
-| 16 | De-duplicate notify/approval logic into one config-driven helper (CQ-2) | MED | M |
-| 17 | Refactor 200+ line functions (CQ-3) | MED | M |
-| 18 | Standardize `response_model` + error envelope (CQ-4) | MED | M |
-| 19 | Add endpoint tests for uncovered modules; measure coverage (TEST-2) | MED | M–L |
-| 20 | Reduce prod log level to WARNING; scrub PII from persisted AI reasoning (REL-9) | LOW | S |
-| 21 | Remove dead code (TournamentOps, deprecated aliases, redundant wrapper) (CQ-5) | LOW | S |
-| 22 | Wire ruff/flake8/mypy into CI (CQ-6) | LOW | S |
-| 23 | Treat AI output as strictly advisory; document prompt-injection posture (SEC LOW) | LOW | S |
+| 1 | Add `skip`/`limit` pagination + total counts to list endpoints (M1) | MED | 1–2 d |
+| 2 | `re.escape` + length cap on all regex-search params and scoping suffix (M2) | MED | 0.5 d |
+| 3 | Replace `dict` bodies with typed `*Update` Pydantic models incl. money `ge=0` (M3) | MED | 1–2 d |
+| 4 | Log (or fail-closed) the swallowed date parses in dms/vendor_kyc/assets (M4) | MED | 0.5 d |
+| 5 | Migrate `on_event` → `lifespan`; gate seeding behind a flag (M5) | MED | 0.5 d |
+| 6 | Bump pymongo → 4.6.3 and re-run pip-audit (M6, with H2) | MED | 0.25 d |
+| 7 | Fix pytest collection (guard env read) + make tests runnable in CI (M7) | MED | 1 d |
+| 8 | `GENERATE_SOURCEMAP=false` for prod build (M8) | MED | 0.1 d |
+| 9 | Route-level `React.lazy`/`Suspense` code-splitting (M9) | MED | 1–2 d |
+| 10 | Lower axios timeout + central error/retry interceptor (M10) | MED | 0.5 d |
+| 11 | Add `.env.example` for backend + frontend (M11) | MED | 0.25 d |
+| 12 | Add `/api/health` with DB ping; wire platform probe (M12) | MED | 0.25 d |
+| 13 | Remove unused `python-jose`/`pyjwt` (L1) | LOW | 0.1 d |
+| 14 | Tighten `python-multipart` pin ≥0.0.18 (L2) | LOW | 0.1 d |
+| 15 | Install+configure ruff, run mypy clean in CI (L3) | LOW | 0.5–1 d |
+| 16 | Add frontend smoke tests (L4) | LOW | 1–2 d |
+| 17 | Debug-log the benign helper/AI-parse fallbacks (L5) | LOW | 0.25 d |
+| 18 | Delete `backend/.env_fix` (L6) | LOW | 0.05 d |
 
 ---
 
-# Go / No-Go Verdict
+## 4. Go / No-Go
 
-## 🔴 NO-GO
+### 🔴 NO-GO
 
-This application **must not be deployed to production in its current state**, regardless of traffic level. The decision is driven by a small number of unconditional blockers:
+The application must not be deployed to production for real users in its current state. Blocking reasons:
 
-**Release-blocking (must fix before any exposure to real users):**
-1. **SEC-1 — No authentication/authorization.** Identity and role come from client headers and body fields; the login never checks the password. This is not a hardening gap, it is the absence of access control. Everything below SEC-1 (fund disbursement, transfers, procurement, elections, PII documents, bank ledger) is world-callable by anyone. (SEC-1..SEC-9)
-2. **SEC-6 — Wildcard CORS with credentials**, which turns the header-based "auth" into something a malicious third-party page can drive.
-3. **TEST-1 — The test suite writes to a live/shared (and by-default remote) database**, so there is no safe regression gate and running "the tests" is itself a production-data hazard.
+1. **No authentication / authorization** — anyone with the URL can read salaries and bank balances and delete records (C1, C2). This is the single most serious issue.
+2. **Served by a dev server** pointed at an **ephemeral preview backend** (C3, C4) — it will be slow, unstable, and can go fully dark without warning.
+3. **A live secret sits in plaintext** in the working tree (C5).
 
-**Will fail the low-latency / zero-downtime bar even after auth is fixed:**
-4. **PERF-BE-1 — Zero DB indexes** (every query is a collection scan).
-5. **PERF-BE-2 — LLM call inline on the request path with no timeout** (one slow upstream stalls the app).
-6. **PERF-BE-3 / PERF-BE-6 — No readiness probe and a full seed on every boot**, so deploys route traffic to not-ready pods → downtime on every release.
+### Minimum bar to reach GO
+- Close **all CRITICAL** (C1–C5): real auth + server-side scoping on reads and writes; serve the production build via nginx; stable production backend URL; rotate the key and move secrets to the platform.
+- Close **all HIGH** (H1–H9): fix CORS; bump vulnerable deps; add DB indexes; offload blocking work + multi-worker prod server; `Decimal` money; atomic balances/sequences; ErrorBoundary + global handlers; durable upload storage.
+- Then re-run this audit (including a full `pytest` and `mypy` pass once the environment is stable) and load-test at ~5–10× expected peak concurrency before sign-off.
 
-**Also strongly recommended before launch:** REL-1/REL-2 (error boundary + surfaced API errors — otherwise users hit blank pages), REL-3 (ID race → duplicate financial identifiers), PERF-BE-5 (pagination), PERF-FE-1 (code-splitting).
+### What's already good (keep it)
+Clean modular route structure; upload handling (MIME allow-list, size cap, UUID names, no traversal); AI-gatekeeper failure handling degrades safely to human review; idempotent seed guards; consistent env-var usage in the frontend (no hardcoded URLs/secrets in `src/`); graceful shutdown wiring in supervisor. The blockers are configuration- and auth-shaped, not architectural — a focused effort closes them quickly.
 
-### Recommended path to GO
-- **Milestone 1 (blockers):** real auth + server-side RBAC on every route (SEC-1); explicit CORS (SEC-6); rate limiting on auth/AI/search (SEC-10); DB indexes (PERF-BE-1); move AI off the request path + timeout (PERF-BE-2); health/readiness endpoints and gate seeding out of prod boot (PERF-BE-3/BE-6); isolate the test DB (TEST-1). This is the minimum bar for a **conditional GO to a private beta**.
-- **Milestone 2 (production-grade):** pagination + N+1 aggregation (PERF-BE-4/BE-5), atomic ID generation (REL-3), error boundary + global API error handling (REL-1/REL-2), graceful shutdown (REL-4), offload blocking PDF/xlsx (PERF-BE-7), frontend code-splitting (PERF-FE-1), secure file serving (SEC-9).
-- **Milestone 3:** the MEDIUM/LOW TODO table above.
-
-A reasonable estimate for a competent team to reach a **conditional GO** (Milestone 1) is on the order of **2–3 weeks**; full production hardening (Milestones 1–2) **4–6 weeks**.
+---
+*Estimated effort to reach GO: ~2–3 engineer-weeks (CRITICAL+HIGH), plus the MEDIUM/LOW backlog above. Re-audit required before deployment.*

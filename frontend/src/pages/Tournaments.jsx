@@ -3,11 +3,10 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { fetchTournaments, fetchTournamentStats, fetchBodies, actOnTournamentAcceptance } from "@/lib/api";
 import {
-    Trophy, Calendar, MapPin, Users, ChevronRight, Filter, ShieldCheck, Plus, LayoutList, LayoutGrid,
+    Trophy, Calendar, MapPin, Users, ChevronRight, Filter, ShieldCheck, Plus,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentCreateModal from "@/components/TournamentCreateModal";
-import TournamentCalendarView from "@/components/TournamentCalendarView";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -161,15 +160,12 @@ const Tournaments = () => {
         <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="tournaments-page">
             <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
                 <div>
-                    <div className="overline">Article VII · Cricket Calendar</div>
+                    <div className="overline">Article VII · Tournament Operations</div>
                     <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
-                        The MPCA Cricket Calendar
+                        Tournaments
                     </h1>
                     <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        The full MPCA tournament calendar — 9 men&apos;s + 3 women&apos;s Inter-Divisional trophies,
-                        5 Championship trophies (Winner + Rest of MP A + B), plus BCCI tournaments
-                        (Ranji, Vijay Hazare, U-23, U-19, U-16, U-14). Squads pull from the Player
-                        Register; age-caps, guest quotas and Women&apos;s eligibility are enforced.
+                        The single hub for every tournament action — create, host acceptance, squad selection, budget &amp; finance, reimbursement claims, match officials and linked camps. Pick a tournament below to open its full workspace, or use <Link to="/tournament-calendar" className="underline decoration-mpca-brass underline-offset-2 hover:text-mpca-oxblood">Tournament Calendar</Link> for a read-only schedule view.
                     </p>
                 </div>
                 {isOfficeBearer && (
@@ -195,25 +191,8 @@ const Tournaments = () => {
                 </div>
             )}
 
-            {/* View toggle + Filter chips */}
+            {/* Filter chips */}
             <div className="flex flex-wrap items-center gap-2 mb-6">
-                <div className="inline-flex border border-mpca-brass/40 mr-3" data-testid="trn-view-toggle">
-                    <button
-                        onClick={() => setViewMode("list")}
-                        className={`px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-semibold flex items-center gap-1.5 ${viewMode === "list" ? "bg-mpca-green-dark text-mpca-ivory" : "text-mpca-green-dark hover:bg-mpca-parchment"}`}
-                        data-testid="trn-view-list"
-                    >
-                        <LayoutList size={12} strokeWidth={1.5} /> List
-                    </button>
-                    <button
-                        onClick={() => setViewMode("calendar")}
-                        className={`px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-semibold flex items-center gap-1.5 border-l border-mpca-brass/40 ${viewMode === "calendar" ? "bg-mpca-green-dark text-mpca-ivory" : "text-mpca-green-dark hover:bg-mpca-parchment"}`}
-                        data-testid="trn-view-calendar"
-                    >
-                        <LayoutGrid size={12} strokeWidth={1.5} /> Calendar
-                    </button>
-                </div>
-
                 <Filter size={12} className="text-mpca-gray-dark" />
                 {[
                     ["all",                  "All"],
@@ -241,9 +220,7 @@ const Tournaments = () => {
                 ))}
             </div>
 
-            {viewMode === "calendar" ? (
-                <TournamentCalendarView tournaments={filtered} bodies={bodies} />
-            ) : (
+            {(
             <div className="bulletin-card overflow-hidden" data-testid="trn-list">
                 {filtered.length === 0 ? (
                     <div className="p-12 text-center text-mpca-gray-dark italic font-serif">No tournaments match this filter.</div>

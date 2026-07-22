@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 33 · Frontend refactor testing (sidebar collapse + Tournament sub-tab strip + new /tournament-calendar page). All 7 requested test scenarios executed via Playwright. 6/7 scenarios pass cleanly. One minor UX regression found — TournamentSubTabs strip does not render on the Locked/Not-yet-accepted variant of the Selection Console screen.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "SelectionConsole (/tournaments/:id/selection when acceptance is Pending)",
+        "issue": "When a tournament's host-acceptance is still Pending, SelectionConsole short-circuits to the '🔒 Locked' fallback screen (lines 283-290) BEFORE rendering <TournamentSubTabs>. As a result the sticky sub-tab strip is missing on this screen even though the spec requires it to remain visible on every /tournaments/:id/* route. Reproduced by clicking the Squad sub-tab from /tournaments/f74daff6-8055-43bb-a684-c2ae3734c641 (Div-Sec persona, host acceptance Pending) → Locked screen renders, [data-testid='tournament-subtabs'] is absent.",
+        "selector": "[data-testid='tournament-subtabs']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "console (dev-mode only)",
+        "issues": [
+          "Recurring React hydration warning: '<span> cannot be a child of <option>' — the Emergent visual-editor is injecting <span data-ve-dynamic> inside <option> tags in TournamentCreateModal (line 322) and SelectionConsole (line 514). Not caused by app code but pollutes console and can cause hydration mismatches in production."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix: Render <TournamentSubTabs tournamentId={id} active='squad' /> INSIDE the acceptanceOK-locked block in SelectionConsole.jsx (~line 283-290) so users retain sub-tab navigation from the Locked screen — currently they only get a 'Back to Calendar' button."
+  ],
+  "critical_code_review_comments": [
+    "SelectionConsole.jsx line 283-290: Locked fallback returns without TournamentSubTabs — inconsistent with TournamentDetail.jsx and TournamentFinanceDetail.jsx which always render the sub-tab strip.",
+    "TournamentSubTabs.jsx line 32-35: On every subtab-mount the component fetches /reimbursement-claims?tournament_id=... — this happens once per tournament view but is fired on Overview/Squad/Finance mounts. Consider caching per tournament id in a context/store to avoid duplicate calls (minor perf)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "86%"},
+  "test_credentials": "6 personas confirmed on /login: persona-chip-president (Mahanaryaman Scindia), persona-chip-secretary (Sanjeev Dua), persona-chip-treasurer (Naveen Mittal · NEW), persona-chip-division-secretary (Devashish Nilosey · DIV-IND), persona-chip-district-secretary (Rajesh Kulkarni · DIST-INDO-IND), persona-chip-match-official (Chandrakant Pandit). NOTE: /app/memory/test_credentials.md still lists 5 personas — Naveen Mittal Treasurer chip is missing from that file and should be added.",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Verified findings per scenario: (1) SIDEBAR COLLAPSE ✓ — Div-Sec sidebar has exactly Operations={Tournaments, Tournament Calendar, Venues & Grounds, Player Register, Match Officials} and Financial={MPCA Schemes Register, Grant Claims}; all 5 forbidden legacy links removed. (2) TOURNAMENT HUB ✓ — /tournaments page title='Tournaments', 'Add Tournament' button visible for office-bearers, view-toggle removed, [data-testid^='trn-finance-'] pill routes to /tournaments/:id/finance correctly. (3) SUBTAB STRIP ✓ (for accepted tournaments) — All 6 tabs render (overview,squad,finance,claim,officials,camps). Squad/Finance active tab correctly gets 'border-mpca-oxblood text-mpca-oxblood' class. Camps subtab routes to /camps. (4) MPCA CALENDAR ✓ — [data-testid='tournament-calendar-page'] renders, scope label = 'All tournaments · state-wide', defaults to Month grid (cal-view-month active), toggling to List shows 38 clickable cal-row-* rows, clicking deep-links to /tournaments/:id. (5) DIVISION CALENDAR SCOPING ✓ — Devashish Nilosey (DIV-IND) sees only 5 tournaments (vs MPCA=38); scope label reads 'Filtered to tournaments allocated to Indore Division'; default view=List. (6) MATCH OFFICIAL SIDEBAR ✓ — Only 2 nav items: 'My DA / TA Forms' and 'Tournament Calendar' (→ /tournament-calendar); no Tournaments hub, no Reimbursement Matrix. (7) REGRESSION (partial) — TournamentCreateModal opens with trn-scheme-select + trn-venue-select present; trn-budget-preview not tested because seeded scheme list contained only '— No scheme / attach later —' at the moment of test (data-loading race, non-critical). Grant Claim chips=13 on /schemes ✓. Submit-Budget button visibility depends on budget.status=Draft/Returned which was not the case on first-visited tournament — behaviour is correct, no regression. ONE ISSUE: locked SelectionConsole (Pending acceptance) does not render TournamentSubTabs — see action_items.",
+  "rca of the issue": "SelectionConsole.jsx returns an early JSX branch (lines 283-290) when acceptanceOK is false. This early-return happens BEFORE the main render tree that hosts <TournamentSubTabs> (line 298). Fix = insert the sub-tabs component inside the locked branch (or restructure so the strip is a common wrapper). Mitigation: user can still navigate via browser back or main sidebar; no data-loss."
+}

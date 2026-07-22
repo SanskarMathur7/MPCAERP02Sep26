@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, Trophy, Save, MapPin, Landmark, BookOpen } from "lucide-react";
+import { X, Trophy, Save, MapPin, Landmark, BookOpen, ChevronLeft } from "lucide-react";
 import {
     createTournament,
     fetchBodies,
@@ -7,6 +7,7 @@ import {
     fetchGrounds,
 } from "@/lib/api";
 import { api } from "@/lib/api";
+import { TOURNAMENT_TYPE_CATALOG, getTypeByCode } from "@/lib/tournamentCatalog";
 
 const TYPE_OPTIONS = [
     { value: "MPCA_InterDivisional", label: "MPCA · Inter-Divisional (MY Memorial, Madhavrao Scindia, JN Bhaya…)" },
@@ -47,6 +48,7 @@ const emptyForm = {
     name: "",
     short_name: "",
     tournament_type: "MPCA_InterDivisional",
+    tournament_type_code: "",
     format: "Multi_Day",
     scope: "Inter_Divisional",
     fiscal_cycle: "2025-26",
@@ -68,6 +70,7 @@ const emptyForm = {
 const TOURNAMENT_SCHEME_CODES = new Set(["2-A", "2-B", "2-C", "2-D", "2-E", "3-A", "3-B", "3-C", "3-D", "9-BCCI"]);
 
 const TournamentCreateModal = ({ open, onClose, onDone }) => {
+    const [step, setStep] = useState(1); // 1 = type picker, 2 = detail form
     const [form, setForm] = useState(emptyForm);
     const [bodies, setBodies] = useState([]);
     const [venues, setVenues] = useState([]);
@@ -81,6 +84,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
 
     useEffect(() => {
         if (!open) return;
+        setStep(1);
         setRefsLoading(true);
         setBodies([]);
         setVenues([]);
@@ -161,6 +165,19 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
 
     if (!open) return null;
 
+    const pickType = (t) => {
+        setForm((f) => ({
+            ...f,
+            tournament_type_code: t.code,
+            tournament_type: t.family,
+            format: t.default_format || f.format,
+            scope: t.default_scope || f.scope,
+            // If a scheme catalogue maps 1:1 with the type code, prefer that scheme.
+            scheme_code: (schemes.find((s) => s.scheme_code === t.code) ? t.code : f.scheme_code),
+        }));
+        setStep(2);
+    };
+
     const handleSave = async () => {
         setBusy(true);
         setErr(null);
@@ -174,6 +191,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                 venue_id: form.venue_id || null,
                 ground_id: form.ground_id || null,
                 scheme_code: form.scheme_code || null,
+                tournament_type_code: form.tournament_type_code || null,
                 age_cap_years: form.age_cap_years ? Number(form.age_cap_years) : null,
                 age_floor_years: form.age_floor_years ? Number(form.age_floor_years) : null,
                 max_squad_size: Number(form.max_squad_size) || 18,
@@ -222,17 +240,52 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                 </button>
 
                 <div className="p-8 border-b border-mpca-brass/30">
-                    <div className="overline">Article VII · Add Tournament</div>
+                    <div className="overline">Article VII · Add Tournament · Step {step} of 2</div>
                     <h2 className="font-serif text-3xl text-mpca-green-dark mt-2 flex items-center gap-2">
                         <Trophy size={22} strokeWidth={1.5} className="text-mpca-brass" />
-                        New Tournament
+                        {step === 1 ? "Pick a Tournament Type" : "Tournament Details"}
                     </h2>
                     <p className="text-mpca-gray-dark text-sm mt-2">
-                        Add a new tournament to the calendar. Pick the type first, then enter the trophy name manually,
-                        pick a host body (MPCA / Division / District), and optionally attach a venue and ground.
+                        {step === 1 ? (
+                            <>Choose one of the {TOURNAMENT_TYPE_CATALOG.length} tournament categories recognised by the MPCA rate card. The category drives budget formulas, input variables and eligibility.</>
+                        ) : (
+                            <>You picked <b>{getTypeByCode(form.tournament_type_code)?.name}</b>. Enter the trophy name, host body and dates. Detailed input-variable data can be filled from the tournament workspace.</>
+                        )}
                     </p>
                 </div>
 
+                {step === 1 && (
+                    <div className="p-8" data-testid="trn-type-picker">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[70vh] overflow-y-auto pr-2">
+                            {TOURNAMENT_TYPE_CATALOG.map((t) => (
+                                <button
+                                    key={t.code}
+                                    onClick={() => pickType(t)}
+                                    className="text-left p-4 border border-mpca-brass/30 hover:border-mpca-oxblood hover:bg-mpca-cream/30 transition-all group"
+                                    data-testid={`trn-type-card-${t.code}`}
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1">
+                                            <div className="font-mono text-[10px] text-mpca-brass uppercase tracking-widest">{t.code}</div>
+                                            <div className="font-serif text-base text-mpca-green-dark group-hover:text-mpca-oxblood mt-1">{t.name}</div>
+                                        </div>
+                                        <span className="text-[9px] uppercase tracking-widest bg-mpca-parchment/60 border border-mpca-brass/30 text-mpca-green-dark px-2 py-0.5 whitespace-nowrap">{t.family.replace("_", " ")}</span>
+                                    </div>
+                                    <div className="text-[11px] text-mpca-gray-dark mt-2 leading-snug">{t.one_liner}</div>
+                                    <div className="text-[10px] text-mpca-brass italic mt-1.5">{t.input_hint}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {step === 2 && (
+                <>
+                <div className="p-8 pb-2">
+                    <button onClick={() => setStep(1)} className="text-[10px] uppercase tracking-widest text-mpca-brass hover:text-mpca-oxblood flex items-center gap-1" data-testid="trn-back-to-picker">
+                        <ChevronLeft size={11} /> Back to type picker
+                    </button>
+                </div>
                 <div className="p-8 space-y-4">
                     <label className="block">
                         <div className="overline text-[9px] mb-1">Tournament Type *</div>
@@ -515,6 +568,8 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                         </button>
                     </div>
                 </div>
+                </>
+                )}
             </div>
         </div>
     );

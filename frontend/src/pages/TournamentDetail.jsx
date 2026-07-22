@@ -10,10 +10,30 @@ import {
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentSubTabs from "@/components/TournamentSubTabs";
-import { Wallet, ArrowRight } from "lucide-react";
+import TournamentProgress from "@/components/TournamentProgress";
+import {
+    MatchCalendarPanel, TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
+} from "@/components/TournamentWorkspacePanels";
+import { getTypeByCode } from "@/lib/tournamentCatalog";
+import { Wallet, ArrowRight, Sliders, Receipt, ScrollText, Activity, HandCoins, Landmark } from "lucide-react";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
+
+const SetupBox = ({ testId, icon: Icon, label, note, onClick, active }) => (
+    <button
+        onClick={onClick}
+        className={`text-left border p-3 hover:bg-mpca-cream/30 transition-all group ${active ? "border-mpca-oxblood bg-mpca-cream/40" : "border-mpca-brass/30"}`}
+        data-testid={testId}
+    >
+        <div className="flex items-center gap-2 mb-1">
+            <Icon size={14} className="text-mpca-brass" strokeWidth={1.6} />
+            <span className="text-[10px] uppercase tracking-widest text-mpca-brass">Setup</span>
+        </div>
+        <div className="font-serif text-sm text-mpca-green-dark group-hover:text-mpca-oxblood">{label}</div>
+        <div className="text-[10px] text-mpca-gray-dark mt-1 font-mono">{note}</div>
+    </button>
+);
 
 const TournamentDetail = () => {
     const { id } = useParams();
@@ -25,6 +45,9 @@ const TournamentDetail = () => {
     const [newSquad, setNewSquad] = useState({ open: false, body_id: "", team_name: "" });
     const [addPlayer, setAddPlayer] = useState({ squad: null, query: "", players: [] });
     const [bodies, setBodies] = useState([]);
+    const [openBox, setOpenBox] = useState(null); // "calendar"|"receipts"|"summary"|"closure"
+    const [progressKey, setProgressKey] = useState(0);
+    const refreshProgress = () => setProgressKey((k) => k + 1);
 
     const load = async () => {
         const [tx, sq] = await Promise.all([fetchTournament(id), fetchSquads(id)]);
@@ -150,6 +173,44 @@ const TournamentDetail = () => {
                         {t.status === "In_Progress" && <button onClick={() => handleStatus("Completed")} className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark" data-testid="trn-complete">Mark Completed</button>}
                         {t.status !== "Cancelled" && t.status !== "Completed" && <button onClick={() => handleStatus("Cancelled")} className="btn-heritage-secondary !text-mpca-ivory !border-mpca-ivory/40 hover:!bg-white/10" data-testid="trn-cancel">Cancel</button>}
                     </div>
+                )}
+            </div>
+
+            {/* Sprint M19 · Progress stepper (5 phases) */}
+            <div className="mb-8">
+                <TournamentProgress tournamentId={id} refreshKey={progressKey} />
+            </div>
+
+            {/* Sprint M19 · 8 setup boxes grid */}
+            <div className="mb-10">
+                <div className="overline mb-3">Tournament Workspace · setup boxes</div>
+                {t.tournament_type_code && (
+                    <div className="mb-3 text-[11px] text-mpca-gray-dark">
+                        Type: <span className="font-mono text-mpca-brass">{t.tournament_type_code}</span>
+                        <span className="ml-2 font-serif text-mpca-green-dark">{getTypeByCode(t.tournament_type_code)?.name || ""}</span>
+                    </div>
+                )}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="setup-boxes">
+                    <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `${Object.keys(t.input_variables).length} set` : "Not filled"} onClick={() => navigate(`/tournaments/${id}/finance`)} />
+                    <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
+                    <SetupBox testId="box-squad" icon={Users} label="Squad Selection" note={squads.length ? `${squads.length} squad(s)` : "Not started"} onClick={() => navigate(`/tournaments/${id}/selection`)} />
+                    <SetupBox testId="box-budget" icon={Wallet} label="Budget & Extras" note="Actuals + heads" onClick={() => navigate(`/tournaments/${id}/finance`)} />
+                    <SetupBox testId="box-invoices" icon={Receipt} label="Invoices + DA Forms" note="Uploaded, extracted, approved" onClick={() => navigate(`/tournaments/${id}/finance?tab=officials`)} />
+                    <SetupBox testId="box-summary" icon={Activity} label="Financial Summary" note="Auto-rollup" onClick={() => setOpenBox(openBox === "summary" ? null : "summary")} active={openBox === "summary"} />
+                    <SetupBox testId="box-receipts" icon={HandCoins} label="MPCA Receipts" note="Payments received" onClick={() => setOpenBox(openBox === "receipts" ? null : "receipts")} active={openBox === "receipts"} />
+                    <SetupBox testId="box-closure" icon={ScrollText} label="Closure Letter" note={t.closure_letter_generated_at ? "Issued" : "Not issued"} onClick={() => setOpenBox(openBox === "closure" ? null : "closure")} active={openBox === "closure"} />
+                </div>
+                {openBox === "calendar" && (
+                    <div className="mt-4"><MatchCalendarPanel tournament={t} canEdit={canEdit || persona?.body_type === "Division"} onChange={() => { refreshProgress(); load(); }} /></div>
+                )}
+                {openBox === "receipts" && (
+                    <div className="mt-4"><TournamentReceiptsPanel tournament={t} canEdit={canEdit} /></div>
+                )}
+                {openBox === "summary" && (
+                    <div className="mt-4"><FinancialSummaryPanel tournament={t} /></div>
+                )}
+                {openBox === "closure" && (
+                    <div className="mt-4"><ClosureLetterPanel tournament={t} persona={persona} canGenerate={canEdit} /></div>
                 )}
             </div>
 

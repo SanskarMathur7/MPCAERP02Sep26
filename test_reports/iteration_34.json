@@ -1,0 +1,48 @@
+{
+  "summary": "Sprint M19 · Tournament Workspace Overhaul — end-to-end backend + frontend testing. All 12 requested scenarios verified. 20/20 pytest cases pass. Frontend flows (hub default filter, 11-card type picker, create+detail, 5-phase progress stepper, 8 setup boxes, match calendar CRUD + lock, receipts, financial summary, closure letter, subtab regression, tournament_type_code persistence) all work as specified. No blocking issues. One minor UX/test race noted around Financial Summary loading placeholder.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Financial Summary panel open",
+        "issue": "When the Financial Summary panel is first opened, it briefly renders a placeholder <div data-testid=\"panel-financial-summary\">Loading financial summary…</div> using the SAME testid as the loaded panel. `summary-variance` only appears after the GET /financial-summary API response resolves (~500ms-1s). Not a functional bug — but tests/automation must wait for `summary-variance` (not just `panel-financial-summary`) to appear. Optional fix: give the loading placeholder a different testid (e.g. `panel-financial-summary-loading`).",
+        "affected_selectors": ["[data-testid='summary-variance']"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "console (dev-only, cosmetic)",
+        "issues": [
+          "Recurring React hydration warning: 'In HTML, <span> cannot be a child of <option>'. Same finding as iter33 — the Emergent visual-editor is injecting <span data-ve-dynamic> inside <option> tags in TournamentCreateModal step-2 selects. Not app-code fault but pollutes console."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_tournament_workspace.py",
+    "/app/test_reports/pytest/iter34_m19.xml"
+  ],
+  "action_items": [
+    "(Optional) Give the FinancialSummaryPanel loading placeholder a distinct testid like `panel-financial-summary-loading` so automation can distinguish the two render states.",
+    "(Minor spec note) TournamentSubTabs labels the 4th tab 'Reimbursement' but the review-request wording says 'Claim'. Functionally identical (routes correctly). Consider aligning label if the spec is strict."
+  ],
+  "critical_code_review_comments": [
+    "tournament_workspace.py:174 — PATCH /calendar-lock uses a query parameter (`?locked=true`) instead of a JSON body. Works but slightly inconsistent with the other PATCH endpoints in the module which use Pydantic bodies. Consider promoting to a `CalendarLockPayload` body-model for consistency.",
+    "TournamentDetail.jsx:194 — box-input-vars opens /finance instead of an inline 'input variables' panel. The spec says 'clicking a box either deep-links to an existing screen (squad/finance) or expands an inline panel'. This is acceptable per spec but the note 'Not filled' on the box will never toggle to 'set' unless input_variables is patched from the finance screen. Confirm the finance screen actually surfaces the input_variables editor.",
+    "TournamentWorkspacePanels.jsx:255 — FinancialSummaryPanel's early-return uses the SAME `panel-financial-summary` testid as the fully-loaded panel (bad for testability). Either rename or add data-loading attribute.",
+    "TournamentWorkspacePanels.jsx:33,42,171 — Uses window.confirm/alert in a modern SPA. Consider a heritage-styled confirmation dialog for consistency with the rest of the app (not blocking, purely UX).",
+    "TournamentCreateModal.jsx:298,322 — inline React children of <option> from the visual-editor cause console warnings. If Emergent visual editor cannot be disabled for <option>, wrap options in a fragment via createPortal or use a headless Select (shadcn) to avoid raw <option>."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_tournament_workspace.py (new · 20 test cases)",
+    "/app/test_reports/pytest/iter34_m19.xml (new · JUnit output)"
+  ],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "100% (all 12 scenarios pass)"},
+  "test_credentials": "6 personas confirmed working on /login. Div-Sec (Devashish Nilosey · DIV-IND) used for hub-default, type-picker, create, calendar CRUD. MPCA Secretary (Sanjeev Dua) used for receipts, financial-summary, closure-letter.",
+  "seed_data_creation": "One TEST tournament created during frontend flow: id=3a01d050-6bb3-43a2-98e7-cd21b82b7a38, name='TEST M19 Utility Trophy 905263', host DIV-IND, type_code=inter_div, 2 matches (Indore vs Bhopal, Gwalior vs Jabalpur), calendar locked, 1 receipt of ₹50,000 NEFT, closure letter generated. Also 11 tiny TEST_types_<code>_* tournaments were created by the pytest parametrised test and auto-cleaned via DELETE. No production data touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Sprint M19 complete and fully verified end-to-end. Scenario-by-scenario results: (1) HUB DEFAULT — Live chip active by default (bg-mpca-green-dark applied), 2 live rows (In_Progress + Squad_Selection), All grows to 7. (2) TYPE PICKER — 11 cards render with all expected data-testid codes. Clicking bcci_staging → Step 2 subtitle mentions 'BCCI Domestic Tournament (Staging)', back-to-picker returns to Step 1. (3) CREATE — inter_div tournament created with DIV-IND host and 2026-03-10/15 dates, modal closes, row appears in list, clicking navigates to /tournaments/{id}. (4) PROGRESS BAR — tournament-progress renders with 12% & 'Current Phase: setup'; all 5 phase pills present; clicking setup reveals sub-steps created/input_vars/accepted/calendar (created=done, others=pending on fresh tournament). (5) SETUP BOXES — all 8 present and clickable; calendar/receipts/summary/closure open inline panels; input-vars/squad/budget/invoices deep-link correctly. (6) MATCH CALENDAR CRUD — add-match form works, 2 matches added (match-row-0, match-row-1), calendar-lock-btn flips to calendar-unlock-btn, match-delete-* buttons disappear after lock. (7) PROGRESS RE-DERIVATION — after reload, progress-step-calendar shows Check icon and percent grew from 6% to 12%. (8) RECEIPTS — Sanjeev Dua persona can add receipt (₹50,000 NEFT); receipt-row-0 renders with '₹50,000' formatted. (9) FINANCIAL SUMMARY — summary-variance shows '₹0' with 'UNDER BUDGET' label (green). (10) CLOSURE LETTER — pre#closure-letter-body contains all 3 required strings including tournament name. (11) SUBTABS regression — all 6 tabs render (labels Overview/Squad Selection/Budget & Finance/Reimbursement/Match Officials/Camps); clicking Squad routes to /selection. (12) TYPE_CODE PERSISTED — GET /api/tournaments/{id} returns tournament_type_code='inter_div'. NOTE: Iter33-reported issue (SelectionConsole locked screen missing subtabs) appears to be FIXED — subtabs now render on the Locked variant.",
+  "rca of the issue": "N/A · no blocking issues. Minor FinancialSummaryPanel loading-state uses duplicate testid — see integration_issues."
+}

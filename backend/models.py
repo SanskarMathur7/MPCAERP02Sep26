@@ -1,6 +1,6 @@
 """All Pydantic models + enum literals for the MPCA ERP."""
 from datetime import datetime, timezone
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict, Any
 import uuid
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -875,6 +875,8 @@ class TournamentBase(BaseModel):
     format: TournamentFormat
     scope: TournamentScope
     tournament_type: TournamentType = "MPCA_InterDivisional"
+    # Sprint M19 · Utility Catalog code — e.g. inter_div / inter_district / bcci_staging / away_participation etc.
+    tournament_type_code: Optional[str] = None
     trophy_name: Optional[str] = None            # e.g. "CT Sarwate Trophy"
     fiscal_cycle: str = "2025-26"
     host_body_id: str = "MPCA"                  # who organises the tournament
@@ -894,6 +896,12 @@ class TournamentBase(BaseModel):
     ground_name_snapshot: Optional[str] = None
     # T-RIM: MPCA reimbursement scheme code (e.g. "2-D" for Inter-Divisional Hosting)
     scheme_code: Optional[str] = None
+    # Sprint M19 · Utility-form input variables (days_per_match, teams, squad_size, etc.)
+    input_variables: Dict[str, Any] = Field(default_factory=dict)
+    # Sprint M19 · Explicit user-action flags (progress bar derives from these)
+    calendar_fixed: bool = False                 # set true by "Lock Calendar" action
+    closure_letter_generated_at: Optional[str] = None
+    closure_letter_url: Optional[str] = None
     # M2-A: squad announcement timelines
     timelines: SquadTimeline = Field(default_factory=SquadTimeline)
     # M2-A: portal slot config for this tournament (division-shared registration link)

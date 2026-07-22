@@ -95,7 +95,7 @@ const Tournaments = () => {
     const [stats, setStats] = useState(null);
     const [bodies, setBodies] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState("all");
+    const [filter, setFilter] = useState("live");
     const [createOpen, setCreateOpen] = useState(false);
     const [viewMode, setViewMode] = useState("list"); // 'list' | 'calendar'
     const [accBusy, setAccBusy] = useState(null); // tournament id being acted on
@@ -131,7 +131,12 @@ const Tournaments = () => {
 
     const filtered = useMemo(() => {
         let r = list;
-        if (["Draft","Awaiting_Approval","Upcoming", "Squad_Selection", "In_Progress", "Completed"].includes(filter)) {
+        // Sprint M19 · "Live" default = active-play statuses only
+        if (filter === "live") {
+            r = r.filter((t) => ["Squad_Selection", "In_Progress"].includes(t.status));
+        } else if (filter === "upcoming") {
+            r = r.filter((t) => t.status === "Upcoming");
+        } else if (["Draft","Awaiting_Approval","Upcoming", "Squad_Selection", "In_Progress", "Completed"].includes(filter)) {
             r = r.filter((t) => t.status === filter);
         } else if (["Inter_Divisional", "Championship", "Invitational"].includes(filter)) {
             r = r.filter((t) => t.scope === filter);
@@ -195,6 +200,8 @@ const Tournaments = () => {
             <div className="flex flex-wrap items-center gap-2 mb-6">
                 <Filter size={12} className="text-mpca-gray-dark" />
                 {[
+                    ["live",                 "🔴 Live"],
+                    ["upcoming",             "Upcoming"],
                     ["all",                  "All"],
                     ["pending_my_accept",    "⏳ Awaiting My Acceptance"],
                     ["MPCA_InterDivisional", "MPCA Inter-Div"],
@@ -204,7 +211,6 @@ const Tournaments = () => {
                     ["three_team",           "3-Team Format"],
                     ["Draft",                "Draft"],
                     ["Awaiting_Approval",    "Awaiting Approval"],
-                    ["Upcoming",             "Upcoming"],
                     ["Squad_Selection",      "In Selection"],
                     ["In_Progress",          "In Progress"],
                     ["Completed",            "Completed"],
@@ -223,7 +229,11 @@ const Tournaments = () => {
             {(
             <div className="bulletin-card overflow-hidden" data-testid="trn-list">
                 {filtered.length === 0 ? (
-                    <div className="p-12 text-center text-mpca-gray-dark italic font-serif">No tournaments match this filter.</div>
+                    <div className="p-12 text-center text-mpca-gray-dark italic font-serif" data-testid="trn-empty">
+                        {filter === "live"
+                            ? "No live tournaments right now. Switch to Upcoming or All to see the full calendar."
+                            : "No tournaments match this filter."}
+                    </div>
                 ) : (
                     filtered.map((t) => {
                         const fm = FORMAT_META[t.format] || { label: t.format, tone: "lapsed" };

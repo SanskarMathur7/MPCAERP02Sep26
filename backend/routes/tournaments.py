@@ -111,7 +111,7 @@ async def patch_tournament(tid: str, patch: dict):
     doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Tournament not found")
-    allowed = {"scheme_code", "notes", "trophy_name", "status", "start_date", "end_date", "venue_id", "ground_id", "venue_name_snapshot", "ground_name_snapshot"}
+    allowed = {"scheme_code", "notes", "trophy_name", "status", "start_date", "end_date", "venue_id", "ground_id", "venue_name_snapshot", "ground_name_snapshot", "input_variables", "calendar_fixed", "closure_letter_url", "closure_letter_generated_at"}
     updates = {k: v for k, v in (patch or {}).items() if k in allowed}
     if updates:
         await db.tournaments.update_one({"id": tid}, {"$set": updates})

@@ -11,6 +11,7 @@ import {
 import CricketLoader from "@/components/CricketLoader";
 import TournamentSubTabs from "@/components/TournamentSubTabs";
 import TournamentProgress from "@/components/TournamentProgress";
+import InputVariablesPanel from "@/components/InputVariablesPanel";
 import {
     MatchCalendarPanel, TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
 } from "@/components/TournamentWorkspacePanels";
@@ -191,7 +192,7 @@ const TournamentDetail = () => {
                     </div>
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="setup-boxes">
-                    <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `${Object.keys(t.input_variables).length} set` : "Not filled"} onClick={() => navigate(`/tournaments/${id}/finance`)} />
+                    <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `${Object.keys(t.input_variables).length} set` : "Not filled"} onClick={() => setOpenBox(openBox === "input-vars" ? null : "input-vars")} active={openBox === "input-vars"} />
                     <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
                     <SetupBox testId="box-squad" icon={Users} label="Squad Selection" note={squads.length ? `${squads.length} squad(s)` : "Not started"} onClick={() => navigate(`/tournaments/${id}/selection`)} />
                     <SetupBox testId="box-budget" icon={Wallet} label="Budget & Extras" note="Actuals + heads" onClick={() => navigate(`/tournaments/${id}/finance`)} />
@@ -200,6 +201,9 @@ const TournamentDetail = () => {
                     <SetupBox testId="box-receipts" icon={HandCoins} label="MPCA Receipts" note="Payments received" onClick={() => setOpenBox(openBox === "receipts" ? null : "receipts")} active={openBox === "receipts"} />
                     <SetupBox testId="box-closure" icon={ScrollText} label="Closure Letter" note={t.closure_letter_generated_at ? "Issued" : "Not issued"} onClick={() => setOpenBox(openBox === "closure" ? null : "closure")} active={openBox === "closure"} />
                 </div>
+                {openBox === "input-vars" && (
+                    <div className="mt-4"><InputVariablesPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>
+                )}
                 {openBox === "calendar" && (
                     <div className="mt-4"><MatchCalendarPanel tournament={t} canEdit={canEdit || persona?.body_type === "Division"} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}

@@ -172,8 +172,8 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
             tournament_type: t.family,
             format: t.default_format || f.format,
             scope: t.default_scope || f.scope,
-            // If a scheme catalogue maps 1:1 with the type code, prefer that scheme.
-            scheme_code: (schemes.find((s) => s.scheme_code === t.code) ? t.code : f.scheme_code),
+            // Use explicit scheme_code from catalog (maps to backend calculator code like 2-B).
+            scheme_code: t.scheme_code || "",
         }));
         setStep(2);
     };

@@ -97,7 +97,7 @@ export const TOURNAMENT_TYPE_CATALOG = [
         scheme_code: null,
         name: "Inter-School Tournament",
         family: "Invitational",
-        default_format: "OneDay",
+        default_format: "One_Day",
         default_scope: "Inter_District",
         icon: "graduation-cap",
         one_liner: "Boys/Girls knockout — up to 12 schools at Div HQ, 8 at a District.",

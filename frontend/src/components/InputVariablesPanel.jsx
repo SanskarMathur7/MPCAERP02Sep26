@@ -107,6 +107,7 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
         try {
             // Persist input variables on the tournament
             await api.patch(`/tournaments/${tournament.id}/input-variables`, { input_variables: values });
+            setDirty(false);  // inputs saved, clear dirty flag immediately (budget upsert may still fail)
 
             if (usesBackend && budgetPreview) {
                 if (existingBudget && existingBudget.status !== "Approved") {

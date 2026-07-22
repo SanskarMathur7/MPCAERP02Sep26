@@ -252,7 +252,7 @@ const FinancialSummaryPanel = ({ tournament }) => {
         api.get(`/tournaments/${tournament.id}/financial-summary`).then((r) => setData(r.data)).catch(() => setData(null));
     }, [tournament?.id]);
 
-    if (!data) return <div className="border border-mpca-brass/30 bg-mpca-ivory p-5 text-[11px] text-mpca-gray-dark" data-testid="panel-financial-summary">Loading financial summary…</div>;
+    if (!data) return <div className="border border-mpca-brass/30 bg-mpca-ivory p-5 text-[11px] text-mpca-gray-dark" data-testid="panel-financial-summary-loading">Loading financial summary…</div>;
     const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
     const rows = [
         ["Approved Budget", data.budget.total_inr, data.budget.status],

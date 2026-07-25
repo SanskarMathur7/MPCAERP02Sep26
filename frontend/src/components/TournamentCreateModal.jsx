@@ -9,6 +9,7 @@ import {
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { TOURNAMENT_TYPE_CATALOG, getTypeByCode, getCreatableTournamentTypes, groupTypesBySection } from "@/lib/tournamentCatalog";
+import { getDirectoryFor } from "@/lib/tournamentDirectory";
 
 // Visual palette per section (matches the user's mockup: BCCI = navy tint,
 // MPCA = green tint, Division = brass/marigold tint)
@@ -198,6 +199,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
         try {
             const payload = {
                 ...form,
+                name: form.name === "__other__" ? "" : form.name,
                 short_name: form.short_name || null,
                 trophy_name: form.trophy_name || null,
                 start_date: form.start_date || null,
@@ -344,18 +346,52 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                     </label>
 
                     <div className="grid md:grid-cols-2 gap-4">
-                        <label className="block">
+                        <label className="block md:col-span-2">
                             <div className="overline text-[9px] mb-1">Tournament Name *</div>
-                            <input
-                                className="input-heritage"
-                                value={form.name}
-                                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                placeholder="e.g. MY Memorial Trophy"
-                                data-testid="trn-name-input"
-                            />
+                            {(() => {
+                                const dir = getDirectoryFor(form.tournament_type_code);
+                                const isOther = form.name === "__other__" || (!!form.name && form.name !== "__other__" && !dir.some((d) => d.name === form.name));
+                                return (
+                                    <>
+                                        {dir.length > 0 && (
+                                            <select
+                                                className="input-heritage"
+                                                value={dir.some((d) => d.name === form.name) ? form.name : (form.name ? "__other__" : "")}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    if (v === "__other__") setForm({ ...form, name: "__other__" });
+                                                    else setForm({ ...form, name: v, trophy_name: v.split(" · ")[0] || v });
+                                                }}
+                                                data-testid="trn-name-select"
+                                            >
+                                                <option value="">— Pick from MPCA directory —</option>
+                                                {dir.map((d) => (
+                                                    <option key={d.name} value={d.name}>{d.name}{d.age ? ` · ${d.age}` : ""}</option>
+                                                ))}
+                                                <option value="__other__">➕ Other · type manually</option>
+                                            </select>
+                                        )}
+                                        {(dir.length === 0 || isOther) && (
+                                            <input
+                                                className={`input-heritage ${dir.length > 0 ? "mt-2" : ""}`}
+                                                value={form.name === "__other__" ? "" : form.name}
+                                                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                                placeholder={dir.length > 0 ? "Type the tournament name manually…" : "e.g. MY Memorial Trophy"}
+                                                data-testid="trn-name-input"
+                                                autoFocus={isOther}
+                                            />
+                                        )}
+                                        {dir.length > 0 && !isOther && form.name && form.name !== "__other__" && (
+                                            <div className="text-[10px] text-mpca-brass italic mt-1">
+                                                Recognised MPCA directory entry — budget rate-card auto-applies.
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </label>
-                        <label className="block">
-                            <div className="overline text-[9px] mb-1">Trophy / Short Name</div>
+                        <label className="block md:col-span-2">
+                            <div className="overline text-[9px] mb-1">Trophy / Short Name (optional)</div>
                             <input
                                 className="input-heritage"
                                 value={form.trophy_name}
@@ -605,7 +641,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                         <button
                             className="btn-heritage-primary"
                             onClick={handleSave}
-                            disabled={busy || refsLoading || !form.name || !form.host_body_id}
+                            disabled={busy || refsLoading || !form.name || form.name === "__other__" || !form.host_body_id}
                             data-testid="trn-save-btn"
                         >
                             <Save size={14} strokeWidth={1.5} /> {busy ? "Saving…" : "Add to Calendar"}

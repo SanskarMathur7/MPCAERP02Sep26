@@ -21,7 +21,7 @@ from routes import (  # noqa: F401
     division_grants, vouchers, ledger, purchase_orders, vendor_kyc,
     assets, hr_payroll, dms, compliance, audit_pack, selection_console, match_officials,
     reimbursement_schemes, reimbursement_claims, camps, squad_ai, grant_claims, scheme_calc,
-    tournament_workspace, rbac,
+    tournament_workspace, rbac, tournament_participations,
 )
 from seed import seed_data
 

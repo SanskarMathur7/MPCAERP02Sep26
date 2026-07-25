@@ -179,6 +179,11 @@ async def patch_setup_meta(tid: str, payload: SetupMetaPayload):
     r = await db.tournaments.update_one({"id": tid}, {"$set": {"setup_meta": payload.setup_meta}})
     if r.matched_count == 0:
         raise HTTPException(404, "Tournament not found")
+    # M26 · Sync per-division participation ledger when pools change
+    pools = payload.setup_meta.get("division_pools") if isinstance(payload.setup_meta, dict) else None
+    if pools is not None:
+        from routes.tournament_participations import sync_participants_from_pools
+        await sync_participants_from_pools(tid, pools)
     return await db.tournaments.find_one({"id": tid}, {"_id": 0})
 
 

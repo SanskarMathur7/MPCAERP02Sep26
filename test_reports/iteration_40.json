@@ -1,0 +1,38 @@
+{
+  "summary": "M26 Tournament Participants Matrix tested end-to-end. Backend: 10/10 pytest cases pass (list/patch/resync + setup-meta auto-sync soft-delete/re-activate + progress regression). Frontend: SetupBox box-participants renders with note '5 bodies · 2 pool(s)', panel-participants displays participants-table with 5 rows (Host+Visitor chips, Accept action for Pending), accept→reset flow works, Re-sync button works for Secretary and is disabled for Division Secretary, history toggle works. M25 basics-division-pools regression OK.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TournamentBasicsPanel", "issues": ["Pre-existing (not M26): React hydration warning — <span> cannot be a child of <option> inside the venue datalist. Emitted from TournamentBasicsPanel around line 380. Non-blocking but should be cleaned up (remove wrapping span in the mapped <option> children)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m26_participants_matrix.py",
+    "/app/test_reports/pytest/m26_results.xml"
+  ],
+  "action_items": [
+    "Optional: Clean up hydration warning in TournamentBasicsPanel datalist <option> (unrelated to M26 but visible in console).",
+    "Optional: The M26 empty-state (data-testid=participants-empty) was not exercised via a live UI flow (the seeded tournament always has pools). Consider adding a fresh Inter_Divisional tournament in test fixtures to cover this. Empty-state is however verified indirectly via backend GET returning [] for fresh tournaments."
+  ],
+  "critical_code_review_comments": [
+    "sync_participants_from_pools correctly upserts existing rows with $set only (removed_at=null, updated_at, pool/role fields) — preserves acceptance_status/note/by_name on re-activation. Verified.",
+    "PATCH /participants/{code} matches with removed_at:None ⇒ 404 for soft-deleted rows. Correct.",
+    "Derived totals aggregate via async cursor iteration; may become slow with large N — consider aggregation pipeline if bodies * tournaments explodes. Acceptable for MVP.",
+    "ParticipantsMatrix.jsx (~230 LOC) is single-file and under threshold — OK.",
+    "canAct = isSelf || canManage — self-persona can accept their own row, and canManage-only can resync. Matches spec."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m26_participants_matrix.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Persona chips on /login: persona-chip-secretary (MPCA State), persona-chip-division-secretary (DIV-IND). No password required — click chip then 'Sign in to the Registrar'.",
+  "seed_data_creation": "During TestAutoSync a temporary tournament (TEST_M26_Sync) is created + deleted via /api/tournaments. Seeded tournament e2a9ac5c-8e72-4d0a-9aa9-8dae40f482e5 was toggled but restored to Pending on DIV-CHM. DIV-BPL still Accepted from earlier dev seed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M26 fully passes. Reuse /app/backend/tests/test_m26_participants_matrix.py for regression. Seeded tournament SEEDED_TID has 5 participants across 2 pools (DIV-IND host in Pool A, DIV-JBP host in Pool B). Existing hydration warning in TournamentBasicsPanel is pre-existing tech-debt, not a functional bug."
+}

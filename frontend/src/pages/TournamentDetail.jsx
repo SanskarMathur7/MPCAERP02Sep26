@@ -13,11 +13,12 @@ import TournamentSubTabs from "@/components/TournamentSubTabs";
 import TournamentProgress from "@/components/TournamentProgress";
 import InputVariablesPanel from "@/components/InputVariablesPanel";
 import TournamentBasicsPanel from "@/components/TournamentBasicsPanel";
+import ParticipantsMatrix from "@/components/ParticipantsMatrix";
 import {
     MatchCalendarPanel, TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
 } from "@/components/TournamentWorkspacePanels";
 import { getTypeByCode } from "@/lib/tournamentCatalog";
-import { Wallet, ArrowRight, Sliders, Receipt, ScrollText, Activity, HandCoins, Landmark, ListChecks } from "lucide-react";
+import { Wallet, ArrowRight, Sliders, Receipt, ScrollText, Activity, HandCoins, Landmark, ListChecks, UsersRound } from "lucide-react";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
@@ -194,6 +195,7 @@ const TournamentDetail = () => {
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="setup-boxes">
                     <SetupBox testId="box-basics" icon={ListChecks} label="Tournament Basics" note={t.setup_meta?.category ? `${t.setup_meta.category} · ${t.setup_meta.age_group}` : "Category, teams, grounds"} onClick={() => setOpenBox(openBox === "basics" ? null : "basics")} active={openBox === "basics"} />
+                    <SetupBox testId="box-participants" icon={UsersRound} label="Participants Matrix" note={(t.setup_meta?.division_pools || []).length ? `${(t.setup_meta.division_pools.flatMap(p => p.division_codes || [])).length} bodies · ${t.setup_meta.division_pools.length} pool(s)` : "Set pools first"} onClick={() => setOpenBox(openBox === "participants" ? null : "participants")} active={openBox === "participants"} />
                     <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `${Object.keys(t.input_variables).length} set` : "Not filled"} onClick={() => setOpenBox(openBox === "input-vars" ? null : "input-vars")} active={openBox === "input-vars"} />
                     <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
                     <SetupBox testId="box-squad" icon={Users} label="Squad Selection" note={squads.length ? `${squads.length} squad(s)` : "Not started"} onClick={() => navigate(`/tournaments/${id}/selection`)} />
@@ -205,6 +207,9 @@ const TournamentDetail = () => {
                 </div>
                 {openBox === "basics" && (
                     <div className="mt-4"><TournamentBasicsPanel tournament={t} canEdit={canEdit || persona?.body_type === "Division"} onChange={() => { refreshProgress(); load(); }} /></div>
+                )}
+                {openBox === "participants" && (
+                    <div className="mt-4"><ParticipantsMatrix tournament={t} persona={persona} canManage={canEdit} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "input-vars" && (
                     <div className="mt-4"><InputVariablesPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>

@@ -21,7 +21,7 @@ from routes import (  # noqa: F401
     division_grants, vouchers, ledger, purchase_orders, vendor_kyc,
     assets, hr_payroll, dms, compliance, audit_pack, selection_console, match_officials,
     reimbursement_schemes, reimbursement_claims, camps, squad_ai, grant_claims, scheme_calc,
-    tournament_workspace,
+    tournament_workspace, rbac,
 )
 from seed import seed_data
 
@@ -43,6 +43,9 @@ async def lifespan(app: FastAPI):
         # Sprint T-RIM: seed reimbursement schemes from MPCA Master Document
         from routes.reimbursement_schemes import seed_reimbursement_schemes
         await seed_reimbursement_schemes()
+        # Sprint M21: seed 13 RBAC roles + bootstrap 6 users from personas
+        from routes.rbac import seed_roles_and_permissions
+        await seed_roles_and_permissions()
     yield
     # ---- shutdown ----
     client.close()

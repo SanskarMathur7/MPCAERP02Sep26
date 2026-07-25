@@ -24,6 +24,7 @@ import {
     MapPin as MapPinIcon,
     UserCheck,
     ShieldCheck,
+    Shield,
 } from "lucide-react";
 
 const DASHBOARD_LINK = { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
@@ -59,6 +60,15 @@ const NAV_DOMAINS = [
             { to: "/venues", label: "Venues & Grounds", icon: MapPinIcon },
             { to: "/players", label: "Player Register", icon: Users },
             { to: "/match-officials", label: "Match Officials", icon: ShieldCheck },
+        ],
+    },
+    {
+        domain: "Governance",
+        // Only President / Secretary / Sys-Admin see this — filter applied in render.
+        state_only: true,
+        rbac_admin_only: true,
+        items: [
+            { to: "/access-control", label: "Access Control (RBAC)", icon: Shield },
         ],
     },
 ];
@@ -261,7 +271,15 @@ const AppLayout = ({ children }) => {
                     </ul>
                     )}
 
-                    {(persona?.id === "match-official" ? OFFICIAL_NAV_DOMAINS : NAV_DOMAINS).map((group) => (
+                    {(persona?.id === "match-official" ? OFFICIAL_NAV_DOMAINS : NAV_DOMAINS)
+                        .filter((group) => {
+                            // Governance / RBAC visible only to President, Secretary, Sys Admin (Q3a)
+                            if (group.rbac_admin_only) {
+                                return persona?.body_type === "State" && ["president", "secretary", "system-administrator"].includes(persona?.id);
+                            }
+                            return true;
+                        })
+                        .map((group) => (
                         <div key={group.domain} className="mb-6">
                             <div
                                 className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2"

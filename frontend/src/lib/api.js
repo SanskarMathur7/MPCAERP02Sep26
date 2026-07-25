@@ -24,6 +24,7 @@ api.interceptors.request.use((config) => {
             if (p?.body_type) config.headers["X-Body-Type"] = p.body_type;
             if (p?.name) config.headers["X-User-Name"] = p.name;
             if (p?.name) config.headers["X-Persona-Name"] = p.name;
+            if (p?.post) config.headers["X-Persona-Post"] = p.post;
         }
     } catch (_) { /* noop */ }
     return config;

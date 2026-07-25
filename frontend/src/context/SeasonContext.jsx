@@ -66,7 +66,7 @@ export const SeasonProvider = ({ children }) => {
     const setSeason = useCallback((next) => setSeasonState(next), []);
 
     return (
-        <SeasonContext.Provider value={{ season, setSeason, seasons: buildSeasonList(season) }}>
+        <SeasonContext.Provider value={{ season, setSeason, seasons: buildSeasonList(DEFAULT_SEASON) }}>
             {children}
         </SeasonContext.Provider>
     );

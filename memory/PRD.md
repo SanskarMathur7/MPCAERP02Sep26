@@ -916,3 +916,79 @@ POST   /api/tournaments/{tid}/participation-reminders/dispatch      (M26 E/F)
 - Cron/background reminder job (currently pull/manual dispatch only).
 - Server-side auth gate audit on the CSV endpoint.
 
+
+## Sprint M27 · Global Cricketing Season Filter · Feb 2026
+
+### Problem
+Every data list (tournaments, budgets, claims, calendar, participants, disclosures,
+meetings…) already carries a `fiscal_cycle` field, but the UI treated the value
+as a per-page detail. The user wants a **single top-right season selector** that
+pivots the entire ERP to a chosen cricketing season (Aug of year N → Jul of
+year N+1, labelled `YYYY-YY`).
+
+### What was built
+- **`SeasonContext`** (`/frontend/src/context/SeasonContext.jsx`) — React
+  context providing `{ season, setSeason, seasons }`. Persists to
+  `localStorage.mpca_season` + `window.__mpca_season`. Default = **2026-27**
+  (per user directive · Aug 2026 → Jul 2027). Rolling 7-season window
+  anchored on the DEFAULT (so options never drift when the user picks a
+  future/past season).
+- **`SeasonSwitcher`** (`/frontend/src/components/SeasonSwitcher.jsx`) —
+  top-right dropdown embedded in a sticky `app-topbar` above every protected
+  page. Dropdown change opens a portalled (`createPortal → document.body`)
+  confirmation modal with clear from → to text + "unsaved changes will be
+  lost" warning. Apply hard-reloads the current route so every list refetches
+  cleanly.
+- **Axios request interceptor** (`/frontend/src/lib/api.js`) —
+  auto-injects `?fiscal_cycle=<season>` into every GET request unless
+  (a) URL/params already contain fiscal_cycle, or (b) request header
+  `X-Season-Optout: 1`. Also forwards `X-Season` header for
+  header-based backends.
+- **New-record defaults** — 6 create forms (TournamentCreateModal,
+  TournamentBudgets, GrantClaims, VendorBills, Procurement, ClaimNew)
+  read `window.__mpca_season || "2026-27"` when initialising fiscal_cycle,
+  so newly-created records land in the currently-selected season.
+- **UI polish** — the Tournaments page stat-tile subtitle
+  "Cycle 2025-26 · state-wide" (hardcoded) now reads
+  `window.__mpca_season` for live label sync.
+
+### Cricketing-season boundary
+`currentCricketSeason(new Date())` uses `getMonth() >= 7` (Aug is month 7)
+to switch. So:
+- Feb 2026 → season `2025-26`
+- Aug 2026 → season `2026-27`
+- Jul 2027 → season `2026-27`
+- Aug 2027 → season `2027-28`
+
+### Test coverage
+- Backend `test_m27_season_filter.py` · 14/14 pass
+  (7 list endpoints filter by fiscal_cycle; 4 non-fiscal endpoints ignore it;
+  cross-season isolation via POST + GET).
+- Frontend Playwright · 15/15 smoke checks
+  (default 2026-27, portalled modal, cancel/apply, per-page presence).
+- M26 A→F regression · 21/21 pass (60/60 combined across M26+M27).
+
+### Data flow at a glance
+```
+User selects "2026-27" in SeasonSwitcher
+      ↓
+  localStorage.mpca_season = "2026-27"
+  window.__mpca_season      = "2026-27"
+      ↓
+Every subsequent api.get('...') → auto-adds ?fiscal_cycle=2026-27
+Every create form's default fiscal_cycle = "2026-27"
+      ↓
+Backend endpoints filter Mongo queries by fiscal_cycle
+      ↓
+All lists, dashboards, participants matrix scope to 2026-27
+```
+
+### Deferred (nice-to-have polish flagged in iter_46 review)
+- Replace `window.location.reload()` on switch with React-Query-style
+  invalidation for a smoother UX (currently kitchen-sink reload).
+- After Aug 2027 revisit `DEFAULT_SEASON` hard-coded to "2026-27".
+- Add a lint rule / CI test that greps every `fiscal_cycle:` literal in
+  frontend forms to prevent drift on new create screens.
+- Widen OpenAPI schema descriptions to document acceptable `scope`
+  values (Inter_Divisional / Inter_District / Championship / Invitational).
+

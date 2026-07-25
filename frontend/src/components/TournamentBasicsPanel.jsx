@@ -394,7 +394,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                     <div className="grid grid-cols-12 gap-2 items-end" data-testid="basics-ground-add-form">
                         <input list="basics-venues-list" placeholder="Venue name (pick or type)" className={`${inputCls} col-span-7`} value={newGround.venue_name} onChange={(e) => setNewGround({ ...newGround, venue_name: e.target.value })} data-testid="basics-ground-venue" />
                         <datalist id="basics-venues-list">
-                            {venues.slice(0, 200).map((v) => <option key={v.id} value={v.name}>{v.city} · {v.category}</option>)}
+                            {venues.slice(0, 200).map((v) => <option key={v.id} value={v.name} label={`${v.city} · ${v.category}`} />)}
                         </datalist>
                         <input placeholder="Ground (optional)" className={`${inputCls} col-span-4`} value={newGround.ground_name} onChange={(e) => setNewGround({ ...newGround, ground_name: e.target.value })} />
                         <button onClick={addGround} className="col-span-1 text-[10px] uppercase bg-mpca-oxblood text-mpca-ivory px-2 py-1.5" data-testid="basics-ground-add-btn"><Plus size={11} /></button>

@@ -394,6 +394,7 @@ class ClosureLetterPayload(BaseModel):
     issued_by_name: Optional[str] = None
     issued_by_post: Optional[str] = None
     additional_notes: Optional[str] = None
+    force: bool = False   # M26 Phase D · bypass closure-readiness guard
 
 
 @api_router.post("/tournaments/{tid}/closure-letter")
@@ -401,6 +402,26 @@ async def generate_closure_letter(tid: str, payload: ClosureLetterPayload):
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
+
+    # M26 Phase D · Closure guard — require every participant settled unless forced
+    active_participants = await db.tournament_participations.count_documents(
+        {"tournament_id": tid, "removed_at": None}
+    )
+    if active_participants > 0 and not getattr(payload, "force", False):
+        from routes.tournament_participations import closure_readiness  # local import to avoid cycles
+        readiness = await closure_readiness(tid)
+        if not readiness["ready_for_closure"]:
+            raise HTTPException(
+                409,
+                {
+                    "error": "not_ready_for_closure",
+                    "message": (
+                        f"{readiness['unsettled_count']} participant(s) still have "
+                        f"outstanding balances. Settle them or pass force=true to override."
+                    ),
+                    "unsettled": readiness["unsettled"],
+                },
+            )
 
     # Re-use the financial summary as the body of the letter
     fs = await tournament_financial_summary(tid)

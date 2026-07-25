@@ -327,3 +327,165 @@ async def resync_participants(tid: str):
     dist_pools = meta.get("district_pools") or []
     await sync_participants_from_pools(tid, div_pools, dist_pools)
     return {"resynced": True, "pool_count": len(div_pools) + len(dist_pools)}
+
+
+# ─────────────── Phase D · Roll-ups & Bulk NEFT ───────────────
+
+from fastapi import Body
+from fastapi.responses import PlainTextResponse
+import csv
+import io
+
+
+@api_router.get("/tournaments/{tid}/neft-batch")
+async def neft_batch_preview(tid: str):
+    """Returns participants with outstanding_inr > 0 along with their default
+    bank account so the Treasurer can preview a bulk NEFT batch before export."""
+    if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
+        raise HTTPException(404, "Tournament not found")
+
+    rows: List[Dict[str, Any]] = []
+    async for p in db.tournament_participations.find({"tournament_id": tid, "removed_at": None}, {"_id": 0}):
+        totals = await _totals_for_participant(tid, p["body_code"])
+        if totals["outstanding_inr"] <= 0:
+            continue
+        bank = await db.bank_accounts.find_one(
+            {"body_id": p["body_code"]}, {"_id": 0}, sort=[("created_at", -1)]
+        )
+        rows.append({
+            **p, **totals,
+            "bank_account": bank,
+            "ready_for_neft": bool(bank and bank.get("account_no") and bank.get("ifsc")),
+        })
+    return {
+        "tournament_id": tid,
+        "batch_count": len(rows),
+        "total_outstanding_inr": sum(r["outstanding_inr"] for r in rows),
+        "participants": rows,
+    }
+
+
+@api_router.post("/tournaments/{tid}/neft-export", response_class=PlainTextResponse)
+async def neft_export(
+    tid: str,
+    body_codes: List[str] = Body(..., embed=True),
+    recorded_by_name: Optional[str] = Body(None, embed=True),
+    remarks: Optional[str] = Body(None, embed=True),
+    dry_run: bool = Body(False, embed=True),
+):
+    """Generates a bank-ready NEFT CSV for the supplied participant body_codes.
+    Columns follow the standard SBI bulk-NEFT template. When dry_run=false, a
+    Tournament Receipt is created for each participant to mark the payment as
+    dispatched (mode='NEFT_Batch', reference_no=`NEFT-<tid6>-<batchseq>`)."""
+    tournament = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not tournament:
+        raise HTTPException(404, "Tournament not found")
+    if not body_codes:
+        raise HTTPException(400, "body_codes cannot be empty")
+
+    from routes.tournament_workspace import TournamentReceipt as _TR
+
+    # Batch sequence
+    batch_seq = (await db.tournament_receipts.count_documents({"tournament_id": tid, "mode": "NEFT_Batch"})) + 1
+    batch_ref = f"NEFT-{tid[:6].upper()}-B{batch_seq:03d}"
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    csv_buf = io.StringIO()
+    writer = csv.writer(csv_buf)
+    writer.writerow([
+        "SL_NO", "BODY_CODE", "BENEFICIARY_NAME", "ACCOUNT_NO", "IFSC",
+        "AMOUNT_INR", "PAYMENT_REF", "REMARKS",
+    ])
+
+    receipts_created = 0
+    skipped: List[Dict[str, str]] = []
+    for i, code in enumerate(body_codes, start=1):
+        p = await db.tournament_participations.find_one(
+            {"tournament_id": tid, "body_code": code, "removed_at": None}, {"_id": 0}
+        )
+        if not p:
+            skipped.append({"body_code": code, "reason": "participant not found"})
+            continue
+        totals = await _totals_for_participant(tid, code)
+        outstanding = totals["outstanding_inr"]
+        if outstanding <= 0:
+            skipped.append({"body_code": code, "reason": "no outstanding balance"})
+            continue
+        bank = await db.bank_accounts.find_one({"body_id": code}, {"_id": 0}, sort=[("created_at", -1)])
+        if not bank or not bank.get("account_no") or not bank.get("ifsc"):
+            skipped.append({"body_code": code, "reason": "missing bank account/IFSC"})
+            continue
+
+        writer.writerow([
+            i,
+            code,
+            (p.get("body_name") or code),
+            bank["account_no"],
+            bank["ifsc"],
+            f"{outstanding:.2f}",
+            f"{batch_ref}/{i:03d}",
+            remarks or f"MPCA reimbursement · {tournament.get('name','tournament')}",
+        ])
+
+        if not dry_run:
+            claim = None
+            if p.get("claim_id"):
+                claim = await db.tournament_reimbursement_claims.find_one({"id": p["claim_id"]}, {"_id": 0, "id": 1})
+            receipt = _TR(
+                tournament_id=tid,
+                participant_body_code=code,
+                receipt_no=f"MPCA-RCT-{tid[:6].upper()}-{batch_ref}-{i:03d}",
+                receipt_date=today,
+                amount_inr=outstanding,
+                mode="NEFT_Batch",
+                reference_no=batch_ref,
+                linked_claim_id=(claim or {}).get("id"),
+                remarks=(remarks or "MPCA bulk NEFT payment"),
+                recorded_by_name=recorded_by_name or "MPCA Treasurer",
+                recorded_at=now_iso,
+            )
+            await db.tournament_receipts.insert_one(receipt.model_dump())
+            receipts_created += 1
+
+    return PlainTextResponse(
+        content=csv_buf.getvalue(),
+        headers={
+            "Content-Disposition": f'attachment; filename="{batch_ref}.csv"',
+            "X-Batch-Ref": batch_ref,
+            "X-Rows-Exported": str(len(body_codes) - len(skipped)),
+            "X-Receipts-Created": str(receipts_created),
+            "X-Rows-Skipped": str(len(skipped)),
+        },
+        media_type="text/csv",
+    )
+
+
+# ─────────────── Phase D · Closure Guard ───────────────
+
+@api_router.get("/tournaments/{tid}/closure-readiness")
+async def closure_readiness(tid: str):
+    """Reports whether every active participant is settled (outstanding_inr == 0).
+    Consumed by the closure-letter workflow to gate issuance."""
+    if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
+        raise HTTPException(404, "Tournament not found")
+    total_active = 0
+    unsettled: List[Dict[str, Any]] = []
+    async for p in db.tournament_participations.find({"tournament_id": tid, "removed_at": None}, {"_id": 0}):
+        total_active += 1
+        totals = await _totals_for_participant(tid, p["body_code"])
+        if totals["outstanding_inr"] > 0.01:
+            unsettled.append({
+                "body_code": p["body_code"],
+                "body_name": p.get("body_name"),
+                "role": p["role"],
+                "outstanding_inr": totals["outstanding_inr"],
+                "acceptance_status": p["acceptance_status"],
+            })
+    return {
+        "tournament_id": tid,
+        "total_active": total_active,
+        "unsettled_count": len(unsettled),
+        "unsettled": unsettled,
+        "ready_for_closure": len(unsettled) == 0,
+    }

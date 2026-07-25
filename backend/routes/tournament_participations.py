@@ -28,6 +28,61 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.infra import db, api_router
 
 
+# ─── Phase E · Notification helper ───
+async def _notify_participation(
+    body_code: str,
+    body_type: str,
+    tournament: Optional[Dict[str, Any]],
+    title: str,
+    message: str,
+    *, severity: str = "info", link: Optional[str] = None,
+) -> None:
+    """Fire a notification to the *Secretary* of the participating body (Division /
+    District). Wrapped in try/except so a notification failure never blocks the
+    core participation flow."""
+    try:
+        from core.helpers import _create_notification
+        role_id = "district-secretary" if body_type == "District" else "division-secretary"
+        await _create_notification(
+            recipient_role_id=role_id,
+            recipient_body_id=body_code,
+            title=title,
+            message=message,
+            link=link or (f"/tournaments/{tournament.get('id')}" if tournament else None),
+            related_type="tournament_participation",
+            related_id=tournament.get("id") if tournament else None,
+            severity=severity,
+            kind="claim_event",
+        )
+    except Exception:  # pragma: no cover — non-blocking best-effort
+        pass
+
+
+async def _notify_mpca(
+    tournament: Optional[Dict[str, Any]],
+    title: str,
+    message: str,
+    *, severity: str = "info", link: Optional[str] = None,
+) -> None:
+    """Fire a notification to the MPCA Secretary (State-level) about a
+    participant lifecycle transition."""
+    try:
+        from core.helpers import _create_notification
+        await _create_notification(
+            recipient_role_id="secretary",
+            recipient_body_id="MPCA",
+            title=title,
+            message=message,
+            link=link or (f"/tournaments/{tournament.get('id')}" if tournament else None),
+            related_type="tournament_participation",
+            related_id=tournament.get("id") if tournament else None,
+            severity=severity,
+            kind="claim_event",
+        )
+    except Exception:  # pragma: no cover
+        pass
+
+
 # ─────────────────────────── Models ───────────────────────────
 
 class TournamentParticipation(BaseModel):
@@ -92,6 +147,7 @@ async def sync_participants_from_pools(
 
     now_iso = datetime.now(timezone.utc).isoformat()
     kept_codes: set = set()
+    newly_added: List[Dict[str, Any]] = []
 
     for pool in merged_pools:
         pool_id = pool.get("id")
@@ -125,6 +181,10 @@ async def sync_participants_from_pools(
             else:
                 row = TournamentParticipation(**update_doc)
                 await db.tournament_participations.insert_one(row.model_dump())
+                newly_added.append({
+                    "body_code": code, "body_name": row.body_name,
+                    "body_type": row.body_type, "role": row.role, "pool_name": pool_name,
+                })
 
     # Soft-delete rows that fell out of the pools
     await db.tournament_participations.update_many(
@@ -135,6 +195,24 @@ async def sync_participants_from_pools(
         },
         {"$set": {"removed_at": now_iso, "updated_at": now_iso}},
     )
+
+    # Phase E · Send acceptance-request notifications for every newly-added row
+    if newly_added:
+        tournament = await db.tournaments.find_one({"id": tid}, {"_id": 0, "id": 1, "name": 1})
+        for np in newly_added:
+            role_line = "as HOST" if np["role"] == "Host" else "as visitor"
+            await _notify_participation(
+                body_code=np["body_code"],
+                body_type=np["body_type"],
+                tournament=tournament,
+                title=f"Invited to {tournament.get('name') if tournament else 'tournament'}",
+                message=(
+                    f"Your {np['body_type'].lower()} has been allocated to {np['pool_name']} "
+                    f"{role_line}. Please open the Tournament Participants page and record your "
+                    f"acceptance so budget/claim workflows unlock."
+                ),
+                severity="warning",
+            )
 
 
 # ───────────────────────── Derivations ─────────────────────────
@@ -312,6 +390,17 @@ async def patch_tournament_participant(tid: str, body_code: str, patch: Particip
     row = await db.tournament_participations.find_one(
         {"tournament_id": tid, "body_code": body_code}, {"_id": 0}
     )
+    # Phase E · Notify MPCA when a participant flips Accepted / Declined
+    if updates.get("acceptance_status") in {"Accepted", "Declined"}:
+        tournament = await db.tournaments.find_one({"id": tid}, {"_id": 0, "id": 1, "name": 1})
+        actor = updates.get("acceptance_by_name") or "the participant secretary"
+        verb = updates["acceptance_status"].lower()
+        await _notify_mpca(
+            tournament=tournament,
+            title=f"{row.get('body_name') or body_code} {verb} · {tournament.get('name') if tournament else 'tournament'}",
+            message=f"{row.get('body_name') or body_code} ({row.get('role')}) has {verb} the invite (by {actor}).",
+            severity=("info" if updates["acceptance_status"] == "Accepted" else "warning"),
+        )
     totals = await _totals_for_participant(tid, body_code)
     return {**row, **totals}
 
@@ -435,7 +524,7 @@ async def neft_export(
             receipt = _TR(
                 tournament_id=tid,
                 participant_body_code=code,
-                receipt_no=f"MPCA-RCT-{tid[:6].upper()}-{batch_ref}-{i:03d}",
+                receipt_no=f"MPCA-RCT-{batch_ref}-{i:03d}",
                 receipt_date=today,
                 amount_inr=outstanding,
                 mode="NEFT_Batch",
@@ -489,3 +578,116 @@ async def closure_readiness(tid: str):
         "unsettled": unsettled,
         "ready_for_closure": len(unsettled) == 0,
     }
+
+
+# ─────────────── Phase E · Reminders (pull-based) ───────────────
+
+@api_router.get("/tournaments/{tid}/participation-reminders")
+async def participation_reminders(tid: str):
+    """Computes overdue lifecycle actions per participant.
+
+    Returns a list where each entry is { body_code, body_name, role, reasons: [str] }.
+    Reasons include: 'awaiting_acceptance' (Pending > 7d), 'no_budget'
+    (Accepted but no budget row), 'no_claim_after_end' (tournament end passed &
+    no claim), 'unsettled' (approved claim > receipts)."""
+    from datetime import datetime as _dt
+    t = await db.tournaments.find_one(
+        {"id": tid}, {"_id": 0, "id": 1, "name": 1, "end_date": 1, "start_date": 1}
+    )
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+
+    now = _dt.now(timezone.utc)
+    end_date_str = t.get("end_date")
+    end_date = None
+    if end_date_str:
+        try:
+            end_date = _dt.fromisoformat(end_date_str.replace("Z", "+00:00"))
+            if end_date.tzinfo is None:
+                end_date = end_date.replace(tzinfo=timezone.utc)
+        except Exception:
+            end_date = None
+
+    reminders: List[Dict[str, Any]] = []
+    async for p in db.tournament_participations.find({"tournament_id": tid, "removed_at": None}, {"_id": 0}):
+        reasons: List[str] = []
+        # 1 · Pending acceptance for > 7 days
+        if p.get("acceptance_status") == "Pending":
+            created = p.get("created_at")
+            try:
+                created_dt = _dt.fromisoformat(created.replace("Z", "+00:00")) if created else None
+                if created_dt and created_dt.tzinfo is None:
+                    created_dt = created_dt.replace(tzinfo=timezone.utc)
+                age_days = (now - created_dt).days if created_dt else 0
+                if age_days >= 7:
+                    reasons.append("awaiting_acceptance")
+            except Exception:
+                pass
+        # 2 · Accepted but no budget row
+        if p.get("acceptance_status") == "Accepted" and not p.get("budget_id"):
+            reasons.append("no_budget")
+        # 3 · Tournament ended, still no claim
+        if end_date and now > end_date and not p.get("claim_id"):
+            reasons.append("no_claim_after_end")
+        # 4 · Unsettled outstanding
+        totals = await _totals_for_participant(tid, p["body_code"])
+        if totals["outstanding_inr"] > 0.01:
+            reasons.append("unsettled")
+
+        if reasons:
+            reminders.append({
+                "body_code": p["body_code"],
+                "body_name": p.get("body_name"),
+                "body_type": p.get("body_type"),
+                "role": p.get("role"),
+                "acceptance_status": p.get("acceptance_status"),
+                "outstanding_inr": totals["outstanding_inr"],
+                "reasons": reasons,
+            })
+    return {
+        "tournament_id": tid,
+        "tournament_name": t.get("name"),
+        "generated_at": now.isoformat(),
+        "reminder_count": len(reminders),
+        "reminders": reminders,
+    }
+
+
+@api_router.post("/tournaments/{tid}/participation-reminders/dispatch")
+async def dispatch_participation_reminders(tid: str):
+    """Fires an in-app notification for every overdue reason. Idempotent — the
+    Treasurer / Secretary can hit this manually or a nightly job can hit it.
+    Returns { dispatched_count }."""
+    data = await participation_reminders(tid)
+    tournament = await db.tournaments.find_one({"id": tid}, {"_id": 0, "id": 1, "name": 1})
+    dispatched = 0
+    reason_titles = {
+        "awaiting_acceptance": ("Acceptance overdue", "warning"),
+        "no_budget": ("Budget not filed", "warning"),
+        "no_claim_after_end": ("Claim overdue", "critical"),
+        "unsettled": ("Outstanding balance", "info"),
+    }
+    for r in data["reminders"]:
+        for reason in r["reasons"]:
+            title, severity = reason_titles.get(reason, (reason, "info"))
+            if reason == "unsettled":
+                await _notify_mpca(
+                    tournament=tournament,
+                    title=f"{title} · {r['body_name']}",
+                    message=(
+                        f"₹{r['outstanding_inr']:.0f} outstanding to {r['body_name']} for "
+                        f"{tournament.get('name') if tournament else 'this tournament'}."
+                    ),
+                    severity=severity,
+                )
+            else:
+                await _notify_participation(
+                    body_code=r["body_code"],
+                    body_type=r["body_type"] or "Division",
+                    tournament=tournament,
+                    title=f"{title} · {tournament.get('name') if tournament else 'tournament'}",
+                    message=f"Action required — reason: {reason.replace('_', ' ')}.",
+                    severity=severity,
+                )
+            dispatched += 1
+    return {"dispatched_count": dispatched, "reminder_count": data["reminder_count"]}

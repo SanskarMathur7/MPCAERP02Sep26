@@ -1,5 +1,5 @@
 import { useEffect, useState, Fragment } from "react";
-import { RefreshCw, Home, Plane, Loader2, Check, X, Info, ChevronDown, ChevronRight, ExternalLink, Landmark, ShieldCheck, ShieldAlert } from "lucide-react";
+import { RefreshCw, Home, Plane, Loader2, Check, X, Info, ChevronDown, ChevronRight, ExternalLink, Landmark, ShieldCheck, ShieldAlert, BellRing } from "lucide-react";
 import { api } from "@/lib/api";
 
 const fmtInr = (n) => {
@@ -53,6 +53,9 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
     const [neftSelected, setNeftSelected] = useState({}); // body_code -> bool
     const [neftBusy, setNeftBusy] = useState(false);
     const [readiness, setReadiness] = useState(null);
+    // Phase E · reminders
+    const [reminders, setReminders] = useState(null);
+    const [reminderBusy, setReminderBusy] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -61,6 +64,8 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
             setRows(data || []);
             // Phase D · fetch closure readiness in parallel (fire-and-forget)
             api.get(`/tournaments/${tournament.id}/closure-readiness`).then((r) => setReadiness(r.data)).catch(() => {});
+            // Phase E · fetch reminders
+            api.get(`/tournaments/${tournament.id}/participation-reminders`).then((r) => setReminders(r.data)).catch(() => {});
         } catch (e) { setErr(e?.response?.data?.detail || e.message); }
         finally { setLoading(false); }
     };
@@ -90,6 +95,19 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
             onChange?.();
         } catch (e) { setErr(e?.response?.data?.detail || e.message); }
         finally { setBusyCode(null); }
+    };
+
+    // Phase E · dispatch reminders
+    const dispatchReminders = async () => {
+        setReminderBusy(true);
+        setErr("");
+        try {
+            const { data } = await api.post(`/tournaments/${tournament.id}/participation-reminders/dispatch`);
+            setErr(""); // clear
+            // Show success toast-ish inline
+            setReminders((r) => r ? { ...r, _last_dispatched: data.dispatched_count } : r);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setReminderBusy(false); }
     };
 
     // ─── Phase D · Bulk NEFT helpers ────────────────────
@@ -170,6 +188,9 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
                         <input type="checkbox" checked={showHistory} onChange={(e) => setShowHistory(e.target.checked)} data-testid="participants-history-toggle" />
                         Show removed history
                     </label>
+                    <button onClick={dispatchReminders} disabled={reminderBusy || !canManage || (reminders?.reminder_count || 0) === 0} className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" title={`Send ${reminders?.reminder_count || 0} reminder(s) to lagging bodies`} data-testid="participants-reminders-btn">
+                        {reminderBusy ? <Loader2 size={11} className="animate-spin" /> : <BellRing size={11} />} Reminders {reminders?.reminder_count ? `(${reminders.reminder_count})` : ""}
+                    </button>
                     <button onClick={openNeft} disabled={!canManage || totalOutstanding <= 0} className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-gold-light px-2 py-1 flex items-center gap-1 disabled:opacity-40" title="Generate NEFT batch for outstanding participants" data-testid="participants-neft-btn">
                         <Landmark size={11} /> Bulk NEFT
                     </button>
@@ -188,6 +209,26 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
                     <span className="text-mpca-gray-dark">
                         · {readiness.total_active} active · {readiness.unsettled_count} unsettled
                     </span>
+                </div>
+            )}
+
+            {reminders && reminders.reminder_count > 0 && (
+                <div className="text-[11px] border border-mpca-brass/30 bg-mpca-brass/5 text-mpca-brass px-3 py-1.5 space-y-1" data-testid="participants-reminders-summary">
+                    <div className="flex items-center gap-2 uppercase tracking-widest text-[9px] font-semibold">
+                        <BellRing size={11} /> {reminders.reminder_count} Lifecycle Reminder(s)
+                        {reminders._last_dispatched != null && (
+                            <span className="text-mpca-green-dark ml-2">✓ {reminders._last_dispatched} dispatched</span>
+                        )}
+                    </div>
+                    <div className="text-mpca-charcoal text-[10px]">
+                        {reminders.reminders.slice(0, 4).map((r) => (
+                            <div key={r.body_code} data-testid={`participants-reminder-${r.body_code}`}>
+                                <b>{r.body_name}</b> ({r.role}) · {r.reasons.map((rs) => rs.replace(/_/g, " ")).join(", ")}
+                                {r.outstanding_inr > 0 && <span className="text-mpca-oxblood ml-1">· ₹{Number(r.outstanding_inr).toLocaleString("en-IN")}</span>}
+                            </div>
+                        ))}
+                        {reminders.reminders.length > 4 && <div className="italic">+{reminders.reminders.length - 4} more…</div>}
+                    </div>
                 </div>
             )}
 

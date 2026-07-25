@@ -1,5 +1,5 @@
 import { useEffect, useState, Fragment } from "react";
-import { RefreshCw, Home, Plane, Loader2, Check, X, Info, ChevronDown, ChevronRight, ExternalLink, Landmark, ShieldCheck, ShieldAlert, BellRing } from "lucide-react";
+import { RefreshCw, Home, Plane, Loader2, Check, X, Info, ChevronDown, ChevronRight, ExternalLink, Landmark, ShieldCheck, ShieldAlert, BellRing, Download } from "lucide-react";
 import { api } from "@/lib/api";
 
 const fmtInr = (n) => {
@@ -62,10 +62,10 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
         try {
             const { data } = await api.get(`/tournaments/${tournament.id}/participants`, { params: { include_removed: showHistory } });
             setRows(data || []);
-            // Phase D · fetch closure readiness in parallel (fire-and-forget)
-            api.get(`/tournaments/${tournament.id}/closure-readiness`).then((r) => setReadiness(r.data)).catch(() => {});
+            // Phase D · fetch closure readiness in parallel
+            api.get(`/tournaments/${tournament.id}/closure-readiness`).then((r) => setReadiness(r.data)).catch((e) => setErr((prev) => prev || `readiness: ${e?.response?.data?.detail || e.message}`));
             // Phase E · fetch reminders
-            api.get(`/tournaments/${tournament.id}/participation-reminders`).then((r) => setReminders(r.data)).catch(() => {});
+            api.get(`/tournaments/${tournament.id}/participation-reminders`).then((r) => setReminders(r.data)).catch((e) => setErr((prev) => prev || `reminders: ${e?.response?.data?.detail || e.message}`));
         } catch (e) { setErr(e?.response?.data?.detail || e.message); }
         finally { setLoading(false); }
     };
@@ -191,6 +191,9 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
                     <button onClick={dispatchReminders} disabled={reminderBusy || !canManage || (reminders?.reminder_count || 0) === 0} className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" title={`Send ${reminders?.reminder_count || 0} reminder(s) to lagging bodies`} data-testid="participants-reminders-btn">
                         {reminderBusy ? <Loader2 size={11} className="animate-spin" /> : <BellRing size={11} />} Reminders {reminders?.reminder_count ? `(${reminders.reminder_count})` : ""}
                     </button>
+                    <a href={`${api.defaults.baseURL}/tournaments/${tournament.id}/participants.csv`} target="_blank" rel="noreferrer" className="text-[10px] uppercase tracking-widest border border-mpca-brass/40 text-mpca-brass px-2 py-1 flex items-center gap-1 hover:bg-mpca-brass/10" title="Download participants matrix as CSV" data-testid="participants-export-csv-btn">
+                        <Download size={11} /> CSV
+                    </a>
                     <button onClick={openNeft} disabled={!canManage || totalOutstanding <= 0} className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-gold-light px-2 py-1 flex items-center gap-1 disabled:opacity-40" title="Generate NEFT batch for outstanding participants" data-testid="participants-neft-btn">
                         <Landmark size={11} /> Bulk NEFT
                     </button>

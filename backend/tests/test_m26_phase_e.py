@@ -255,7 +255,8 @@ class TestDispatchReminders:
             "title": {"$regex": "^Outstanding balance"},
         })
 
-    def test_dispatch_is_idempotent_and_repeatable(self, s, db):
+    def test_dispatch_second_call_is_deduped_within_10min(self, s, db):
+        # Phase F: dispatch dedupes within 10min window
         db.notifications.delete_many({
             "related_type": "tournament_participation",
             "related_id": MY_MEMORIAL_TID,
@@ -263,15 +264,16 @@ class TestDispatchReminders:
         })
         r1 = s.post(f"{BASE_URL}/api/tournaments/{MY_MEMORIAL_TID}/participation-reminders/dispatch").json()
         r2 = s.post(f"{BASE_URL}/api/tournaments/{MY_MEMORIAL_TID}/participation-reminders/dispatch").json()
-        # Second call fires same batch again (manual, non-dedup)
-        assert r2["dispatched_count"] == r1["dispatched_count"]
-        # notifications count should have doubled for outstanding-balance topic
+        assert r1["dispatched_count"] >= 1
+        assert r2["dispatched_count"] == 0
+        assert r2.get("deduped_count", 0) >= 1
+        # notifications count should NOT have doubled
         cnt = db.notifications.count_documents({
             "related_type": "tournament_participation",
             "related_id": MY_MEMORIAL_TID,
             "title": {"$regex": "^Outstanding balance"},
         })
-        assert cnt >= 2 * max(1, r1["dispatched_count"] and 1)  # at least 2 (fired twice)
+        assert cnt == r1["dispatched_count"]
         db.notifications.delete_many({
             "related_type": "tournament_participation",
             "related_id": MY_MEMORIAL_TID,

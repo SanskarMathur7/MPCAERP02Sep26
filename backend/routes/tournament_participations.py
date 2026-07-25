@@ -657,10 +657,17 @@ async def participation_reminders(tid: str):
 async def dispatch_participation_reminders(tid: str):
     """Fires an in-app notification for every overdue reason. Idempotent — the
     Treasurer / Secretary can hit this manually or a nightly job can hit it.
-    Returns { dispatched_count }."""
+    Returns { dispatched_count, deduped_count }.
+
+    Phase F · dedup — skips any notification whose (recipient, title) already
+    exists in the past 10 minutes, so a Treasurer double-clicking the Reminders
+    button does not spam the inbox."""
+    from datetime import timedelta
     data = await participation_reminders(tid)
     tournament = await db.tournaments.find_one({"id": tid}, {"_id": 0, "id": 1, "name": 1})
     dispatched = 0
+    deduped = 0
+    dedup_after = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
     reason_titles = {
         "awaiting_acceptance": ("Acceptance overdue", "warning"),
         "no_budget": ("Budget not filed", "warning"),
@@ -671,23 +678,142 @@ async def dispatch_participation_reminders(tid: str):
         for reason in r["reasons"]:
             title, severity = reason_titles.get(reason, (reason, "info"))
             if reason == "unsettled":
+                full_title = f"{title} · {r['body_name']}"
+                recipient_role, recipient_body = "secretary", "MPCA"
+                message = (
+                    f"₹{r['outstanding_inr']:.0f} outstanding to {r['body_name']} for "
+                    f"{tournament.get('name') if tournament else 'this tournament'}."
+                )
+            else:
+                full_title = f"{title} · {tournament.get('name') if tournament else 'tournament'}"
+                recipient_role = "district-secretary" if r["body_type"] == "District" else "division-secretary"
+                recipient_body = r["body_code"]
+                message = f"Action required — reason: {reason.replace('_', ' ')}."
+
+            # Dedup check
+            recent = await db.notifications.find_one({
+                "recipient_role_id": recipient_role,
+                "recipient_body_id": recipient_body,
+                "title": full_title,
+                "related_type": "tournament_participation",
+                "related_id": tid,
+                "created_at": {"$gt": dedup_after},
+            }, {"_id": 1})
+            if recent:
+                deduped += 1
+                continue
+
+            if reason == "unsettled":
                 await _notify_mpca(
-                    tournament=tournament,
-                    title=f"{title} · {r['body_name']}",
-                    message=(
-                        f"₹{r['outstanding_inr']:.0f} outstanding to {r['body_name']} for "
-                        f"{tournament.get('name') if tournament else 'this tournament'}."
-                    ),
-                    severity=severity,
+                    tournament=tournament, title=full_title, message=message, severity=severity,
                 )
             else:
                 await _notify_participation(
-                    body_code=r["body_code"],
-                    body_type=r["body_type"] or "Division",
-                    tournament=tournament,
-                    title=f"{title} · {tournament.get('name') if tournament else 'tournament'}",
-                    message=f"Action required — reason: {reason.replace('_', ' ')}.",
-                    severity=severity,
+                    body_code=r["body_code"], body_type=r["body_type"] or "Division",
+                    tournament=tournament, title=full_title, message=message, severity=severity,
                 )
             dispatched += 1
-    return {"dispatched_count": dispatched, "reminder_count": data["reminder_count"]}
+    return {
+        "dispatched_count": dispatched,
+        "deduped_count": deduped,
+        "reminder_count": data["reminder_count"],
+    }
+
+
+# ─────────────── Phase F · CSV / Excel export & Variance ───────────────
+
+@api_router.get("/tournaments/{tid}/participants.csv", response_class=PlainTextResponse)
+async def export_participants_csv(tid: str):
+    """Exports the Participants Matrix as a governance-ready CSV so MPCA can
+    attach it to closure documentation or share with an auditor."""
+    tournament = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not tournament:
+        raise HTTPException(404, "Tournament not found")
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["MPCA · Tournament Participants Matrix"])
+    writer.writerow([f"Tournament: {tournament.get('name', tid)} · Scope: {tournament.get('scope', '—')} · Cycle: {tournament.get('fiscal_cycle', '—')}"])
+    writer.writerow([f"Generated: {datetime.now(timezone.utc).isoformat()}"])
+    writer.writerow([])
+    writer.writerow([
+        "BODY_CODE", "BODY_NAME", "BODY_TYPE", "ROLE", "POOL",
+        "ACCEPTANCE", "ACCEPTED_AT", "ACCEPTED_BY",
+        "BUDGET_INR", "BUDGET_STATUS",
+        "INVOICES_INR", "INVOICE_COUNT",
+        "CLAIM_INR", "CLAIM_STATUS",
+        "RECEIVED_INR", "OUTSTANDING_INR", "VARIANCE_INR",
+        "REMOVED_AT",
+    ])
+
+    grand_budget = 0.0
+    grand_inv = 0.0
+    grand_claim = 0.0
+    grand_recv = 0.0
+    grand_out = 0.0
+
+    async for p in db.tournament_participations.find({"tournament_id": tid}, {"_id": 0}).sort([("removed_at", 1), ("role", -1), ("body_name", 1)]):
+        totals = await _totals_for_participant(tid, p["body_code"])
+        variance = totals["budget_total_inr"] - totals["invoice_total_inr"]
+        writer.writerow([
+            p["body_code"], p.get("body_name") or "", p.get("body_type") or "", p.get("role") or "",
+            p.get("pool_name") or "",
+            p.get("acceptance_status") or "", p.get("acceptance_at") or "", p.get("acceptance_by_name") or "",
+            f"{totals['budget_total_inr']:.2f}", totals.get("budget_status") or "",
+            f"{totals['invoice_total_inr']:.2f}", str(totals["invoice_count"]),
+            f"{totals['claim_requested_inr']:.2f}", totals.get("claim_status") or "",
+            f"{totals['receipt_total_inr']:.2f}", f"{totals['outstanding_inr']:.2f}", f"{variance:.2f}",
+            p.get("removed_at") or "",
+        ])
+        if not p.get("removed_at"):
+            grand_budget += totals["budget_total_inr"]
+            grand_inv += totals["invoice_total_inr"]
+            grand_claim += totals["claim_requested_inr"]
+            grand_recv += totals["receipt_total_inr"]
+            grand_out += totals["outstanding_inr"]
+
+    writer.writerow([])
+    writer.writerow([
+        "TOTALS", "", "", "", "", "", "", "",
+        f"{grand_budget:.2f}", "",
+        f"{grand_inv:.2f}", "",
+        f"{grand_claim:.2f}", "",
+        f"{grand_recv:.2f}", f"{grand_out:.2f}", f"{grand_budget - grand_inv:.2f}",
+        "",
+    ])
+
+    fname = f"MPCA-Participants-{tid[:6].upper()}-{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+    return PlainTextResponse(
+        content=buf.getvalue(),
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+        media_type="text/csv",
+    )
+
+
+@api_router.get("/tournaments/{tid}/variance-summary")
+async def participants_variance_summary(tid: str):
+    """Returns per-participant variance analytics for the Financial Summary view."""
+    if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
+        raise HTTPException(404, "Tournament not found")
+    rows: List[Dict[str, Any]] = []
+    async for p in db.tournament_participations.find({"tournament_id": tid, "removed_at": None}, {"_id": 0}):
+        t = await _totals_for_participant(tid, p["body_code"])
+        budget = t["budget_total_inr"]
+        invoices = t["invoice_total_inr"]
+        variance = budget - invoices
+        utilisation = (invoices / budget * 100) if budget > 0 else 0.0
+        rows.append({
+            "body_code": p["body_code"], "body_name": p.get("body_name"), "role": p["role"],
+            "budget_inr": budget, "invoice_inr": invoices,
+            "variance_inr": variance, "utilisation_pct": round(utilisation, 1),
+            "over_budget": variance < 0,
+        })
+    totals = {
+        "budget_inr": sum(r["budget_inr"] for r in rows),
+        "invoice_inr": sum(r["invoice_inr"] for r in rows),
+    }
+    totals["variance_inr"] = totals["budget_inr"] - totals["invoice_inr"]
+    totals["utilisation_pct"] = round(
+        (totals["invoice_inr"] / totals["budget_inr"] * 100) if totals["budget_inr"] > 0 else 0.0, 1
+    )
+    return {"tournament_id": tid, "participants": rows, "totals": totals}

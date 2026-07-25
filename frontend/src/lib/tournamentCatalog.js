@@ -7,115 +7,23 @@
  * with `tournament_type_code` set for downstream input-variable forms.
  */
 
+/**
+ * Sprint M22 · Tournament Type Catalog with RBAC classification
+ *
+ * `created_by`  — which body-type persona is allowed to CREATE this type.
+ *                 MPCA-level personas ("State") vs Division/District personas.
+ * `section`     — grouping in the type-picker per user's mockup:
+ *                 "BCCI ALLOTS TO MPCA"
+ *                 "MPCA ALLOTS TO DIVISION"
+ *                 "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS"
+ * `flow`        — origin → recipient hint ("BCCI → MPCA", "MPCA → Division",
+ *                 "Division → District", etc.), rendered as a chip on each card.
+ *
+ * Rule per user brief (screenshot):
+ *   MPCA-level personas create: bcci_staging, away_participation, inter_div
+ *   Division/District personas create: everything else (8 types)
+ */
 export const TOURNAMENT_TYPE_CATALOG = [
-    {
-        code: "inter_div",
-        scheme_code: "2-B",
-        name: "MPCA Inter-Divisional Tournament",
-        family: "MPCA_InterDivisional",
-        default_format: "Multi_Day",
-        default_scope: "Inter_Divisional",
-        icon: "trophy",
-        one_liner: "State-level trophies played between MPCA Divisions (MY Memorial, Madhavrao Scindia, JN Bhaya).",
-        input_hint: "Pools & hosts, days per match, knockout structure, prize incentives.",
-        eligible_hosts: ["MPCA", "Division"],
-    },
-    {
-        code: "inter_district",
-        scheme_code: "2-A",
-        name: "Inter-District Tournament",
-        family: "MPCA_InterDivisional",
-        default_format: "Multi_Day",
-        default_scope: "Inter_District",
-        icon: "shield",
-        one_liner: "Compulsory Division-level tournament between constituent Districts.",
-        input_hint: "Per-day ceilings (INR 28k one-team, 39k both-teams), umpires, ground rent.",
-        eligible_hosts: ["Division"],
-    },
-    {
-        code: "inter_div_travel",
-        scheme_code: "2-C",
-        name: "Inter-Divisional Participation (Travel Subsidy)",
-        family: "MPCA_InterDivisional",
-        default_format: "Multi_Day",
-        default_scope: "Inter_Divisional",
-        icon: "route",
-        one_liner: "Travel subsidy claim when a Division plays away in an MPCA Inter-Divisional tournament.",
-        input_hint: "III-tier AC rail fare, feeder legs from District HQ, Tatkal premium.",
-        eligible_hosts: ["Division"],
-    },
-    {
-        code: "pre_camp",
-        scheme_code: "3-D",
-        name: "Pre-Tournament Camp (Divisional Team)",
-        family: "MPCA_InterDivisional",
-        default_format: "Multi_Day",
-        default_scope: "Inter_Divisional",
-        icon: "dumbbell",
-        one_liner: "8-day camp ahead of an Inter-Divisional tournament (league or knockout stage).",
-        input_hint: "Camp days ≤ 8, players 18-20, coach + trainer honoraria, medical actuals.",
-        eligible_hosts: ["Division"],
-    },
-    {
-        code: "reciprocal",
-        scheme_code: null,   // uses fallback / actuals
-        name: "Reciprocal Matches Between Divisions",
-        family: "MPCA_InterDivisional",
-        default_format: "Multi_Day",
-        default_scope: "Inter_Divisional",
-        icon: "arrow-left-right",
-        one_liner: "Bilateral 2-day matches between two Divisions in a specific age group.",
-        input_hint: "Total camp+reciprocal days ≤ 8, host claims stay + food + officials.",
-        eligible_hosts: ["Division"],
-    },
-    {
-        code: "coaching_camp",
-        scheme_code: "3-A",
-        name: "Periodical Coaching Camp (District Players)",
-        family: "MPCA_InterDivisional",
-        default_format: "Multi_Day",
-        default_scope: "Inter_District",
-        icon: "notebook-pen",
-        one_liner: "Two-week coaching camp for district-level players run by a Division.",
-        input_hint: "Camp days ~14, ₹15k misc cap, prior MPCA notification mandatory.",
-        eligible_hosts: ["Division"],
-    },
-    {
-        code: "vacation_camp",
-        scheme_code: null,
-        name: "Vacation Camp",
-        family: "MPCA_InterDivisional",
-        default_format: "Multi_Day",
-        default_scope: "Inter_District",
-        icon: "sun",
-        one_liner: "Vacation-window camp (typically 2-3 weeks) with outstation + local players.",
-        input_hint: "Free of charge to players — Secretary's undertaking required.",
-        eligible_hosts: ["Division"],
-    },
-    {
-        code: "inter_school",
-        scheme_code: null,
-        name: "Inter-School Tournament",
-        family: "Invitational",
-        default_format: "One_Day",
-        default_scope: "Inter_District",
-        icon: "graduation-cap",
-        one_liner: "Boys/Girls knockout — up to 12 schools at Div HQ, 8 at a District.",
-        input_hint: "25 ov (till SF), 50 ov (SF+F), ₹5k grant/day, entry fee ₹1.5k/team.",
-        eligible_hosts: ["Division", "District"],
-    },
-    {
-        code: "inter_club",
-        scheme_code: null,
-        name: "Inter-Club Tournament ('A' Grade)",
-        family: "Invitational",
-        default_format: "Multi_Day",
-        default_scope: "Inter_District",
-        icon: "flag",
-        one_liner: "Two-day knockout among 10-12 'A' grade clubs of a Division.",
-        input_hint: "Only two-day knockout reimbursed; outstation clubs get stay+food+travel.",
-        eligible_hosts: ["Division"],
-    },
     {
         code: "bcci_staging",
         scheme_code: "2-D",
@@ -123,10 +31,13 @@ export const TOURNAMENT_TYPE_CATALOG = [
         family: "BCCI",
         default_format: "FiveDay",
         default_scope: "Championship",
-        icon: "shield-check",
-        one_liner: "Hosting a BCCI tournament (Ranji, CK Nayudu, U-19 etc.) at an MPCA venue.",
+        one_liner: "Allotted by BCCI under the rotation format and staged by MPCA at Indore or Gwalior. Hosting fee and participation subsidy are receivable from BCCI; all staging arrangements are the host association's cost.",
         input_hint: "Host fee ₹1.75L/day multi-day, ₹3.5-4.5L limited-overs; cars, anti-doping room.",
-        eligible_hosts: ["MPCA", "Division"],
+        eligible_hosts: ["MPCA"],
+        created_by: ["State"],                       // MPCA only
+        section: "BCCI ALLOTS TO MPCA",
+        flow: "BCCI → MPCA",
+        scheme_ref: "BCCI Guidelines to Staging Associations 2025-26",
     },
     {
         code: "away_participation",
@@ -135,14 +46,188 @@ export const TOURNAMENT_TYPE_CATALOG = [
         family: "BCCI",
         default_format: "FiveDay",
         default_scope: "Championship",
-        icon: "plane",
-        one_liner: "MP team travelling to another State for a BCCI tournament.",
+        one_liner: "The MP team travelling to another state for a BCCI fixture. Participation subsidy is receivable per match; the travelling squad's own travel, hotel and allowances are billed to MPCA, so a tour runs at a net cost.",
         input_hint: "Air/rail fare + hotel ₹3.4k/night + ₹500/day allowance + subsidy receivable.",
         eligible_hosts: ["MPCA"],
+        created_by: ["State"],                       // MPCA only
+        section: "BCCI ALLOTS TO MPCA",
+        flow: "BCCI → MPCA",
+        scheme_ref: "BCCI Guidelines cl.1B and cl.13",
+    },
+    {
+        code: "inter_div",
+        scheme_code: "2-B",
+        name: "MPCA Inter-Divisional Tournament",
+        family: "MPCA_InterDivisional",
+        default_format: "Multi_Day",
+        default_scope: "Inter_Divisional",
+        one_liner: "Allotted by MPCA under the CDC / Tournament Committee calendar and hosted by a Division. MPCA funds hosting on the parameters at pp.11-13 of the scheme.",
+        input_hint: "Pools & hosts, days per match, knockout structure, prize incentives.",
+        eligible_hosts: ["MPCA"],
+        created_by: ["State"],                       // MPCA only (allots)
+        section: "MPCA ALLOTS TO DIVISION",
+        flow: "MPCA → Division",
+        scheme_ref: "Scheme pp.11-13",
+    },
+    // ─────────── DIVISION-CREATED (8 types) ───────────
+    {
+        code: "inter_div_travel",
+        scheme_code: "2-C",
+        name: "Inter-Divisional Participation (Travel Subsidy)",
+        family: "MPCA_InterDivisional",
+        default_format: "Multi_Day",
+        default_scope: "Inter_Divisional",
+        one_liner: "Claimed by a Division travelling out of its own area to play an MPCA inter-divisional match. Entitlement is III-tier AC rail fare for 18 persons.",
+        input_hint: "III-tier AC rail fare, feeder legs from District HQ, Tatkal premium.",
+        eligible_hosts: ["Division"],
+        created_by: ["Division", "District"],
+        section: "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS",
+        flow: "MPCA → Division",
+        scheme_ref: "Scheme p.10",
+    },
+    {
+        code: "pre_camp",
+        scheme_code: "3-D",
+        name: "Pre-Tournament Camp (Divisional Team)",
+        family: "MPCA_InterDivisional",
+        default_format: "Multi_Day",
+        default_scope: "Inter_Divisional",
+        one_liner: "Camp held by a Division for the team going to an MPCA inter-divisional tournament. Eight days maximum, including reporting and departure.",
+        input_hint: "Camp days ≤ 8, players 18-20, coach + trainer honoraria, medical actuals.",
+        eligible_hosts: ["Division"],
+        created_by: ["Division", "District"],
+        section: "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS",
+        flow: "Division → Divisional team",
+        scheme_ref: "Scheme p.19",
+    },
+    {
+        code: "reciprocal",
+        scheme_code: null,
+        name: "Reciprocal Matches Between Divisions",
+        family: "MPCA_InterDivisional",
+        default_format: "Multi_Day",
+        default_scope: "Inter_Divisional",
+        one_liner: "Arranged between two Divisions for match exposure. These days form part of the pre-tournament camp — camp and reciprocal matches together cannot exceed eight days.",
+        input_hint: "Total camp+reciprocal days ≤ 8, host claims stay + food + officials.",
+        eligible_hosts: ["Division"],
+        created_by: ["Division", "District"],
+        section: "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS",
+        flow: "Division → Division",
+        scheme_ref: "Scheme p.18",
+    },
+    {
+        code: "inter_district",
+        scheme_code: "2-A",
+        name: "Inter-District Tournament",
+        family: "MPCA_InterDivisional",
+        default_format: "Multi_Day",
+        default_scope: "Inter_District",
+        one_liner: "Conducted by a Division within its own area to select the divisional team. Every Division must hold one. Subsidy is capped per match day on the travel profile of the fixture.",
+        input_hint: "Per-day ceilings (INR 28k one-team, 39k both-teams), umpires, ground rent.",
+        eligible_hosts: ["Division"],
+        created_by: ["Division", "District"],
+        section: "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS",
+        flow: "Division → District",
+        scheme_ref: "Scheme pp.8-9",
+    },
+    {
+        code: "inter_school",
+        scheme_code: null,
+        name: "Inter-School Tournament",
+        family: "Invitational",
+        default_format: "One_Day",
+        default_scope: "Inter_District",
+        one_liner: "Knockout tournament for schools that promote cricket through the year. Entry fee is collected by the host and declared with the claim.",
+        input_hint: "25 ov (till SF), 50 ov (SF+F), ₹5k grant/day, entry fee ₹1.5k/team.",
+        eligible_hosts: ["Division", "District"],
+        created_by: ["Division", "District"],
+        section: "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS",
+        flow: "Division → Schools",
+        scheme_ref: "Scheme p.7",
+    },
+    {
+        code: "inter_club",
+        scheme_code: null,
+        name: "Inter-Club Tournament ('A' Grade Clubs)",
+        family: "Invitational",
+        default_format: "Multi_Day",
+        default_scope: "Inter_District",
+        one_liner: "Two-day knockout invitation tournament for 'A' grade clubs. One-day matches and league-cum-knockout formats are not reimbursed.",
+        input_hint: "Only two-day knockout reimbursed; outstation clubs get stay+food+travel.",
+        eligible_hosts: ["Division"],
+        created_by: ["Division", "District"],
+        section: "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS",
+        flow: "Division → 'A' grade clubs",
+        scheme_ref: "Scheme pp.14-15",
+    },
+    {
+        code: "coaching_camp",
+        scheme_code: "3-A",
+        name: "Periodical Coaching Camp (District Players)",
+        family: "MPCA_InterDivisional",
+        default_format: "Multi_Day",
+        default_scope: "Inter_District",
+        one_liner: "A fortnight's camp for players from district and rural places who cannot practise at the divisional headquarters. Not available for the camp before an inter-divisional tournament.",
+        input_hint: "Camp days ~14, ₹15k misc cap, prior MPCA notification mandatory.",
+        eligible_hosts: ["Division"],
+        created_by: ["Division", "District"],
+        section: "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS",
+        flow: "Division → District players",
+        scheme_ref: "Scheme p.16",
+    },
+    {
+        code: "vacation_camp",
+        scheme_code: null,
+        name: "Vacation Camp",
+        family: "MPCA_InterDivisional",
+        default_format: "Multi_Day",
+        default_scope: "Inter_District",
+        one_liner: "A two to three week summer camp. The Divisional Secretary must certify that no amount was charged from the players.",
+        input_hint: "Free of charge to players — Secretary's undertaking required.",
+        eligible_hosts: ["Division"],
+        created_by: ["Division", "District"],
+        section: "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS",
+        flow: "Division → Players",
+        scheme_ref: "Scheme p.17",
     },
 ];
 
 export const getTypeByCode = (code) => TOURNAMENT_TYPE_CATALOG.find((t) => t.code === code) || null;
+
+/**
+ * Filter the catalog to only types a persona is allowed to CREATE, per the
+ * user's RBAC rule (screenshot):
+ *   MPCA (body_type=State) → BCCI staging, Away participation, MPCA Inter-Div (3 types)
+ *   Division/District      → the remaining 8 types
+ *   Any other persona      → nothing (returns empty array)
+ */
+export const getCreatableTournamentTypes = (persona) => {
+    const bt = persona?.body_type;
+    if (!bt) return [];
+    return TOURNAMENT_TYPE_CATALOG.filter((t) => (t.created_by || []).includes(bt));
+};
+
+/**
+ * Group a catalog subset by their `section` label so the type picker can
+ * render the visual sections shown in the user's mockup.
+ */
+export const groupTypesBySection = (types) => {
+    const out = {};
+    for (const t of types) {
+        const s = t.section || "Other";
+        (out[s] = out[s] || []).push(t);
+    }
+    // Preserve the order MPCA → BCCI → Division sections
+    const order = [
+        "BCCI ALLOTS TO MPCA",
+        "MPCA ALLOTS TO DIVISION",
+        "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS",
+    ];
+    const ordered = {};
+    for (const s of order) if (out[s]) ordered[s] = out[s];
+    for (const s of Object.keys(out)) if (!ordered[s]) ordered[s] = out[s];
+    return ordered;
+};
 
 /**
  * Fallback input specs for the 5 tournament categories that don't map to an

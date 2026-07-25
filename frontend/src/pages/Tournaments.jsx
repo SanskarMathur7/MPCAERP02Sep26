@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { getCreatableTournamentTypes } from "@/lib/tournamentCatalog";
 import { fetchTournaments, fetchTournamentStats, fetchBodies, actOnTournamentAcceptance } from "@/lib/api";
 import {
     Trophy, Calendar, MapPin, Users, ChevronRight, Filter, ShieldCheck, Plus,
@@ -173,7 +174,7 @@ const Tournaments = () => {
                         The single hub for every tournament action — create, host acceptance, squad selection, budget &amp; finance, reimbursement claims, match officials and linked camps. Pick a tournament below to open its full workspace, or use <Link to="/tournament-calendar" className="underline decoration-mpca-brass underline-offset-2 hover:text-mpca-oxblood">Tournament Calendar</Link> for a read-only schedule view.
                     </p>
                 </div>
-                {isOfficeBearer && (
+                {isOfficeBearer && getCreatableTournamentTypes(persona).length > 0 && (
                     <button
                         className="btn-heritage-primary"
                         onClick={() => setCreateOpen(true)}

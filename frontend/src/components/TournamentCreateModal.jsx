@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, Trophy, Save, MapPin, Landmark, BookOpen, ChevronLeft } from "lucide-react";
+import { X, Trophy, Save, MapPin, Landmark, BookOpen, ChevronLeft, ArrowRight, ShieldAlert } from "lucide-react";
 import {
     createTournament,
     fetchBodies,
@@ -7,7 +7,16 @@ import {
     fetchGrounds,
 } from "@/lib/api";
 import { api } from "@/lib/api";
-import { TOURNAMENT_TYPE_CATALOG, getTypeByCode } from "@/lib/tournamentCatalog";
+import { useAuth } from "@/context/AuthContext";
+import { TOURNAMENT_TYPE_CATALOG, getTypeByCode, getCreatableTournamentTypes, groupTypesBySection } from "@/lib/tournamentCatalog";
+
+// Visual palette per section (matches the user's mockup: BCCI = navy tint,
+// MPCA = green tint, Division = brass/marigold tint)
+const SECTION_STYLES = {
+    "BCCI ALLOTS TO MPCA":                                             { header: "bg-mpca-navy/20 text-mpca-navy", cardBorder: "border-mpca-navy/40" },
+    "MPCA ALLOTS TO DIVISION":                                         { header: "bg-mpca-green-dark/20 text-mpca-green-dark", cardBorder: "border-mpca-green-dark/40" },
+    "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS": { header: "bg-mpca-brass/20 text-mpca-brass", cardBorder: "border-mpca-brass/40" },
+};
 
 const TYPE_OPTIONS = [
     { value: "MPCA_InterDivisional", label: "MPCA · Inter-Divisional (MY Memorial, Madhavrao Scindia, JN Bhaya…)" },
@@ -70,8 +79,13 @@ const emptyForm = {
 const TOURNAMENT_SCHEME_CODES = new Set(["2-A", "2-B", "2-C", "2-D", "2-E", "3-A", "3-B", "3-C", "3-D", "9-BCCI"]);
 
 const TournamentCreateModal = ({ open, onClose, onDone }) => {
+    const { persona } = useAuth();
     const [step, setStep] = useState(1); // 1 = type picker, 2 = detail form
     const [form, setForm] = useState(emptyForm);
+
+    // RBAC-filtered catalog for the current persona (Sprint M22)
+    const creatableTypes = useMemo(() => getCreatableTournamentTypes(persona), [persona]);
+    const sectionedTypes = useMemo(() => groupTypesBySection(creatableTypes), [creatableTypes]);
     const [bodies, setBodies] = useState([]);
     const [venues, setVenues] = useState([]);
     const [grounds, setGrounds] = useState([]);
@@ -247,7 +261,13 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                     </h2>
                     <p className="text-mpca-gray-dark text-sm mt-2">
                         {step === 1 ? (
-                            <>Choose one of the {TOURNAMENT_TYPE_CATALOG.length} tournament categories recognised by the MPCA rate card. The category drives budget formulas, input variables and eligibility.</>
+                            creatableTypes.length === 0 ? (
+                                <>Your role does not have permission to create tournaments. Please contact the MPCA Secretariat.</>
+                            ) : (
+                                <>
+                                    You are signed in as <b>{persona?.name}</b> ({persona?.body_type}) — the {creatableTypes.length} tournament categories below are the ones your role may create. The category drives budget formulas, input variables and eligibility.
+                                </>
+                            )
                         ) : (
                             <>You picked <b>{getTypeByCode(form.tournament_type_code)?.name}</b>. Enter the trophy name, host body and dates. Detailed input-variable data can be filled from the tournament workspace.</>
                         )}
@@ -256,26 +276,50 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
 
                 {step === 1 && (
                     <div className="p-8" data-testid="trn-type-picker">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[70vh] overflow-y-auto pr-2">
-                            {TOURNAMENT_TYPE_CATALOG.map((t) => (
-                                <button
-                                    key={t.code}
-                                    onClick={() => pickType(t)}
-                                    className="text-left p-4 border border-mpca-brass/30 hover:border-mpca-oxblood hover:bg-mpca-cream/30 transition-all group"
-                                    data-testid={`trn-type-card-${t.code}`}
-                                >
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="flex-1">
-                                            <div className="font-mono text-[10px] text-mpca-brass uppercase tracking-widest">{t.code}</div>
-                                            <div className="font-serif text-base text-mpca-green-dark group-hover:text-mpca-oxblood mt-1">{t.name}</div>
+                        {creatableTypes.length === 0 ? (
+                            <div className="p-10 text-center border border-mpca-oxblood/30 bg-mpca-oxblood/5" data-testid="trn-type-picker-empty">
+                                <ShieldAlert size={28} className="mx-auto text-mpca-oxblood mb-3" strokeWidth={1.2} />
+                                <div className="font-serif text-lg text-mpca-oxblood">No tournament types available to you.</div>
+                                <div className="text-[11px] text-mpca-gray-dark mt-2">Only MPCA-level and Division/District personas may create tournaments.</div>
+                            </div>
+                        ) : (
+                            <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+                                {Object.entries(sectionedTypes).map(([sectionLabel, types]) => {
+                                    const style = SECTION_STYLES[sectionLabel] || { header: "bg-mpca-parchment text-mpca-green-dark", cardBorder: "border-mpca-brass/30" };
+                                    return (
+                                        <div key={sectionLabel} data-testid={`trn-type-section-${sectionLabel.slice(0, 30).toLowerCase().replace(/[^a-z]+/g, "-")}`}>
+                                            <div className="overline text-[9px] mb-2 text-mpca-brass">
+                                                {sectionLabel}
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {types.map((t) => (
+                                                    <button
+                                                        key={t.code}
+                                                        onClick={() => pickType(t)}
+                                                        className={`text-left p-4 border ${style.cardBorder} hover:border-mpca-oxblood hover:bg-mpca-cream/30 transition-all group relative`}
+                                                        data-testid={`trn-type-card-${t.code}`}
+                                                    >
+                                                        <div className={`inline-block text-[9px] uppercase tracking-widest px-2 py-0.5 ${style.header} mb-2`}>
+                                                            {sectionLabel.replace("A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS", "DIVISION ALLOTS TO " + (t.flow.split("→")[1] || "").trim().toUpperCase())}
+                                                        </div>
+                                                        <div className="font-serif text-base text-mpca-green-dark group-hover:text-mpca-oxblood">{t.name}</div>
+                                                        <div className="text-[11px] text-mpca-gray-dark mt-2 leading-snug line-clamp-3">{t.one_liner}</div>
+                                                        <div className="mt-3 flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest">
+                                                            <span className="border border-mpca-brass/40 text-mpca-brass px-1.5 py-0.5">{t.flow.split("→")[0].trim()}</span>
+                                                            <ArrowRight size={10} className="text-mpca-gray-dark" />
+                                                            <span className="border border-mpca-brass/40 text-mpca-brass px-1.5 py-0.5">{(t.flow.split("→")[1] || "").trim()}</span>
+                                                        </div>
+                                                        {t.scheme_ref && (
+                                                            <div className="text-[9px] font-mono text-mpca-gray-dark italic mt-2">{t.scheme_ref}</div>
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <span className="text-[9px] uppercase tracking-widest bg-mpca-parchment/60 border border-mpca-brass/30 text-mpca-green-dark px-2 py-0.5 whitespace-nowrap">{t.family.replace("_", " ")}</span>
-                                    </div>
-                                    <div className="text-[11px] text-mpca-gray-dark mt-2 leading-snug">{t.one_liner}</div>
-                                    <div className="text-[10px] text-mpca-brass italic mt-1.5">{t.input_hint}</div>
-                                </button>
-                            ))}
-                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 )}
 

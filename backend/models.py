@@ -896,6 +896,9 @@ class TournamentBase(BaseModel):
     ground_name_snapshot: Optional[str] = None
     # T-RIM: MPCA reimbursement scheme code (e.g. "2-D" for Inter-Divisional Hosting)
     scheme_code: Optional[str] = None
+    # Sprint M24 · Setup meta captures the MPCA 7-step process fields
+    # (category, age group, grounds, teams/pools, camp player group).
+    setup_meta: Dict[str, Any] = Field(default_factory=dict)
     # Sprint M19 · Utility-form input variables (days_per_match, teams, squad_size, etc.)
     input_variables: Dict[str, Any] = Field(default_factory=dict)
     # Sprint M19 · Explicit user-action flags (progress bar derives from these)

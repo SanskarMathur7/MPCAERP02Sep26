@@ -170,6 +170,19 @@ async def patch_input_variables(tid: str, payload: InputVariablesPayload):
     return await db.tournaments.find_one({"id": tid}, {"_id": 0})
 
 
+class SetupMetaPayload(BaseModel):
+    setup_meta: Dict[str, Any]
+
+
+@api_router.patch("/tournaments/{tid}/setup-meta")
+async def patch_setup_meta(tid: str, payload: SetupMetaPayload):
+    r = await db.tournaments.update_one({"id": tid}, {"$set": {"setup_meta": payload.setup_meta}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Tournament not found")
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+
+
 @api_router.patch("/tournaments/{tid}/calendar-lock")
 async def lock_tournament_calendar(tid: str, locked: bool = True):
     r = await db.tournaments.update_one({"id": tid}, {"$set": {"calendar_fixed": locked}})
@@ -223,12 +236,19 @@ async def get_tournament_progress(tid: str):
     payment_done = claim_reviewed and receipt_total >= claim_approved_total and receipt_total > 0
 
     input_vars_set = bool(t.get("input_variables"))
+    setup_meta = t.get("setup_meta") or {}
+    basics_set = bool(setup_meta.get("category") and setup_meta.get("age_group"))
+    teams_set = bool(setup_meta.get("teams") or setup_meta.get("pools") or setup_meta.get("player_group"))
+    grounds_set = bool(setup_meta.get("grounds"))
     calendar_fixed = bool(t.get("calendar_fixed"))
     closure_letter = bool(t.get("closure_letter_generated_at"))
 
     phases = [
         {"key": "setup", "label": "Setup", "steps": [
             _step("created", "Tournament created", True),
+            _step("basics", "Category & age group set", basics_set),
+            _step("teams", "Teams / pools / player group set", teams_set),
+            _step("grounds", "Grounds listed", grounds_set),
             _step("input_vars", "Input variables fixed", input_vars_set),
             _step("accepted", "Accepted by Division", accepted, note=acceptance_status),
             _step("calendar", "Calendar fixed", calendar_fixed, note=f"{match_count} matches added"),

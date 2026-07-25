@@ -15,7 +15,8 @@ const isRbacAdmin = (persona) => persona && RBAC_ADMIN_PERSONA_IDS.includes(pers
 
 
 const RolesTab = ({ roles, catalog, onRefresh, persona }) => {
-    const [selected, setSelected] = useState(roles[0] || null);
+    const [selectedId, setSelectedId] = useState(roles[0]?.id || null);
+    const selected = useMemo(() => roles.find((r) => r.id === selectedId) || roles[0] || null, [roles, selectedId]);
     const [pendingPerms, setPendingPerms] = useState(new Set());
     const [pendingDescription, setPendingDescription] = useState("");
     const [saving, setSaving] = useState(false);
@@ -91,7 +92,7 @@ const RolesTab = ({ roles, catalog, onRefresh, persona }) => {
                 {filteredRoles.map((r) => {
                     const active = selected?.id === r.id;
                     return (
-                        <button key={r.id} onClick={() => setSelected(r)}
+                        <button key={r.id} onClick={() => setSelectedId(r.id)}
                             className={`w-full text-left p-3 border transition-colors ${active ? "border-mpca-oxblood bg-mpca-cream/40" : "border-mpca-brass/30 hover:bg-mpca-cream/30"}`}
                             data-testid={`rbac-role-row-${r.id}`}>
                             <div className="flex items-start justify-between gap-2">
@@ -399,7 +400,7 @@ const AccessControl = () => {
     };
     useEffect(() => { load(); }, []);
 
-    if (!isRbacAdmin(persona) && persona?.body_type !== "State") {
+    if (!isRbacAdmin(persona)) {
         return (
             <div className="p-16 text-center" data-testid="rbac-forbidden">
                 <ShieldAlert size={40} className="mx-auto text-mpca-oxblood" strokeWidth={1.2} />

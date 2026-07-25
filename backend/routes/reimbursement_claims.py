@@ -190,6 +190,12 @@ async def create_claim(payload: TournamentReimbursementCreate):
     payload_dict = payload.model_dump()
     # Prefer explicit scheme_code from payload, then tournament, then fallback
     payload_dict["scheme_code"] = payload.scheme_code or t.get("scheme_code")
+    # M26 Phase B · auto-link to participant row
+    if not payload_dict.get("participant_body_code"):
+        from routes.tournament_participations import resolve_participant_body_code
+        payload_dict["participant_body_code"] = await resolve_participant_body_code(
+            payload.tournament_id, payload.body_id
+        )
     claim = TournamentReimbursementClaim(
         claim_ref=claim_ref,
         tournament_name=t.get("name"),
@@ -197,6 +203,9 @@ async def create_claim(payload: TournamentReimbursementCreate):
         **payload_dict,
     )
     await db.tournament_reimbursement_claims.insert_one(claim.model_dump())
+    if claim.participant_body_code:
+        from routes.tournament_participations import link_claim_to_participant
+        await link_claim_to_participant(payload.tournament_id, claim.participant_body_code, claim.id)
     return claim
 
 

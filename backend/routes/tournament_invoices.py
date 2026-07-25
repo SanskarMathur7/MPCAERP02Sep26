@@ -180,6 +180,12 @@ async def create_invoice(payload: TournamentInvoiceCreate):
         }, {"_id": 0}, sort=[("created_at", -1)])
         if tb:
             body["budget_id"] = tb["id"]
+    # M26 Phase B · auto-link to participant row if one exists
+    if not body.get("participant_body_code"):
+        from routes.tournament_participations import resolve_participant_body_code
+        body["participant_body_code"] = await resolve_participant_body_code(
+            payload.tournament_id, payload.body_id
+        )
 
     inv = TournamentInvoice(
         invoice_ref=await _next_invoice_ref(cycle),

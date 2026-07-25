@@ -1,0 +1,25 @@
+{
+  "summary": "M26 Phase B (per-participant linkage + drill-down) tested end-to-end. Backend: 18/18 pytest (8 new Phase B + 10 Phase A regression) — POST budget/invoice/claim auto-set participant_body_code, participant row's budget_id/claim_id get linked, receipt derives participant from linked_claim_id, GET /participants/{code}/finance returns full trail with 404 for unknown code, and _totals_for_participant now correctly reads db.tournament_reimbursement_claims (Phase A regression fix verified). Frontend: on seeded tournament e2a9ac5c → box-participants opens matrix, DIV-BPL row shows ₹80,000 budget + ₹49,560 invoice + TRC-2025-26-0007 Draft; chevron expands 4-column drill-down (TB-2025-26-015 / Volvo Buses ₹49,560 / TRC-2025-26-0007 Approved ₹0 Draft / Receipts 0) and collapses cleanly. Totals footer correct (₹80,000 / ₹49,560 / — / — / —). RBAC: Re-sync enabled for MPCA Secretary, disabled for Division Secretary. DivSec can still drill-down DIV-IND (self-body).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_m26_phase_b.py",
+    "/app/backend/tests/test_m26_participants_matrix.py",
+    "/app/test_reports/pytest/m26_phaseb_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "resolve_participant_body_code / link_budget_to_participant / link_claim_to_participant helpers correctly only set body_code when an active (removed_at:None) participant row exists — no forced link. Idempotent via {budget_id: None} / {claim_id: None} guard so subsequent budgets/claims won't overwrite the first-linked doc (behavior verified). Confirm this matches PM expectation — if not, drop the None guard so latest doc wins.",
+    "Receipt derivation falls back to claim.body_id when claim.participant_body_code is null — good defensive coding.",
+    "participant_finance_snapshot picks latest budget and latest claim by created_at only; consider filtering out Rejected budgets so the panel doesn't show a stale rejected doc when a newer Draft exists. Minor nit — not blocking.",
+    "No MongoDB _id leakage across new drill-down endpoint (verified in assertions).",
+    "tournament_participations.py is ~310 LOC — under the 700 threshold. OK."
+  ],
+  "updated_files": ["/app/backend/tests/test_m26_phase_b.py (new)"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100%"},
+  "test_credentials": "persona-chip-secretary (MPCA), persona-chip-division-secretary (DIV-IND). No password.",
+  "seed_data_creation": "Creates & deletes a TEST_M26_PhaseB tournament per module. Also toggles DIV-CHM in seeded tournament (already used by iter_40 tests). Dev-seed data for DIV-BPL on tournament e2a9ac5c (TB-2025-26-015 / INV Volvo Buses / TRC-2025-26-0007) untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase B is green. Reuse test_m26_phase_b.py + test_m26_participants_matrix.py for regression. Seeded tournament SEEDED_TID = e2a9ac5c-8e72-4d0a-9aa9-8dae40f482e5 has DIV-BPL wired with real budget/invoice/claim — use it for UI drill-down verifications. Note that the auto-link helpers use a {budget_id:None}/{claim_id:None} guard so only the FIRST created budget/claim links; if next phase needs 'latest doc wins' semantics, drop that guard."
+}

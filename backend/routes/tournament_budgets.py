@@ -174,6 +174,12 @@ async def create_tournament_budget(payload: TournamentBudgetCreate):
 
     budget_no = await _next_tb_no(payload.fiscal_cycle)
     body_dump = payload.model_dump()
+    # M26 Phase B · auto-link to participant row if one exists for this (tournament, body)
+    if not body_dump.get("participant_body_code"):
+        from routes.tournament_participations import resolve_participant_body_code
+        body_dump["participant_body_code"] = await resolve_participant_body_code(
+            payload.tournament_id, payload.body_id
+        )
     budget = TournamentBudget(
         budget_no=budget_no,
         tournament_name=tournament.get("name"),
@@ -181,6 +187,9 @@ async def create_tournament_budget(payload: TournamentBudgetCreate):
         **body_dump,
     )
     await db.tournament_budgets.insert_one(budget.model_dump())
+    if budget.participant_body_code:
+        from routes.tournament_participations import link_budget_to_participant
+        await link_budget_to_participant(payload.tournament_id, budget.participant_body_code, budget.id)
     return budget
 
 

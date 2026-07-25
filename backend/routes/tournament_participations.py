@@ -152,14 +152,14 @@ async def _totals_for_participant(tid: str, body_code: str) -> Dict[str, float]:
     claim_status = None
     claim_requested = 0.0
     claim_approved = 0.0
-    c = await db.reimbursement_claims.find_one(
+    c = await db.tournament_reimbursement_claims.find_one(
         {"tournament_id": tid, "participant_body_code": body_code},
         {"_id": 0}, sort=[("created_at", -1)],
     )
     if c:
         claim_status = c.get("status")
-        claim_requested = float(c.get("total_requested_inr") or c.get("total_claimed_inr") or 0)
-        claim_approved = float(c.get("approved_total_inr") or 0)
+        claim_requested = float(c.get("total_requested_inr") or c.get("total_claimed_inr") or (c.get("summary") or {}).get("eligible_total_inr") or 0)
+        claim_approved = float(c.get("approved_amount_inr") or 0)
 
     return {
         "invoice_total_inr": inv_total,
@@ -201,6 +201,79 @@ async def get_tournament_participant(tid: str, body_code: str):
     totals = await _totals_for_participant(tid, body_code)
     return {**row, **totals}
 
+
+
+# ─────────────── Shared helpers for downstream modules (M26 · Phase B) ───────────────
+
+async def resolve_participant_body_code(tid: str, body_code: Optional[str]) -> Optional[str]:
+    """If an active participant row exists for (tournament, body_code), returns
+    body_code — used by Budget/Invoice/Claim create endpoints to auto-tag the
+    row so ParticipantsMatrix lights up. Returns None otherwise (no forced link)."""
+    if not body_code:
+        return None
+    row = await db.tournament_participations.find_one(
+        {"tournament_id": tid, "body_code": body_code, "removed_at": None},
+        {"_id": 0, "body_code": 1},
+    )
+    return row["body_code"] if row else None
+
+
+async def link_budget_to_participant(tid: str, body_code: Optional[str], budget_id: str):
+    if not body_code:
+        return
+    await db.tournament_participations.update_one(
+        {"tournament_id": tid, "body_code": body_code, "removed_at": None, "budget_id": None},
+        {"$set": {"budget_id": budget_id, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+
+
+async def link_claim_to_participant(tid: str, body_code: Optional[str], claim_id: str):
+    if not body_code:
+        return
+    await db.tournament_participations.update_one(
+        {"tournament_id": tid, "body_code": body_code, "removed_at": None, "claim_id": None},
+        {"$set": {"claim_id": claim_id, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+
+
+# ─────────────── Drill-down: per-participant finance snapshot ───────────────
+
+@api_router.get("/tournaments/{tid}/participants/{body_code}/finance")
+async def participant_finance_snapshot(tid: str, body_code: str):
+    """Returns the full financial trail for a single participant: budget,
+    invoice list, claim, receipts. Used by the participant drill-down UI."""
+    row = await db.tournament_participations.find_one(
+        {"tournament_id": tid, "body_code": body_code}, {"_id": 0}
+    )
+    if not row:
+        raise HTTPException(404, "Participant not found")
+
+    budget = await db.tournament_budgets.find_one(
+        {"tournament_id": tid, "participant_body_code": body_code},
+        {"_id": 0}, sort=[("created_at", -1)],
+    )
+    invoices: List[Dict[str, Any]] = []
+    async for inv in db.tournament_invoices.find(
+        {"tournament_id": tid, "participant_body_code": body_code}, {"_id": 0}
+    ).sort([("created_at", -1)]):
+        invoices.append(inv)
+    claim = await db.tournament_reimbursement_claims.find_one(
+        {"tournament_id": tid, "participant_body_code": body_code},
+        {"_id": 0}, sort=[("created_at", -1)],
+    )
+    receipts: List[Dict[str, Any]] = []
+    async for r in db.tournament_receipts.find(
+        {"tournament_id": tid, "participant_body_code": body_code}, {"_id": 0}
+    ).sort([("receipt_date", -1)]):
+        receipts.append(r)
+
+    return {
+        "participant": row,
+        "budget": budget,
+        "invoices": invoices,
+        "claim": claim,
+        "receipts": receipts,
+    }
 
 @api_router.patch("/tournaments/{tid}/participants/{body_code}")
 async def patch_tournament_participant(tid: str, body_code: str, patch: ParticipationPatch):

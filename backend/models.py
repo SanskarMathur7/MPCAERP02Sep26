@@ -1231,6 +1231,7 @@ class TournamentBudgetBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     tournament_id: str                       # Tournament.id
     body_id: str                             # Division (or District) raising the budget ask
+    participant_body_code: Optional[str] = None   # M26 · links to tournament_participations row
     fiscal_cycle: str = "2025-26"
     total_ceiling_inr: float                 # fixed cap proposed by division
     head_allocations: List[BudgetHeadAllocation] = []   # sub-limits by head
@@ -1735,6 +1736,7 @@ class TournamentInvoiceBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     tournament_id: str
     body_id: str                                 # spending body (usually a Division)
+    participant_body_code: Optional[str] = None  # M26 · links to tournament_participations row
     budget_id: Optional[str] = None              # linked TournamentBudget
     budget_head_code: Optional[str] = None       # legacy: single head (kept for back-compat)
     allocations: List[InvoiceHeadAllocation] = []  # NEW · multi-head splits (Sprint T-RIM)
@@ -1924,6 +1926,7 @@ class TournamentReimbursementClaimBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     tournament_id: str
     body_id: str                                  # Division submitting the claim
+    participant_body_code: Optional[str] = None   # M26 · links to tournament_participations row
     fiscal_cycle: str = "2025-26"
     scheme_code: Optional[str] = None
     notes: Optional[str] = None

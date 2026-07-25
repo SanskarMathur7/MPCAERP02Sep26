@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { RefreshCw, Home, Plane, Loader2, Check, X, Info, Wallet, Receipt, HandCoins, ScrollText } from "lucide-react";
+import { useEffect, useState, Fragment } from "react";
+import { RefreshCw, Home, Plane, Loader2, Check, X, Info, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 
 const fmtInr = (n) => {
@@ -43,6 +43,9 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
     const [busyCode, setBusyCode] = useState(null);
     const [err, setErr] = useState("");
     const [showHistory, setShowHistory] = useState(false);
+    const [expandedCode, setExpandedCode] = useState(null);
+    const [drilldown, setDrilldown] = useState({}); // body_code -> finance snapshot
+    const [drillLoading, setDrillLoading] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -53,7 +56,7 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
         finally { setLoading(false); }
     };
 
-    useEffect(() => { load(); /* eslint-disable-next-line */ }, [tournament.id, showHistory]);
+    useEffect(() => { load(); }, [tournament.id, showHistory]);
 
     const resync = async () => {
         setErr("");
@@ -80,6 +83,18 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
         finally { setBusyCode(null); }
     };
 
+    const toggleExpand = async (body_code) => {
+        if (expandedCode === body_code) { setExpandedCode(null); return; }
+        setExpandedCode(body_code);
+        if (drilldown[body_code]) return;
+        setDrillLoading(true);
+        try {
+            const { data } = await api.get(`/tournaments/${tournament.id}/participants/${body_code}/finance`);
+            setDrilldown((m) => ({ ...m, [body_code]: data }));
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setDrillLoading(false); }
+    };
+
     const activeRows = rows.filter((r) => !r.removed_at);
     const removedRows = rows.filter((r) => r.removed_at);
 
@@ -99,7 +114,7 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
                     <div className="overline text-[9px]">MPCA Multi-Division Ledger</div>
                     <div className="font-serif text-lg text-mpca-green-dark mt-1">Participants · {activeRows.length} bodies</div>
                     <div className="text-[11px] text-mpca-gray-dark mt-1 max-w-2xl">
-                        One row per participating Division/District. MPCA tracks each body's acceptance, budget, invoices, claim and payment for this tournament in one place. Auto-synced from the Division Pools setup.
+                        One row per participating Division/District. MPCA tracks each body&apos;s acceptance, budget, invoices, claim and payment for this tournament in one place. Auto-synced from the Division Pools setup.
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -140,11 +155,19 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
                             {activeRows.map((r) => {
                                 const isSelf = persona?.body_code === r.body_code;
                                 const canAct = isSelf || canManage;
+                                const isExpanded = expandedCode === r.body_code;
+                                const drill = drilldown[r.body_code];
                                 return (
-                                    <tr key={r.body_code} className="border-b border-mpca-brass/10 hover:bg-mpca-cream/40" data-testid={`participants-row-${r.body_code}`}>
+                                    <Fragment key={r.body_code}>
+                                    <tr className="border-b border-mpca-brass/10 hover:bg-mpca-cream/40" data-testid={`participants-row-${r.body_code}`}>
                                         <td className="px-3 py-2 font-serif text-mpca-green-dark">
-                                            <div>{r.body_name}</div>
-                                            <div className="text-[9px] font-mono text-mpca-brass">{r.body_code}</div>
+                                            <button onClick={() => toggleExpand(r.body_code)} className="inline-flex items-center gap-1 text-left hover:text-mpca-oxblood" data-testid={`participants-expand-${r.body_code}`}>
+                                                {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                <span>
+                                                    <div>{r.body_name}</div>
+                                                    <div className="text-[9px] font-mono text-mpca-brass">{r.body_code}</div>
+                                                </span>
+                                            </button>
                                         </td>
                                         <td className="px-3 py-2">
                                             {r.role === "Host" ? (
@@ -181,6 +204,72 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
                                             )}
                                         </td>
                                     </tr>
+                                    {isExpanded && (
+                                        <tr className="bg-mpca-cream/20" data-testid={`participants-drill-${r.body_code}`}>
+                                            <td colSpan={10} className="px-4 py-3">
+                                                {drillLoading && !drill ? (
+                                                    <div className="text-[11px] text-mpca-brass flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Loading finance snapshot…</div>
+                                                ) : !drill ? (
+                                                    <div className="text-[11px] text-mpca-gray-dark italic">No drill-down data yet.</div>
+                                                ) : (
+                                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-[11px]">
+                                                        <div>
+                                                            <div className="overline text-[9px] mb-1">Budget</div>
+                                                            {drill.budget ? (
+                                                                <div className="font-mono text-mpca-charcoal">
+                                                                    <div>{drill.budget.budget_no}</div>
+                                                                    <div>₹{Number(drill.budget.total_ceiling_inr || 0).toLocaleString("en-IN")}</div>
+                                                                    <div className="text-[9px] text-mpca-brass">{drill.budget.status}</div>
+                                                                </div>
+                                                            ) : <div className="text-mpca-gray-dark italic">No budget yet</div>}
+                                                        </div>
+                                                        <div>
+                                                            <div className="overline text-[9px] mb-1">Invoices ({drill.invoices?.length || 0})</div>
+                                                            {(drill.invoices || []).length === 0 ? (
+                                                                <div className="text-mpca-gray-dark italic">None</div>
+                                                            ) : (
+                                                                <div className="space-y-0.5 max-h-24 overflow-y-auto">
+                                                                    {drill.invoices.slice(0, 6).map((inv) => (
+                                                                        <div key={inv.id} className="flex justify-between font-mono">
+                                                                            <span className="truncate max-w-[10rem]">{inv.vendor_name || inv.invoice_ref}</span>
+                                                                            <span>₹{Number(inv.total_inr || 0).toLocaleString("en-IN")}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                    {drill.invoices.length > 6 && <div className="text-[9px] text-mpca-brass">+{drill.invoices.length - 6} more…</div>}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <div className="overline text-[9px] mb-1">Claim</div>
+                                                            {drill.claim ? (
+                                                                <div className="font-mono text-mpca-charcoal">
+                                                                    <div>{drill.claim.claim_ref}</div>
+                                                                    <div>Approved ₹{Number(drill.claim.approved_amount_inr || 0).toLocaleString("en-IN")}</div>
+                                                                    <div className="text-[9px] text-mpca-brass">{drill.claim.status}</div>
+                                                                </div>
+                                                            ) : <div className="text-mpca-gray-dark italic">Not filed</div>}
+                                                        </div>
+                                                        <div>
+                                                            <div className="overline text-[9px] mb-1">Receipts ({drill.receipts?.length || 0})</div>
+                                                            {(drill.receipts || []).length === 0 ? (
+                                                                <div className="text-mpca-gray-dark italic">None</div>
+                                                            ) : (
+                                                                <div className="space-y-0.5 max-h-24 overflow-y-auto">
+                                                                    {drill.receipts.slice(0, 6).map((rc) => (
+                                                                        <div key={rc.id} className="flex justify-between font-mono text-mpca-green-dark">
+                                                                            <span>{rc.receipt_date}</span>
+                                                                            <span>₹{Number(rc.amount_inr || 0).toLocaleString("en-IN")}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    </Fragment>
                                 );
                             })}
                         </tbody>
@@ -217,7 +306,7 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
             <div className="text-[10px] text-mpca-gray-dark flex items-start gap-1">
                 <Info size={11} className="mt-0.5 flex-shrink-0" />
                 <div>
-                    Once each body's Division Secretary accepts, they can file their own <b>budget</b>, upload <b>invoices</b>, submit a <b>reimbursement claim</b>, and mark receipts via the existing Finance / Invoice / Reimbursement modules — each row of this matrix will reflect their live status automatically (linked via <code>participant_body_code</code>).
+                    Once each body&apos;s Division Secretary accepts, they can file their own <b>budget</b>, upload <b>invoices</b>, submit a <b>reimbursement claim</b>, and mark receipts via the existing Finance / Invoice / Reimbursement modules — each row of this matrix will reflect their live status automatically (linked via <code>participant_body_code</code>).
                 </div>
             </div>
         </div>

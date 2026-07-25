@@ -105,6 +105,7 @@ class TournamentReceipt(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     tournament_id: str
+    participant_body_code: Optional[str] = None  # M26 · attach receipt to a participant row
     receipt_no: str
     receipt_date: str                            # ISO YYYY-MM-DD
     amount_inr: float
@@ -117,6 +118,7 @@ class TournamentReceipt(BaseModel):
 
 
 class TournamentReceiptCreate(BaseModel):
+    participant_body_code: Optional[str] = None
     receipt_date: str
     amount_inr: float
     mode: str = "NEFT"
@@ -139,10 +141,18 @@ async def create_tournament_receipt(tid: str, payload: TournamentReceiptCreate):
     if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
         raise HTTPException(404, "Tournament not found")
     count = await db.tournament_receipts.count_documents({"tournament_id": tid})
+    body = payload.model_dump()
+    # M26 Phase B · derive participant_body_code from linked claim if not supplied
+    if not body.get("participant_body_code") and body.get("linked_claim_id"):
+        claim = await db.tournament_reimbursement_claims.find_one(
+            {"id": body["linked_claim_id"]}, {"_id": 0, "participant_body_code": 1, "body_id": 1}
+        )
+        if claim:
+            body["participant_body_code"] = claim.get("participant_body_code") or claim.get("body_id")
     r = TournamentReceipt(
         tournament_id=tid,
         receipt_no=f"MPCA-RCT-{tid[:6].upper()}-{count + 1:03d}",
-        **payload.model_dump(),
+        **body,
     )
     await db.tournament_receipts.insert_one(r.model_dump())
     return r

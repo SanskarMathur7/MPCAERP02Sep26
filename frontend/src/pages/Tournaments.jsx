@@ -188,10 +188,10 @@ const Tournaments = () => {
 
             {stats && (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10" data-testid="trn-stats">
-                    <StatTile icon={Trophy}      label="Total Tournaments"   value={stats.total_tournaments}  sub="Cycle 2025-26"             accent="navy" />
-                    <StatTile icon={Calendar}    label="Upcoming"            value={stats.upcoming}            sub="Awaiting squad selection"   accent="saffron" />
-                    <StatTile icon={Users}       label="In Selection"        value={stats.in_selection}        sub="Squads being formed"        accent="marigold" />
-                    <StatTile icon={ShieldCheck} label="In Progress"         value={stats.in_progress}         sub="Currently being played"     accent="navy" />
+                    <StatTile icon={Trophy}      label={persona?.body_type === "State" ? "Total Tournaments" : "In My Scope"}   value={persona?.body_type === "State" ? stats.total_tournaments : list.length}  sub={persona?.body_type === "State" ? "Cycle 2025-26 · state-wide" : `${persona?.body_name || persona?.body_code}`} accent="navy" />
+                    <StatTile icon={Calendar}    label="Upcoming"            value={persona?.body_type === "State" ? stats.upcoming : list.filter((t) => t.status === "Upcoming").length}            sub="Awaiting squad selection"   accent="saffron" />
+                    <StatTile icon={Users}       label="In Selection"        value={persona?.body_type === "State" ? stats.in_selection : list.filter((t) => t.status === "Squad_Selection").length}        sub="Squads being formed"        accent="marigold" />
+                    <StatTile icon={ShieldCheck} label="In Progress"         value={persona?.body_type === "State" ? stats.in_progress : list.filter((t) => t.status === "In_Progress").length}         sub="Currently being played"     accent="navy" />
                     <StatTile icon={Trophy}      label="Players Selected"    value={stats.total_players_selected} sub={stats.total_squads + " squads"} accent="maroon" />
                 </div>
             )}

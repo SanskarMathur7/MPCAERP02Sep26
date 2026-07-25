@@ -1,0 +1,32 @@
+{
+  "summary": "Sprint M25 · Division Pools & Host — end-to-end verified. Backend: 4/4 pytest cases pass in test_m25_division_pools.py (bodies?body_type=Division returns 10 MP divisions; PATCH /setup-meta persists division_pools[] and GET /tournaments/{tid} echoes them; GET /progress marks setup.teams DONE when only division_pools present; NOT done when empty). Frontend flow (Division Secretary persona → /tournaments → inter_div tournament MY Memorial → Overview → click box-basics → panel-basics renders): basics-division-pools section shows; Add Pool creates pools with rand-ID data-testids; ticking 2 divisions in Pool A + host radio DIV-IND works; second pool 'Pool B' — DIV-IND checkbox is disabled AND parent has opacity-40 class (cross-pool guard works); Save Basics → no basics-save-error → reload → 2 pools · 4 divs · 2 hosts persisted (summary confirmed). Validation: empty pool + save → basics-save-error 'Pool C has no divisions — add at least one or remove the pool.' Camp type (pre_camp): basics-division-pools NOT rendered, basics-player-group + basics-player-group-input present. Progress % jumped 26% → 37% after pool save (setup.teams marked done).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m25_division_pools.py",
+    "/app/test_reports/pytest/iter39_m25.xml"
+  ],
+  "action_items": [
+    "(Info · from iter_38 still open) TournamentBasicsPanel meta state does not resync when parent tournament prop refreshes with a new setup_meta — currently OK because parent unmounts panel between saves, but note for future.",
+    "(Info) tournament_workspace.patch_setup_meta hard-$sets the whole setup_meta dict without a Pydantic model or size cap — malicious clients could write arbitrary keys. Consider constraining to whitelisted fields (category, age_group, teams, pools, division_pools, grounds, player_group, player_count)."
+  ],
+  "critical_code_review_comments": [
+    "TournamentBasicsPanel.jsx uses Math.random-based uid() for pool ids — OK for client-side keys but if a pool is saved and later renamed then more pools are added by another editor, ID collisions are theoretically possible. Consider crypto.randomUUID().",
+    "TournamentBasicsPanel.jsx toggleDivisionInPool auto-picks the first division as host when the current host is de-selected. That's convenient but silent; consider a toast so the user sees the host has changed.",
+    "TournamentDetail.jsx line 207 gates canEdit as `canEdit || persona?.body_type !== 'State'` — meaning ANY non-State persona (including District, Match Official) can edit the panel. Verify this matches RBAC intent; likely only Division Secretary should edit an inter-divisional tournament's pools."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m25_division_pools.py (new · 4 tests · all pass)",
+    "/app/test_reports/pytest/iter39_m25.xml (new · JUnit output)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (all 6 review acceptance criteria met)"},
+  "test_credentials": "6 persona chips on /login — persona-chip-division-secretary used (Devashish Nilosey · Indore Division). Existing inter_div tournament used: e2a9ac5c-8e72-4d0a-9aa9-8dae40f482e5 (MY Memorial). Camp: b7e6763e-a1a1-4772-ae60-77eb980156d5 (pre_camp).",
+  "seed_data_creation": "Test suite creates 2 TEST_M25 inter_div tournaments per pytest run (no DELETE endpoint). MY Memorial (e2a9ac5c-...) now has 2 persisted division_pools (Pool A: DIV-BPL+DIV-IND host=DIV-IND, Pool B: DIV-JBP+DIV-GWL host=DIV-JBP) from UI flow — main agent may want to reset this.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "M25 Division Pools & Host feature fully green. Data shape stored under tournament.setup_meta.division_pools = [{id, name, division_codes[], host_division_code}]. Progress derivation (tournament_workspace.py line 244) counts division_pools toward the teams_set step. Panel appears only after clicking box-basics on Overview tab (SetupBox toggle in TournamentDetail.jsx line 196). Cross-pool exclusion is enforced client-side (usedDivisionCodes Set + disabled attribute + opacity-40 class)."
+}

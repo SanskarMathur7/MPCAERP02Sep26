@@ -238,7 +238,12 @@ async def get_tournament_progress(tid: str):
     input_vars_set = bool(t.get("input_variables"))
     setup_meta = t.get("setup_meta") or {}
     basics_set = bool(setup_meta.get("category") and setup_meta.get("age_group"))
-    teams_set = bool(setup_meta.get("teams") or setup_meta.get("pools") or setup_meta.get("player_group"))
+    teams_set = bool(
+        setup_meta.get("teams")
+        or setup_meta.get("pools")
+        or setup_meta.get("division_pools")
+        or setup_meta.get("player_group")
+    )
     grounds_set = bool(setup_meta.get("grounds"))
     calendar_fixed = bool(t.get("calendar_fixed"))
     closure_letter = bool(t.get("closure_letter_generated_at"))

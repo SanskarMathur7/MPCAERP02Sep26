@@ -61,28 +61,45 @@ class ParticipationPatch(BaseModel):
 
 # ───────────────────────── Sync helper ─────────────────────────
 
-async def sync_participants_from_pools(tid: str, division_pools: List[Dict[str, Any]]):
+async def sync_participants_from_pools(
+    tid: str,
+    division_pools: Optional[List[Dict[str, Any]]] = None,
+    district_pools: Optional[List[Dict[str, Any]]] = None,
+):
     """Idempotent — upserts one row per (tournament_id, body_code) based on the
-    supplied division_pools. Bodies dropped from the pools are soft-deleted.
-    Called from tournament_workspace.patch_setup_meta after every save."""
-    if not isinstance(division_pools, list):
+    supplied division_pools + district_pools. Bodies dropped from the pools are
+    soft-deleted. Called from tournament_workspace.patch_setup_meta after every save.
+
+    Phase C · handles both Inter_Divisional (division_pools with Division codes)
+    and Inter_District (district_pools with District codes) uniformly.
+    """
+    # If neither list is provided (e.g. non-inter-body tournament), no-op.
+    if division_pools is None and district_pools is None:
         return
 
-    # Cache division names for display
-    codes_in_pools = {c for p in division_pools for c in (p.get("division_codes") or [])}
-    body_docs = {}
+    merged_pools: List[Dict[str, Any]] = []
+    for p in (division_pools or []):
+        merged_pools.append({**p, "_default_body_type": "Division"})
+    for p in (district_pools or []):
+        merged_pools.append({**p, "_default_body_type": "District"})
+
+    # Cache body names for display
+    codes_in_pools = {c for p in merged_pools for c in (p.get("division_codes") or p.get("district_codes") or [])}
+    body_docs: Dict[str, Dict[str, Any]] = {}
     if codes_in_pools:
         async for b in db.bodies.find({"code": {"$in": list(codes_in_pools)}}, {"_id": 0, "code": 1, "name": 1, "body_type": 1}):
             body_docs[b["code"]] = b
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    kept_codes = set()
+    kept_codes: set = set()
 
-    for pool in division_pools:
+    for pool in merged_pools:
         pool_id = pool.get("id")
         pool_name = pool.get("name")
-        host_code = pool.get("host_division_code")
-        for code in pool.get("division_codes") or []:
+        host_code = pool.get("host_division_code") or pool.get("host_district_code")
+        # Support both keys — division_codes for old data, district_codes for Phase C
+        member_codes = pool.get("division_codes") or pool.get("district_codes") or []
+        for code in member_codes:
             kept_codes.add(code)
             body = body_docs.get(code, {})
             role = "Host" if code == host_code else "Visitor"
@@ -92,7 +109,7 @@ async def sync_participants_from_pools(tid: str, division_pools: List[Dict[str, 
             update_doc = {
                 "tournament_id": tid,
                 "body_code": code,
-                "body_type": body.get("body_type") or "Division",
+                "body_type": body.get("body_type") or pool.get("_default_body_type") or "Division",
                 "body_name": body.get("name") or code,
                 "role": role,
                 "pool_id": pool_id,
@@ -301,10 +318,12 @@ async def patch_tournament_participant(tid: str, body_code: str, patch: Particip
 
 @api_router.post("/tournaments/{tid}/participants/resync")
 async def resync_participants(tid: str):
-    """Manual re-sync trigger — pulls current setup_meta.division_pools and reconciles."""
+    """Manual re-sync trigger — pulls current setup_meta pools and reconciles."""
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "setup_meta": 1})
     if not t:
         raise HTTPException(404, "Tournament not found")
-    pools = ((t.get("setup_meta") or {}).get("division_pools")) or []
-    await sync_participants_from_pools(tid, pools)
-    return {"resynced": True, "pool_count": len(pools)}
+    meta = t.get("setup_meta") or {}
+    div_pools = meta.get("division_pools") or []
+    dist_pools = meta.get("district_pools") or []
+    await sync_participants_from_pools(tid, div_pools, dist_pools)
+    return {"resynced": True, "pool_count": len(div_pools) + len(dist_pools)}

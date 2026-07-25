@@ -28,11 +28,18 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     const type = getTypeByCode(tournament.tournament_type_code);
     const isCamp = CAMP_TYPES.includes(tournament.tournament_type_code);
+    // Phase C · derive body-mode from tournament scope
+    const isDistrictScope = tournament.scope === "Inter_District";
+    const poolKey = isDistrictScope ? "district_pools" : "division_pools";
+    const bodyLabel = isDistrictScope ? "District" : "Division";
+    const bodyLabelPlural = isDistrictScope ? "Districts" : "Divisions";
+
     const [meta, setMeta] = useState({
         category: "Senior",
         age_group: "Senior",
         teams: [],
         division_pools: [],
+        district_pools: [],
         grounds: [],
         player_group: "",
         player_count: 20,
@@ -42,58 +49,64 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState("");
     const [venues, setVenues] = useState([]);
-    const [divisions, setDivisions] = useState([]);
+    const [bodies, setBodies] = useState([]);   // divisions OR districts depending on scope
     const [newTeam, setNewTeam] = useState({ name: "", pool: "A" });
     const [newGround, setNewGround] = useState({ venue_name: "", ground_name: "" });
 
     useEffect(() => {
         api.get("/venues").then((r) => setVenues(r.data || [])).catch(() => setVenues([]));
-        api.get("/bodies", { params: { body_type: "Division" } })
-            .then((r) => setDivisions(r.data || []))
-            .catch(() => setDivisions([]));
-    }, []);
+        const params = isDistrictScope
+            ? { body_type: "District", parent_code: tournament.host_body_id || undefined }
+            : { body_type: "Division" };
+        api.get("/bodies", { params })
+            .then((r) => setBodies(r.data || []))
+            .catch(() => setBodies([]));
+    }, [isDistrictScope, tournament.host_body_id]);
 
     const setField = (k, v) => { setMeta((m) => ({ ...m, [k]: v })); setDirty(true); };
 
-    // ─── Division Pools helpers ────────────────────────────
-    const dpools = meta.division_pools || [];
-    const usedDivisionCodes = useMemo(
-        () => new Set(dpools.flatMap((p) => p.division_codes || [])),
+    // ─── Body Pools helpers (Division or District) ──────────
+    const dpools = meta[poolKey] || [];
+    const usedBodyCodes = useMemo(
+        () => new Set(dpools.flatMap((p) => p.division_codes || p.district_codes || [])),
         [dpools]
     );
-    const divisionByCode = useMemo(() => {
+    const bodyByCode = useMemo(() => {
         const m = {};
-        divisions.forEach((d) => { m[d.code] = d; });
+        bodies.forEach((d) => { m[d.code] = d; });
         return m;
-    }, [divisions]);
+    }, [bodies]);
+    const codesKey = isDistrictScope ? "district_codes" : "division_codes";
+    const hostKey = isDistrictScope ? "host_district_code" : "host_division_code";
 
     const addPool = () => {
         const nextLetter = POOL_LABELS[dpools.length] || `${dpools.length + 1}`;
-        const newPool = { id: uid(), name: `Pool ${nextLetter}`, division_codes: [], host_division_code: null };
-        setField("division_pools", [...dpools, newPool]);
+        const newPool = { id: uid(), name: `Pool ${nextLetter}`, [codesKey]: [], [hostKey]: null };
+        setField(poolKey, [...dpools, newPool]);
     };
-    const removePool = (pid) => setField("division_pools", dpools.filter((p) => p.id !== pid));
+    const removePool = (pid) => setField(poolKey, dpools.filter((p) => p.id !== pid));
     const patchPool = (pid, patch) => {
         setField(
-            "division_pools",
+            poolKey,
             dpools.map((p) => (p.id === pid ? { ...p, ...patch } : p))
         );
     };
-    const toggleDivisionInPool = (pid, code) => {
+    const toggleBodyInPool = (pid, code) => {
         const pool = dpools.find((p) => p.id === pid);
         if (!pool) return;
-        const included = (pool.division_codes || []).includes(code);
-        // Prevent putting a division into more than one pool
-        if (!included && usedDivisionCodes.has(code)) return;
+        const currentCodes = pool[codesKey] || [];
+        const included = currentCodes.includes(code);
+        // Prevent putting a body into more than one pool
+        if (!included && usedBodyCodes.has(code)) return;
         const next_codes = included
-            ? pool.division_codes.filter((c) => c !== code)
-            : [...(pool.division_codes || []), code];
-        const next_host = pool.host_division_code && next_codes.includes(pool.host_division_code)
-            ? pool.host_division_code
+            ? currentCodes.filter((c) => c !== code)
+            : [...currentCodes, code];
+        const next_host = pool[hostKey] && next_codes.includes(pool[hostKey])
+            ? pool[hostKey]
             : (next_codes[0] || null);
-        patchPool(pid, { division_codes: next_codes, host_division_code: next_host });
+        patchPool(pid, { [codesKey]: next_codes, [hostKey]: next_host });
     };
-    const setPoolHost = (pid, code) => patchPool(pid, { host_division_code: code });
+    const setPoolHost = (pid, code) => patchPool(pid, { [hostKey]: code });
     const renamePool = (pid, name) => patchPool(pid, { name });
 
     // ─── Free-text extra teams (clubs/schools/districts) ────
@@ -115,14 +128,15 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     // ─── Save with validation ───────────────────────────
     const validate = () => {
         for (const p of dpools) {
-            if ((p.division_codes || []).length === 0) {
-                return `${p.name} has no divisions — add at least one or remove the pool.`;
+            const memberCodes = p[codesKey] || [];
+            if (memberCodes.length === 0) {
+                return `${p.name} has no ${bodyLabelPlural.toLowerCase()} — add at least one or remove the pool.`;
             }
-            if (!p.host_division_code) {
-                return `${p.name} needs a host division marked.`;
+            if (!p[hostKey]) {
+                return `${p.name} needs a host ${bodyLabel.toLowerCase()} marked.`;
             }
-            if (!p.division_codes.includes(p.host_division_code)) {
-                return `${p.name}'s host must be one of its divisions.`;
+            if (!memberCodes.includes(p[hostKey])) {
+                return `${p.name}'s host must be one of its ${bodyLabelPlural.toLowerCase()}.`;
             }
         }
         return "";
@@ -142,8 +156,8 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     };
 
     const teamPools = Array.from(new Set((meta.teams || []).map((t) => t.pool))).sort();
-    const totalDivisions = dpools.reduce((n, p) => n + (p.division_codes || []).length, 0);
-    const totalHosts = dpools.filter((p) => p.host_division_code).length;
+    const totalBodies = dpools.reduce((n, p) => n + ((p[codesKey] || []).length), 0);
+    const totalHosts = dpools.filter((p) => p[hostKey]).length;
 
     return (
         <div className="border border-mpca-brass/30 bg-mpca-ivory p-5 space-y-5" data-testid="panel-basics">
@@ -203,10 +217,10 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                 </div>
             ) : (
                 <>
-                {/* Step 4a · Division Pools & Host */}
+                {/* Step 4a · Division/District Pools & Host */}
                 <div className="border-t border-mpca-brass/20 pt-4" data-testid="basics-division-pools">
                     <div className="flex items-center justify-between mb-2">
-                        <div className="overline text-[9px] flex items-center gap-2"><UsersIcon size={11} /> Step 4 · Division Pools & Host</div>
+                        <div className="overline text-[9px] flex items-center gap-2"><UsersIcon size={11} /> Step 4 · {bodyLabel} Pools & Host</div>
                         {canEdit && (
                             <button
                                 onClick={addPool}
@@ -219,13 +233,16 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                         )}
                     </div>
                     <div className="text-[10px] text-mpca-gray-dark italic mb-3">
-                        Add one or more pools. Tick the divisions travelling in each pool and mark the host division (where matches are played).
-                        A division can appear in only one pool.
+                        Add one or more pools. Tick the {bodyLabelPlural.toLowerCase()} travelling in each pool and mark the host {bodyLabel.toLowerCase()} (where matches are played).
+                        A {bodyLabel.toLowerCase()} can appear in only one pool.
+                        {isDistrictScope && !tournament.host_body_id && (
+                            <span className="block mt-1 text-mpca-oxblood">Note: this Inter-District tournament has no host Division set — pick one from the tournament header first.</span>
+                        )}
                     </div>
 
                     {dpools.length === 0 && (
                         <div className="border border-dashed border-mpca-brass/40 px-4 py-6 text-center text-[11px] text-mpca-gray-dark" data-testid="basics-pools-empty">
-                            No division pools added yet. {canEdit && <span>Click <b>Add Pool</b> to start.</span>}
+                            No {bodyLabel.toLowerCase()} pools added yet. {canEdit && <span>Click <b>Add Pool</b> to start.</span>}
                         </div>
                     )}
 
@@ -245,8 +262,8 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                                             <div className="font-serif text-sm">{pool.name}</div>
                                         )}
                                         <span className="text-[9px] uppercase tracking-widest opacity-80">
-                                            · {(pool.division_codes || []).length} divs
-                                            {pool.host_division_code ? ` · host: ${divisionByCode[pool.host_division_code]?.name || pool.host_division_code}` : " · no host set"}
+                                            · {(pool[codesKey] || []).length} {isDistrictScope ? "distr." : "divs"}
+                                            {pool[hostKey] ? ` · host: ${bodyByCode[pool[hostKey]]?.name || pool[hostKey]}` : " · no host set"}
                                         </span>
                                     </div>
                                     {canEdit && (
@@ -256,14 +273,14 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                                     )}
                                 </div>
                                 <div className="px-3 py-2">
-                                    {divisions.length === 0 ? (
-                                        <div className="text-[10px] italic text-mpca-gray-dark py-2">Loading divisions…</div>
+                                    {bodies.length === 0 ? (
+                                        <div className="text-[10px] italic text-mpca-gray-dark py-2">Loading {bodyLabelPlural.toLowerCase()}…</div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
-                                            {divisions.map((d) => {
-                                                const inThisPool = (pool.division_codes || []).includes(d.code);
-                                                const inOtherPool = !inThisPool && usedDivisionCodes.has(d.code);
-                                                const isHost = pool.host_division_code === d.code;
+                                            {bodies.map((d) => {
+                                                const inThisPool = (pool[codesKey] || []).includes(d.code);
+                                                const inOtherPool = !inThisPool && usedBodyCodes.has(d.code);
+                                                const isHost = pool[hostKey] === d.code;
                                                 return (
                                                     <div
                                                         key={d.code}
@@ -274,7 +291,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                                                             type="checkbox"
                                                             checked={inThisPool}
                                                             disabled={!canEdit || inOtherPool}
-                                                            onChange={() => toggleDivisionInPool(pool.id, d.code)}
+                                                            onChange={() => toggleBodyInPool(pool.id, d.code)}
                                                             data-testid={`basics-pool-${pool.id}-div-${d.code}-check`}
                                                         />
                                                         <span className="flex-1 truncate text-mpca-charcoal">
@@ -307,7 +324,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
 
                     {dpools.length > 0 && (
                         <div className="text-[10px] font-mono text-mpca-brass mt-2" data-testid="basics-pools-summary">
-                            {dpools.length} pool(s) · {totalDivisions} division(s) · {totalHosts} host(s) assigned
+                            {dpools.length} pool(s) · {totalBodies} {bodyLabel.toLowerCase()}(s) · {totalHosts} host(s) assigned
                         </div>
                     )}
                 </div>

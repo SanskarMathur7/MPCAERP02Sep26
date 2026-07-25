@@ -1,0 +1,27 @@
+{
+  "summary": "M26 Phase C (Inter_District pool + participation) tested end-to-end. Backend: 8/8 new pytest in test_m26_phase_c.py covering (1) PATCH /setup-meta with district_pools auto-creates District participation rows (body_type='District'), (2) merged division+district pools produce merged participant list with per-body body_type, (3) progress.setup.teams=true when only district_pools present, (4) resync returns pool_count = len(div)+len(dist), (5) District participant persists acceptance (PATCH with body_code=DIST-*), (6) regression Inter_Divisional still creates Division rows unchanged, (7) soft-delete on pool reduction. Also re-ran Phase A+B suite: 18/18 still green. Total 26/26 backend tests pass. Frontend: Created fresh Inter_District (TEST_M26C_UI_InterDistrict, host=DIV-IND) via API, opened box-basics → header renders 'STEP 4 · DISTRICT POOLS & HOST', Add Pool button loads exactly 8 districts under DIV-IND (Alirajpur/Barwani/Burhanpur/Dhar/Indore/Jhabua/Khandwa/Khargone) with NO DIV-* codes leaking. Ticked 2 districts (DIST-INDO-IND + DIST-DHAR-IND), set INDO as host, saved. After reload, GET /api/tournaments/{tid} returns setup_meta.district_pools=[{district_codes:[INDO,DHAR], host_district_code:INDO}]. box-participants matrix opens showing 'Dhar District Cricket Association · Visitor · Pool A · Pending' and 'Indore District Cricket Association · Host · Pool A · Pending' with the same lifecycle columns/actions as Phase A/B. Regression tournament e2a9ac5c (MY Memorial · Inter_Divisional) still shows 'STEP 4 · DIVISION POOLS & HOST' with 2 pools + 5 DIV-* codes rendered correctly (visually confirmed via screenshot — playwright selector count returned 0 due to timing before /bodies fetch resolved, non-blocking test-script issue).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_m26_phase_c.py",
+    "/app/backend/tests/test_m26_phase_b.py",
+    "/app/backend/tests/test_m26_participants_matrix.py",
+    "/app/test_reports/pytest/m26_phasec_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "sync_participants_from_pools cleanly merges both pool lists via a single loop with a `_default_body_type` sentinel — good separation. body_type is overridden by actual bodies.body_type when available, else defaults to the pool's origin (Division/District). Correct.",
+    "tournament_workspace.patch_setup_meta forwards div_pools + dist_pools with `is not None` gating — an empty list will still trigger sync (good, allows clearing pools).",
+    "resync endpoint's pool_count = len(div_pools) + len(dist_pools) — matches spec, but if you ever need per-scope counts consider returning {div_pool_count, dist_pool_count} — minor nit.",
+    "Frontend TournamentBasicsPanel: bodies-loading effect key is (isDistrictScope, tournament.host_body_id) — correct, will re-fetch when scope or host changes.",
+    "TournamentDetail box-participants note correctly sums division_pools + district_pools; verified via screenshot ('2 bodies · 1 pool(s)').",
+    "Pre-existing (not Phase C) hydration warning about <span> inside <option> in the venue datalist (line 397 of TournamentBasicsPanel.jsx) still logs in console — unrelated to Phase C but worth cleaning up (React 18 hydration mismatch)."
+  ],
+  "updated_files": ["/app/backend/tests/test_m26_phase_c.py (new)"],
+  "success_rate": {"backend": "100% (26/26 across Phase A+B+C)", "frontend": "100%"},
+  "test_credentials": "persona-chip-secretary (MPCA). No password.",
+  "seed_data_creation": "Backend tests create+delete TEST_M26C_InterDistrict / TEST_M26C_MergePools / TEST_M26C_InterDiv_Regression per module. Frontend UI test created TEST_M26C_UI_InterDistrict (id=608d019a-ec0d-45c2-9e3b-697bd916d10a) with pool [DIST-INDO-IND, DIST-DHAR-IND] — DELETE returns 405 in this env (same as prior iterations), so the row remains and can be reused/manually cleaned by main agent.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase C green. test_m26_phase_c.py is the regression harness for Inter_District behavior. If a new phase adds a 3rd pool type (e.g. club_pools), extend sync_participants_from_pools with the same _default_body_type pattern. Note: tournament_type enum in /app/backend/models.py does NOT include 'MPCA_InterDistrict' — Inter_District tournaments must be created with tournament_type='MPCA_Championship' (or another existing literal) while scope='Inter_District'. Consider adding 'MPCA_InterDistrict' literal for cleaner UX. Pre-existing hydration warning at TournamentBasicsPanel.jsx:397 (option>span) unrelated to Phase C but still visible in console."
+}

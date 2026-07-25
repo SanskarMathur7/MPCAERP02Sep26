@@ -189,11 +189,13 @@ async def patch_setup_meta(tid: str, payload: SetupMetaPayload):
     r = await db.tournaments.update_one({"id": tid}, {"$set": {"setup_meta": payload.setup_meta}})
     if r.matched_count == 0:
         raise HTTPException(404, "Tournament not found")
-    # M26 · Sync per-division participation ledger when pools change
-    pools = payload.setup_meta.get("division_pools") if isinstance(payload.setup_meta, dict) else None
-    if pools is not None:
+    # M26 · Sync per-body participation ledger when pools change
+    meta = payload.setup_meta if isinstance(payload.setup_meta, dict) else {}
+    div_pools = meta.get("division_pools")
+    dist_pools = meta.get("district_pools")
+    if div_pools is not None or dist_pools is not None:
         from routes.tournament_participations import sync_participants_from_pools
-        await sync_participants_from_pools(tid, pools)
+        await sync_participants_from_pools(tid, div_pools, dist_pools)
     return await db.tournaments.find_one({"id": tid}, {"_id": 0})
 
 
@@ -257,6 +259,7 @@ async def get_tournament_progress(tid: str):
         setup_meta.get("teams")
         or setup_meta.get("pools")
         or setup_meta.get("division_pools")
+        or setup_meta.get("district_pools")
         or setup_meta.get("player_group")
     )
     grounds_set = bool(setup_meta.get("grounds"))

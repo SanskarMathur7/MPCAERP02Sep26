@@ -61,7 +61,7 @@ const emptyForm = {
     tournament_type_code: "",
     format: "Multi_Day",
     scope: "Inter_Divisional",
-    fiscal_cycle: "2025-26",
+    fiscal_cycle: (typeof window !== "undefined" && window.__mpca_season) || "2026-27",
     host_body_id: "MPCA",
     scheme_code: "",
     start_date: "",

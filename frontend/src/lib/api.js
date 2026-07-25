@@ -9,7 +9,8 @@ export const api = axios.create({
     timeout: 15000,
 });
 
-// Attach persona (role) + optional email to every request so backend RBAC works.
+// Attach persona (role) + optional email + selected season to every request so
+// backend RBAC + season scoping work.
 api.interceptors.request.use((config) => {
     try {
         const raw = typeof window !== "undefined" && window.localStorage.getItem("mpca_persona");
@@ -26,6 +27,23 @@ api.interceptors.request.use((config) => {
             if (p?.name) config.headers["X-Persona-Name"] = p.name;
             if (p?.post) config.headers["X-Persona-Post"] = p.post;
         }
+        // M27 · Global cricketing-season filter — injected on GET only, and
+        // only when the caller has NOT already supplied fiscal_cycle. This
+        // keeps explicit per-page overrides working while covering the 95%
+        // of list pages that just want "current season".
+        const season = (typeof window !== "undefined" && window.__mpca_season) ||
+                       (typeof window !== "undefined" && window.localStorage.getItem("mpca_season"));
+        const method = (config.method || "get").toLowerCase();
+        if (season && method === "get") {
+            config.params = config.params || {};
+            const hasCycle = Object.prototype.hasOwnProperty.call(config.params, "fiscal_cycle")
+                || (typeof config.url === "string" && config.url.includes("fiscal_cycle="));
+            const optOut = config.headers?.["X-Season-Optout"] === "1";
+            if (!hasCycle && !optOut) config.params.fiscal_cycle = season;
+        }
+        // Also forward as a header so backend endpoints that read from a
+        // header-based season selector (few) can pick it up.
+        if (season) config.headers = { ...(config.headers || {}), "X-Season": season };
     } catch (_) { /* noop */ }
     return config;
 });

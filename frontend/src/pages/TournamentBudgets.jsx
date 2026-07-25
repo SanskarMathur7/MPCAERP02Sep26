@@ -55,7 +55,7 @@ const NewBudgetDialog = ({ open, persona, onClose, onCreated }) => {
     const [bodies, setBodies] = useState([]);
     const [form, setForm] = useState({
         tournament_id: "", body_id: "", total_ceiling_inr: "",
-        fiscal_cycle: "2025-26", notes: "",
+        fiscal_cycle: (typeof window !== "undefined" && window.__mpca_season) || "2026-27", notes: "",
     });
     const [heads, setHeads] = useState(HEADS.map((h) => ({ ...h, limit: "" })));
     const [busy, setBusy] = useState(false);

@@ -40,7 +40,7 @@ const ClaimNew = () => {
         description: "",
         category: "Tournament_Funding",
         amount_inr: "",
-        fiscal_cycle: "2025-26",
+        fiscal_cycle: (typeof window !== "undefined" && window.__mpca_season) || "2026-27",
         claim_path: "Bulk_Budget",
         tournament_budget_id: "",
     });

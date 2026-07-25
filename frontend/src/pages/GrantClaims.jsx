@@ -42,7 +42,7 @@ const GrantClaims = () => {
 
     const createClaim = async () => {
         try {
-            const payload = { ...newClaim, body_id: persona?.body_code || "MPCA", fiscal_cycle: "2025-26" };
+            const payload = { ...newClaim, body_id: persona?.body_code || "MPCA", fiscal_cycle: (typeof window !== "undefined" && window.__mpca_season) || "2026-27" };
             const { data } = await api.post("/grant-claims", payload);
             setClaims((prev) => [data, ...prev]);
             setSelected(data);

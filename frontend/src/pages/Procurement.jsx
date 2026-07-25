@@ -32,7 +32,7 @@ const Pill = ({ tone, label, testId }) => (
 
 // ---------- New PR form ----------
 const NewProcurementDialog = ({ open, persona, onClose, onCreated }) => {
-    const [form, setForm] = useState({ title: "", description: "", estimated_amount_inr: "", fiscal_cycle: "2025-26" });
+    const [form, setForm] = useState({ title: "", description: "", estimated_amount_inr: "", fiscal_cycle: (typeof window !== "undefined" && window.__mpca_season) || "2026-27" });
     const [busy, setBusy] = useState(false);
     if (!open) return null;
     const submit = async (e) => {
@@ -47,7 +47,7 @@ const NewProcurementDialog = ({ open, persona, onClose, onCreated }) => {
                 fiscal_cycle: form.fiscal_cycle,
             });
             onCreated(pr);
-            setForm({ title: "", description: "", estimated_amount_inr: "", fiscal_cycle: "2025-26" });
+            setForm({ title: "", description: "", estimated_amount_inr: "", fiscal_cycle: (typeof window !== "undefined" && window.__mpca_season) || "2026-27" });
         } catch (e) {
             alert(e?.response?.data?.detail || e.message);
         } finally {

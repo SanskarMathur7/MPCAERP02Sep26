@@ -51,7 +51,7 @@ const NewBillDialog = ({ open, persona, onClose, onCreated }) => {
         vendor_id: "", category: "Hotel", bill_no_external: "",
         bill_date: new Date().toISOString().slice(0, 10), description: "",
         base_amount_inr: "", gst_inr: "0", tds_inr: "0",
-        fiscal_cycle: "2025-26",
+        fiscal_cycle: (typeof window !== "undefined" && window.__mpca_season) || "2026-27",
     });
     const [docs, setDocs] = useState([]);
     const [busy, setBusy] = useState(false);
@@ -102,7 +102,7 @@ const NewBillDialog = ({ open, persona, onClose, onCreated }) => {
                 vendor_id: "", category: "Hotel", bill_no_external: "",
                 bill_date: new Date().toISOString().slice(0, 10), description: "",
                 base_amount_inr: "", gst_inr: "0", tds_inr: "0",
-                fiscal_cycle: "2025-26",
+                fiscal_cycle: (typeof window !== "undefined" && window.__mpca_season) || "2026-27",
             });
         } catch (err) {
             alert(err?.response?.data?.detail || err.message);

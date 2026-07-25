@@ -2,6 +2,7 @@ import "@/App.css";
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { SeasonProvider } from "@/context/SeasonContext";
 import AppLayout from "@/components/AppLayout";
 // Kept eager: shell + first-paint public routes (avoids a loading flash on entry).
 import Landing from "@/pages/Landing";
@@ -91,6 +92,7 @@ function App() {
     return (
         <div className="App">
             <AuthProvider>
+                <SeasonProvider>
                 <BrowserRouter>
                     <Suspense fallback={<PageLoader />}>
                         <Routes>
@@ -192,6 +194,7 @@ function App() {
                         </Routes>
                     </Suspense>
                 </BrowserRouter>
+                </SeasonProvider>
             </AuthProvider>
         </div>
     );

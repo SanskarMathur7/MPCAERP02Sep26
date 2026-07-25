@@ -152,6 +152,7 @@ const COMING_SOON_DOMAINS = [
 
 import { MpcaEmblem as MPCACrest } from "@/components/MpcaEmblem";
 import NotificationBell from "@/components/NotificationBell";
+import SeasonSwitcher from "@/components/SeasonSwitcher";
 import AIAssistantPanel from "@/components/AIAssistantPanel";
 
 const AppLayout = ({ children }) => {
@@ -362,6 +363,9 @@ const AppLayout = ({ children }) => {
 
             {/* Main */}
             <main className="flex-1 overflow-y-auto" data-testid="app-main">
+                <div className="sticky top-0 z-30 bg-mpca-cream/95 backdrop-blur-sm border-b border-mpca-brass/20 px-6 py-2 flex items-center justify-end gap-3" data-testid="app-topbar">
+                    <SeasonSwitcher />
+                </div>
                 {children}
             </main>
             <AIAssistantPanel />

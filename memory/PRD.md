@@ -718,3 +718,41 @@ back-office spine that closes the loop with Sprint 1's ledger via auto-vouchers.
 - **Phase VI** — BCCI-level ball-by-ball online scoring tool.
 
 
+
+## Sprint M25 · Division Pools & Host Utility · Feb 2026
+
+### What was built
+- `TournamentBasicsPanel.jsx` — added Step 4 · **Division Pools & Host** section:
+  - Multi-pool support (Add Pool / Remove Pool) up to Pool H.
+  - Each pool has an editable name (default "Pool A", "Pool B" …), a checkbox
+    list of the 10 MP divisions (loaded from `GET /api/bodies?body_type=Division`)
+    and a Host radio button (Home icon) that must sit on one of the ticked divisions.
+  - Cross-pool exclusion — a division already in another pool renders greyed
+    (opacity-40) and disabled to prevent duplicates.
+  - Save validation blocks pools with no divisions or no host and surfaces the
+    error inline via `data-testid=basics-save-error` (replaces the old
+    `window.alert`).
+  - Legacy free-text "Extra Teams" grid retained under Step 4b for
+    club/school/district entrants.
+- `tournament_workspace.py` — `progress` derivation now treats
+  `setup_meta.division_pools` as a valid teams indicator (setup.teams step
+  goes green once at least one pool exists).
+- `TournamentDetail.jsx` — tightened `canEdit` gating on the Basics panel to
+  `State || Division` (previously anyone non-State).
+
+### Data shape
+```
+tournament.setup_meta.division_pools = [
+  { id: "abc123", name: "Pool A",
+    division_codes: ["DIV-BPL","DIV-IND"],
+    host_division_code: "DIV-IND" }
+]
+```
+
+### Test coverage
+- `/app/backend/tests/test_m25_division_pools.py` — 4/4 pass
+  (bodies filter · setup-meta persistence · progress derivation ON/OFF).
+- Iteration 39 frontend + backend E2E — 100 % pass across 6 acceptance
+  criteria (add/remove pools · host radio · cross-pool exclusion · validation
+  banner · camp variant hides pools · progress % moves from 26→37 %).
+

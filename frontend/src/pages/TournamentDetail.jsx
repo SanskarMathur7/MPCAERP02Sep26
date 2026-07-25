@@ -204,7 +204,7 @@ const TournamentDetail = () => {
                     <SetupBox testId="box-closure" icon={ScrollText} label="Closure Letter" note={t.closure_letter_generated_at ? "Issued" : "Not issued"} onClick={() => setOpenBox(openBox === "closure" ? null : "closure")} active={openBox === "closure"} />
                 </div>
                 {openBox === "basics" && (
-                    <div className="mt-4"><TournamentBasicsPanel tournament={t} canEdit={canEdit || persona?.body_type !== "State"} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div className="mt-4"><TournamentBasicsPanel tournament={t} canEdit={canEdit || persona?.body_type === "Division"} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "input-vars" && (
                     <div className="mt-4"><InputVariablesPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>

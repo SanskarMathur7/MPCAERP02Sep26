@@ -824,3 +824,95 @@ GET /api/tournaments/{tid}/participants →
 - Inter-District variant (participants = districts of the host division).
 - Roll-up dashboard: sum of participant budgets → master budget variance.
 
+
+## Sprint M26 · Phases B → F · Multi-Division Lifecycle Rollout · Feb 2026
+
+### Phase B · Downstream Auto-Linkage
+- `TournamentBudgetBase`, `TournamentInvoiceBase`, `TournamentReimbursementClaimBase`,
+  `TournamentReceiptCreate` all now accept optional `participant_body_code`.
+- Create endpoints auto-resolve `participant_body_code` from `(tournament_id, body_id)`
+  when a live participation row exists, then upsert `budget_id`/`claim_id` on that row.
+- Receipt endpoint derives `participant_body_code` from `linked_claim_id` when the
+  Treasurer records payment against a claim.
+- New drill-down: `GET /api/tournaments/{tid}/participants/{code}/finance` returns
+  the full budget + invoices + claim + receipts trail for a participant.
+- Frontend: ParticipantsMatrix rows are now expandable (chevron) → inline 4-column
+  finance snapshot (Budget / Invoices / Claim / Receipts) rendered per row.
+- **Test coverage**: iter_41 · 18/18 pass.
+
+### Phase C · Inter-District Variant
+- `sync_participants_from_pools(tid, division_pools=None, district_pools=None)`
+  handles both types uniformly. `district_pools` shape: same as division_pools
+  but with `district_codes[]` and `host_district_code`.
+- `TournamentBasicsPanel.jsx` derives `isDistrictScope` from tournament.scope
+  and swaps: label ("District Pools & Host"), body list source
+  (`/api/bodies?body_type=District&parent_code=<host_body_id>`), and setup_meta key
+  (`district_pools`).
+- **Test coverage**: iter_42 · 8/8 Phase C + regression clean.
+
+### Phase D · Roll-ups & Bulk NEFT
+- `GET /api/tournaments/{tid}/neft-batch` — preview participants with
+  `outstanding_inr > 0` + their bank_account details, plus `ready_for_neft` flag.
+- `POST /api/tournaments/{tid}/neft-export` — CSV bank-upload with columns
+  `SL_NO,BODY_CODE,BENEFICIARY_NAME,ACCOUNT_NO,IFSC,AMOUNT_INR,PAYMENT_REF,REMARKS`.
+  Creates one Receipt per eligible body with `mode='NEFT_Batch'`,
+  `reference_no=NEFT-<TID6>-B<seq>`. Skipped rows surface via response headers.
+- `GET /api/tournaments/{tid}/closure-readiness` — reports `unsettled` participants.
+- `POST /api/tournaments/{tid}/closure-letter` now blocks with **HTTP 409** when
+  any participant is unsettled; `payload.force=true` overrides.
+- Frontend: header buttons **Bulk NEFT** (green pill) + **Re-sync**, closure
+  readiness chip (green ShieldCheck / red ShieldAlert), NEFT modal with
+  per-row checkboxes and CSV blob download.
+- **Test coverage**: iter_43 · 13/13 Phase D + 39/39 regression.
+
+### Phase E · Notifications & Reminders
+- `sync_participants_from_pools` fires a `warning`-severity notification to
+  each newly-added body's Secretary (Division/District) inviting them to accept.
+- `patch_tournament_participant` fires a notification to MPCA Secretary on
+  `Accepted` / `Declined` flip (severity varies).
+- `GET /api/tournaments/{tid}/participation-reminders` — pull-based reasons
+  per participant: `awaiting_acceptance` (Pending > 7d), `no_budget`
+  (Accepted but no budget row), `no_claim_after_end` (tournament ended, no claim),
+  `unsettled` (outstanding > 0).
+- `POST /api/tournaments/{tid}/participation-reminders/dispatch` fires
+  in-app notifications for every open reason.
+- Frontend: **Reminders (N)** button + summary panel listing top-4 overdue
+  bodies with reasons + outstanding.
+- **Test coverage**: iter_44 · 8/8 Phase E + 47/47 regression.
+
+### Phase F · Reporting, Variance & Polish
+- `GET /api/tournaments/{tid}/participants.csv` — governance-ready CSV with
+  18 columns and TOTALS footer. Includes soft-deleted rows.
+- `GET /api/tournaments/{tid}/variance-summary` — per-participant analytics
+  `{budget_inr, invoice_inr, variance_inr, utilisation_pct, over_budget}` +
+  aggregate totals.
+- **10-minute dedup throttle** on reminder dispatch (`db.notifications`
+  lookup by recipient+title+tid); response now returns `{dispatched_count,
+  deduped_count, reminder_count}`.
+- Frontend: **CSV** export anchor button in header; readiness/reminders load
+  errors now surface in the error bar (previously silent).
+- **Test coverage**: iter_45 · 13/13 Phase F + **60/60 across A→F**.
+
+### API Surface Recap
+```
+GET    /api/tournaments/{tid}/participants[?include_removed]        (M26 A)
+GET    /api/tournaments/{tid}/participants/{body_code}              (M26 A)
+PATCH  /api/tournaments/{tid}/participants/{body_code}              (M26 A)
+POST   /api/tournaments/{tid}/participants/resync                   (M26 A)
+GET    /api/tournaments/{tid}/participants/{body_code}/finance      (M26 B)
+GET    /api/tournaments/{tid}/participants.csv                      (M26 F)
+GET    /api/tournaments/{tid}/variance-summary                      (M26 F)
+GET    /api/tournaments/{tid}/neft-batch                            (M26 D)
+POST   /api/tournaments/{tid}/neft-export                           (M26 D)
+GET    /api/tournaments/{tid}/closure-readiness                     (M26 D)
+GET    /api/tournaments/{tid}/participation-reminders               (M26 E)
+POST   /api/tournaments/{tid}/participation-reminders/dispatch      (M26 E/F)
+```
+
+### Deferred (post-M26)
+- Batch-fetch aggregation in `_totals_for_participant` for tournaments with
+  100+ bodies (present impl is O(N)×3 round-trips per row).
+- Excel `.xlsx` export (currently CSV only).
+- Cron/background reminder job (currently pull/manual dispatch only).
+- Server-side auth gate audit on the CSV endpoint.
+

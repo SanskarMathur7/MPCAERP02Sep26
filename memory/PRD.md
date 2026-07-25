@@ -756,3 +756,71 @@ tournament.setup_meta.division_pools = [
   criteria (add/remove pools · host radio · cross-pool exclusion · validation
   banner · camp variant hides pools · progress % moves from 26→37 %).
 
+
+## Sprint M26 · Multi-Division Participants Matrix · Feb 2026
+
+### Problem
+For inter-divisional (and inter-district) tournaments, MPCA needs to manage the
+FULL lifecycle for every participating division in one place: **acceptance ·
+budget · invoices · claim · reimbursement receipts**. Prior sprints tracked
+these per-tournament as a single flat row — no way to see or drive per-body
+progress from the tournament workspace.
+
+### What was built
+- **New collection `tournament_participations`** with fields:
+  `{tournament_id, body_code, body_type, body_name, role: Host|Visitor,
+    pool_id, pool_name, acceptance_status, acceptance_note, acceptance_at,
+    acceptance_by_name, budget_id, claim_id, notes, removed_at, created_at, updated_at}`
+- **Auto-sync hook** — `PATCH /api/tournaments/{tid}/setup-meta` now calls
+  `sync_participants_from_pools()` whenever `division_pools` is present.
+  * Adds new divisions as rows.
+  * Soft-deletes bodies that fell out (`removed_at` timestamp).
+  * Re-activates soft-deleted rows if a division is re-added — **preserves
+    acceptance history**.
+- **REST endpoints** (`routes/tournament_participations.py`):
+  * `GET  /api/tournaments/{tid}/participants[?include_removed]`
+  * `GET  /api/tournaments/{tid}/participants/{body_code}`
+  * `PATCH /api/tournaments/{tid}/participants/{body_code}`
+    (acceptance_status ∈ Pending/Accepted/Declined/Not_Required, +note/by_name/notes)
+  * `POST /api/tournaments/{tid}/participants/resync` — manual reconcile
+  * Live derivations from `tournament_invoices`, `tournament_budgets`,
+    `reimbursement_claims`, `tournament_receipts` filtered by
+    `participant_body_code` (fields already additive on those tables).
+- **Frontend `ParticipantsMatrix.jsx`** — new setup box `box-participants`
+  (UsersRound icon). Shows a table row per participant with columns:
+  Body · Role (Host/Visitor chip) · Pool · Accept (chip + inline Accept/Decline
+  buttons) · Budget · Invoices · Claim · Received · Outstanding · Actions.
+  Roll-up totals in the tfoot. History toggle to show soft-deleted rows.
+  Re-sync button (State only).
+- RBAC: self-division persona can accept its own row; only State personas can
+  Re-sync.
+
+### Test coverage
+- Backend suite `test_m26_participants_matrix.py` — 10/10 pass
+  (list · patch · resync · setup-meta auto-sync · soft-delete · re-activation
+  preserving acceptance · progress regression from M25).
+- Iteration 40 frontend + backend E2E — 100 % pass.
+
+### Data shape (illustration)
+```
+GET /api/tournaments/{tid}/participants →
+[
+  { body_code: "DIV-IND", role: "Host",    pool_name: "Pool A",
+    acceptance_status: "Accepted",  budget_total_inr: 500000,
+    invoice_total_inr: 320000, claim_status: "Submitted",
+    claim_requested_inr: 320000, receipt_total_inr: 0,
+    outstanding_inr: 0 },
+  { body_code: "DIV-BPL", role: "Visitor", pool_name: "Pool A",
+    acceptance_status: "Pending",   budget_total_inr: 85000,
+    invoice_total_inr: 0, claim_requested_inr: 0,
+    receipt_total_inr: 0, outstanding_inr: 0 },
+  …
+]
+```
+
+### Deferred (Phase B / C — future sprints)
+- Per-participant claim submission gating (Division persona restricted to own row).
+- Bulk NEFT payment file generation across all participants.
+- Inter-District variant (participants = districts of the host division).
+- Roll-up dashboard: sum of participant budgets → master budget variance.
+

@@ -157,26 +157,8 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
         return grounds.filter((g) => g.venue_id === form.venue_id);
     }, [grounds, form.venue_id]);
 
-    // Fix 5: Live budget preview when scheme is selected (uses backend calc with defaults).
-    useEffect(() => {
-        if (!form.scheme_code) { setBudgetPreview(null); return; }
-        let cancelled = false;
-        setPreviewLoading(true);
-        (async () => {
-            try {
-                const spec = await api.get(`/schemes/${form.scheme_code}/input-spec`).then((r) => r.data);
-                const defaults = {};
-                (spec.input_variables || []).forEach((v) => { defaults[v.key] = v.default; });
-                const computed = await api.post(`/schemes/${form.scheme_code}/compute-budget`, { inputs: defaults }).then((r) => r.data);
-                if (!cancelled) setBudgetPreview(computed);
-            } catch (_) {
-                if (!cancelled) setBudgetPreview(null);
-            } finally {
-                if (!cancelled) setPreviewLoading(false);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [form.scheme_code]);
+    // Sprint M23c · Removed: live budget preview on create. Budget is now
+    // computed inside the tournament workspace's Input Variables panel.
 
     if (!open) return null;
 
@@ -214,24 +196,9 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                 notes: form.notes || null,
             };
             const t = await createTournament(payload);
-
-            // If a scheme was chosen, auto-create a draft budget for the tournament
-            // so the Division Secretary can immediately submit for MPCA approval.
-            if (form.scheme_code && budgetPreview) {
-                try {
-                    await api.post("/tournament-budgets", {
-                        tournament_id: t.id,
-                        body_id: form.host_body_id,
-                        fiscal_cycle: form.fiscal_cycle,
-                        total_ceiling_inr: budgetPreview.total_ceiling_inr,
-                        head_allocations: (budgetPreview.head_allocations || []).map((h) => ({
-                            head: h.head, limit_inr: h.limit_inr, notes: h.formula,
-                        })),
-                        notes: `Auto-created from scheme ${form.scheme_code} at tournament creation.`,
-                    });
-                } catch (_) { /* non-fatal — user can create budget manually later */ }
-            }
-
+            // Sprint M23c · Auto-budget moved out of the create flow — the
+            // Input Variables panel on the tournament workspace now owns budget
+            // creation once the user fills the scheme-specific variables.
             onDone?.(t);
             onClose();
         } catch (e) {
@@ -332,77 +299,82 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                         <ChevronLeft size={11} /> Back to type picker
                     </button>
                 </div>
-                <div className="p-8 space-y-4">
+                <div className="p-8 space-y-5">
+                    {/* Read-only type badge — locked from Step 1 */}
+                    <div className="border border-mpca-brass/30 bg-mpca-parchment/40 px-4 py-3 flex items-center gap-3" data-testid="trn-type-badge">
+                        <Trophy size={16} strokeWidth={1.5} className="text-mpca-brass" />
+                        <div className="flex-1">
+                            <div className="overline text-[9px]">Selected Tournament Type</div>
+                            <div className="font-serif text-base text-mpca-green-dark mt-0.5">{getTypeByCode(form.tournament_type_code)?.name || form.tournament_type}</div>
+                        </div>
+                        <div className="text-[10px] text-mpca-brass italic max-w-xs text-right">
+                            Rate-card + input variables for this type are pre-defined by MPCA and will be applied when you open the tournament workspace.
+                        </div>
+                    </div>
+
+                    {/* Master information — 4 essentials to identify the tournament */}
                     <label className="block">
-                        <div className="overline text-[9px] mb-1">Tournament Type *</div>
-                        <select
+                        <div className="overline text-[9px] mb-1">Tournament Name *</div>
+                        {(() => {
+                            const dir = getDirectoryFor(form.tournament_type_code);
+                            const isOther = form.name === "__other__" || (!!form.name && form.name !== "__other__" && !dir.some((d) => d.name === form.name));
+                            return (
+                                <>
+                                    {dir.length > 0 && (
+                                        <select
+                                            className="input-heritage"
+                                            value={dir.some((d) => d.name === form.name) ? form.name : (form.name ? "__other__" : "")}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                if (v === "__other__") setForm({ ...form, name: "__other__" });
+                                                else setForm({ ...form, name: v, trophy_name: v.split(" · ")[0] || v });
+                                            }}
+                                            data-testid="trn-name-select"
+                                        >
+                                            <option value="">— Pick from MPCA directory —</option>
+                                            {dir.map((d) => (
+                                                <option key={d.name} value={d.name}>{d.name}{d.age ? ` · ${d.age}` : ""}</option>
+                                            ))}
+                                            <option value="__other__">➕ Other · type manually</option>
+                                        </select>
+                                    )}
+                                    {(dir.length === 0 || isOther) && (
+                                        <input
+                                            className={`input-heritage ${dir.length > 0 ? "mt-2" : ""}`}
+                                            value={form.name === "__other__" ? "" : form.name}
+                                            onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                            placeholder={dir.length > 0 ? "Type the tournament name manually…" : "e.g. MY Memorial Trophy"}
+                                            data-testid="trn-name-input"
+                                            autoFocus={isOther}
+                                        />
+                                    )}
+                                </>
+                            );
+                        })()}
+                    </label>
+
+                    <label className="block">
+                        <div className="overline text-[9px] mb-1">Trophy / Short Name (optional)</div>
+                        <input
                             className="input-heritage"
-                            value={form.tournament_type}
-                            onChange={(e) => setForm({ ...form, tournament_type: e.target.value })}
-                            data-testid="trn-type-select"
-                        >
-                            {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
+                            value={form.trophy_name}
+                            onChange={(e) => setForm({ ...form, trophy_name: e.target.value })}
+                            placeholder="Auto-fills from directory · edit if needed"
+                            data-testid="trn-trophy-input"
+                        />
                     </label>
 
                     <div className="grid md:grid-cols-2 gap-4">
-                        <label className="block md:col-span-2">
-                            <div className="overline text-[9px] mb-1">Tournament Name *</div>
-                            {(() => {
-                                const dir = getDirectoryFor(form.tournament_type_code);
-                                const isOther = form.name === "__other__" || (!!form.name && form.name !== "__other__" && !dir.some((d) => d.name === form.name));
-                                return (
-                                    <>
-                                        {dir.length > 0 && (
-                                            <select
-                                                className="input-heritage"
-                                                value={dir.some((d) => d.name === form.name) ? form.name : (form.name ? "__other__" : "")}
-                                                onChange={(e) => {
-                                                    const v = e.target.value;
-                                                    if (v === "__other__") setForm({ ...form, name: "__other__" });
-                                                    else setForm({ ...form, name: v, trophy_name: v.split(" · ")[0] || v });
-                                                }}
-                                                data-testid="trn-name-select"
-                                            >
-                                                <option value="">— Pick from MPCA directory —</option>
-                                                {dir.map((d) => (
-                                                    <option key={d.name} value={d.name}>{d.name}{d.age ? ` · ${d.age}` : ""}</option>
-                                                ))}
-                                                <option value="__other__">➕ Other · type manually</option>
-                                            </select>
-                                        )}
-                                        {(dir.length === 0 || isOther) && (
-                                            <input
-                                                className={`input-heritage ${dir.length > 0 ? "mt-2" : ""}`}
-                                                value={form.name === "__other__" ? "" : form.name}
-                                                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                                placeholder={dir.length > 0 ? "Type the tournament name manually…" : "e.g. MY Memorial Trophy"}
-                                                data-testid="trn-name-input"
-                                                autoFocus={isOther}
-                                            />
-                                        )}
-                                        {dir.length > 0 && !isOther && form.name && form.name !== "__other__" && (
-                                            <div className="text-[10px] text-mpca-brass italic mt-1">
-                                                Recognised MPCA directory entry — budget rate-card auto-applies.
-                                            </div>
-                                        )}
-                                    </>
-                                );
-                            })()}
-                        </label>
-                        <label className="block md:col-span-2">
-                            <div className="overline text-[9px] mb-1">Trophy / Short Name (optional)</div>
+                        <label className="block">
+                            <div className="overline text-[9px] mb-1">Cricketing Season *</div>
                             <input
-                                className="input-heritage"
-                                value={form.trophy_name}
-                                onChange={(e) => setForm({ ...form, trophy_name: e.target.value })}
-                                placeholder="e.g. Madhavrao Scindia Trophy"
-                                data-testid="trn-trophy-input"
+                                className="input-heritage font-mono"
+                                value={form.fiscal_cycle}
+                                onChange={(e) => setForm({ ...form, fiscal_cycle: e.target.value })}
+                                placeholder="2025-26"
+                                data-testid="trn-fy-input"
                             />
                         </label>
-                    </div>
-
-                    <div className="grid md:grid-cols-3 gap-4">
                         <label className="block">
                             <div className="overline text-[9px] mb-1">Format *</div>
                             <select
@@ -413,27 +385,6 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                             >
                                 {FORMAT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                             </select>
-                        </label>
-                        <label className="block">
-                            <div className="overline text-[9px] mb-1">Scope *</div>
-                            <select
-                                className="input-heritage"
-                                value={form.scope}
-                                onChange={(e) => setForm({ ...form, scope: e.target.value })}
-                                data-testid="trn-scope-select"
-                            >
-                                {SCOPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                        </label>
-                        <label className="block">
-                            <div className="overline text-[9px] mb-1">Fiscal Cycle</div>
-                            <input
-                                className="input-heritage font-mono"
-                                value={form.fiscal_cycle}
-                                onChange={(e) => setForm({ ...form, fiscal_cycle: e.target.value })}
-                                placeholder="2025-26"
-                                data-testid="trn-fy-input"
-                            />
                         </label>
                     </div>
 
@@ -457,100 +408,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                                 </option>
                             ))}
                         </select>
-                        <div className="text-[10px] text-mpca-gray-dark mt-1 italic">
-                            Pick MPCA (State) for state-level events, a Division for Inter-Divisional / Inter-District, a District for local tournaments.
-                        </div>
                     </label>
-
-                    {/* Fix 5: MPCA Reimbursement Scheme with live auto-budget preview */}
-                    <label className="block">
-                        <div className="overline text-[9px] mb-1 flex items-center gap-2">
-                            <BookOpen size={11} /> MPCA Reimbursement Scheme
-                            {previewLoading && <span className="text-[9px] text-mpca-brass italic normal-case tracking-normal">computing budget…</span>}
-                        </div>
-                        <select
-                            className="input-heritage"
-                            value={form.scheme_code}
-                            onChange={(e) => setForm({ ...form, scheme_code: e.target.value })}
-                            disabled={refsLoading || schemes.length === 0}
-                            data-testid="trn-scheme-select"
-                        >
-                            <option value="">— No scheme / attach later —</option>
-                            {schemes.map((s) => (
-                                <option key={s.scheme_code} value={s.scheme_code}>
-                                    Scheme {s.scheme_code} · {s.name}
-                                </option>
-                            ))}
-                        </select>
-                        <div className="text-[10px] text-mpca-gray-dark mt-1 italic">
-                            Pick the applicable scheme (e.g. 2-D for Inter-Divisional Hosting) — a draft budget will be auto-created and available for the Division Secretary to submit.
-                        </div>
-                        {budgetPreview && (
-                            <div className="mt-2 border border-mpca-brass/40 bg-mpca-parchment/40 p-3" data-testid="trn-budget-preview">
-                                <div className="flex justify-between items-center">
-                                    <div className="overline text-[9px]">Auto-Budget Preview (default inputs)</div>
-                                    <div className="font-mono text-lg text-mpca-oxblood" data-testid="trn-budget-total">
-                                        ₹{Math.round(budgetPreview.total_ceiling_inr || 0).toLocaleString("en-IN")}
-                                    </div>
-                                </div>
-                                <div className="mt-2 space-y-0.5">
-                                    {(budgetPreview.head_allocations || []).slice(0, 6).map((h, i) => (
-                                        <div key={i} className="flex justify-between text-[10px] font-mono">
-                                            <span className="text-mpca-green-dark truncate">{h.head}</span>
-                                            <span className="text-mpca-brass">₹{Math.round(h.limit_inr || 0).toLocaleString("en-IN")}</span>
-                                        </div>
-                                    ))}
-                                    {(budgetPreview.head_allocations || []).length > 6 && (
-                                        <div className="text-[10px] text-mpca-gray-dark italic">+ {budgetPreview.head_allocations.length - 6} more heads</div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </label>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <label className="block">
-                            <div className="overline text-[9px] mb-1 flex items-center gap-2">
-                                <MapPin size={11} /> Venue
-                                {refsLoading && <span className="text-[9px] text-mpca-brass italic normal-case tracking-normal">loading…</span>}
-                            </div>
-                            <select
-                                className="input-heritage"
-                                value={form.venue_id}
-                                onChange={(e) => setForm({ ...form, venue_id: e.target.value, ground_id: "" })}
-                                disabled={refsLoading}
-                                data-testid="trn-venue-select"
-                            >
-                                <option value="">{refsLoading ? "Loading venues…" : "— None / TBD —"}</option>
-                                {!refsLoading && filteredVenues.map((v) => (
-                                    <option key={v.id} value={v.id}>{v.name} ({v.city}) · {v.category}</option>
-                                ))}
-                            </select>
-                            {!refsLoading && form.host_body_id !== "MPCA" && filteredVenues.length < venues.length && (
-                                <div className="text-[10px] text-mpca-brass mt-1 italic">
-                                    Showing {filteredVenues.length} of {venues.length} venues — filtered to your host body.
-                                </div>
-                            )}
-                        </label>
-                        <label className="block">
-                            <div className="overline text-[9px] mb-1">Ground (under selected venue)</div>
-                            <select
-                                className="input-heritage"
-                                value={form.ground_id}
-                                onChange={(e) => setForm({ ...form, ground_id: e.target.value })}
-                                disabled={!form.venue_id}
-                                data-testid="trn-ground-select"
-                            >
-                                <option value="">— None —</option>
-                                {groundsForVenue.map((g) => (
-                                    <option key={g.id} value={g.id}>{g.name} · {g.type}</option>
-                                ))}
-                            </select>
-                            {form.venue_id && groundsForVenue.length === 0 && (
-                                <div className="text-[10px] text-mpca-oxblood mt-1 italic">No grounds defined under this venue yet. Add grounds via the Venues & Grounds page.</div>
-                            )}
-                        </label>
-                    </div>
 
                     <div className="grid md:grid-cols-2 gap-4">
                         <label className="block">
@@ -575,60 +433,23 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                         </label>
                     </div>
 
-                    <div className="grid md:grid-cols-3 gap-4">
-                        <label className="block">
-                            <div className="overline text-[9px] mb-1">Age Cap (U-)</div>
-                            <input
-                                type="number"
-                                className="input-heritage font-mono"
-                                value={form.age_cap_years}
-                                onChange={(e) => setForm({ ...form, age_cap_years: e.target.value })}
-                                placeholder="e.g. 19"
-                                data-testid="trn-agecap-input"
-                            />
-                        </label>
-                        <label className="block">
-                            <div className="overline text-[9px] mb-1">Age Floor (+)</div>
-                            <input
-                                type="number"
-                                className="input-heritage font-mono"
-                                value={form.age_floor_years}
-                                onChange={(e) => setForm({ ...form, age_floor_years: e.target.value })}
-                                placeholder="e.g. 14"
-                                data-testid="trn-agefloor-input"
-                            />
-                        </label>
-                        <label className="block">
-                            <div className="overline text-[9px] mb-1">Max Squad Size</div>
-                            <input
-                                type="number"
-                                className="input-heritage font-mono"
-                                value={form.max_squad_size}
-                                onChange={(e) => setForm({ ...form, max_squad_size: e.target.value })}
-                                data-testid="trn-squad-input"
-                            />
-                        </label>
-                    </div>
-
-                    <label className="flex items-center gap-2 text-sm text-mpca-charcoal">
-                        <input
-                            type="checkbox"
-                            checked={form.is_womens}
-                            onChange={(e) => setForm({ ...form, is_womens: e.target.checked })}
-                            data-testid="trn-womens-toggle"
-                        />
-                        Women&apos;s tournament
-                    </label>
-
                     <label className="block">
-                        <div className="overline text-[9px] mb-1">Notes</div>
+                        <div className="overline text-[9px] mb-1">Notes (optional)</div>
                         <textarea
-                            className="input-heritage min-h-[70px]"
+                            className="input-heritage min-h-[60px]"
                             value={form.notes}
                             onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                            placeholder="Any additional context for the tournament…"
                             data-testid="trn-notes-input"
                         />
                     </label>
+
+                    <div className="border-l-4 border-mpca-brass/50 bg-mpca-cream/30 px-4 py-3">
+                        <div className="text-[10px] text-mpca-brass uppercase tracking-widest">Next steps</div>
+                        <div className="text-[11px] text-mpca-gray-dark mt-1 leading-snug">
+                            After you save, open the tournament workspace to fill the scheme-specific input variables — those drive the auto-budget and reimbursement flow. Venue, squad, and match calendar are also assigned from the workspace.
+                        </div>
+                    </div>
 
                     {err && (
                         <div className="bg-mpca-oxblood/10 border border-mpca-oxblood/40 p-3 text-sm text-mpca-oxblood" data-testid="trn-error">

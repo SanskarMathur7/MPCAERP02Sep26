@@ -7,6 +7,7 @@ Exports produce Excel (xlsx) and PDF (letterhead A4) via openpyxl + reportlab.
 Budget-vs-Actual pulls annual_budget from body.annual_grant_inr (or override) and
 actuals from vouchers (Payment for outflows, Receipt for inflows).
 """
+import asyncio
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import List, Optional
@@ -179,7 +180,7 @@ async def ledger_export_xlsx(body_id: str, fiscal_cycle: Optional[str] = None):
         ws.column_dimensions[chr(64 + col)].width = width
 
     buf = BytesIO()
-    wb.save(buf)
+    await asyncio.to_thread(wb.save, buf)  # H4 · offload CPU-bound serialize
     buf.seek(0)
     filename = f"ledger_{body_id}_{fy}.xlsx"
     return StreamingResponse(
@@ -247,7 +248,7 @@ async def ledger_export_pdf(body_id: str, fiscal_cycle: Optional[str] = None):
     story.append(Paragraph(f"Generated on {datetime.now(timezone.utc).strftime('%d %b %Y · %H:%M UTC')}",
                             ParagraphStyle("foot", parent=styles["Normal"], fontSize=8,
                                            textColor=colors.grey, alignment=1)))
-    doc.build(story)
+    await asyncio.to_thread(doc.build, story)  # H4 · offload CPU-bound PDF render
     buf.seek(0)
     filename = f"ledger_{body_id}_{fy}.pdf"
     return StreamingResponse(buf, media_type="application/pdf",

@@ -16,7 +16,9 @@ from typing import List, Optional, Literal
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+import asyncio
 from core.infra import db, api_router
+from core.shared_services import next_seq  # H6 · atomic sequence
 from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 
@@ -68,20 +70,20 @@ class GrantClaimCreate(GrantClaimBase): pass
 
 
 async def _next_claim_ref(cycle: str) -> str:
-    count = await db.grant_claims.count_documents({"fiscal_cycle": cycle})
-    return f"GRC-{cycle}-{count + 1:04d}"
+    seq = await next_seq(f"grant_claim:{cycle}", lambda: db.grant_claims.count_documents({"fiscal_cycle": cycle}))
+    return f"GRC-{cycle}-{seq:04d}"
 
 
 # ═══════════════════ CRUD ═══════════════════
 
 @api_router.get("/grant-claims", response_model=List[GrantClaim])
-async def list_grant_claims(request: Request, scheme_code: Optional[str] = None, body_id: Optional[str] = None, status: Optional[GrantClaimStatus] = None):
+async def list_grant_claims(request: Request, scheme_code: Optional[str] = None, body_id: Optional[str] = None, status: Optional[GrantClaimStatus] = None, skip: int = 0, limit: int = 500):
     q: dict = {}
     if scheme_code: q["scheme_code"] = scheme_code
     if body_id: q["body_id"] = body_id
     else: q.update(body_scope(get_scope(request)))
     if status: q["status"] = status
-    docs = await db.grant_claims.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    docs = await db.grant_claims.find(q, {"_id": 0}).sort("created_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
 
@@ -188,7 +190,8 @@ Return ONLY a JSON object (no prose, no code fences) with keys:
   "verdict_note": "one line summary"
 }}"""
         file_content = FileContentWithMimeType(file_path=local_path, mime_type=mime)
-        resp = await chat.send_message(UserMessage(text=prompt, file_contents=[file_content]))
+        resp = await asyncio.wait_for(  # H4 · timeout guard
+            chat.send_message(UserMessage(text=prompt, file_contents=[file_content])), timeout=45)
         txt = str(resp).strip()
         # Strip markdown code fences
         if txt.startswith("```"):
@@ -394,7 +397,8 @@ Rules:
 
         chat = LlmChat(api_key=key, session_id=payload.session_id, system_message=system_msg)
         chat = chat.with_model("gemini", "gemini-2.5-flash")
-        resp = await chat.send_message(UserMessage(text=payload.message))
+        resp = await asyncio.wait_for(  # H4 · timeout guard
+            chat.send_message(UserMessage(text=payload.message)), timeout=45)
         return {"reply": str(resp), "session_id": payload.session_id, "body_id": body_id}
     except Exception as e:
         return {"reply": f"AI Assistant error: {e}", "session_id": payload.session_id, "error": True}

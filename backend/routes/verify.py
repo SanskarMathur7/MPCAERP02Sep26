@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
+from core.shared_services import next_seq  # H6 · atomic sequence
 from models import Member
 from core.helpers import next_uid as _
 
@@ -34,6 +35,6 @@ async def verify_member(uid: str):
 
 async def _next_invoice_no() -> str:
     year = datetime.now(timezone.utc).year
-    count = await db.fee_invoices.count_documents({})
-    return f"MPCA-FEE-{year}-{count + 1:04d}"
+    seq = await next_seq("fee_invoice:all", lambda: db.fee_invoices.count_documents({}))
+    return f"MPCA-FEE-{year}-{seq:04d}"
 

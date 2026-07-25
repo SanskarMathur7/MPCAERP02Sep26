@@ -1,4 +1,5 @@
 """Routes · Player Module (M1)."""
+import re
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import HTTPException, Request
@@ -38,6 +39,8 @@ async def list_players(
     division_folder: Optional[str] = None,
     season_year: Optional[str] = None,
     court_order_only: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = 2000,
 ):
     scope = get_scope(request)
     query: dict = {}
@@ -59,10 +62,10 @@ async def list_players(
         query["court_order_flag"] = True
     if search:
         search_or = [
-            {"full_name": {"$regex": search, "$options": "i"}},
-            {"player_id": {"$regex": search, "$options": "i"}},
-            {"player_display_id": {"$regex": search, "$options": "i"}},
-            {"contact_email": {"$regex": search, "$options": "i"}},
+            {"full_name": {"$regex": re.escape(search), "$options": "i"}},
+            {"player_id": {"$regex": re.escape(search), "$options": "i"}},
+            {"player_display_id": {"$regex": re.escape(search), "$options": "i"}},
+            {"contact_email": {"$regex": re.escape(search), "$options": "i"}},
         ]
         # If scope already put an $or (Division scope), $and them together
         if "$or" in query:
@@ -70,7 +73,7 @@ async def list_players(
             query["$and"] = [{"$or": existing_or}, {"$or": search_or}]
         else:
             query["$or"] = search_or
-    docs = await db.players.find(query, {"_id": 0}).sort("registered_on", -1).to_list(2000)
+    docs = await db.players.find(query, {"_id": 0}).sort("registered_on", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
 

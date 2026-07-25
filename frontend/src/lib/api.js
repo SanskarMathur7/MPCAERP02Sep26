@@ -6,7 +6,7 @@ export const API_BASE = `${BACKEND_URL}/api`;
 
 export const api = axios.create({
     baseURL: API_BASE,
-    timeout: 20000,
+    timeout: 15000,
 });
 
 // Attach persona (role) + optional email to every request so backend RBAC works.
@@ -28,6 +28,25 @@ api.interceptors.request.use((config) => {
     } catch (_) { /* noop */ }
     return config;
 });
+
+// M10 · retry idempotent GETs on transient failures (network error / timeout /
+// 5xx) with a short backoff, so a blip doesn't surface as a hard error.
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const config = error.config || {};
+        const isGet = (config.method || "get").toLowerCase() === "get";
+        const status = error.response?.status;
+        const transient = !error.response || status >= 500 || error.code === "ECONNABORTED";
+        config.__retryCount = config.__retryCount || 0;
+        if (isGet && transient && config.__retryCount < 2) {
+            config.__retryCount += 1;
+            await new Promise((r) => setTimeout(r, 400 * config.__retryCount));
+            return api(config);
+        }
+        return Promise.reject(error);
+    }
+);
 
 export const fetchMembers = async (params = {}) => {
     const { data } = await api.get("/members", { params });

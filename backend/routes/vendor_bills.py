@@ -1,4 +1,5 @@
 """Routes · Vendor Master + Vendor Bills (F6a)"""
+import re
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import HTTPException
@@ -88,6 +89,8 @@ async def list_vendors(
     body_id: Optional[str] = None,
     search: Optional[str] = None,
     include_blacklisted: bool = True,
+    skip: int = 0,
+    limit: int = 2000,
 ):
     q: dict = {}
     if category:
@@ -98,11 +101,11 @@ async def list_vendors(
         q["is_blacklisted"] = False
     if search:
         q["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"gstin": {"$regex": search, "$options": "i"}},
-            {"vendor_no": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": re.escape(search), "$options": "i"}},
+            {"gstin": {"$regex": re.escape(search), "$options": "i"}},
+            {"vendor_no": {"$regex": re.escape(search), "$options": "i"}},
         ]
-    docs = await db.vendors.find(q, {"_id": 0}).sort("name", 1).to_list(2000)
+    docs = await db.vendors.find(q, {"_id": 0}).sort("name", 1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
 
@@ -181,6 +184,8 @@ async def list_vendor_bills(
     category: Optional[VendorCategory] = None,
     vendor_id: Optional[str] = None,
     fiscal_cycle: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 2000,
 ):
     q: dict = {}
     if body_id:
@@ -193,7 +198,7 @@ async def list_vendor_bills(
         q["vendor_id"] = vendor_id
     if fiscal_cycle:
         q["fiscal_cycle"] = fiscal_cycle
-    docs = await db.vendor_bills.find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    docs = await db.vendor_bills.find(q, {"_id": 0}).sort("created_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
 
@@ -317,7 +322,11 @@ async def pay_vendor_bill(bid: str, action: VendorBillAction):
             raise HTTPException(404, f"Source account {src_id} not found")
 
     amount = float(doc.get("total_amount_inr") or 0)
-    new_balance = round(float(acct.get("current_balance") or 0) - amount, 2)
+    # H6 · atomic debit — $inc avoids the lost-update race on concurrent payments.
+    acct = await db.bank_accounts.find_one_and_update(
+        {"id": src_id}, {"$inc": {"current_balance": -amount}}, return_document=True,
+    )
+    new_balance = round(float(acct.get("current_balance") or 0), 2)
 
     # Book the debit transaction
     txn = BankTransaction(
@@ -332,7 +341,7 @@ async def pay_vendor_bill(bid: str, action: VendorBillAction):
         balance_after=new_balance,
     )
     await db.bank_txns.insert_one(txn.model_dump())
-    await db.bank_accounts.update_one({"id": src_id}, {"$set": {"current_balance": new_balance}})
+    # (balance already applied atomically above via $inc)
 
     step = ApprovalStep(
         stage="Paid",

@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
+from core.shared_services import next_seq  # H6 · atomic sequence
 from models import Claim, ClaimCreate, ClaimAction, ClaimStatus, ClaimCategory, ApprovalStep, BankTransaction, Body
 from core.helpers import _next_claim_no, _resolve_parent_body, _append_step, _notify_for_claim, _decorate_claim
 from core.ai_validator import _run_ai_validation, _apply_ai_verdict
@@ -17,8 +18,8 @@ from models import SANCTION_THRESHOLDS, TWO_SIGNATORY_THRESHOLD_INR
 
 
 async def _next_claim_no(cycle: str) -> str:
-    count = await db.claims.count_documents({"fiscal_cycle": cycle})
-    return f"CLM-{cycle}-{count + 1:03d}"
+    seq = await next_seq(f"claim:{cycle}", lambda: db.claims.count_documents({"fiscal_cycle": cycle}))
+    return f"CLM-{cycle}-{seq:03d}"
 
 
 async def _resolve_parent_body(body_id: str) -> Optional[str]:
@@ -32,6 +33,8 @@ async def list_claims(
     parent_body_id: Optional[str] = None,
     status: Optional[ClaimStatus] = None,
     fiscal_cycle: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 500,
 ):
     """List claims. body_id filters claims submitted BY that body.
     parent_body_id filters claims pending review BY that body (for Division/MPCA inboxes)."""
@@ -44,7 +47,7 @@ async def list_claims(
         query["status"] = status
     if fiscal_cycle:
         query["fiscal_cycle"] = fiscal_cycle
-    docs = await db.claims.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    docs = await db.claims.find(query, {"_id": 0}).sort("created_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return [_decorate_claim(d) for d in docs]
 
 

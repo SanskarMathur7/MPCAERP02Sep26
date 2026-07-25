@@ -11,6 +11,7 @@ Generates a consolidated audit-ready PDF pack for a given fiscal cycle with:
 
 Uses reportlab (already in requirements from Sprint 1).
 """
+import asyncio
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Optional
@@ -253,7 +254,7 @@ async def audit_pack_pdf(fiscal_cycle: Optional[str] = None,
         f"For questions contact the MPCA Finance & Accounts team.</i>", st_body,
     ))
 
-    doc.build(story)
+    await asyncio.to_thread(doc.build, story)  # H4 · offload CPU-bound PDF render
     buf.seek(0)
     filename = f"MPCA_Audit_Workpapers_{fy}_{datetime.now().strftime('%Y%m%d')}.pdf"
     return StreamingResponse(buf, media_type="application/pdf",

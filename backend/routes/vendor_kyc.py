@@ -15,7 +15,7 @@ from typing import List, Literal, Optional
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
+from core.infra import db, api_router, logger
 from core.shared_services import write_audit_log
 
 
@@ -150,8 +150,8 @@ async def kyc_summary():
                         "name": v.get("name"), "kyc_expires_at": v["kyc_expires_at"],
                         "days_left": (exp - now).days,
                     })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("vendor_kyc: unparseable kyc_expires_at %r on vendor %s (%s)", v.get("kyc_expires_at"), v.get("id"), e)
         by_status[st] = by_status.get(st, 0) + 1
     return {
         "total_vendors": len(docs),

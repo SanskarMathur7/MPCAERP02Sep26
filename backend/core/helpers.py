@@ -4,6 +4,7 @@ from datetime import timedelta as _td  # alias used by _decorate_claim + fairpla
 from typing import List, Optional
 from fastapi import HTTPException
 from core.infra import db
+from core.shared_services import next_seq  # H6 · atomic sequence counters
 from models import (
     Notification, ApprovalStep, MemberCategory,
     ProcurementMethod, ClaimStatus, PlayerCreate,
@@ -19,8 +20,8 @@ CATEGORY_PREFIX = {
 
 async def next_uid(category: MemberCategory) -> str:
     prefix = CATEGORY_PREFIX[category]
-    count = await db.members.count_documents({"category": category})
-    return f"MPCA-{prefix}-{count + 1:04d}"
+    seq = await next_seq(f"member:{category}", lambda: db.members.count_documents({"category": category}))
+    return f"MPCA-{prefix}-{seq:04d}"
 
 
 # MoM (Feb 2026) — TAT agreed at 2 days (48 hours) uniformly across stages.
@@ -82,15 +83,15 @@ def _next_meeting_no(meeting_type: str, count: int) -> str:
 # ---- _next_invoice_no ----
 async def _next_invoice_no() -> str:
     year = datetime.now(timezone.utc).year
-    count = await db.fee_invoices.count_documents({})
-    return f"MPCA-FEE-{year}-{count + 1:04d}"
+    seq = await next_seq("fee_invoice:all", lambda: db.fee_invoices.count_documents({}))
+    return f"MPCA-FEE-{year}-{seq:04d}"
 
 
 
 # ---- _next_claim_no ----
 async def _next_claim_no(cycle: str) -> str:
-    count = await db.claims.count_documents({"fiscal_cycle": cycle})
-    return f"CLM-{cycle}-{count + 1:03d}"
+    seq = await next_seq(f"claim:{cycle}", lambda: db.claims.count_documents({"fiscal_cycle": cycle}))
+    return f"CLM-{cycle}-{seq:03d}"
 
 
 
@@ -428,16 +429,16 @@ def _decorate_claim(doc: dict) -> dict:
 
 # ---- _next_pr_no ----
 async def _next_pr_no(cycle: str) -> str:
-    count = await db.procurement_requests.count_documents({"fiscal_cycle": cycle})
-    return f"PR-{cycle}-{count + 1:03d}"
+    seq = await next_seq(f"pr:{cycle}", lambda: db.procurement_requests.count_documents({"fiscal_cycle": cycle}))
+    return f"PR-{cycle}-{seq:03d}"
 
 
 # ---- player helpers ----
 async def _next_player_id() -> str:
     """Format: MPCA/YYYY/SERIAL (6-digit, zero-padded). Legacy internal id."""
     year = datetime.now(timezone.utc).year
-    count = await db.players.count_documents({"player_id": {"$regex": f"^MPCA/{year}/"}})
-    return f"MPCA/{year}/{count + 1:06d}"
+    seq = await next_seq(f"player_legacy:{year}", lambda: db.players.count_documents({"player_id": {"$regex": f"^MPCA/{year}/"}}))
+    return f"MPCA/{year}/{seq:06d}"
 
 
 def _new_player_display_id(dob_iso: str, first_reg_year: int, serial: int) -> str:
@@ -456,8 +457,7 @@ def _new_player_display_id(dob_iso: str, first_reg_year: int, serial: int) -> st
 
 async def _next_player_display_serial(first_reg_year: int) -> int:
     """Serial counter within a first-registration year."""
-    count = await db.players.count_documents({"first_registration_year": first_reg_year})
-    return count + 1
+    return await next_seq(f"player_display:{first_reg_year}", lambda: db.players.count_documents({"first_registration_year": first_reg_year}))
 
 
 def _derive_division_folder(body_id: str) -> Optional[str]:
@@ -546,15 +546,15 @@ def _validate_eligibility(p: PlayerCreate) -> tuple[bool, List[str]]:
 
 # ---- _next_noc_no ----
 async def _next_noc_no(cycle: str) -> str:
-    count = await db.transfer_requests.count_documents({"fiscal_cycle": cycle})
-    return f"NOC-{cycle}-{count + 1:03d}"
+    seq = await next_seq(f"noc:{cycle}", lambda: db.transfer_requests.count_documents({"fiscal_cycle": cycle}))
+    return f"NOC-{cycle}-{seq:03d}"
 
 
 
 # ---- _next_tournament_no ----
 async def _next_tournament_no(cycle: str) -> str:
-    count = await db.tournaments.count_documents({"fiscal_cycle": cycle})
-    return f"TRN-{cycle}-{count + 1:03d}"
+    seq = await next_seq(f"tournament:{cycle}", lambda: db.tournaments.count_documents({"fiscal_cycle": cycle}))
+    return f"TRN-{cycle}-{seq:03d}"
 
 
 
@@ -600,7 +600,7 @@ def _check_player_against_tournament(player: dict, t: dict, existing_squad_membe
 
 # ---- fixture helpers ----
 async def _next_fixture_no(cycle: str) -> str:
-    count = await db.fixtures.count_documents({"fixture_no": {"$regex": f"^FX-{cycle}-"}})
-    return f"FX-{cycle}-{count + 1:04d}"
+    seq = await next_seq(f"fixture:{cycle}", lambda: db.fixtures.count_documents({"fixture_no": {"$regex": f"^FX-{cycle}-"}}))
+    return f"FX-{cycle}-{seq:04d}"
 
 

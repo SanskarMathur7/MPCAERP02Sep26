@@ -4,9 +4,12 @@ import re
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field
 from fastapi import HTTPException, Request
 
+import asyncio
 from core.infra import db, api_router
+from core.shared_services import next_seq  # H6 · atomic sequence
 from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 from models import (
@@ -72,8 +75,8 @@ HEAD_LABEL_TO_CODE = {v: k for k, v in HEAD_CODE_TO_LABEL.items()}
 
 
 async def _next_invoice_ref(cycle: str) -> str:
-    count = await db.tournament_invoices.count_documents({"invoice_ref": {"$regex": f"^INV-{cycle}-"}})
-    return f"INV-{cycle}-{count + 1:04d}"
+    seq = await next_seq(f"tinvoice:{cycle}", lambda: db.tournament_invoices.count_documents({"invoice_ref": {"$regex": f"^INV-{cycle}-"}}))
+    return f"INV-{cycle}-{seq:04d}"
 
 
 async def _run_invoice_extraction(file_path: str, mime: str) -> dict:
@@ -92,7 +95,7 @@ async def _run_invoice_extraction(file_path: str, mime: str) -> dict:
         file_contents=[FileContentWithMimeType(file_path=file_path, mime_type=mime)],
     )
     try:
-        raw = await chat.send_message(msg)
+        raw = await asyncio.wait_for(chat.send_message(msg), timeout=45)  # H4 · timeout guard
     except Exception as e:
         return {"error": f"{type(e).__name__}: {str(e)[:200]}", "confidence": 0.0}
     parsed = _parse_ai_response(raw if isinstance(raw, str) else str(raw))
@@ -187,15 +190,29 @@ async def create_invoice(payload: TournamentInvoiceCreate):
     return inv
 
 
+class TournamentInvoicePatch(BaseModel):
+    # M3 · typed patch body. extra="ignore" drops unknown keys exactly like the
+    # previous key-whitelist did; money fields are validated as non-negative numbers.
+    model_config = ConfigDict(extra="ignore")
+    vendor_name: Optional[str] = None
+    invoice_no: Optional[str] = None
+    invoice_date: Optional[str] = None
+    amount_inr: Optional[float] = Field(None, ge=0)
+    gst_inr: Optional[float] = Field(None, ge=0)
+    total_inr: Optional[float] = Field(None, ge=0)
+    budget_head_code: Optional[str] = None
+    notes: Optional[str] = None
+    manually_overridden: Optional[bool] = None
+
+
 @api_router.patch("/tournament-invoices/{iid}", response_model=TournamentInvoice)
-async def update_invoice(iid: str, patch: dict):
+async def update_invoice(iid: str, patch: TournamentInvoicePatch):
     doc = await db.tournament_invoices.find_one({"id": iid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Invoice not found")
     if doc["status"] not in ("Draft", "Rejected"):
         raise HTTPException(409, f"Cannot edit an invoice in status {doc['status']}")
-    allowed = {"vendor_name","invoice_no","invoice_date","amount_inr","gst_inr","total_inr","budget_head_code","notes","manually_overridden"}
-    updates = {k: v for k, v in patch.items() if k in allowed}
+    updates = patch.model_dump(exclude_unset=True)  # M3 · only client-provided, validated fields
     if updates:
         updates["manually_overridden"] = True
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()

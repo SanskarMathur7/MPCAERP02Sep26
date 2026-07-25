@@ -1,5 +1,6 @@
 """Routes · Members + Dynamic Member Categories + Bulk Upload (M6)."""
 import csv
+import re
 import io
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -40,6 +41,8 @@ async def list_members(
     division_body_id: Optional[str] = None,
     search: Optional[str] = None,
     body_id: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 2000,
 ):
     scope = get_scope(request)
     query: dict = {}
@@ -56,18 +59,18 @@ async def list_members(
         query.update(body_scope(scope))
     if search:
         search_or = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"uid": {"$regex": search, "$options": "i"}},
-            {"email": {"$regex": search, "$options": "i"}},
-            {"membership_id": {"$regex": search, "$options": "i"}},
-            {"role": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": re.escape(search), "$options": "i"}},
+            {"uid": {"$regex": re.escape(search), "$options": "i"}},
+            {"email": {"$regex": re.escape(search), "$options": "i"}},
+            {"membership_id": {"$regex": re.escape(search), "$options": "i"}},
+            {"role": {"$regex": re.escape(search), "$options": "i"}},
         ]
         if "$or" in query:
             existing_or = query.pop("$or")
             query["$and"] = [{"$or": existing_or}, {"$or": search_or}]
         else:
             query["$or"] = search_or
-    docs = await db.members.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    docs = await db.members.find(query, {"_id": 0}).sort("created_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
 

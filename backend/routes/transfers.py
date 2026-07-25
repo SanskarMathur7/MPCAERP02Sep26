@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
+from core.shared_services import next_seq  # H6 · atomic sequence
 from models import TransferRequest, TransferCreate, TransferStatus, ClaimAction, ApprovalStep, Player
 from core.helpers import _next_noc_no, _notify_for_transfer
 
@@ -14,8 +15,8 @@ from core.helpers import _next_noc_no, _notify_for_transfer
 
 
 async def _next_noc_no(cycle: str) -> str:
-    count = await db.transfer_requests.count_documents({"fiscal_cycle": cycle})
-    return f"NOC-{cycle}-{count + 1:03d}"
+    seq = await next_seq(f"noc:{cycle}", lambda: db.transfer_requests.count_documents({"fiscal_cycle": cycle}))
+    return f"NOC-{cycle}-{seq:03d}"
 
 
 @api_router.get("/transfers", response_model=List[TransferRequest])
@@ -24,6 +25,8 @@ async def list_transfers(
     from_body_id: Optional[str] = None,
     to_body_id: Optional[str] = None,
     status: Optional[TransferStatus] = None,
+    skip: int = 0,
+    limit: int = 500,
 ):
     query: dict = {}
     if player_id:
@@ -34,7 +37,7 @@ async def list_transfers(
         query["to_body_id"] = to_body_id
     if status:
         query["status"] = status
-    docs = await db.transfer_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    docs = await db.transfer_requests.find(query, {"_id": 0}).sort("created_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
 

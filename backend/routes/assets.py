@@ -15,7 +15,7 @@ import uuid
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
+from core.infra import db, api_router, logger
 from core.shared_services import next_code, write_audit_log, indian_fy
 
 
@@ -106,15 +106,16 @@ def _compute_depreciation(asset: dict, as_on: Optional[datetime] = None) -> dict
         purchase = datetime.fromisoformat(asset["purchase_date"])
         if purchase.tzinfo is None:
             purchase = purchase.replace(tzinfo=timezone.utc)
-    except Exception:
+    except Exception as e:
+        logger.warning("assets: unparseable purchase_date %r on asset %s (%s); using as_on", asset.get("purchase_date"), asset.get("id"), e)
         purchase = as_on
     # For disposed assets, cap the months at disposal
     end = as_on
     if asset.get("status") == "Disposed" and asset.get("disposal_date"):
         try:
             end = datetime.fromisoformat(asset["disposal_date"]).replace(tzinfo=timezone.utc)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("assets: unparseable disposal_date %r on asset %s (%s)", asset.get("disposal_date"), asset.get("id"), e)
     months_used = min(_months_between(purchase, end), total_months)
     accumulated = min(depreciable, round(monthly * months_used, 2))
     book = round(cost - accumulated, 2)
@@ -141,13 +142,15 @@ async def _get(aid: str) -> dict:
 async def list_assets(body_id: Optional[str] = None,
                       category: Optional[AssetCategory] = None,
                       status: Optional[AssetStatus] = None,
-                      fiscal_cycle: Optional[str] = None):
+                      fiscal_cycle: Optional[str] = None,
+                      skip: int = 0,
+                      limit: int = 2000):
     q: dict = {}
     if body_id: q["body_id"] = body_id
     if category: q["category"] = category
     if status: q["status"] = status
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
-    docs = await db.assets.find(q, {"_id": 0}).sort("purchase_date", -1).to_list(2000)
+    docs = await db.assets.find(q, {"_id": 0}).sort("purchase_date", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     # Refresh book values on read
     for d in docs:
         if d.get("status") != "Disposed":
@@ -199,7 +202,8 @@ async def depreciation_schedule(aid: str, months: int = 60):
     salvage = float(a.get("salvage_value_inr") or 0)
     try:
         purchase = datetime.fromisoformat(a["purchase_date"])
-    except Exception:
+    except Exception as e:
+        logger.warning("assets: unparseable purchase_date %r on asset %s (%s); using now", a.get("purchase_date"), a.get("id"), e)
         purchase = datetime.now(timezone.utc)
     rows = []
     accumulated = 0.0

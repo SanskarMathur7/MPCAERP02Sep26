@@ -126,12 +126,14 @@ class PayrollFinalisePayload(BaseModel):
 @api_router.get("/employees", response_model=List[Employee])
 async def list_employees(body_id: Optional[str] = None,
                          status: Optional[EmployeeStatus] = None,
-                         employment_type: Optional[EmploymentType] = None):
+                         employment_type: Optional[EmploymentType] = None,
+                         skip: int = 0,
+                         limit: int = 1000):
     q: dict = {}
     if body_id: q["body_id"] = body_id
     if status: q["status"] = status
     if employment_type: q["employment_type"] = employment_type
-    return await db.employees.find(q, {"_id": 0}).sort("employee_no", 1).to_list(1000)
+    return await db.employees.find(q, {"_id": 0}).sort("employee_no", 1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
 
 
 @api_router.get("/employees/{eid}", response_model=Employee)
@@ -256,12 +258,14 @@ async def generate_payroll(payload: PayrollGeneratePayload):
 @api_router.get("/payroll/registers", response_model=List[PayrollRegister])
 async def list_registers(body_id: Optional[str] = None,
                          fiscal_cycle: Optional[str] = None,
-                         status: Optional[str] = None):
+                         status: Optional[str] = None,
+                         skip: int = 0,
+                         limit: int = 200):
     q: dict = {}
     if body_id: q["body_id"] = body_id
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
     if status: q["status"] = status
-    return await db.payroll_registers.find(q, {"_id": 0}).sort("period", -1).to_list(200)
+    return await db.payroll_registers.find(q, {"_id": 0}).sort("period", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
 
 
 @api_router.get("/payroll/registers/{rid}", response_model=PayrollRegister)

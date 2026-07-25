@@ -51,6 +51,38 @@ async def next_code(entity: str, org_short: str = "MPCA", fy: Optional[str] = No
     return f"{key}/{str(seq).zfill(pad)}"
 
 
+async def next_seq(key: str, seed=None) -> int:
+    """H6 · atomic per-key sequence counter (gap-free, race-safe).
+
+    Replaces the `count_documents(...) + 1` numbering pattern, which returned the
+    same value to two concurrent creates (-> duplicate reference numbers). Here the
+    number comes from an atomic `$inc`, so concurrent callers always get distinct
+    values.
+
+    On first use for a `key`, the counter is lazily seeded so existing data keeps
+    its numbering continuous:
+      * `seed` may be an int, or a zero-arg callable returning an int/awaitable
+        (e.g. `lambda: db.claims.count_documents({...})`).
+      * The first returned value equals `seed + 1` -- matching the old `count + 1`.
+    """
+    existing = await db.code_counters.find_one({"_id": key}, {"seq": 1})
+    if existing is None and seed is not None:
+        n = seed() if callable(seed) else seed
+        if hasattr(n, "__await__"):
+            n = await n
+        # $setOnInsert is atomic + idempotent: only the first racer seeds it.
+        await db.code_counters.update_one(
+            {"_id": key}, {"$setOnInsert": {"seq": int(n)}}, upsert=True
+        )
+    result = await db.code_counters.find_one_and_update(
+        {"_id": key},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=True,
+    )
+    return result["seq"]
+
+
 # ═══════════════════ 2 · Approval Engine (P2.1-2.2) ═══════════════════
 # Generic, ordered stages. Modules configure their own workflows;
 # the engine enforces current-stage-only actions and segregation-of-duties.

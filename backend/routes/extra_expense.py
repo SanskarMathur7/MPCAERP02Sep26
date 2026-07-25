@@ -5,6 +5,7 @@ Every action is logged on tournament.expense_events (append-only ApprovalStep li
 """
 from datetime import datetime, timezone
 from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field
 from fastapi import HTTPException, Request
 
 from core.infra import db, api_router
@@ -78,15 +79,27 @@ async def create_extra_expense_request(payload: ExtraExpenseCreate):
     return req
 
 
+class ExtraExpensePatch(BaseModel):
+    # M3 · typed patch body; extra keys ignored (as before), amount validated >= 0.
+    model_config = ConfigDict(extra="ignore")
+    head_code: Optional[str] = None
+    head_label: Optional[str] = None
+    is_new_head: Optional[bool] = None
+    amount_inr: Optional[float] = Field(None, ge=0)
+    justification: Optional[str] = None
+    linked_invoice_id: Optional[str] = None
+    linked_invoice_ref: Optional[str] = None
+    supporting_file_url: Optional[str] = None
+
+
 @api_router.patch("/extra-expense-requests/{rid}", response_model=ExtraExpenseRequest)
-async def update_extra_expense_request(rid: str, patch: dict):
+async def update_extra_expense_request(rid: str, patch: ExtraExpensePatch):
     doc = await db.extra_expense_requests.find_one({"id": rid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Extra expense request not found")
     if doc["status"] not in ("Draft", "Info_Requested"):
         raise HTTPException(409, f"Cannot edit in status {doc['status']}")
-    allowed = {"head_code","head_label","is_new_head","amount_inr","justification","linked_invoice_id","linked_invoice_ref","supporting_file_url"}
-    updates = {k: v for k, v in patch.items() if k in allowed}
+    updates = patch.model_dump(exclude_unset=True)  # M3 · only client-provided, validated fields
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     # If applicant re-edited after info request, move back to Draft
     if doc["status"] == "Info_Requested":

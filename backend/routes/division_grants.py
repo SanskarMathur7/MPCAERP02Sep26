@@ -131,12 +131,14 @@ async def _apply(gid: str, *, action: str, new_status: str, new_stage: str,
 @api_router.get("/division-grants", response_model=List[DivisionGrant])
 async def list_division_grants(body_id: Optional[str] = None,
                                 status: Optional[DivisionGrantStatus] = None,
-                                fiscal_cycle: Optional[str] = None):
+                                fiscal_cycle: Optional[str] = None,
+                                skip: int = 0,
+                                limit: int = 500):
     q: dict = {}
     if body_id: q["body_id"] = body_id
     if status: q["status"] = status
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
-    return await db.division_grants.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return await db.division_grants.find(q, {"_id": 0}).sort("created_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
 
 
 @api_router.get("/division-grants/{gid}", response_model=DivisionGrant)

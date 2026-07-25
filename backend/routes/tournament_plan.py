@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import HTTPException, Request
 
+import re
 from core.infra import db, api_router
+from core.shared_services import next_seq  # H6 · atomic sequence
 from core.scoping import get_scope
 from core.helpers import _create_notification
 from models import (
@@ -330,8 +332,8 @@ async def reject_tournament_plan(tid: str, action: TournamentPlanAction):
 
 
 async def _next_da_ref(cycle: str) -> str:
-    count = await db.match_official_da.count_documents({"da_ref": {"$regex": f"^DA-{cycle}-"}})
-    return f"DA-{cycle}-{count + 1:04d}"
+    seq = await next_seq(f"da:{cycle}", lambda: db.match_official_da.count_documents({"da_ref": {"$regex": f"^DA-{cycle}-"}}))
+    return f"DA-{cycle}-{seq:04d}"
 
 
 async def _prebuild_da_forms(tournament: dict) -> int:
@@ -399,7 +401,7 @@ async def list_da_forms(request: Request, tournament_id: Optional[str] = None, s
     if scope.is_official and scope.name and not official_name:
         official_name = scope.name
     if official_name:
-        q["official_name"] = {"$regex": official_name, "$options": "i"}
+        q["official_name"] = {"$regex": re.escape(official_name), "$options": "i"}
     docs = await db.match_official_da.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return docs
 

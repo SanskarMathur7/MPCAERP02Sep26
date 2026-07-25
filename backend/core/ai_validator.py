@@ -1,4 +1,5 @@
 """AI Gatekeeper (Gemini 3 Flash) for grant claim validation."""
+import asyncio
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +15,9 @@ from core.helpers import _create_notification, _notify_for_claim, _recipient_for
 from models import ApprovalStep
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
+# H4 · hard ceiling on the LLM call so a hung provider can't pin a request open.
+# A timeout raises TimeoutError, caught by the surrounding except -> HOLD_FOR_HUMAN.
+AI_CALL_TIMEOUT = float(os.environ.get("AI_CALL_TIMEOUT", "45"))
 AI_MODEL_PROVIDER = "gemini"
 AI_MODEL_NAME = "gemini-3-flash-preview"
 
@@ -170,7 +174,7 @@ async def _run_ai_validation(claim_doc: dict) -> dict:
     )
 
     try:
-        raw = await chat.send_message(msg)
+        raw = await asyncio.wait_for(chat.send_message(msg), timeout=AI_CALL_TIMEOUT)
     except Exception as e:
         return {
             "decision": "HOLD_FOR_HUMAN",
@@ -391,7 +395,7 @@ async def _run_player_doc_validation(player_doc: dict) -> dict:
     )
 
     try:
-        raw = await chat.send_message(msg)
+        raw = await asyncio.wait_for(chat.send_message(msg), timeout=AI_CALL_TIMEOUT)
     except Exception as e:
         return {
             "decision": "FLAGGED",

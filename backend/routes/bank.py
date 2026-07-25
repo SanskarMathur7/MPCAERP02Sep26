@@ -43,16 +43,20 @@ async def list_transactions(account_id: Optional[str] = None, limit: int = 200):
 
 @api_router.post("/bank/transactions", response_model=BankTransaction)
 async def add_transaction(payload: BankTransactionCreate):
-    acct = await db.bank_accounts.find_one({"id": payload.account_id}, {"_id": 0})
+    delta = payload.amount if payload.txn_type == "Credit" else -payload.amount
+    # H6 · atomic balance update — a single $inc prevents the lost-update race
+    # where two concurrent transactions read the same balance and one overwrites
+    # the other. find_one_and_update returns the document AFTER the increment.
+    acct = await db.bank_accounts.find_one_and_update(
+        {"id": payload.account_id},
+        {"$inc": {"current_balance": delta}},
+        return_document=True,
+    )
     if not acct:
         raise HTTPException(404, "Account not found")
-    delta = payload.amount if payload.txn_type == "Credit" else -payload.amount
-    new_balance = round(acct["current_balance"] + delta, 2)
+    new_balance = round(acct["current_balance"], 2)
     txn = BankTransaction(balance_after=new_balance, **payload.model_dump())
     await db.bank_txns.insert_one(txn.model_dump())
-    await db.bank_accounts.update_one(
-        {"id": payload.account_id}, {"$set": {"current_balance": new_balance}}
-    )
     return txn
 
 

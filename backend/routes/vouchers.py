@@ -90,13 +90,15 @@ async def create_voucher_for_grant(grant: dict, actor_name: str = "System") -> d
 async def list_vouchers(body_id: Optional[str] = None,
                         voucher_type: Optional[VoucherType] = None,
                         fiscal_cycle: Optional[str] = None,
-                        linked_module: Optional[str] = None):
+                        linked_module: Optional[str] = None,
+                        skip: int = 0,
+                        limit: int = 1000):
     q: dict = {}
     if body_id: q["body_id"] = body_id
     if voucher_type: q["voucher_type"] = voucher_type
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
     if linked_module: q["linked_module"] = linked_module
-    docs = await db.vouchers.find(q, {"_id": 0}).sort("date", -1).to_list(1000)
+    docs = await db.vouchers.find(q, {"_id": 0}).sort("date", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
 

@@ -1,0 +1,45 @@
+{
+  "summary": "Iter36 · Comprehensive regression sweep across Sprints M17-M20. Backend: 15/15 pytest cases pass in /app/backend/tests/test_iter36_regression.py (core endpoints, scheme_calc input-spec + compute-budget, tournament workspace: matches/receipts/progress/financial-summary, inter_school create). Frontend smoke covered: 6 persona chips, sidebar structure (Div-Sec + Match Official), tournaments hub live-default filter + 11 type cards + step-2 back-to-picker, tournament detail (subtabs + progress bar 44% + 5 phase pills + 8 setup boxes all present), scoped Tournament Calendar (Div=10, MPCA=54), Player detail Performance tab with 6 stats & 4 charts, Schemes register 13 claim chips → /grant-claims/new?scheme=X + new-claim-modal, Financial Summary variance = ₹3,35,000, Closure letter button present, RBAC for District Sec (list correctly empty; scoping enforced). Iter35-flagged inter_school 422 bug is FIXED (POST /api/tournaments now accepts payload with tournament_type=Invitational + scope=Inter_District + format=One_Day). No blocking regressions found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/tournaments as District-Secretary (Rajesh Kulkarni)",
+        "issues": [
+          "Stat cards at top (Total Tournaments 54, Upcoming 24, In Selection 1, In Progress 1) show STATE-WIDE counts even though the list below is correctly scoped and shows 'No tournaments match this filter'. Numbers are misleading — either scope the stat counters to the persona's visible tournaments, or add a subtitle like 'Cycle 2025-26 · state-wide' so users understand the discrepancy. Minor UX, not a functional bug."
+        ]
+      },
+      {
+        "screen": "TournamentCreateModal (dev-only, cosmetic — recurring)",
+        "issues": [
+          "React hydration warning still emitted: '<span> cannot be a child of <option>' — same as iter33-35. Root cause is Emergent visual-editor injecting <span data-ve-dynamic> inside <option> tags. Non-blocking but pollutes console."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter36_regression.py",
+    "/app/test_reports/pytest/iter36.xml"
+  ],
+  "action_items": [
+    "(Optional/Minor) Scope the stat cards on /tournaments to the persona's visible list, OR label them as state-wide cycle totals to avoid confusion for District/Division users."
+  ],
+  "critical_code_review_comments": [
+    "TournamentCreateModal.jsx — still using raw <option> children of <select> (which the Emergent visual editor mutates into <span> children). Consider migrating create-modal selects to shadcn <Select> to remove the recurring console warning.",
+    "InputVariablesPanel & TournamentWorkspacePanels — window.alert/window.confirm still used in ~5 spots. Replace with shadcn Dialog for a modern feel (previously flagged in iter34-35, still pending).",
+    "tournament_workspace.py PATCH /calendar-lock — uses query param instead of a Pydantic body (inconsistent with peer PATCH endpoints in the same module)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter36_regression.py (new · 15 test cases · 15 pass)",
+    "/app/test_reports/pytest/iter36.xml (new · JUnit output)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% (all sampled scenarios pass)"},
+  "test_credentials": "All 6 personas working via /login persona chips + login-submit-btn. No passwords required.",
+  "seed_data_creation": "One TEST inter_school tournament (TEST_iter36 InterSchool 001) was created + deleted via API during the create-inter_school test. No lingering seed data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Full-sweep regression pass; everything green. iter35 open items also verified fixed: (1) tournament create for inter_school works end-to-end (default_format 'One_Day' now matches backend enum), (2) approved-budget lock badge shown correctly on M20 InputVariablesPanel, (3) TournamentSubTabs strip renders on Overview/Selection/Finance including locked squad screens. Test tournament 61460d66-4844-49f2-b0b2-e6f3a9bd6ced still carries the Approved ₹3,35,000 budget from iter35 (progress = 44%, phase = setup, 2/4 setup sub-steps done). Backend API paths for scheme calc are: GET /api/schemes/{code}/input-spec and POST /api/schemes/{code}/compute-budget (NOT /api/scheme-calc/... which was my initial mistake). Reimbursement schemes list at GET /api/reimbursement-schemes (21 seeded; iter35 said 24 — 3-doc drift). No blocking work for main agent.",
+  "rca of the issue": "N/A — no blocking issues surfaced in this comprehensive regression sweep."
+}

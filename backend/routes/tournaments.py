@@ -6,6 +6,7 @@ from fastapi import HTTPException, Header, Request
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
+from core.shared_services import next_seq  # H6 · atomic sequence
 from core.scoping import get_scope
 from models import Tournament, TournamentCreate, TournamentStatus, Squad, SquadCreate, SquadAddPlayer, SquadMember, Body, Player, TournamentFormat, TournamentScope, TournamentAcceptance, TournamentAcceptanceEntry
 from core.helpers import _next_tournament_no, _check_player_against_tournament, _age_years
@@ -19,8 +20,8 @@ _ACCEPTANCE_ROLES = {"division-secretary", "district-secretary", "president", "s
 
 
 async def _next_tournament_no(cycle: str) -> str:
-    count = await db.tournaments.count_documents({"fiscal_cycle": cycle})
-    return f"TRN-{cycle}-{count + 1:03d}"
+    seq = await next_seq(f"tournament:{cycle}", lambda: db.tournaments.count_documents({"fiscal_cycle": cycle}))
+    return f"TRN-{cycle}-{seq:03d}"
 
 
 def _tournament_scope_query(scope) -> dict:
@@ -57,6 +58,8 @@ async def list_tournaments(
     scope: Optional[TournamentScope] = None,
     fiscal_cycle: Optional[str] = None,
     format: Optional[TournamentFormat] = None,
+    skip: int = 0,
+    limit: int = 200,
 ):
     query: dict = {}
     if status:
@@ -75,7 +78,7 @@ async def list_tournaments(
             query["$and"] = [{"$or": query.pop("$or")}, scope_q]
         else:
             query.update(scope_q)
-    docs = await db.tournaments.find(query, {"_id": 0}).sort("start_date", 1).to_list(200)
+    docs = await db.tournaments.find(query, {"_id": 0}).sort("start_date", 1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
 

@@ -1,4 +1,5 @@
 """Routes · Phase M2-B/M2-C — Fixtures, Match Results, Rankings, HR Allocation."""
+import re
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
 from fastapi import HTTPException
@@ -260,7 +261,7 @@ async def hr_work_hours(name: Optional[str] = None, role: Optional[MatchOfficial
         {"$unwind": "$officials"},
     ]
     if name:
-        pipeline.append({"$match": {"officials.name": {"$regex": name, "$options": "i"}}})
+        pipeline.append({"$match": {"officials.name": {"$regex": re.escape(name), "$options": "i"}}})
     if role:
         pipeline.append({"$match": {"officials.role": role}})
     pipeline += [

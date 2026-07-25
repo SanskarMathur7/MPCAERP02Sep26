@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
+from core.shared_services import next_seq  # H6 · atomic sequence
 from models import ProcurementRequest, ProcurementRequestCreate, Quotation, AwardPayload, ApprovalStep, Body, Claim
 from core.helpers import _next_pr_no, _notify_for_procurement, _procurement_method_for
 from models import ProcurementMethod, ProcurementStatus
@@ -15,8 +16,8 @@ from models import ProcurementMethod, ProcurementStatus
 
 
 async def _next_pr_no(cycle: str) -> str:
-    count = await db.procurement_requests.count_documents({"fiscal_cycle": cycle})
-    return f"PR-{cycle}-{count + 1:03d}"
+    seq = await next_seq(f"pr:{cycle}", lambda: db.procurement_requests.count_documents({"fiscal_cycle": cycle}))
+    return f"PR-{cycle}-{seq:03d}"
 
 
 @api_router.get("/procurement", response_model=List[ProcurementRequest])
@@ -25,6 +26,8 @@ async def list_procurement(
     status: Optional[ProcurementStatus] = None,
     method: Optional[ProcurementMethod] = None,
     fiscal_cycle: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 500,
 ):
     query: dict = {}
     if body_id:
@@ -35,7 +38,7 @@ async def list_procurement(
         query["method"] = method
     if fiscal_cycle:
         query["fiscal_cycle"] = fiscal_cycle
-    docs = await db.procurement_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    docs = await db.procurement_requests.find(query, {"_id": 0}).sort("created_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
 

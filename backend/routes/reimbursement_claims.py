@@ -9,6 +9,7 @@ from typing import List, Optional
 from fastapi import HTTPException, Request
 
 from core.infra import db, api_router
+from core.shared_services import next_seq  # H6 · atomic sequence
 from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 from models import (
@@ -21,8 +22,8 @@ from models import (
 # ═══════════════════ Helpers ═══════════════════
 
 async def _next_claim_ref(cycle: str) -> str:
-    count = await db.tournament_reimbursement_claims.count_documents({"fiscal_cycle": cycle})
-    return f"TRC-{cycle}-{count + 1:04d}"
+    seq = await next_seq(f"treimb:{cycle}", lambda: db.tournament_reimbursement_claims.count_documents({"fiscal_cycle": cycle}))
+    return f"TRC-{cycle}-{seq:04d}"
 
 
 async def _compute_summary(tournament_id: str, body_id: str) -> dict:
@@ -132,6 +133,8 @@ async def list_claims(
     body_id: Optional[str] = None,
     status: Optional[TournamentReimbursementStatus] = None,
     fiscal_cycle: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 500,
 ):
     q: dict = {}
     if tournament_id: q["tournament_id"] = tournament_id
@@ -141,7 +144,7 @@ async def list_claims(
         q.update(body_scope(get_scope(request)))
     if status: q["status"] = status
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
-    docs = await db.tournament_reimbursement_claims.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    docs = await db.tournament_reimbursement_claims.find(q, {"_id": 0}).sort("created_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
 

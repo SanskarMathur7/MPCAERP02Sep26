@@ -17,7 +17,8 @@ import uuid
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
+import re
+from core.infra import db, api_router, logger
 from core.shared_services import write_audit_log
 
 
@@ -97,7 +98,9 @@ async def list_documents(folder: Optional[DocFolder] = None,
                           related_module: Optional[str] = None,
                           related_id: Optional[str] = None,
                           tag: Optional[str] = None,
-                          search: Optional[str] = None):
+                          search: Optional[str] = None,
+                          skip: int = 0,
+                          limit: int = 1000):
     q: dict = {}
     if folder: q["folder"] = folder
     if status: q["status"] = status
@@ -106,11 +109,11 @@ async def list_documents(folder: Optional[DocFolder] = None,
     if tag: q["tags"] = tag
     if search:
         q["$or"] = [
-            {"filename": {"$regex": search, "$options": "i"}},
-            {"doc_type": {"$regex": search, "$options": "i"}},
-            {"tags": {"$regex": search, "$options": "i"}},
+            {"filename": {"$regex": re.escape(search), "$options": "i"}},
+            {"doc_type": {"$regex": re.escape(search), "$options": "i"}},
+            {"tags": {"$regex": re.escape(search), "$options": "i"}},
         ]
-    docs = await db.documents.find(q, {"_id": 0}).sort("uploaded_at", -1).to_list(1000)
+    docs = await db.documents.find(q, {"_id": 0}).sort("uploaded_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     # Lazy expiry status flip
     now = datetime.now(timezone.utc)
     for d in docs:
@@ -119,8 +122,8 @@ async def list_documents(folder: Optional[DocFolder] = None,
                 exp = datetime.fromisoformat(d["expiry_date"].replace("Z", "+00:00"))
                 if exp <= now:
                     d["status"] = "Expired"
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("dms: unparseable expiry_date %r on doc %s (%s)", d.get("expiry_date"), d.get("id"), e)
     return docs
 
 
@@ -213,8 +216,8 @@ async def dms_summary():
                     st = "Expired"
                 elif (exp - now).days <= 30:
                     expiring_30 += 1
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("dms: unparseable expiry_date %r on doc %s (%s)", d.get("expiry_date"), d.get("id"), e)
         by_status[st] = by_status.get(st, 0) + 1
     return {
         "total": len(docs),

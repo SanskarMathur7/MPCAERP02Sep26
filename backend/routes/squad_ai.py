@@ -22,6 +22,7 @@ Verdict shape
       ai_notes: [str, ...]
     }
 """
+import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional
 from collections import Counter
@@ -332,7 +333,7 @@ RECOMMENDED XV (top 5): {[{'name': r['full_name'], 'role': r['role'], 'score': r
 """
         chat = LlmChat(api_key=key, session_id=f"squad-review-{sid}", system_message="You are a concise MPCA cricket selection expert.")
         chat = chat.with_model("gemini", "gemini-2.5-flash")
-        resp = await chat.send_message(UserMessage(text=prompt))
+        resp = await asyncio.wait_for(chat.send_message(UserMessage(text=prompt)), timeout=45)  # H4
         verdict["ai_second_opinion"] = {
             "text": str(resp),
             "model": "gemini-2.5-flash",

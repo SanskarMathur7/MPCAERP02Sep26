@@ -6,6 +6,7 @@ Three lightweight modules:
   3. Ground Expenses — sub-ledger tracking salaries, maintenance, utilities per ground
      Workflow: Draft → Submitted → Approved → Paid
 """
+import re
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import HTTPException
@@ -91,7 +92,7 @@ async def list_venues(
     if bcci_approval:
         q["bcci_approval"] = bcci_approval
     if city:
-        q["city"] = {"$regex": city, "$options": "i"}
+        q["city"] = {"$regex": re.escape(city), "$options": "i"}
     return await db.venues.find(q, {"_id": 0}).sort("name", 1).to_list(1000)
 
 

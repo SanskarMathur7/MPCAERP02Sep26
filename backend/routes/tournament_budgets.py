@@ -14,6 +14,7 @@ from typing import List, Optional
 from fastapi import HTTPException, Request
 
 from core.infra import db, api_router
+from core.shared_services import next_seq  # H6 · atomic sequence
 from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 from models import (
@@ -26,8 +27,8 @@ from models import (
 # ─────────────── Helpers ───────────────
 
 async def _next_tb_no(cycle: str) -> str:
-    count = await db.tournament_budgets.count_documents({"fiscal_cycle": cycle})
-    return f"TB-{cycle}-{count + 1:03d}"
+    seq = await next_seq(f"tbudget:{cycle}", lambda: db.tournament_budgets.count_documents({"fiscal_cycle": cycle}))
+    return f"TB-{cycle}-{seq:03d}"
 
 
 def _append_tb_step(doc: dict, step: ApprovalStep, new_status: str) -> dict:

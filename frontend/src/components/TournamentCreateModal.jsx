@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useSeason } from "@/context/SeasonContext";
 import { TOURNAMENT_TYPE_CATALOG, getTypeByCode, getCreatableTournamentTypes, groupTypesBySection } from "@/lib/tournamentCatalog";
 import { getDirectoryFor } from "@/lib/tournamentDirectory";
 
@@ -81,8 +82,9 @@ const TOURNAMENT_SCHEME_CODES = new Set(["2-A", "2-B", "2-C", "2-D", "2-E", "3-A
 
 const TournamentCreateModal = ({ open, onClose, onDone }) => {
     const { persona } = useAuth();
+    const { season, seasons } = useSeason();
     const [step, setStep] = useState(1); // 1 = type picker, 2 = detail form
-    const [form, setForm] = useState(emptyForm);
+    const [form, setForm] = useState({ ...emptyForm, fiscal_cycle: season });
 
     // RBAC-filtered catalog for the current persona (Sprint M22)
     const creatableTypes = useMemo(() => getCreatableTournamentTypes(persona), [persona]);
@@ -105,7 +107,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
         setVenues([]);
         setGrounds([]);
         setSchemes([]);
-        setForm(emptyForm);
+        setForm({ ...emptyForm, fiscal_cycle: season });
         setBudgetPreview(null);
         setErr(null);
         (async () => {
@@ -126,12 +128,41 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
         })();
     }, [open]);
 
+    // Sprint M28 · Host body dropdown scoping by persona
+    //   MPCA (State) creates → list all 10 MP Divisions (they are the operational hosts).
+    //   Division persona creates → list all Districts UNDER that division (parent_code match).
+    //   District persona creates → self only (rare, e.g. a district-hosted invitational).
+    //   Fallback (Public / no persona) → State + Division + District — everything host-eligible.
     const hostOptions = useMemo(() => {
-        // Only host-eligible bodies: MPCA, Divisions, Districts (exclude BCCI/Clubs).
-        return bodies
-            .filter((b) => ["State", "Division", "District"].includes(b.body_type))
-            .sort((a, b) => a.body_type.localeCompare(b.body_type) || a.name.localeCompare(b.name));
-    }, [bodies]);
+        const eligible = bodies.filter((b) => ["State", "Division", "District"].includes(b.body_type));
+        if (!persona) return eligible;
+        const bt = persona.body_type;
+        if (bt === "State") {
+            // MPCA: divisions are the practical hosts. Retain State (MPCA itself) for
+            // BCCI-scope tournaments where MPCA hosts state-wide events.
+            return eligible.filter((b) => b.body_type === "Division" || b.code === "MPCA")
+                .sort((a, b) => a.body_type.localeCompare(b.body_type) || a.name.localeCompare(b.name));
+        }
+        if (bt === "Division") {
+            // Districts under my division + myself (some Div hosts a tournament directly).
+            return eligible
+                .filter((b) => (b.body_type === "District" && b.parent_code === persona.body_code) || b.code === persona.body_code)
+                .sort((a, b) => a.body_type.localeCompare(b.body_type) || a.name.localeCompare(b.name));
+        }
+        if (bt === "District") {
+            return eligible.filter((b) => b.code === persona.body_code);
+        }
+        return eligible;
+    }, [bodies, persona]);
+
+    // Auto-default host_body_id when persona-scoped options load.
+    useEffect(() => {
+        if (!open || refsLoading || hostOptions.length === 0) return;
+        if (!hostOptions.some((b) => b.code === form.host_body_id)) {
+            // First option is the sensible default (division for MPCA, self for others).
+            setForm((f) => ({ ...f, host_body_id: hostOptions[0].code }));
+        }
+    }, [hostOptions, refsLoading, open]);
 
     // Fix 4: Filter venues by host body's HQ city.
     // MPCA (State) → all venues. Division/District → venues in the same city as the
@@ -367,13 +398,14 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                     <div className="grid md:grid-cols-2 gap-4">
                         <label className="block">
                             <div className="overline text-[9px] mb-1">Cricketing Season *</div>
-                            <input
+                            <select
                                 className="input-heritage font-mono"
                                 value={form.fiscal_cycle}
                                 onChange={(e) => setForm({ ...form, fiscal_cycle: e.target.value })}
-                                placeholder="2025-26"
                                 data-testid="trn-fy-input"
-                            />
+                            >
+                                {seasons.map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
                         </label>
                         <label className="block">
                             <div className="overline text-[9px] mb-1">Format *</div>
@@ -390,7 +422,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
 
                     <label className="block">
                         <div className="overline text-[9px] mb-1 flex items-center gap-2">
-                            <Landmark size={11} /> Host Body *
+                            <Landmark size={11} /> {persona?.body_type === "State" ? "Host Division *" : persona?.body_type === "Division" ? "Host District *" : "Host Body *"}
                             {refsLoading && <span className="text-[9px] text-mpca-brass italic normal-case tracking-normal">loading…</span>}
                         </div>
                         <select
@@ -400,14 +432,20 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                             disabled={refsLoading || hostOptions.length === 0}
                             data-testid="trn-host-select"
                         >
-                            {refsLoading && <option value="MPCA">Loading bodies…</option>}
-                            {!refsLoading && hostOptions.length === 0 && <option value="">No bodies available</option>}
+                            {refsLoading && <option value="">Loading…</option>}
+                            {!refsLoading && hostOptions.length === 0 && <option value="">No hosts available for your role</option>}
                             {!refsLoading && hostOptions.map((b) => (
                                 <option key={b.code} value={b.code}>
-                                    [{b.body_type}] {b.name} ({b.code})
+                                    {b.name} ({b.code})
                                 </option>
                             ))}
                         </select>
+                        {persona?.body_type === "State" && (
+                            <div className="text-[10px] text-mpca-gray-dark mt-1 italic">MPCA tournaments are hosted by a Division. Pick which Division will physically host.</div>
+                        )}
+                        {persona?.body_type === "Division" && (
+                            <div className="text-[10px] text-mpca-gray-dark mt-1 italic">Divisional tournaments are hosted by one of the Districts under {persona?.body_name || persona?.body_code}.</div>
+                        )}
                     </label>
 
                     <div className="grid md:grid-cols-2 gap-4">

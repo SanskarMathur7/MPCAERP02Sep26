@@ -998,6 +998,7 @@ class Squad(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     tournament_id: str
     body_id: str                                  # the participating team's body (division/district)
+    participant_body_code: Optional[str] = None   # M28 · mirrors body_id when this squad belongs to a tournament participant row
     team_name: str
     members: List[SquadMember] = []
     eligibility_warnings: List[str] = []         # accumulated validator output

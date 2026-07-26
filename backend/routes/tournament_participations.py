@@ -362,12 +362,22 @@ async def participant_finance_snapshot(tid: str, body_code: str):
     ).sort([("receipt_date", -1)]):
         receipts.append(r)
 
+    # M28 · Squad linked to this participant (by participant_body_code fallback to body_id).
+    squad = await db.squads.find_one(
+        {"tournament_id": tid, "$or": [
+            {"participant_body_code": body_code},
+            {"body_id": body_code},
+        ]},
+        {"_id": 0}, sort=[("created_at", -1)],
+    )
+
     return {
         "participant": row,
         "budget": budget,
         "invoices": invoices,
         "claim": claim,
         "receipts": receipts,
+        "squad": squad,
     }
 
 @api_router.patch("/tournaments/{tid}/participants/{body_code}")

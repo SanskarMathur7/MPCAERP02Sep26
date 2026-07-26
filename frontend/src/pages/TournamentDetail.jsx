@@ -14,6 +14,7 @@ import TournamentProgress from "@/components/TournamentProgress";
 import InputVariablesPanel from "@/components/InputVariablesPanel";
 import TournamentBasicsPanel from "@/components/TournamentBasicsPanel";
 import ParticipantsMatrix from "@/components/ParticipantsMatrix";
+import TournamentSquadsPanel from "@/components/TournamentSquadsPanel";
 import {
     MatchCalendarPanel, TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
 } from "@/components/TournamentWorkspacePanels";
@@ -210,6 +211,9 @@ const TournamentDetail = () => {
                 )}
                 {openBox === "participants" && (
                     <div className="mt-4"><ParticipantsMatrix tournament={t} persona={persona} canManage={canEdit} onChange={() => { refreshProgress(); load(); }} /></div>
+                )}
+                {openBox === "squads" && (
+                    <div className="mt-4"><TournamentSquadsPanel tournament={t} persona={persona} canManage={canEdit} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "input-vars" && (
                     <div className="mt-4"><InputVariablesPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>

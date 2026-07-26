@@ -1,0 +1,54 @@
+{
+  "summary": "M28 (Create-form UX polish + Squads panel) tested. Backend: new /app/backend/tests/test_m28_squad_link.py with 6 tests — all PASS. Covers (a) Squad.participant_body_code Optional[str] + auto-populate on POST /api/squads when body_id matches active tournament_participations row; (b) null when no participant row; (c) GET /api/tournaments/{tid}/participants/{code}/finance returns `squad` key (populated for the participant that has a squad, null for the one that does not); (d) $or fallback exercised. Frontend: Verified via Playwright for BOTH personas — TournamentCreateModal season dropdown is now <select data-testid=trn-fy-input> with 7 rolling options ['2023-24','2024-25','2025-26','2026-27','2027-28','2028-29','2029-30'] default '2026-27' (matches useSeason()). Host dropdown correctly scopes: State persona (Sanjeev Dua/MPCA) → label 'Host Division *', 11 options (10 divisions + MPCA), helper 'MPCA tournaments are hosted by a Division…' present. Division persona (Devashish Nilosey/DIV-IND) → label 'Host District *', 9 options (8 DIST-*-IND + DIV-IND), default DIST-ALIR-IND (first option, previously hardcoded to MPCA — fixed), helper 'Divisional tournaments are hosted by one of the Districts under {body_name}' present. Auto-default on refsLoading complete works. CRITICAL BUG: `data-testid=box-squads` SetupBox card is MISSING from /app/frontend/src/pages/TournamentDetail.jsx setup-boxes grid — only box-squad (Squad Selection, navigates away) exists. The panel-squads render block (line 215-217, `openBox === 'squads'`) exists but is UNREACHABLE via UI because no SetupBox toggles it. Enumerated data-testids on Bhausaheb Nimbalkar Trophy page: ['box-basics','box-participants','box-input-vars','box-calendar','box-squad','box-budget','box-invoices','box-summary','box-receipts','box-closure'] — box-squads absent.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "TournamentDetail.jsx (setup-boxes grid, line ~197-208)",
+        "issue": "Missing `box-squads` SetupBox card. The TournamentSquadsPanel component is imported and rendered in a conditional block `{openBox === 'squads' && ...}` (line 215-217), but no SetupBox exists to set openBox to 'squads'. Add `<SetupBox testId='box-squads' icon={Users} label='Squads' note={...} onClick={() => setOpenBox(openBox === 'squads' ? null : 'squads')} active={openBox === 'squads'} />` alongside box-participants.",
+        "selector": "[data-testid=box-squads]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "TournamentCreateModal (Step 2)",
+        "issues": ["React hydration warning in console: '<span> cannot be a child of <option>'. Likely from a lucide icon or wrapping <span> placed inside a <select> <option> tag somewhere in the modal. Non-blocking but should be cleaned up."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m28_squad_link.py",
+    "/app/test_reports/pytest/m28_squad_link.xml"
+  ],
+  "action_items": [
+    "PRIORITY-1: Add missing SetupBox with data-testid='box-squads' to /app/frontend/src/pages/TournamentDetail.jsx (between box-participants and box-input-vars, or where preferred). It should toggle openBox='squads' to make the already-wired TournamentSquadsPanel reachable. Suggested note text: `${rows.filter(r=>r.squad).length} squads / ${rows.length} participants` or 'One card per participant'.",
+    "PRIORITY-3 (nit): Fix `<span> cannot be a child of <option>` React hydration warning surfaced when TournamentCreateModal step-2 mounts.",
+    "Note for future runs: Legacy hardcoded MY_MEMORIAL_TID='e2a9ac5c-...' in /app/backend/tests/test_m26_phase_[def].py + test_m26_participants_matrix.py + test_m26_phase_f.py no longer exists in DB — 16 M26 regression tests fail with 404. Pre-existing environmental issue (not caused by M28). Recommend converting those tests to create their own fresh tournament fixture instead of relying on seeded data."
+  ],
+  "critical_code_review_comments": [
+    "TournamentDetail.jsx: The `openBox === 'squads'` render branch is dead code without the accompanying SetupBox — this ships as a silent regression. Recommend a lint rule / test that every renderable openBox value has a matching SetupBox testId. This is the single-line miss that renders M28's biggest UX addition unreachable.",
+    "TournamentSquadsPanel.jsx uses N+1 API calls: one /participants + one /finance PER participant. For a 10-division tournament that's 11 sequential (well, Promise.all-parallel) calls. Consider a `?with_squad=true` query flag on /participants to fold it into a single response.",
+    "TournamentCreateModal.jsx line 165 useEffect deps: `[hostOptions, refsLoading, open]` — `form.host_body_id` is used inside but omitted; when the user manually picks a host and then persona changes (rare within one modal session, but possible), the auto-default runs incorrectly. Add form.host_body_id to deps or guard with a ref.",
+    "TournamentCreateModal.jsx line 87: initial state uses `season` from useSeason(), but the useEffect on line 102 resets form again with `{...emptyForm, fiscal_cycle: season}`. emptyForm.fiscal_cycle already reads window.__mpca_season || '2026-27' (line 65). Duplicate fallback logic; recommend removing the window global read now that useSeason() is the source of truth.",
+    "Backend routes/tournaments.py:341 imports resolve_participant_body_code inside the handler on every POST /squads call — safe but creates a repeated module import each request. Hoist the import to module top-level for a nano-optimisation and cleaner dep graph.",
+    "Squad.participant_body_code is Optional[str] — good. But there is no follow-on link back to tournament_participations to write squad_id (analogous to link_budget_to_participant). If MPCA's Squads panel needs to filter 'participants with squad started', the current implementation forces a client-side join. Consider adding link_squad_to_participant."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m28_squad_link.py (new · 6 tests · 6/6 pass)"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6 M28)",
+    "frontend": "83% (5/6 M28 checks pass; box-squads/panel-squads reachability fails)"
+  },
+  "test_credentials": "persona-chip-secretary (MPCA State) & persona-chip-division-secretary (DIV-IND). Both validated. Two-step login: chip → 'Sign in to the Registrar' button.",
+  "seed_data_creation": "One TEST_M28_<hex> Inter_District tournament created + district_pools patched to seed 2 DIST-*-IND participants + 2 test squads (TEST_M28_TEAM_A on d1, TEST_M28_TEAM_UNRELATED on unrelated district). Tournament deleted in fixture teardown. Squads left dangling (delete endpoint not exercised).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M28 backend is green (6/6). Frontend blocker: box-squads SetupBox missing from TournamentDetail.jsx grid — one-line fix. After main agent adds the SetupBox, retest by (a) navigating to any /tournaments/{tid}, (b) clicking data-testid=box-squads, (c) verifying data-testid=panel-squads renders and lists one squad-card-<code> per active participant with member count, status chip, warnings, open/start link, and 'yours' pill when persona.body_code matches. Also verify with DIV-IND persona (persona-chip-division-secretary) that the persona-owned participant shows the 'yours' pill. Note: legacy M26 phase E/F tests need a fixture rewrite — they depend on a hardcoded MY_MEMORIAL_TID that no longer exists in DB.",
+  "rca of the issue": "Frontend bug — TournamentDetail.jsx was partially edited for M28: the import (TournamentSquadsPanel), the render conditional (`{openBox === 'squads' && <TournamentSquadsPanel .../>}`), and the accompanying `Users` icon import were all added correctly. But the actual SetupBox card that would toggle openBox to 'squads' was never added to the grid. Result: dead code + unreachable feature. Reproduction: log in as any persona → /tournaments → open any tournament → scan setup-boxes grid → no box-squads. Fix: single-line addition of <SetupBox testId='box-squads' ... /> in the grid on line ~199 (adjacent to box-participants)."
+}

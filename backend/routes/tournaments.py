@@ -336,7 +336,13 @@ async def create_squad(payload: SquadCreate):
     existing = await db.squads.find_one({"tournament_id": payload.tournament_id, "body_id": payload.body_id})
     if existing:
         raise HTTPException(400, f"A squad for {payload.body_id} already exists in this tournament")
-    squad = Squad(**payload.model_dump())
+    payload_dump = payload.model_dump()
+    # M28 · auto-link to tournament participant row if one exists
+    from routes.tournament_participations import resolve_participant_body_code
+    payload_dump["participant_body_code"] = await resolve_participant_body_code(
+        payload.tournament_id, payload.body_id
+    )
+    squad = Squad(**payload_dump)
     await db.squads.insert_one(squad.model_dump())
     return squad
 

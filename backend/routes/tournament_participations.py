@@ -20,6 +20,7 @@ and re-activated automatically if the division is re-added.
 """
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
+import copy
 import uuid
 
 from fastapi import HTTPException
@@ -198,7 +199,7 @@ async def sync_participants_from_pools(
             else:
                 row = TournamentParticipation(
                     **update_doc,
-                    input_variables=dict(master_iv) if master_iv else None,
+                    input_variables=copy.deepcopy(master_iv) if master_iv else None,
                 )
                 await db.tournament_participations.insert_one(row.model_dump())
                 newly_added.append({

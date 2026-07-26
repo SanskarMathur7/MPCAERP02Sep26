@@ -1181,3 +1181,37 @@ _Shipped 26 Jul 2026 · verified iter_51 (100% BE, 100% FE)_
 - **Persona-scoped filter** on Budgets / Invoices / Claims list pages by `participant_body_code`.
 - **AI document parsing** on Grant Claims.
 - **Closure Letter PDF** + consolidated dashboards.
+
+---
+
+## Sprint M32 · Two-Tier Input Variables + Inline Panels + Diff Highlights
+_Shipped 26 Jul 2026 · verified iter_52 (100% BE, 100% FE)_
+
+**Delivered:**
+- **Two-tier Input Variables** — MPCA sets the tournament master (`tournament.input_variables`, MPCA-only). Every accepted participant inherits a deep-copy draft (`tournament_participations.input_variables`). Division/District secretaries edit THEIR draft. Panel is persona-aware:
+  - `iv-mode-banner-master` (MPCA), `iv-mode-banner-participant` (Division), or `iv-readonly-banner` (spectator).
+  - Every row shows the MPCA default + a `iv-reset-<key>` snap-back button when the participant diverges.
+  - MPCA Auto-Split Budget button hidden for non-MPCA personas.
+- **Per-participant budget generation** — `POST /tournaments/{tid}/participants/{body_code}/budget/generate` regenerates or creates a draft budget from that participant's IV. Host → full scheme; Visitor → travel + DA + food + stay + lodging + contingency subset. `input_variables_snapshot` persisted for diffing later.
+- **Master-vs-Division diff** — `GET /tournament-budgets/{bid}/diff-master` returns per-head deltas + IV changes. Finance detail page shows `budget-diff-summary` banner + `★ Changed` badges on divergent heads so MPCA can review before approving.
+- **Inline Budget & Extras / Invoices panels** — `box-budget` and `box-invoices` no longer redirect. They expand INSIDE Tournament Overview (`TournamentBudgetsPanel`, `TournamentInvoicesPanel`) scoped by persona. Deep-links to the full finance screen remain via `tb-open-full-btn` / `ti-open-full-btn`.
+- **Submit-workflow tracking** — `POST /tournament-budgets/{bid}/submit` now stamps `submitted_by_body`, `submitted_by_name`, `submitted_at`. Pending With MPCA shows each Division's request separately.
+
+**Files touched:**
+- **BE:** `tournament_participations.py` (model + endpoints + deepcopy on inherit), `tournament_budgets.py` (diff-master endpoint + submitted_by tracking), `models.py` (TournamentBudget adds input_variables_snapshot / submitted_by fields).
+- **FE new:** `TournamentBudgetsPanel.jsx`, `TournamentInvoicesPanel.jsx`.
+- **FE mod:** `InputVariablesPanel.jsx` (persona-aware + Reset), `TournamentDetail.jsx` (inline panels), `TournamentFinanceDetail.jsx` (diff badges).
+
+**Tests:** `/app/backend/tests/test_m32_iv_and_diff.py` — 8/8 pass.
+
+### Non-blocking notes (deferred)
+- Regeneration overwrites Draft/Returned head allocations — if a Division later gets a per-head fine-tune editor, add a preserve-manual-tweaks flag.
+- Visitor keyword classifier + 20 %-fallback still uses magic constants (documented since M31).
+- `diff-master` recomputes master preview each call — cache if it becomes hot.
+
+### Deferred (rolling forward)
+- **PapaParse** for Match Calendar CSV.
+- **Persona-scoped filter** on list pages Budgets / Invoices / Claims (backend supports it; UI wire-up pending).
+- **AI document parsing** on Grant Claims (non-tournament).
+- **Closure Letter PDF** + consolidated dashboards.
+- **Cap** on Division IV divergence from master (user explicitly deferred).

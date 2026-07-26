@@ -1,0 +1,27 @@
+{
+  "summary": "M32 sprint fully verified end-to-end. Backend (8/8 pytest passing at /app/backend/tests/test_m32_iv_and_diff.py): (1) new PATCH /participants/{body}/input-variables saves a per-participant IV draft, stamps updated_at + updated_by, 404s on missing participant. (2) POST /participants/{body}/budget/generate re-generates the existing Draft budget for DIV-IND (regenerated=true), body_id=DIV-IND, input_variables_snapshot populated, head_allocations + total refreshed. (3) GET /tournament-budgets/{bid}/diff-master returns diffable=true with master_total_inr, division_total_inr, delta_total_inr, per-head diffs (changed flag), changed_heads_count, and input_variable_changes listing 'match_days' after divergence. (4) POST /tournament-budgets/{bid}/submit stamps submitted_by_body = actor_body_id, submitted_by_name, submitted_at. (5) New participants auto-inherit master IV via sync_participants_from_pools (DIV-IND row returns input_variables populated). Frontend (all persona-aware behaviours verified via Playwright): (A) MPCA persona (Sanjeev Dua) opens SM Khan Trophy → iv-mode-banner-master shown, iv-auto-split-btn visible, iv-mode-banner-participant absent. (B) Division persona (Devashish Nilosey) → iv-mode-banner-participant with 'Indore Division draft (Host)' text; iv-mode-banner-master + iv-auto-split-btn absent (correctly hidden). 9 iv-master-<key> row hints present ('MPCA: 8 Reset' etc.). Reset-to-master: changing match_days from 11→777 causes iv-reset-match_days to appear; clicking Reset snaps value back to 8 (master) and Reset button disappears. (C) Inline Budget & Extras: clicking box-budget renders [data-testid=panel-tournament-budgets] IN-PLACE (URL stays /tournaments/{tid}, no redirect to /finance), tb-open-full-btn present for both personas, tb-generate-mine-btn hidden for MPCA. (D) Inline Invoices panel: box-invoices renders [data-testid=panel-tournament-invoices], ti-open-full-btn present, no redirect. (E) Finance detail /tournaments/{tid}/finance: budget-diff-summary strip appears with '★ Division diff · 6 heads differ from MPCA master · Total Δ +₹81,300 (29%)' and 6 budget-head-diff-badge-<i> star badges render. (F) M31 regression: sub-tabs strip trimmed to overview + squad only (no finance/claim/officials/camps). All 4 feature blocks in the review request pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_m32_iv_and_diff.py",
+    "/app/test_reports/pytest/m32_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "tournament_participations.py sync_participants_from_pools deep-copies master_iv via dict(master_iv) (shallow) — if master IV ever grows nested dicts (e.g. tier tables), Division edits could bleed back into the master. Consider copy.deepcopy for safety.",
+    "generate_participant_budget always OVERWRITES existing Draft/Returned head_allocations + total. If a Division has manually tweaked a specific head via a future line-item editor, they'd lose those edits silently. Consider a confirm dialog or a preserve-manual-tweaks flag when it becomes editable.",
+    "Visitor keyword filter (_is_visitor_head) applied to head labels via substring match — same M31 concern flagged before. Fallback to synthetic 'Team Travel Subsidy' at 20% of ceiling is still a magic constant.",
+    "budget_diff_master re-computes the master preview on every call — for large scheme_calc runs this could be slow. Consider caching master_preview per (scheme_code, master_iv hash) if it becomes hot.",
+    "TournamentBudgetsPanel — for a Division persona with multiple historical budgets on the SAME body, panel shows all of them (correct scoping — same body_id). Verify UI clarifies that a Division may have superseded/returned budgets alongside the active one; current display shows status pills so it is acceptable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m32_iv_and_diff.py"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (all 12 UI checks pass)"},
+  "test_credentials": "persona-chip-secretary (Sanjeev Dua · MPCA) and persona-chip-division-secretary (Devashish Nilosey · DIV-IND). Must click 'Sign in to the Registrar' button AFTER selecting persona chip — selecting the chip alone only autofills the form.",
+  "seed_data_creation": "Tests bump match_days on DIV-IND's participant IV during runs (existing Draft budget TB-2026-27-002 gets regenerated). The submit test also flips a DIV-IND Draft to Submitted and then returns it via /return so status resets. No new tournaments created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M32 (two-tier IV + inline Budget/Invoices panels + diff-master) fully green. SM Khan Trophy (id=58bd8f3c-2562-4231-b846-537103e8a542) with DIV-IND is the canonical fixture. To exercise diff-master, PATCH /participants/DIV-IND/input-variables with a modified match_days, then POST /participants/DIV-IND/budget/generate. Playwright login flow requires clicking persona chip THEN clicking 'Sign in to the Registrar' button (persona chip only autofills; it does not submit).",
+  "rca of the issue": "Not applicable — feature verification pass, no bugs found."
+}

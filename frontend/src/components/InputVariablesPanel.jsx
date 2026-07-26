@@ -1,49 +1,50 @@
 import { useEffect, useMemo, useState } from "react";
-import { Save, Send, Loader2, Calculator, AlertTriangle, ChevronRight, Split } from "lucide-react";
+import { Save, Send, Loader2, Calculator, AlertTriangle, ChevronRight, Split, RotateCcw, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { getTypeByCode, INLINE_INPUT_SPECS } from "@/lib/tournamentCatalog";
 
 const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 
 /**
- * Sprint M20 · Input Variables Panel
- * ──────────────────────────────────
- * Renders a dynamic form for the tournament's category. Two sources:
- *   (a) Backend `/api/schemes/{scheme_code}/input-spec` — used when the
- *       category maps to an existing deterministic calculator (2-A/2-B/2-C/
- *       2-D/3-A/3-D).
- *   (b) Frontend `INLINE_INPUT_SPECS` — fallback for categories with no
- *       backend calculator (reciprocal, inter_school, inter_club,
- *       vacation_camp, away_participation). Vars are still stored on the
- *       tournament document; the Division fills a manual budget for these.
+ * Sprint M20 · Input Variables Panel · M32 · Two-tier (MPCA master ↔ Division draft)
+ * ──────────────────────────────────────────────────────────────────────────────────
+ * Two-tier variable editor:
+ *   ─ MPCA (State) personas edit the tournament's MASTER input variables. This
+ *     is the reference figure used to auto-fan-out per-body sub-budgets.
+ *   ─ Division/District personas that participate in the tournament edit THEIR
+ *     LOCAL draft (stored on tournament_participations.input_variables). Their
+ *     draft drives THEIR sub-budget and stays independent of the MPCA master.
  *
- * Save flow:
- *   1. PATCH /tournaments/{tid}/input-variables  (persist inputs)
- *   2. If scheme_code present → POST /schemes/{code}/compute-budget with
- *      inputs, then upsert `tournament_budgets` (create if none, PATCH if
- *      exists — as long as status is not Approved).
- *   3. Optional "Submit Budget to MPCA" — POSTs to the existing
- *      `/tournament-budgets/{bid}/submit` endpoint.
+ * Every value shows the MPCA default next to the input; a Reset button snaps
+ * the field back to master. When the Division saves, we regenerate their draft
+ * budget via POST /tournaments/{tid}/participants/{body}/budget/generate.
  */
 const InputVariablesPanel = ({ tournament, persona, onChange }) => {
     const type = getTypeByCode(tournament.tournament_type_code);
     const schemeCode = tournament.scheme_code || type?.scheme_code || null;
     const usesBackend = !!schemeCode;
 
+    // ── Persona / mode detection
+    const isMPCA = persona?.body_type === "State" && ["secretary", "president", "treasurer"].includes(persona?.id);
+    const [myParticipation, setMyParticipation] = useState(null);
+    const isParticipant = !!myParticipation;
+    const mode = isMPCA ? "master" : isParticipant ? "participant" : "readonly";
+
     const [spec, setSpec] = useState(null);
+    // masterIV = tournament.input_variables (MPCA defaults) — always available for compare + reset
+    const [masterIV, setMasterIV] = useState(tournament.input_variables || {});
+    // values = the IV we're editing (master if MPCA, participant.input_variables if Division)
     const [values, setValues] = useState(tournament.input_variables || {});
     const [budgetPreview, setBudgetPreview] = useState(null);
     const [existingBudget, setExistingBudget] = useState(null);
     const [loadingSpec, setLoadingSpec] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [computing, setComputing] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [dirty, setDirty] = useState(false);
+    const [splitting, setSplitting] = useState(false);
 
-    // M29 · Only MPCA (State) office-bearers can edit tournament input variables.
-    // Division/District personas can only VIEW their allocated budget line (they
-    // filter budgets/invoices by participant_body_code elsewhere).
-    const canEdit = persona?.body_type === "State" && ["secretary", "president", "treasurer"].includes(persona?.id);
+    // canEdit — MPCA edits master, participants edit their own draft
+    const canEdit = mode === "master" || mode === "participant";
 
     // 1) Load input spec (backend or inline) and seed default values
     useEffect(() => {
@@ -72,28 +73,59 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tournament.id, schemeCode]);
 
-    // 2) Load existing budget for this tournament (if any)
+    // 2) Load existing budget for this tournament scoped by persona
     useEffect(() => {
         (async () => {
             try {
-                const list = await api.get("/tournament-budgets", { params: { tournament_id: tournament.id } }).then((r) => r.data);
+                const params = { tournament_id: tournament.id };
+                // For Division/District persona, only show THEIR budget row.
+                if (mode === "participant" && myParticipation?.body_code) {
+                    params.body_id = myParticipation.body_code;
+                }
+                const list = await api.get("/tournament-budgets", { params }).then((r) => r.data);
                 setExistingBudget(list && list.length ? list[0] : null);
             } catch (_) { setExistingBudget(null); }
         })();
-    }, [tournament.id]);
+    }, [tournament.id, mode, myParticipation?.body_code]);
+
+    // M32 · Load THIS persona's participation row (drives per-body IV)
+    useEffect(() => {
+        if (persona?.body_type !== "Division" && persona?.body_type !== "District") {
+            setMyParticipation(null);
+            return;
+        }
+        (async () => {
+            try {
+                const parts = await api.get(`/tournaments/${tournament.id}/participants`).then((r) => r.data);
+                const mine = (parts || []).find((p) => p.body_code === persona.body_code && !p.removed_at);
+                setMyParticipation(mine || null);
+                if (mine && (mine.input_variables || Object.keys(masterIV).length)) {
+                    // Prefer participant IV; fall back to master defaults
+                    setValues(mine.input_variables || masterIV);
+                }
+            } catch (_) { setMyParticipation(null); }
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        })();
+    }, [tournament.id, persona?.body_code, persona?.body_type]);
 
     const setField = (key, val) => {
         setValues((v) => ({ ...v, [key]: val }));
         setDirty(true);
     };
 
+    // M32 · Reset a single row back to MPCA master default
+    const resetField = (key) => {
+        if (masterIV[key] === undefined) return;
+        setValues((v) => ({ ...v, [key]: masterIV[key] }));
+        setDirty(true);
+    };
+
     const recalcBudget = async () => {
         if (!usesBackend) return;
-        setComputing(true);
         try {
             const preview = await api.post(`/schemes/${schemeCode}/compute-budget`, { inputs: values }).then((r) => r.data);
             setBudgetPreview(preview);
-        } finally { setComputing(false); }
+        } catch (_) { /* silent */ }
     };
 
     // Auto-recalc when values change (with debounce)
@@ -104,17 +136,32 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [values, usesBackend, loadingSpec]);
 
-    // 3) Save inputs + upsert budget doc
+    // 3) Save inputs + upsert budget doc — persona-aware
     const saveAndUpsertBudget = async () => {
         setSaving(true);
         try {
-            // Persist input variables on the tournament
+            if (mode === "participant") {
+                // Division/District: save to THEIR participation row + regenerate their sub-budget
+                await api.patch(`/tournaments/${tournament.id}/participants/${myParticipation.body_code}/input-variables`, {
+                    input_variables: values,
+                    updated_by: persona?.name,
+                });
+                setDirty(false);
+                if (usesBackend) {
+                    const res = await api.post(`/tournaments/${tournament.id}/participants/${myParticipation.body_code}/budget/generate`).then((r) => r.data);
+                    if (res?.budget) setExistingBudget(res.budget);
+                }
+                onChange?.();
+                return;
+            }
+
+            // MPCA (State): save master IV + upsert host-body budget as before
             await api.patch(`/tournaments/${tournament.id}/input-variables`, { input_variables: values });
-            setDirty(false);  // inputs saved, clear dirty flag immediately (budget upsert may still fail)
+            setMasterIV(values);
+            setDirty(false);
 
             if (usesBackend && budgetPreview) {
                 if (existingBudget && existingBudget.status !== "Approved") {
-                    // Update existing draft/submitted budget with new figures
                     await api.patch(`/tournament-budgets/${existingBudget.id}`, {
                         total_ceiling_inr: budgetPreview.total_ceiling_inr,
                         head_allocations: (budgetPreview.head_allocations || []).map((h) => ({
@@ -122,11 +169,9 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
                         })),
                         notes: `Recomputed from ${schemeCode} inputs on ${new Date().toLocaleString("en-IN")}`,
                     });
-                    // Refresh
                     const list = await api.get("/tournament-budgets", { params: { tournament_id: tournament.id } }).then((r) => r.data);
                     setExistingBudget(list && list.length ? list[0] : null);
                 } else if (!existingBudget) {
-                    // Create a fresh draft budget
                     const created = await api.post("/tournament-budgets", {
                         tournament_id: tournament.id,
                         body_id: tournament.host_body_id,
@@ -172,7 +217,6 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
 
     const inputVars = spec?.input_variables || [];
     const budgetIsLocked = existingBudget && existingBudget.status === "Approved";
-    const [splitting, setSplitting] = useState(false);
 
     // M31 · Auto-Split Budget — fan out Input Variables into per-body sub-budgets.
     // Host body gets the full hosting scheme; visitor bodies get travel/DA/stay
@@ -242,12 +286,28 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
                 )}
             </div>
 
-            {/* MPCA-only banner for non-editable personas */}
-            {!canEdit && (
+            {/* M32 · Persona-aware banner */}
+            {mode === "master" && (
+                <div className="border border-mpca-oxblood/30 bg-mpca-oxblood/5 text-mpca-oxblood px-3 py-2 text-[11px] flex items-start gap-2" data-testid="iv-mode-banner-master">
+                    <Users size={12} className="mt-0.5 shrink-0" />
+                    <div>
+                        <b className="uppercase tracking-widest text-[10px]">MPCA Master IV</b> · These are the reference values for the whole tournament. When new participants are added, they inherit these as their starting draft.
+                    </div>
+                </div>
+            )}
+            {mode === "participant" && (
+                <div className="border border-mpca-green-dark/30 bg-mpca-green-dark/5 text-mpca-green-dark px-3 py-2 text-[11px] flex items-start gap-2" data-testid="iv-mode-banner-participant">
+                    <Users size={12} className="mt-0.5 shrink-0" />
+                    <div>
+                        <b className="uppercase tracking-widest text-[10px]">{myParticipation.body_name || myParticipation.body_code} draft ({myParticipation.role})</b> · Edit any variable to shape YOUR sub-budget. Reset any row to snap it back to the MPCA master. When you are happy, save + submit for MPCA approval.
+                    </div>
+                </div>
+            )}
+            {mode === "readonly" && (
                 <div className="border border-mpca-brass/40 bg-mpca-brass/10 text-mpca-brass px-3 py-2 text-[11px] flex items-start gap-2" data-testid="iv-readonly-banner">
                     <AlertTriangle size={12} className="mt-0.5 shrink-0" />
                     <div>
-                        <b className="uppercase tracking-widest text-[10px]">MPCA-only</b> · Only MPCA office-bearers (President, Hon. Secretary, Hon. Treasurer) can set the tournament input variables. You are viewing this panel in read-only mode.
+                        <b className="uppercase tracking-widest text-[10px]">Read-only</b> · You are not a participant on this tournament and are not an MPCA office-bearer. Input Variables shown in view-only mode.
                     </div>
                 </div>
             )}
@@ -262,11 +322,31 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
                 <>
                     {/* Input grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-testid="iv-input-grid">
-                        {inputVars.map((iv) => (
+                        {inputVars.map((iv) => {
+                            const masterVal = masterIV[iv.key];
+                            const curVal = values[iv.key];
+                            const diverges = mode === "participant" && masterVal !== undefined && String(masterVal) !== String(curVal);
+                            return (
                             <label key={iv.key} className="block" data-testid={`iv-field-${iv.key}`}>
-                                <div className="text-[10px] uppercase tracking-widest text-mpca-brass font-mono">
-                                    {iv.label}
-                                    {iv.unit && <span className="ml-1 text-mpca-gray-dark">({iv.unit})</span>}
+                                <div className="text-[10px] uppercase tracking-widest text-mpca-brass font-mono flex items-center gap-2">
+                                    <span>{iv.label}{iv.unit && <span className="ml-1 text-mpca-gray-dark">({iv.unit})</span>}</span>
+                                    {mode === "participant" && masterVal !== undefined && (
+                                        <span className="text-[9px] normal-case tracking-normal text-mpca-gray-dark" data-testid={`iv-master-${iv.key}`}>
+                                            MPCA: <span className="font-mono">{String(masterVal)}</span>
+                                            {diverges && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => resetField(iv.key)}
+                                                    className="ml-2 text-[9px] uppercase tracking-widest text-mpca-oxblood hover:underline inline-flex items-center gap-0.5"
+                                                    data-testid={`iv-reset-${iv.key}`}
+                                                    title="Reset to MPCA master value"
+                                                >
+                                                    <RotateCcw size={9} /> Reset
+                                                </button>
+                                            )}
+                                        </span>
+                                    )}
+                                    {diverges && <span className="text-[9px] text-mpca-oxblood" title="You changed this from MPCA default">●</span>}
                                 </div>
                                 {iv.type === "select" ? (
                                     <select
@@ -296,7 +376,8 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
                                 )}
                                 {iv.hint && <div className="text-[9px] text-mpca-gray-dark italic mt-1">{iv.hint}</div>}
                             </label>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     {/* Live budget preview */}
@@ -304,7 +385,7 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
                         <div className="border border-mpca-brass/40 bg-mpca-parchment/40 p-4" data-testid="iv-budget-preview">
                             <div className="flex items-center justify-between">
                                 <div className="overline text-[9px] flex items-center gap-2">
-                                    <Calculator size={11} /> Auto-Budget · Live preview {computing && <Loader2 size={11} className="animate-spin ml-1" />}
+                                    <Calculator size={11} /> Auto-Budget · Live preview
                                 </div>
                                 <div className="font-mono text-2xl text-mpca-oxblood" data-testid="iv-computed-total">
                                     {budgetPreview ? fmt(budgetPreview.total_ceiling_inr) : "—"}
@@ -351,7 +432,7 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
                                     {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                                     Save Input Variables{existingBudget ? " & Update Budget" : " & Create Draft Budget"}
                                 </button>
-                                {usesBackend && (
+                                {usesBackend && mode === "master" && (
                                     <button
                                         onClick={runAutoSplit}
                                         disabled={splitting || saving || !budgetPreview}

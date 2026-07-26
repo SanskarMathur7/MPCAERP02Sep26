@@ -10,7 +10,7 @@ Variable items have their own approve/reject sub-workflow that MPCA can run
 independently of the overall budget approval.
 """
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import HTTPException, Request
 
 from core.infra import db, api_router
@@ -224,6 +224,11 @@ async def submit_tournament_budget(bid: str, action: TournamentBudgetAction):
         actor_body_id=action.actor_body_id, decision="Submitted", notes=action.notes,
     )
     update = _append_tb_step(doc, step, "Submitted")
+    # M32 · Track which body submitted this budget so MPCA can see per-Division
+    # requests distinctly in Pending With MPCA.
+    update["submitted_by_body"] = action.actor_body_id or doc.get("body_id")
+    update["submitted_by_name"] = action.actor_name
+    update["submitted_at"] = datetime.now(timezone.utc).isoformat()
     await db.tournament_budgets.update_one({"id": bid}, {"$set": update})
     updated = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
     await _notify_for_tb(updated, "Submitted", action.actor_name)
@@ -362,3 +367,71 @@ async def delete_tournament_budget(bid: str):
         raise HTTPException(409, f"Cannot delete a budget in status '{doc['status']}'. Only Draft / Rejected are deletable.")
     await db.tournament_budgets.delete_one({"id": bid})
     return {"ok": True}
+
+
+
+# ─────────────── M32 · Master-vs-Division diff for MPCA review ───────────────
+
+@api_router.get("/tournament-budgets/{bid}/diff-master")
+async def budget_diff_master(bid: str):
+    """Compares the Division's submitted budget with what MPCA's master input
+    variables would have produced. Highlights every head where the Division
+    changed the amount so MPCA can see the delta before approving."""
+    from routes.scheme_calc import compute_budget, ComputeRequest
+
+    doc = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Tournament budget not found")
+
+    t = await db.tournaments.find_one({"id": doc["tournament_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Parent tournament not found")
+
+    master_iv = t.get("input_variables") or {}
+    div_iv = doc.get("input_variables_snapshot") or master_iv
+    scheme_code = t.get("scheme_code")
+    if not scheme_code or not master_iv:
+        return {"diffable": False, "reason": "Master budget can't be computed (missing scheme or IV)."}
+
+    master_preview = await compute_budget(scheme_code, ComputeRequest(inputs=master_iv))
+    master_heads = {h["head"]: float(h["limit_inr"]) for h in master_preview.get("head_allocations") or []}
+
+    diffs: List[Dict[str, Any]] = []
+    for h in doc.get("head_allocations") or []:
+        head_name = h["head"]
+        div_amt = float(h.get("limit_inr", 0))
+        master_amt = float(master_heads.get(head_name, 0.0))
+        delta = round(div_amt - master_amt, 2)
+        pct = round((delta / master_amt * 100.0), 1) if master_amt else None
+        diffs.append({
+            "head": head_name,
+            "master_inr": master_amt,
+            "division_inr": div_amt,
+            "delta_inr": delta,
+            "delta_pct": pct,
+            "changed": abs(delta) > 0.01,
+        })
+
+    total_master = round(sum(master_heads.values()), 2)
+    total_div = float(doc.get("total_ceiling_inr", 0))
+
+    # IV diff (which raw inputs Division touched)
+    iv_diffs: List[Dict[str, Any]] = []
+    keys = set(master_iv.keys()) | set(div_iv.keys())
+    for k in sorted(keys):
+        mv = master_iv.get(k)
+        dv = div_iv.get(k)
+        if mv != dv:
+            iv_diffs.append({"key": k, "master": mv, "division": dv})
+
+    return {
+        "diffable": True,
+        "scheme_code": scheme_code,
+        "master_total_inr": total_master,
+        "division_total_inr": total_div,
+        "delta_total_inr": round(total_div - total_master, 2),
+        "delta_total_pct": round(((total_div - total_master) / total_master * 100.0), 1) if total_master else None,
+        "heads": diffs,
+        "changed_heads_count": sum(1 for d in diffs if d["changed"]),
+        "input_variable_changes": iv_diffs,
+    }

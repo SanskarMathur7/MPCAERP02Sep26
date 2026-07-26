@@ -1253,6 +1253,12 @@ class TournamentBudget(TournamentBudgetBase):
     created_by: Optional[str] = None
     return_reason_code: Optional[str] = None
     return_reason_detail: Optional[str] = None
+    # M32 · Snapshot of the input_variables that generated this budget — used by
+    # MPCA review to show diff highlights vs the tournament master IV.
+    input_variables_snapshot: Optional[Dict[str, Any]] = None
+    submitted_by_body: Optional[str] = None
+    submitted_by_name: Optional[str] = None
+    submitted_at: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

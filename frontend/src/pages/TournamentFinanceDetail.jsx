@@ -30,6 +30,7 @@ const TournamentFinanceDetail = () => {
     const [extras, setExtras] = useState([]);
     const [claim, setClaim] = useState(null);
     const [tracker, setTracker] = useState(null);
+    const [diffMaster, setDiffMaster] = useState(null);   // M32 · master-vs-division head diffs
     const [loading, setLoading] = useState(true);
 
     // Local form state for invoice creation
@@ -78,8 +79,14 @@ const TournamentFinanceDetail = () => {
             if (activeBudget) {
                 const { data: tr } = await api.get(`/tournament-budgets/${activeBudget.id}/tracker`);
                 setTracker(tr);
+                // M32 · Fetch diff-vs-master so we can highlight head deltas
+                try {
+                    const { data: dm } = await api.get(`/tournament-budgets/${activeBudget.id}/diff-master`);
+                    setDiffMaster(dm);
+                } catch (_) { setDiffMaster(null); }
             } else {
                 setTracker(null);
+                setDiffMaster(null);
             }
         } catch (e) {
             console.error(e);
@@ -451,17 +458,40 @@ const TournamentFinanceDetail = () => {
                                 </div>
                             </div>
                             <div className="grid grid-cols-12 gap-3 px-4 py-2 bg-mpca-green-dark text-mpca-gold-light text-[10px] uppercase tracking-widest">
-                                <div className="col-span-7">Budget Head</div>
+                                <div className="col-span-6">Budget Head</div>
                                 <div className="col-span-3 text-right">Limit (₹)</div>
-                                <div className="col-span-2 text-right">Notes</div>
+                                <div className="col-span-3 text-right">Vs MPCA Master</div>
                             </div>
-                            {budgetHeads.map((h, i) => (
-                                <div key={i} className="grid grid-cols-12 gap-3 px-4 py-2.5 items-center border-b border-mpca-brass/10 text-sm" data-testid={`budget-head-row-${i}`}>
-                                    <div className="col-span-7 text-mpca-green-dark">{h.head}</div>
-                                    <div className="col-span-3 text-right font-mono">{fmt(h.limit_inr)}</div>
-                                    <div className="col-span-2 text-right text-[10px] text-mpca-gray-dark truncate">{h.notes || "—"}</div>
+                            {diffMaster?.diffable && diffMaster.changed_heads_count > 0 && (
+                                <div className="px-4 py-2 border-b border-mpca-oxblood/30 bg-mpca-oxblood/5 text-mpca-oxblood text-[11px] flex items-center justify-between" data-testid="budget-diff-summary">
+                                    <div>
+                                        <b className="uppercase tracking-widest text-[10px]">★ Division diff</b> · {diffMaster.changed_heads_count} head{diffMaster.changed_heads_count === 1 ? "" : "s"} differ from MPCA master
+                                    </div>
+                                    <div className="text-right font-mono text-[10px]">
+                                        Total Δ {diffMaster.delta_total_inr > 0 ? "+" : ""}{fmt(diffMaster.delta_total_inr)} ({diffMaster.delta_total_pct ?? 0}%)
+                                    </div>
                                 </div>
-                            ))}
+                            )}
+                            {budgetHeads.map((h, i) => {
+                                const d = (diffMaster?.heads || []).find((x) => x.head === h.head);
+                                const changed = d?.changed;
+                                return (
+                                <div key={i} className={`grid grid-cols-12 gap-3 px-4 py-2.5 items-center border-b border-mpca-brass/10 text-sm ${changed ? "bg-mpca-oxblood/5" : ""}`} data-testid={`budget-head-row-${i}`}>
+                                    <div className="col-span-6 text-mpca-green-dark flex items-center gap-2">
+                                        {changed && <span className="text-mpca-oxblood text-[10px] font-mono uppercase tracking-widest bg-mpca-oxblood/10 px-1 py-0.5 border border-mpca-oxblood/40" title={`Division changed from ₹${(d.master_inr || 0).toLocaleString("en-IN")} to ₹${(d.division_inr || 0).toLocaleString("en-IN")} (Δ ${d.delta_pct}%)`} data-testid={`budget-head-diff-badge-${i}`}>★ Changed</span>}
+                                        {h.head}
+                                    </div>
+                                    <div className="col-span-3 text-right font-mono">{fmt(h.limit_inr)}</div>
+                                    <div className="col-span-3 text-right text-[10px] font-mono">
+                                        {d ? (
+                                            <span className={`${changed ? (d.delta_inr > 0 ? "text-mpca-oxblood" : "text-mpca-green-dark") : "text-mpca-gray-dark"}`}>
+                                                {d.delta_inr === 0 ? "= same" : `${d.delta_inr > 0 ? "+" : ""}${fmt(d.delta_inr)} (${d.delta_pct ?? 0}%)`}
+                                            </span>
+                                        ) : "—"}
+                                    </div>
+                                </div>
+                                );
+                            })}
                             {scheme && scheme.conditions?.length > 0 && (
                                 <div className="p-4 bg-mpca-cream/30">
                                     <div className="overline text-[9px] mb-2">Scheme Conditions</div>

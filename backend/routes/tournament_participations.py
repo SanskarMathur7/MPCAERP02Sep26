@@ -102,6 +102,11 @@ class TournamentParticipation(BaseModel):
     budget_id: Optional[str] = None
     claim_id: Optional[str] = None
     notes: Optional[str] = None
+    # M32 · Per-participant input variables (starts as copy of tournament master,
+    # then Division/District can edit their own draft that drives their sub-budget).
+    input_variables: Optional[Dict[str, Any]] = None
+    input_variables_updated_at: Optional[str] = None
+    input_variables_updated_by: Optional[str] = None
     removed_at: Optional[str] = None            # soft-delete marker
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -112,6 +117,13 @@ class ParticipationPatch(BaseModel):
     acceptance_note: Optional[str] = None
     acceptance_by_name: Optional[str] = None
     notes: Optional[str] = None
+
+
+class InputVariablesPatch(BaseModel):
+    """M32 · Payload for Division/District to save their local input variables."""
+    input_variables: Dict[str, Any]
+    updated_by: Optional[str] = None
+    model_config = ConfigDict(extra="ignore")
 
 
 # ───────────────────────── Sync helper ─────────────────────────
@@ -149,6 +161,11 @@ async def sync_participants_from_pools(
     kept_codes: set = set()
     newly_added: List[Dict[str, Any]] = []
 
+    # M32 · Snapshot the tournament's master input_variables so new participants
+    # inherit a working copy they can edit.
+    _t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "input_variables": 1})
+    master_iv = (_t or {}).get("input_variables") or {}
+
     for pool in merged_pools:
         pool_id = pool.get("id")
         pool_name = pool.get("name")
@@ -179,7 +196,10 @@ async def sync_participants_from_pools(
                     {"$set": update_doc},
                 )
             else:
-                row = TournamentParticipation(**update_doc)
+                row = TournamentParticipation(
+                    **update_doc,
+                    input_variables=dict(master_iv) if master_iv else None,
+                )
                 await db.tournament_participations.insert_one(row.model_dump())
                 newly_added.append({
                     "body_code": code, "body_name": row.body_name,
@@ -413,6 +433,132 @@ async def patch_tournament_participant(tid: str, body_code: str, patch: Particip
         )
     totals = await _totals_for_participant(tid, body_code)
     return {**row, **totals}
+
+
+# ─────────────── M32 · Per-participant Input Variables + Budget generate ───────────────
+
+@api_router.patch("/tournaments/{tid}/participants/{body_code}/input-variables")
+async def patch_participant_input_variables(
+    tid: str,
+    body_code: str,
+    payload: InputVariablesPatch,
+):
+    """Division/District secretary saves their local input-variables draft.
+
+    The values do NOT overwrite the tournament master (which stays MPCA-owned).
+    They only shape THIS participant's downstream sub-budget."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    r = await db.tournament_participations.update_one(
+        {"tournament_id": tid, "body_code": body_code, "removed_at": None},
+        {"$set": {
+            "input_variables": payload.input_variables,
+            "input_variables_updated_at": now_iso,
+            "input_variables_updated_by": payload.updated_by,
+            "updated_at": now_iso,
+        }},
+    )
+    if r.matched_count == 0:
+        raise HTTPException(404, "Participant not found or already removed")
+    row = await db.tournament_participations.find_one(
+        {"tournament_id": tid, "body_code": body_code}, {"_id": 0}
+    )
+    return row
+
+
+@api_router.post("/tournaments/{tid}/participants/{body_code}/budget/generate")
+async def generate_participant_budget(tid: str, body_code: str):
+    """Generate (or update) THIS participant's draft budget from their local
+    input_variables. Host role → full hosting scheme; Visitor role → travel + DA
+    subsidy subset. If a live budget already exists, its head allocations are
+    OVERWRITTEN with the freshly computed values while status/notes stay put."""
+    from models import TournamentBudget
+    from routes.scheme_calc import compute_budget, ComputeRequest
+    from routes.tournament_workspace import _is_visitor_head
+
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    part = await db.tournament_participations.find_one(
+        {"tournament_id": tid, "body_code": body_code, "removed_at": None}, {"_id": 0}
+    )
+    if not part:
+        raise HTTPException(404, "Participant not found")
+
+    iv = part.get("input_variables") or t.get("input_variables") or {}
+    if not iv:
+        raise HTTPException(400, "No input variables set for this participant yet. Save the panel first.")
+    scheme_code = t.get("scheme_code")
+    if not scheme_code:
+        raise HTTPException(400, "Tournament has no scheme_code — cannot auto-compute a budget.")
+
+    preview = await compute_budget(scheme_code, ComputeRequest(inputs=iv))
+    full_heads = preview.get("head_allocations") or []
+    if not full_heads:
+        raise HTTPException(422, "Scheme returned zero heads.")
+
+    role = part.get("role", "Visitor")
+    if role == "Host":
+        heads_for_this = full_heads
+    else:
+        heads_for_this = [h for h in full_heads if _is_visitor_head(h["head"])] or [{
+            "head": "Team Travel Subsidy",
+            "limit_inr": round(preview.get("total_ceiling_inr", 0) * 0.20, 2),
+            "formula": "20% of total ceiling (fallback)",
+        }]
+
+    head_allocs = [{
+        "head": h["head"],
+        "limit_inr": float(h["limit_inr"]),
+        "spent_inr": 0.0,
+        "notes": h.get("formula"),
+    } for h in heads_for_this]
+    total = round(sum(h["limit_inr"] for h in head_allocs), 2)
+    cycle = t.get("fiscal_cycle") or "2025-26"
+
+    existing = await db.tournament_budgets.find_one({
+        "tournament_id": tid,
+        "body_id": body_code,
+        "fiscal_cycle": cycle,
+        "status": {"$in": ["Draft", "Returned"]},
+    }, {"_id": 0})
+
+    if existing:
+        await db.tournament_budgets.update_one(
+            {"id": existing["id"]},
+            {"$set": {
+                "head_allocations": head_allocs,
+                "total_ceiling_inr": total,
+                "input_variables_snapshot": dict(iv),
+                "notes": (existing.get("notes") or "") + f"\n[Regenerated {datetime.now(timezone.utc).isoformat()}]",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        budget = await db.tournament_budgets.find_one({"id": existing["id"]}, {"_id": 0})
+        return {"budget": budget, "generated": False, "regenerated": True}
+
+    # Fresh budget
+    body = await db.bodies.find_one({"code": body_code}, {"_id": 0})
+    count = await db.tournament_budgets.count_documents({"fiscal_cycle": cycle})
+    tb = TournamentBudget(
+        budget_no=f"TB-{cycle}-{count + 1:03d}",
+        tournament_id=tid,
+        tournament_name=t.get("name"),
+        body_id=body_code,
+        body_name=(body or {}).get("name", body_code),
+        fiscal_cycle=cycle,
+        head_allocations=head_allocs,
+        total_ceiling_inr=total,
+        status="Draft",
+        notes=f"Generated by {body_code} · {role} allocation · {scheme_code}",
+        participant_body_code=body_code,
+        input_variables_snapshot=dict(iv),
+    )
+    doc = tb.model_dump()
+    await db.tournament_budgets.insert_one(doc)
+    await link_budget_to_participant(tid, body_code, tb.id)
+    return {"budget": doc, "generated": True, "regenerated": False}
+
+
 
 
 @api_router.post("/tournaments/{tid}/participants/resync")

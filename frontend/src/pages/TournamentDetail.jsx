@@ -12,6 +12,8 @@ import CricketLoader from "@/components/CricketLoader";
 import TournamentSubTabs from "@/components/TournamentSubTabs";
 import TournamentProgress from "@/components/TournamentProgress";
 import InputVariablesPanel from "@/components/InputVariablesPanel";
+import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
+import TournamentInvoicesPanel from "@/components/TournamentInvoicesPanel";
 import TournamentStatusStepper from "@/components/TournamentStatusStepper";
 import TournamentBasicsPanel from "@/components/TournamentBasicsPanel";
 import ParticipantsMatrix from "@/components/ParticipantsMatrix";
@@ -215,8 +217,8 @@ const TournamentDetail = () => {
                             navigate(`/tournaments/${id}/selection`);
                         }
                     }} />
-                    <SetupBox testId="box-budget" icon={Wallet} label="Budget & Extras" note="Actuals + heads" onClick={() => navigate(`/tournaments/${id}/finance`)} />
-                    <SetupBox testId="box-invoices" icon={Receipt} label="Invoices + DA Forms" note="Uploaded, extracted, approved" onClick={() => navigate(`/tournaments/${id}/finance?tab=officials`)} />
+                    <SetupBox testId="box-budget" icon={Wallet} label="Budget & Extras" note="Draft budgets · per body" onClick={() => setOpenBox(openBox === "budget" ? null : "budget")} active={openBox === "budget"} />
+                    <SetupBox testId="box-invoices" icon={Receipt} label="Invoices + DA Forms" note="Uploaded, extracted, approved" onClick={() => setOpenBox(openBox === "invoices" ? null : "invoices")} active={openBox === "invoices"} />
                     <SetupBox testId="box-summary" icon={Activity} label="Financial Summary" note="Auto-rollup" onClick={() => setOpenBox(openBox === "summary" ? null : "summary")} active={openBox === "summary"} />
                     <SetupBox testId="box-receipts" icon={HandCoins} label="MPCA Receipts" note="Payments received" onClick={() => setOpenBox(openBox === "receipts" ? null : "receipts")} active={openBox === "receipts"} />
                     <SetupBox testId="box-closure" icon={ScrollText} label="Closure Letter" note={t.closure_letter_generated_at ? "Issued" : "Not issued"} onClick={() => setOpenBox(openBox === "closure" ? null : "closure")} active={openBox === "closure"} />
@@ -235,6 +237,12 @@ const TournamentDetail = () => {
                 )}
                 {openBox === "calendar" && (
                     <div className="mt-4"><MatchCalendarPanel tournament={t} canEdit={canEdit || persona?.body_type === "Division"} onChange={() => { refreshProgress(); load(); }} /></div>
+                )}
+                {openBox === "budget" && (
+                    <div className="mt-4"><TournamentBudgetsPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>
+                )}
+                {openBox === "invoices" && (
+                    <div className="mt-4"><TournamentInvoicesPanel tournament={t} persona={persona} /></div>
                 )}
                 {openBox === "receipts" && (
                     <div className="mt-4"><TournamentReceiptsPanel tournament={t} canEdit={canEdit} /></div>

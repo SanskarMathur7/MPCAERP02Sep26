@@ -1055,3 +1055,66 @@ Three user asks:
   since Phase B (M26). Variance summary + drill-down already surface totals.
 - Bulk NEFT + Closure guard (Phase D) close the payment loop symmetrically.
 
+
+## Sprint M29 · Grounds Refactor + Input-Vars RBAC Fix + Match Calendar CSV Import · Feb 2026
+
+### Problem
+User asks:
+1. Step 5 Basics panel confusingly asked for "Venue name" AND "Ground name". Real
+   world: MPCA/Division/District owns *grounds* — that's the only atomic booking
+   unit. Venue is just an address wrapper. Ground picker should be filtered by
+   owner (MPCA + tournament host + all participants).
+2. Input Variables Panel had a **RBAC bug** — canEdit was inverted so MPCA State
+   personas (President/Secretary/Treasurer) were BLOCKED from editing. Division
+   personas were allowed even though they should be read-only.
+3. Match Calendar needed team+ground dropdowns tied to tournament basics + a
+   bulk CSV import path so MPCA can post an entire fixture list in one go.
+
+### What was built
+- **`GET /api/grounds`** now accepts `owner_body_codes` (comma-separated). Returns
+  grounds where `managed_by_body_id ∈ codes` OR the parent venue's owner matches.
+- **Seeded 22 divisional grounds** (2 per Division) + 2 MPCA grounds. Attached to
+  11 seeded venues (all now correctly categorised as `Divisional` or `MPCA_State`
+  after a category-field patch).
+- **`TournamentBasicsPanel.jsx`** — replaced text-based venue + ground inputs with
+  a single dropdown scoped to owner_body_codes = MPCA + tournament.host_body_id +
+  all participant bodies from division_pools/district_pools. Removed unused
+  `/venues` fetch that was pointing at a broken endpoint.
+- **`InputVariablesPanel.jsx:43`** — RBAC bug fixed. canEdit is now:
+    `persona.body_type === 'State' && persona.id ∈ {secretary,president,treasurer}`
+  (verified via Playwright — MPCA President/Secretary/Treasurer edit, Division
+  Secretary read-only).
+- **`MatchCalendarPanel`** — home/away team `<input>` → `<select>` populated from
+  setup_meta pools. Ground/venue text inputs → single `<select>` from
+  setup_meta.grounds[]. Added `data-testid=calendar-template-btn` (download CSV
+  template) and `calendar-import-csv-btn` + hidden file input for bulk CSV
+  ingestion. Inline success/error banner (`calendar-import-result`).
+
+### Fixes applied post-review (iter_48)
+- **CRITICAL**: `/api/venues` was returning 500 because my seed omitted the
+  required `category` enum field. Patched all 11 orphaned venues:
+  `Divisional` for the 10 MP-division venues, `MPCA_State` for the 1 MPCA venue.
+- Removed unused `venues` state from TournamentBasicsPanel (dead code).
+
+### Test coverage
+- `test_m29_grounds_filter.py` — 9/9 pytest PASS.
+- Frontend Playwright (iter_48): RBAC 4/4 personas, ground picker, CSV template,
+  CSV import happy path + malformed CSV — all PASS.
+- `/api/venues` post-fix returns 200 (was 500).
+
+### Deferred items from user's option 2a (not shipped this iteration)
+- **Auto-Split Budget button** (Host = full hosting scheme, Visitors = travel
+  subsidy only). Backend `POST /tournaments/{tid}/budget/auto-split` + frontend
+  button in InputVariablesPanel. Estimated 30 min next sprint.
+- Per-persona filter of budgets/invoices/claims by `participant_body_code` on
+  the existing list pages (backend already stores the field; only UI filter to
+  wire).
+
+### Non-blocking tech-debt flagged
+- Match Calendar CSV parser splits on plain `,` — will break notes containing
+  commas. Swap to PapaParse or a mini quoted-CSV parser.
+- MatchCalendar posts each imported match sequentially. Consider a bulk
+  endpoint `POST /tournaments/{tid}/matches/bulk`.
+- `<span> cannot be a child of <option>` hydration warning in TournamentCreateModal
+  step 2 (pre-existing since iter_40, source not located).
+

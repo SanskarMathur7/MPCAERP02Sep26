@@ -48,14 +48,12 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState("");
-    const [venues, setVenues] = useState([]);
     const [availableGrounds, setAvailableGrounds] = useState([]);
     const [bodies, setBodies] = useState([]);   // divisions OR districts depending on scope
     const [newTeam, setNewTeam] = useState({ name: "", pool: "A" });
     const [newGround, setNewGround] = useState({ ground_id: "" });
 
     useEffect(() => {
-        api.get("/venues").then((r) => setVenues(r.data || [])).catch(() => setVenues([]));
         const params = isDistrictScope
             ? { body_type: "District", parent_code: tournament.host_body_id || undefined }
             : { body_type: "Division" };

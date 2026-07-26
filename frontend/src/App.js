@@ -66,6 +66,7 @@ const ReimbursementClaimDetail = lazy(() =>
     import("@/pages/ReimbursementClaims").then((m) => ({ default: m.ReimbursementClaimDetail })));
 const MyDAForms = lazy(() => import("@/pages/MyDAForms"));
 const SquadReview = lazy(() => import("@/pages/SquadReview"));
+const SquadDetail = lazy(() => import("@/pages/SquadDetail"));
 const CampsPage = lazy(() => import("@/pages/Camps"));
 const SchemesMaster = lazy(() => import("@/pages/SchemesMaster"));
 const GrantClaims = lazy(() => import("@/pages/GrantClaims"));
@@ -185,6 +186,8 @@ function App() {
                             <Route path="/reimbursement-claims/:id" element={<Protected><ReimbursementClaimDetail /></Protected>} />
                             <Route path="/my-da-forms" element={<Protected><MyDAForms /></Protected>} />
                             <Route path="/squads/:sid/review" element={<Protected><SquadReview /></Protected>} />
+                            <Route path="/squads/:sid" element={<Protected><SquadDetail /></Protected>} />
+                            <Route path="/tournaments/:tid/squads/new" element={<Protected><SquadDetail /></Protected>} />
                             <Route path="/camps" element={<Protected><CampsPage /></Protected>} />
                             <Route path="/schemes" element={<Protected><SchemesMaster /></Protected>} />
                             <Route path="/grant-claims" element={<Protected><GrantClaims /></Protected>} />

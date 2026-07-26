@@ -32,7 +32,37 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
         (meta.teams || []).forEach((t) => codes.add(t.name));
         return Array.from(codes);
     }, [tournament?.setup_meta]);
-    const groundOptions = useMemo(() => tournament?.setup_meta?.grounds || [], [tournament?.setup_meta]);
+
+    // M30 · Fallback ground pool — if Basics hasn't been configured with grounds yet,
+    // hydrate the dropdown directly from /grounds scoped to MPCA + host + participating bodies
+    // so the user isn't blocked on Match Calendar entry.
+    const [fallbackGrounds, setFallbackGrounds] = useState([]);
+    const basicsGrounds = tournament?.setup_meta?.grounds || [];
+
+    useEffect(() => {
+        if (basicsGrounds.length > 0) return;   // Basics already configured — skip fetch
+        const owners = new Set(["MPCA"]);
+        if (tournament?.host_body_id) owners.add(tournament.host_body_id);
+        const meta = tournament?.setup_meta || {};
+        (meta.division_pools || []).forEach((p) => (p.division_codes || []).forEach((c) => owners.add(c)));
+        (meta.district_pools || []).forEach((p) => (p.district_codes || []).forEach((c) => owners.add(c)));
+        const ownerParam = Array.from(owners).join(",");
+        api.get("/grounds", { params: { owner_body_codes: ownerParam } })
+            .then((r) => setFallbackGrounds(
+                (r.data || []).map((g) => ({
+                    id: g.id,
+                    ground_id: g.id,
+                    ground_no: g.ground_no,
+                    ground_name: g.name,
+                    venue_name: g.venue_name,
+                    owner_body_code: g.managed_by_body_id || g.owner_body_id,
+                }))
+            ))
+            .catch(() => setFallbackGrounds([]));
+    }, [basicsGrounds.length, tournament?.host_body_id, tournament?.setup_meta]);
+
+    const groundOptions = basicsGrounds.length > 0 ? basicsGrounds : fallbackGrounds;
+    const usingFallbackGrounds = basicsGrounds.length === 0 && fallbackGrounds.length > 0;
 
     const load = async () => {
         setLoading(true);
@@ -206,13 +236,18 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                         <select className={inputCls + " col-span-2"} value={`${form.venue_name}|${form.ground_name}`} onChange={(e) => {
                             const [v, g] = e.target.value.split("|"); setForm({ ...form, venue_name: v || "", ground_name: g || "" });
                         }} data-testid="match-venue-input">
-                            <option value="|">Ground…</option>
+                            <option value="|">{groundOptions.length ? "Ground…" : "No grounds available — add in Basics"}</option>
                             {groundOptions.map((g) => (
                                 <option key={g.id} value={`${g.venue_name}|${g.ground_name}`}>{g.ground_name} @ {g.venue_name}</option>
                             ))}
                         </select>
                         <input placeholder="Notes" className={inputCls} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
                     </div>
+                    {usingFallbackGrounds && (
+                        <div className="mt-2 text-[10px] text-mpca-brass italic" data-testid="calendar-grounds-fallback-hint">
+                            Showing all scoped grounds ({fallbackGrounds.length}). Tip · pin exact grounds for this tournament under Tournament Basics → Grounds.
+                        </div>
+                    )}
                     <div className="flex justify-end gap-2 mt-3">
                         <button onClick={() => setCreating(false)} className="text-[10px] uppercase tracking-widest text-mpca-gray-dark px-3 py-1.5 hover:text-mpca-oxblood flex items-center gap-1"><X size={11} /> Cancel</button>
                         <button onClick={addMatch} className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1" data-testid="match-save-btn"><Save size={11} /> Save fixture</button>

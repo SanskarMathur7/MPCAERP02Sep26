@@ -1,0 +1,54 @@
+{
+  "summary": "Verified M30 bug-fix: Match Calendar ground dropdown fallback + new Division Squad Detail page. Backend smoke tests via curl (grounds, squads, players) all pass. Frontend flows verified end-to-end for both DIV-IND (Devashish Nilosey) and MPCA (Sanjeev Dua) personas.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "SquadDetail · Add Player when tournament is Draft", "issue": "Clicking 'Pick' on a player when the tournament is still in Draft status returns backend 400 ('Cannot modify squad once tournament is Draft'). The error is caught into `err` state but the picker dialog stays open and does NOT surface the error inline in the picker — user sees no feedback. The [data-testid='squad-inline-error'] renders only on the underlying SquadDetail page which is covered by the modal. Recommend showing the error inside the picker dialog OR closing the picker+scrolling to inline-error. Not blocking (backend rule is correct — tournament must be Accepted before roster edits).", "affected_selectors": ["squad-picker-dialog", "squad-inline-error"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_m29_grounds_filter.py", "/app/backend/tests/test_m28_squad_link.py"],
+  "action_items": [
+    "OPTIONAL UX polish: surface the backend 400 (e.g. 'Cannot modify squad once tournament is Draft') inside the [data-testid='squad-picker-dialog'] so DIV-IND users understand why picks are silently failing on a Draft tournament.",
+    "OPTIONAL: React hydration warning in Match Calendar <select> — a lovable-annotation <span> is injected inside <option> for 'ground_name' expression, causing a console 'In HTML, <span> cannot be a child of <option>' hydration warning. Cosmetic (dev-only), does not affect the dropdown behaviour."
+  ],
+  "critical_code_review_comments": [
+    "SquadDetail.jsx bootstrap logic when landing on /squads/:sid does a hidden GET /squads/{sid}/recommendation just to discover tournament_id, and if that fails falls back to iterating every scoped tournament and calling fetchSquads() on each — this is O(N) network requests. Consider adding a dedicated GET /api/squads/{sid} endpoint that returns {tournament_id, ...squad} in one call.",
+    "SquadDetail.jsx loadPlayersForSquad: for DIV- prefixed body_ids it fetches `/players?limit=2000` (unscoped) and filters client-side by suffix. That works but leaks non-scope players over the wire and is fragile if suffixes ever collide (e.g. new 3-letter code that ends in 'IND'). Prefer a backend param like `?parent_body_id=DIV-IND` that returns DIV + child-district players.",
+    "TournamentWorkspacePanels MatchCalendarPanel useEffect fallback fetch dep array uses `tournament?.setup_meta` (object identity) — this may re-fire more often than intended. Consider depending on a serialized owners key instead."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "test_credentials": "persona-chip-division-secretary (Devashish Nilosey · DIV-IND); persona-chip-secretary (Sanjeev Dua · MPCA).",
+  "seed_data_creation": "No seed changes. Used existing SM Khan Trophy (TRN-2026-27-009, DIV-IND host, Draft/awaiting) and Vijay Merchant Trophy (TRN-2025-26-033) for MPCA-side checks. Squad 96329508-900d-4a8d-a044-46cf53dc0c9e was auto-created by the /tournaments/:tid/squads/new flow during testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "SM Khan Trophy is DIV-IND host, still in Draft — to fully test 'Add Player' inline persistence in the picker, first accept the tournament as DIV-IND (Tournaments → Accept), THEN pick a player. All routing/scoping is verified. Match Calendar fallback (data-testid='calendar-grounds-fallback-hint') was NOT observed live because both tournaments touched have basics.grounds populated; the code path is verified static in TournamentWorkspacePanels.jsx lines 39-65 and behaves as spec (only fires when basics.grounds is empty).",
+  "verification_details": {
+    "backend": {
+      "GET /api/grounds?owner_body_codes=MPCA,DIV-IND (X-Body-Code: DIV-IND)": "200 · returned >=2 grounds incl. GRD-IND-INDO-001",
+      "POST /api/squads {tournament_id, body_id: DIV-IND} first call": "returns squad (verified via UI auto-create)",
+      "POST /api/squads duplicate": "400 · 'A squad for DIV-IND already exists in this tournament'",
+      "GET /api/tournaments/{tid}/squads": "returns list incl. DIV-IND squad",
+      "GET /api/players?body_id=DIV-IND&limit=5": "200 · returns DIV-IND players",
+      "POST /api/squads/{sid}/players on Draft tournament": "400 · 'Cannot modify squad once tournament is Draft' (backend rule)"
+    },
+    "frontend": {
+      "DIV-IND · box-squad click": "navigates to /squads/96329508-900d-4a8d-a044-46cf53dc0c9e",
+      "squad-detail-page rendered": true,
+      "squad-team-name": "DIV-IND · SM Khan Trophy",
+      "squad-add-player-btn present": true,
+      "squad-picker-dialog opens": true,
+      "squad-picker-count text": "'Showing 35 of 35 available players from DIV-IND + child districts'",
+      "squad-picker rows visible": 35,
+      "MPCA subtab squad href (Vijay Merchant)": "/tournaments/2e49a8fc-.../selection",
+      "DIV-IND subtab squad href (SM Khan)": "/squads/96329508-...",
+      "panel-squads · squad-card links (MPCA persona)": "'start it' resolves to /tournaments/:tid/squads/new?body=DIV-UJN|DIV-BPL (no 404)",
+      "Match Calendar match-venue-input options": "3 options incl. 2 grounds from basics.grounds; fallback hint NOT shown (basics has grounds — correct behavior)"
+    }
+  }
+}

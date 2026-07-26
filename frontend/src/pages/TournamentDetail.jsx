@@ -200,7 +200,17 @@ const TournamentDetail = () => {
                     <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} />
                     <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `${Object.keys(t.input_variables).length} set` : "Not filled"} onClick={() => setOpenBox(openBox === "input-vars" ? null : "input-vars")} active={openBox === "input-vars"} />
                     <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
-                    <SetupBox testId="box-squad" icon={Users} label="Squad Selection" note={squads.length ? `${squads.length} squad(s)` : "Not started"} onClick={() => navigate(`/tournaments/${id}/selection`)} />
+                    <SetupBox testId="box-squad" icon={Users} label="Squad Selection" note={persona?.body_type === "Division" || persona?.body_type === "District" ? `My body · ${persona?.body_code}` : (squads.length ? `${squads.length} squad(s)` : "Not started")} onClick={() => {
+                        // Non-MPCA personas jump straight to their body's per-squad detail;
+                        // MPCA continues to the multi-body Selection Console.
+                        if (persona?.body_type === "Division" || persona?.body_type === "District") {
+                            const existing = squads.find((s) => s.body_id === persona.body_code);
+                            if (existing) navigate(`/squads/${existing.id}`);
+                            else navigate(`/tournaments/${id}/squads/new?body=${persona.body_code}`);
+                        } else {
+                            navigate(`/tournaments/${id}/selection`);
+                        }
+                    }} />
                     <SetupBox testId="box-budget" icon={Wallet} label="Budget & Extras" note="Actuals + heads" onClick={() => navigate(`/tournaments/${id}/finance`)} />
                     <SetupBox testId="box-invoices" icon={Receipt} label="Invoices + DA Forms" note="Uploaded, extracted, approved" onClick={() => navigate(`/tournaments/${id}/finance?tab=officials`)} />
                     <SetupBox testId="box-summary" icon={Activity} label="Financial Summary" note="Auto-rollup" onClick={() => setOpenBox(openBox === "summary" ? null : "summary")} active={openBox === "summary"} />

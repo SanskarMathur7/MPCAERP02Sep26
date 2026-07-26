@@ -1,0 +1,51 @@
+{
+  "summary": "M29 tested: (1) Ground picker owner_body_codes filter on GET /api/grounds — 9/9 pytest cases PASS including MPCA-only, DIV-IND-only, multi-body, unknown-body, whitespace-tolerance, and no-500-across-filter-variants. (2) InputVariablesPanel RBAC bug fix VERIFIED for all 4 personas via Playwright: MPCA president/secretary/treasurer show iv-save-btn + 0 disabled inputs; DIV-IND secretary shows no save-btn + all 9 inputs disabled. (3) TournamentBasicsPanel: basics-ground-select dropdown renders (3 opts for Women's U-23), legacy 'Venue name' and 'Ground name' text inputs removed, basics-ground-add-btn present. (4) MatchCalendarPanel: calendar-template-btn downloads correct CSV template (header: stage,match_date,start_time,home_team,away_team,venue_name,ground_name,notes + 2 sample rows). Malformed CSV shows 'Import failed: CSV needs a header row + at least one data row.' banner. Valid single-row CSV imports successfully → 'Imported 1 / 1 matches' banner + match visible in list. match-home-input & match-venue-input converted from text to <select>. CRITICAL BUG UNCOVERED (not in-scope but must-fix): GET /api/venues returns 500 — ResponseValidationError because 5 seeded division venues (VEN-BPL-001, VEN-CHM-001, VEN-GWL-001, VEN-IND-001, VEN-JBP-001) are missing the required `category` field. This breaks /venues endpoint site-wide (any page listing venues, including Venues & Grounds module and TournamentBasicsPanel's /venues fetch). Ground-picker still works because /grounds returns venue_name snapshot directly.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/venues",
+        "issue": "Returns 500 ResponseValidationError — 5 division venues seeded without required `category` field (VEN-BPL-001, VEN-CHM-001, VEN-GWL-001, VEN-IND-001, VEN-JBP-001). Log: fastapi.exceptions.ResponseValidationError: 5 validation errors — all say {'type':'missing','loc':('response',N,'category'),'msg':'Field required'}. Fix: run db update to set default category (e.g. 'Ground_Only' or 'Stadium') on those 5 documents, OR make `category` Optional in the Venue model.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "TournamentCreateModal (Step 2) — pre-existing from iter47",
+        "issues": ["React hydration warning still logged in console: 'In HTML, <span> cannot be a child of <option>.' Non-blocking. Not caused by M29."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m29_grounds_filter.py",
+    "/app/test_reports/pytest/m29_grounds_filter.xml"
+  ],
+  "action_items": [
+    "PRIORITY-1 (CRITICAL): Fix /api/venues 500 — either patch 5 division venue docs (VEN-BPL-001/CHM-001/GWL-001/IND-001/JBP-001) to add `category` field, or make Venue.category Optional. Command: `db.venues.update_many({'category': {'$exists': False}}, {'$set': {'category': 'Ground_Only'}})`.",
+    "PRIORITY-3 (nit, pre-existing): Resolve `<span> cannot be a child of <option>` hydration warning in TournamentCreateModal step 2."
+  ],
+  "critical_code_review_comments": [
+    "routes/venues_grounds.py list_grounds() venue-fallback query loads ALL venues matching codes into memory then filters — fine at current scale (~700 venues per logs) but should be indexed on managed_by_body_id if venue count grows.",
+    "TournamentBasicsPanel.jsx L58 still fetches /venues into a `venues` state that is never consumed anywhere in the component (dead code from pre-M29 refactor). Remove it — cleans up one of the 500 error hits on the tournament detail page.",
+    "MatchCalendarPanel groundOptions relies on tournament.setup_meta.grounds — if user opens Match Calendar BEFORE saving grounds in Basics, the venue dropdown is empty. No inline hint or link back to Basics. Consider showing 'Add grounds in Tournament Basics first' as placeholder when groundOptions is empty.",
+    "MatchCalendarPanel CSV import splits on plain ',' — will break rows where notes/venue contain commas. Recommend swapping to PapaParse or a mini quoted-CSV parser (~20 LOC).",
+    "MatchCalendarPanel importCsv fires N sequential api.post calls in a for-loop — for 30-match tournaments this is slow and non-transactional. Consider a bulk endpoint POST /tournaments/{tid}/matches/bulk that accepts an array."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m29_grounds_filter.py (new · 9 tests · 9/9 pass)"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 M29 filter tests) — but /api/venues is 500 (out-of-scope regression)",
+    "frontend": "100% (RBAC 4/4 personas + ground-picker + CSV template + CSV import happy + CSV malformed all PASS)"
+  },
+  "test_credentials": "persona-chip-president, persona-chip-secretary, persona-chip-treasurer, persona-chip-division-secretary — all validated. Two-step login: chip → 'Sign in to the Registrar' button.",
+  "seed_data_creation": "Created 1 test match via CSV import (League/2026-09-01/DIV-IND vs DIV-BPL/Test Venue/Test Ground) on tournament 71802619-... then deleted via DELETE /api/tournaments/{tid}/matches/{mid}. No residual test data.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M29 (grounds filter + RBAC fix + calendar CSV import) is functionally COMPLETE and validated. Only blocker is the pre-existing /api/venues 500 (5 division venues missing `category` field) which impacts Venues & Grounds pages. After main agent runs the db patch, retest /api/venues=200 and re-render the Venues & Grounds page. Note: for a richer Match Calendar test with populated team/ground dropdowns, create an Inter_Divisional tournament with 2+ division_pools and a couple of setup_meta.grounds — the current Women's U-23 tournament has empty pools so home/venue selects only show the placeholder option.",
+  "rca of the issue": "/api/venues 500 RCA: 22 divisional + 2 MPCA ground seeder created associated venues but the seed payload omitted the `category` field (Venue.category is a required Pydantic field of VenueCategory enum). At list time FastAPI response validation fails on those 5 documents. Mitigation: `await db.venues.update_many({'category': {'$exists': False}}, {'$set': {'category': 'Ground_Only'}})` OR model change: `category: Optional[VenueCategory] = None`."
+}

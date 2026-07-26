@@ -40,7 +40,10 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
     const [submitting, setSubmitting] = useState(false);
     const [dirty, setDirty] = useState(false);
 
-    const canEdit = persona?.body_type !== "State" && ["division-secretary", "district-secretary", "secretary", "president", "treasurer"].includes(persona?.id);
+    // M29 · Only MPCA (State) office-bearers can edit tournament input variables.
+    // Division/District personas can only VIEW their allocated budget line (they
+    // filter budgets/invoices by participant_body_code elsewhere).
+    const canEdit = persona?.body_type === "State" && ["secretary", "president", "treasurer"].includes(persona?.id);
 
     // 1) Load input spec (backend or inline) and seed default values
     useEffect(() => {

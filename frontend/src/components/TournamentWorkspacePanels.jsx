@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Plus, Trash2, Save, X, Loader2, Lock, LockOpen, Calendar as CalIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Trash2, Save, X, Loader2, Lock, LockOpen, Calendar as CalIcon, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 
 const inputCls = "input-heritage !py-1.5 !text-xs";
@@ -14,11 +14,25 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
     const [matches, setMatches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [importResult, setImportResult] = useState(null);
+    const fileRef = useRef(null);
     const [form, setForm] = useState({
         stage: "League", match_date: "", start_time: "10:00",
         home_team: "", away_team: "", venue_name: tournament?.venue_name_snapshot || "",
         ground_name: tournament?.ground_name_snapshot || "", notes: "",
     });
+
+    // M29 · Derive team options from tournament pools + ground options from Step 5 grounds.
+    const teamOptions = useMemo(() => {
+        const meta = tournament?.setup_meta || {};
+        const codes = new Set();
+        (meta.division_pools || []).forEach((p) => (p.division_codes || []).forEach((c) => codes.add(c)));
+        (meta.district_pools || []).forEach((p) => (p.district_codes || []).forEach((c) => codes.add(c)));
+        (meta.teams || []).forEach((t) => codes.add(t.name));
+        return Array.from(codes);
+    }, [tournament?.setup_meta]);
+    const groundOptions = useMemo(() => tournament?.setup_meta?.grounds || [], [tournament?.setup_meta]);
 
     const load = async () => {
         setLoading(true);
@@ -49,6 +63,49 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
         onChange?.();
     };
 
+    // M29 · CSV bulk import
+    const downloadTemplate = () => {
+        const header = "stage,match_date,start_time,home_team,away_team,venue_name,ground_name,notes\n";
+        const sample = 'League,2026-09-01,10:00,DIV-IND,DIV-BPL,MPCA Stadium Bhopal,MPCA Stadium Main Ground,Round 1\nLeague,2026-09-02,14:00,DIV-JBP,DIV-GWL,Jabalpur Cricket Complex,Jabalpur Main Ground,\n';
+        const blob = new Blob([header + sample], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = `match-calendar-template-${tournament.id.slice(0,6)}.csv`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    };
+    const importCsv = async (file) => {
+        if (!file) return;
+        setImporting(true); setImportResult(null);
+        try {
+            const text = await file.text();
+            const lines = text.split(/\r?\n/).filter((l) => l.trim());
+            if (lines.length < 2) throw new Error("CSV needs a header row + at least one data row.");
+            const header = lines[0].split(",").map((h) => h.trim());
+            const idx = (col) => header.indexOf(col);
+            const rows = lines.slice(1).map((ln) => {
+                const cells = ln.split(",").map((c) => c.trim());
+                return {
+                    stage: cells[idx("stage")] || "League",
+                    match_date: cells[idx("match_date")],
+                    start_time: cells[idx("start_time")] || "10:00",
+                    home_team: cells[idx("home_team")],
+                    away_team: cells[idx("away_team")],
+                    venue_name: cells[idx("venue_name")] || "",
+                    ground_name: cells[idx("ground_name")] || "",
+                    notes: cells[idx("notes")] || "",
+                };
+            }).filter((r) => r.home_team && r.away_team && r.match_date);
+            let created = 0, errors = 0;
+            for (const row of rows) {
+                try { await api.post(`/tournaments/${tournament.id}/matches`, row); created++; }
+                catch { errors++; }
+            }
+            setImportResult({ created, errors, total: rows.length });
+            await load(); onChange?.();
+        } catch (e) {
+            setImportResult({ created: 0, errors: 1, total: 0, error: e.message });
+        } finally { setImporting(false); if (fileRef.current) fileRef.current.value = ""; }
+    };
+
     const locked = !!tournament?.calendar_fixed;
 
     return (
@@ -73,12 +130,29 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                         )
                     )}
                     {canEdit && !locked && (
+                        <>
+                        <button onClick={downloadTemplate} className="text-[10px] uppercase tracking-widest border border-mpca-brass/40 text-mpca-brass px-2 py-1 flex items-center gap-1" title="Download CSV template" data-testid="calendar-template-btn">
+                            <Upload size={11} /> Template
+                        </button>
+                        <button onClick={() => fileRef.current?.click()} disabled={importing} className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" data-testid="calendar-import-csv-btn">
+                            {importing ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} Import CSV
+                        </button>
+                        <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => importCsv(e.target.files?.[0])} data-testid="calendar-import-file" />
                         <button onClick={() => setCreating(true)} className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 flex items-center gap-1" data-testid="calendar-add-match-btn">
                             <Plus size={11} /> Add Match
                         </button>
+                        </>
                     )}
                 </div>
             </div>
+
+            {importResult && (
+                <div className={`mb-3 text-[11px] px-3 py-1.5 border ${importResult.error ? "border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood" : "border-mpca-green-dark/40 bg-mpca-green-dark/5 text-mpca-green-dark"}`} data-testid="calendar-import-result">
+                    {importResult.error
+                        ? `Import failed: ${importResult.error}`
+                        : `Imported ${importResult.created} / ${importResult.total} matches` + (importResult.errors ? ` · ${importResult.errors} failed` : "")}
+                </div>
+            )}
 
             {loading ? (
                 <div className="py-6 text-center text-[11px] text-mpca-gray-dark"><Loader2 size={14} className="inline animate-spin mr-1" /> Loading matches…</div>
@@ -121,10 +195,22 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                         </select>
                         <input type="date" className={inputCls} value={form.match_date} onChange={(e) => setForm({ ...form, match_date: e.target.value })} data-testid="match-date-input" />
                         <input type="time" className={inputCls} value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} data-testid="match-time-input" />
-                        <input placeholder="Home team" className={inputCls} value={form.home_team} onChange={(e) => setForm({ ...form, home_team: e.target.value })} data-testid="match-home-input" />
-                        <input placeholder="Away team" className={inputCls} value={form.away_team} onChange={(e) => setForm({ ...form, away_team: e.target.value })} data-testid="match-away-input" />
-                        <input placeholder="Venue" className={inputCls} value={form.venue_name} onChange={(e) => setForm({ ...form, venue_name: e.target.value })} data-testid="match-venue-input" />
-                        <input placeholder="Ground (optional)" className={inputCls} value={form.ground_name} onChange={(e) => setForm({ ...form, ground_name: e.target.value })} />
+                        <select className={inputCls} value={form.home_team} onChange={(e) => setForm({ ...form, home_team: e.target.value })} data-testid="match-home-input">
+                            <option value="">Home team…</option>
+                            {teamOptions.map((t) => <option key={`h-${t}`} value={t}>{t}</option>)}
+                        </select>
+                        <select className={inputCls} value={form.away_team} onChange={(e) => setForm({ ...form, away_team: e.target.value })} data-testid="match-away-input">
+                            <option value="">Away team…</option>
+                            {teamOptions.filter((t) => t !== form.home_team).map((t) => <option key={`a-${t}`} value={t}>{t}</option>)}
+                        </select>
+                        <select className={inputCls + " col-span-2"} value={`${form.venue_name}|${form.ground_name}`} onChange={(e) => {
+                            const [v, g] = e.target.value.split("|"); setForm({ ...form, venue_name: v || "", ground_name: g || "" });
+                        }} data-testid="match-venue-input">
+                            <option value="|">Ground…</option>
+                            {groundOptions.map((g) => (
+                                <option key={g.id} value={`${g.venue_name}|${g.ground_name}`}>{g.ground_name} @ {g.venue_name}</option>
+                            ))}
+                        </select>
                         <input placeholder="Notes" className={inputCls} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
                     </div>
                     <div className="flex justify-end gap-2 mt-3">

@@ -49,9 +49,10 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState("");
     const [venues, setVenues] = useState([]);
+    const [availableGrounds, setAvailableGrounds] = useState([]);
     const [bodies, setBodies] = useState([]);   // divisions OR districts depending on scope
     const [newTeam, setNewTeam] = useState({ name: "", pool: "A" });
-    const [newGround, setNewGround] = useState({ venue_name: "", ground_name: "" });
+    const [newGround, setNewGround] = useState({ ground_id: "" });
 
     useEffect(() => {
         api.get("/venues").then((r) => setVenues(r.data || [])).catch(() => setVenues([]));
@@ -62,6 +63,19 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
             .then((r) => setBodies(r.data || []))
             .catch(() => setBodies([]));
     }, [isDistrictScope, tournament.host_body_id]);
+
+    // M29 · Fetch grounds owned by MPCA + tournament host + participants.
+    useEffect(() => {
+        const owners = new Set(["MPCA"]);
+        if (tournament.host_body_id) owners.add(tournament.host_body_id);
+        const pools = (meta.division_pools || []).concat(meta.district_pools || []);
+        pools.forEach((p) => (p.division_codes || p.district_codes || []).forEach((c) => owners.add(c)));
+        const ownerParam = Array.from(owners).join(",");
+        if (!ownerParam) return;
+        api.get("/grounds", { params: { owner_body_codes: ownerParam } })
+            .then((r) => setAvailableGrounds(r.data || []))
+            .catch(() => setAvailableGrounds([]));
+    }, [tournament.host_body_id, meta.division_pools, meta.district_pools]);
 
     const setField = (k, v) => { setMeta((m) => ({ ...m, [k]: v })); setDirty(true); };
 
@@ -119,9 +133,26 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
 
     // ─── Grounds ──────────────────────────────────────
     const addGround = () => {
-        if (!newGround.venue_name) return;
-        setField("grounds", [...(meta.grounds || []), { ...newGround, id: Date.now() }]);
-        setNewGround({ venue_name: "", ground_name: "" });
+        if (!newGround.ground_id) return;
+        const g = availableGrounds.find((x) => x.id === newGround.ground_id);
+        if (!g) return;
+        // Prevent duplicate
+        if ((meta.grounds || []).some((x) => x.ground_id === g.id)) {
+            setNewGround({ ground_id: "" });
+            return;
+        }
+        setField("grounds", [
+            ...(meta.grounds || []),
+            {
+                id: Date.now(),
+                ground_id: g.id,
+                ground_no: g.ground_no,
+                ground_name: g.name,
+                venue_name: g.venue_name,
+                owner_body_code: g.managed_by_body_id,
+            },
+        ]);
+        setNewGround({ ground_id: "" });
     };
     const removeGround = (id) => setField("grounds", (meta.grounds || []).filter((g) => g.id !== id));
 
@@ -382,8 +413,13 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                         <div className="px-3 py-3 text-[11px] text-mpca-gray-dark italic">No grounds listed yet.</div>
                     ) : (meta.grounds || []).map((g) => (
                         <div key={g.id} className="grid grid-cols-12 gap-2 px-3 py-1.5 border-b border-mpca-brass/10 text-xs items-center" data-testid={`basics-ground-row-${g.id}`}>
-                            <div className="col-span-7 font-serif text-mpca-green-dark">{g.venue_name}</div>
-                            <div className="col-span-4 text-mpca-gray-dark">{g.ground_name || "—"}</div>
+                            <div className="col-span-7 font-serif text-mpca-green-dark">
+                                {g.ground_name}
+                                <span className="text-[9px] text-mpca-brass ml-1">
+                                    @ {g.venue_name}{g.owner_body_code ? ` · owner: ${g.owner_body_code}` : ""}
+                                </span>
+                            </div>
+                            <div className="col-span-4 text-mpca-gray-dark font-mono text-[10px]">{g.ground_no || "—"}</div>
                             <div className="col-span-1 text-right">
                                 {canEdit && <button onClick={() => removeGround(g.id)} className="text-mpca-oxblood/70 hover:text-mpca-oxblood" data-testid={`basics-ground-del-${g.id}`}><Trash2 size={11} /></button>}
                             </div>
@@ -392,12 +428,25 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                 </div>
                 {canEdit && (
                     <div className="grid grid-cols-12 gap-2 items-end" data-testid="basics-ground-add-form">
-                        <input list="basics-venues-list" placeholder="Venue name (pick or type)" className={`${inputCls} col-span-7`} value={newGround.venue_name} onChange={(e) => setNewGround({ ...newGround, venue_name: e.target.value })} data-testid="basics-ground-venue" />
-                        <datalist id="basics-venues-list">
-                            {venues.slice(0, 200).map((v) => <option key={v.id} value={v.name} label={`${v.city} · ${v.category}`} />)}
-                        </datalist>
-                        <input placeholder="Ground (optional)" className={`${inputCls} col-span-4`} value={newGround.ground_name} onChange={(e) => setNewGround({ ...newGround, ground_name: e.target.value })} />
-                        <button onClick={addGround} className="col-span-1 text-[10px] uppercase bg-mpca-oxblood text-mpca-ivory px-2 py-1.5" data-testid="basics-ground-add-btn"><Plus size={11} /></button>
+                        <select
+                            className={`${inputCls} col-span-11`}
+                            value={newGround.ground_id}
+                            onChange={(e) => setNewGround({ ground_id: e.target.value })}
+                            data-testid="basics-ground-select"
+                        >
+                            <option value="">Pick a ground (owned by MPCA / host / participants)…</option>
+                            {availableGrounds.map((g) => (
+                                <option key={g.id} value={g.id}>
+                                    {g.name} @ {g.venue_name} · {g.managed_by_body_id || "MPCA"}
+                                </option>
+                            ))}
+                        </select>
+                        <button onClick={addGround} disabled={!newGround.ground_id} className="col-span-1 text-[10px] uppercase bg-mpca-oxblood text-mpca-ivory px-2 py-1.5 disabled:opacity-40" data-testid="basics-ground-add-btn"><Plus size={11} /></button>
+                    </div>
+                )}
+                {availableGrounds.length === 0 && canEdit && (
+                    <div className="text-[10px] text-mpca-gray-dark italic mt-1">
+                        No grounds available yet for the involved bodies. Configure grounds in the Grounds module first (owner = MPCA / host division / participating bodies).
                     </div>
                 )}
             </div>

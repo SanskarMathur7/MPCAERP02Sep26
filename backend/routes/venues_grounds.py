@@ -184,7 +184,12 @@ async def delete_venue(vid: str):
 # ──────────────────── Grounds ────────────────────
 
 @api_router.get("/grounds", response_model=List[Ground])
-async def list_grounds(venue_id: Optional[str] = None, type: Optional[GroundType] = None, format: Optional[TournamentFormat] = None):
+async def list_grounds(
+    venue_id: Optional[str] = None,
+    type: Optional[GroundType] = None,
+    format: Optional[TournamentFormat] = None,
+    owner_body_codes: Optional[str] = None,   # M29 · comma-separated body codes
+):
     q: dict = {}
     if venue_id:
         q["venue_id"] = venue_id
@@ -192,6 +197,18 @@ async def list_grounds(venue_id: Optional[str] = None, type: Optional[GroundType
         q["type"] = type
     if format:
         q["suitable_formats"] = format
+    if owner_body_codes:
+        codes = [c.strip() for c in owner_body_codes.split(",") if c.strip()]
+        if codes:
+            # A ground is owned by managed_by_body_id (override) OR its venue's managed_by_body_id.
+            # Resolve via venue lookup once, then filter in-memory (grounds are typically small).
+            venue_ids_for_owners = [v["id"] async for v in db.venues.find(
+                {"managed_by_body_id": {"$in": codes}}, {"_id": 0, "id": 1}
+            )]
+            q["$or"] = [
+                {"managed_by_body_id": {"$in": codes}},
+                {"venue_id": {"$in": venue_ids_for_owners}, "managed_by_body_id": None},
+            ]
     return await db.grounds.find(q, {"_id": 0}).sort("name", 1).to_list(1000)
 
 

@@ -1215,3 +1215,27 @@ _Shipped 26 Jul 2026 · verified iter_52 (100% BE, 100% FE)_
 - **AI document parsing** on Grant Claims (non-tournament).
 - **Closure Letter PDF** + consolidated dashboards.
 - **Cap** on Division IV divergence from master (user explicitly deferred).
+
+---
+
+## Sprint M32.1 · Budget approval UX + duplicate-submission guard
+_Shipped 26 Jul 2026 · verified iter_53 (100% BE, 100% FE)_
+
+**Delivered:**
+- **MPCA review action tray** on Tournament Finance detail — when budget.status='Submitted' and persona.body_type='State', renders `[data-testid='budget-review-tray']` with three buttons: `budget-approve-btn`, `budget-return-btn`, `budget-reject-btn`. Wired to the existing `/tournament-budgets/{bid}/approve|return|reject` endpoints with actor stamping.
+- **One-active-budget-per-body guard** — `POST /tournaments/{tid}/participants/{body}/budget/generate` now hard-fails with HTTP 400 + a helpful message ('Budget TB-… is currently Submitted — ask MPCA to Return it') when a Submitted or Approved budget already exists for that (tournament, body, cycle) tuple. Guard is checked FIRST (defensive against stale bad data), then the Draft/Returned lookup proceeds.
+- **`Cancelled` status** added to `TournamentBudgetStatus` Literal so dedup'd rows load cleanly.
+- **Frontend dedupe filtering** — `TournamentBudgetsPanel` hides Cancelled rows; 'Generate My Budget' only renders when the body has no live budget row. Finance detail active-budget picker prioritises Submitted > Returned > Approved > Draft.
+- **Data cleanup script** ran once against DIV-IND on SM Khan Trophy — TB-001 & TB-002 marked Cancelled, TB-003 (Submitted) retained.
+
+**Files touched:**
+- **BE:** `routes/tournament_participations.py` (guard-first refactor), `models.py` (Cancelled Literal).
+- **FE:** `pages/TournamentFinanceDetail.jsx` (action tray + smart budget picker), `components/InputVariablesPanel.jsx` (graceful 400 alert), `components/TournamentBudgetsPanel.jsx` (Cancelled filter + gated Generate button).
+
+**Tests:** `/app/backend/tests/test_m32_1_budget_guard.py` (6/6 pass).
+
+### Known non-blocking review notes
+- MPCA in-place head-value editing before approval — intentional stub. Copy reads: 'MPCA can edit values above before approving (upcoming) — for now use Return + Division re-submits.'
+- Cancelled budgets can only be created via admin script (no `/cancel` endpoint). Add one if manual cancellation becomes a common workflow.
+- Client-side Cancelled filter — for scale prefer a backend `?exclude_status=Cancelled` query param eventually.
+- Persona gate for the action tray uses `body_type='State'`. If Treasurer / President should be restricted from budget approvals in future, narrow to `role_id in {'secretary', 'president'}`.

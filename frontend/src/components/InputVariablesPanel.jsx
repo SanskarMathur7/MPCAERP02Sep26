@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Save, Send, Loader2, Calculator, AlertTriangle, ChevronRight } from "lucide-react";
+import { Save, Send, Loader2, Calculator, AlertTriangle, ChevronRight, Split } from "lucide-react";
 import { api } from "@/lib/api";
 import { getTypeByCode, INLINE_INPUT_SPECS } from "@/lib/tournamentCatalog";
 
@@ -172,6 +172,40 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
 
     const inputVars = spec?.input_variables || [];
     const budgetIsLocked = existingBudget && existingBudget.status === "Approved";
+    const [splitting, setSplitting] = useState(false);
+
+    // M31 · Auto-Split Budget — fan out Input Variables into per-body sub-budgets.
+    // Host body gets the full hosting scheme; visitor bodies get travel/DA/stay
+    // subsidy only. Existing budgets for any (tournament, body) pair are preserved.
+    const runAutoSplit = async () => {
+        if (dirty) {
+            if (!window.confirm("You have unsaved input variables. Save them first?\n\nOK = Save then Auto-Split · Cancel = abort")) return;
+            await saveAndUpsertBudget();
+        }
+        if (!window.confirm(
+            "Auto-Split Budget?\n\n" +
+            "This creates one DRAFT budget per accepted participant:\n" +
+            "· Host body → full hosting scheme allocation\n" +
+            "· Visitor bodies → travel + DA + stay subsidy only\n\n" +
+            "Existing budgets are preserved (not overwritten)."
+        )) return;
+        setSplitting(true);
+        try {
+            const { data } = await api.post(`/tournaments/${tournament.id}/budget/auto-split`);
+            const created = data.created || [];
+            const skipped = data.skipped || [];
+            const msg = [
+                `Auto-Split complete for ${tournament.name}.`,
+                `${created.length} draft budget${created.length === 1 ? "" : "s"} created.`,
+                skipped.length ? `${skipped.length} skipped (existing budget preserved).` : "",
+                created.length ? "\nBreakdown:\n" + created.map((c) => `  · ${c.body_code} (${c.role}) — ${c.budget_no} · ₹${(c.total_inr || 0).toLocaleString("en-IN")}`).join("\n") : "",
+            ].filter(Boolean).join("\n");
+            alert(msg);
+            onChange?.();
+        } catch (e) {
+            alert(e?.response?.data?.detail || e.message);
+        } finally { setSplitting(false); }
+    };
 
     return (
         <div className="border border-mpca-brass/30 bg-mpca-ivory p-5 space-y-5" data-testid="panel-input-variables">
@@ -317,6 +351,18 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
                                     {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                                     Save Input Variables{existingBudget ? " & Update Budget" : " & Create Draft Budget"}
                                 </button>
+                                {usesBackend && (
+                                    <button
+                                        onClick={runAutoSplit}
+                                        disabled={splitting || saving || !budgetPreview}
+                                        className="text-[11px] uppercase tracking-widest bg-mpca-ivory/10 text-mpca-gold-light px-4 py-2 flex items-center gap-1 disabled:opacity-40 hover:bg-mpca-ivory/20 transition-colors border border-mpca-gold-light/50"
+                                        data-testid="iv-auto-split-btn"
+                                        title="Create per-body sub-budgets: Host gets full hosting scheme, Visitors get travel+DA subsidy only."
+                                    >
+                                        {splitting ? <Loader2 size={12} className="animate-spin" /> : <Split size={12} />}
+                                        Auto-Split Budget
+                                    </button>
+                                )}
                                 {existingBudget && ["Draft", "Returned"].includes(existingBudget.status) && (
                                     <button
                                         onClick={submitBudget}

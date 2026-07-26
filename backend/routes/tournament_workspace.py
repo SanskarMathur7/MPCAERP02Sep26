@@ -180,6 +180,126 @@ async def patch_input_variables(tid: str, payload: InputVariablesPayload):
     return await db.tournaments.find_one({"id": tid}, {"_id": 0})
 
 
+# ─────────────── M31 · Auto-Split Budget (Host vs Visitor) ───────────────
+#
+# One-click generator that fans out the tournament's Input Variables into
+# per-body draft budgets. Host body → full hosting scheme allocation
+# (grounds, kit, officials, players). Visitor bodies → travel + DA + stay
+# subsidy only (they don't pay for the ground). Existing draft/approved
+# budgets for a (tournament, body) pair are preserved.
+
+_VISITOR_HEAD_KEYWORDS = (
+    "travel", " ta ", " da ", "food", "stay", "hotel", "lodging",
+    "boarding", "meal", "conveyance", "transport", "contingency",
+)
+
+
+def _is_visitor_head(head_label: str) -> bool:
+    label = f" {head_label.lower()} "
+    return any(k in label for k in _VISITOR_HEAD_KEYWORDS)
+
+
+@api_router.post("/tournaments/{tid}/budget/auto-split")
+async def auto_split_budget(tid: str):
+    from models import TournamentBudget
+    from routes.tournament_participations import link_budget_to_participant
+
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+
+    input_vars = t.get("input_variables") or {}
+    if not input_vars:
+        raise HTTPException(400, "Set the Input Variables before running Auto-Split. MPCA action pending.")
+    scheme_code = t.get("scheme_code")
+    if not scheme_code:
+        raise HTTPException(400, "No scheme_code on tournament — Auto-Split requires an auto-budget scheme (not manual actuals).")
+    cycle = t.get("fiscal_cycle") or "2025-26"
+
+    # Compute the full scheme allocation once
+    from routes.scheme_calc import compute_budget, ComputeRequest
+    preview = await compute_budget(scheme_code, ComputeRequest(inputs=input_vars))
+    full_heads = preview.get("head_allocations") or []
+    if not full_heads:
+        raise HTTPException(422, "Scheme returned zero heads — check input variables and rate card.")
+
+    visitor_heads = [h for h in full_heads if _is_visitor_head(h["head"])]
+    if not visitor_heads:
+        # Fall back — give visitors just the top travel/DA-ish head or a stubbed one
+        visitor_heads = [{"head": "Team Travel Subsidy", "limit_inr": round(preview.get("total_ceiling_inr", 0) * 0.20, 2), "formula": "20% of total ceiling (fallback)"}]
+
+    # Fetch participants (accepted only, non-removed)
+    participants = await db.tournament_participations.find({
+        "tournament_id": tid,
+        "removed_at": None,
+        "acceptance_status": {"$in": ["Accepted", "Pending"]},  # include Pending so budgets are ready
+    }, {"_id": 0}).to_list(200)
+
+    if not participants:
+        raise HTTPException(400, "No accepted participants on this tournament. Add participants via the Participants Matrix first.")
+
+    async def _budget_no() -> str:
+        count = await db.tournament_budgets.count_documents({"fiscal_cycle": cycle})
+        return f"TB-{cycle}-{count + 1:03d}"
+
+    created: List[dict] = []
+    skipped: List[dict] = []
+
+    for p in participants:
+        body_code = p.get("body_code")
+        role = p.get("role", "Visitor")
+        # Skip if a live budget already exists for this (tournament, body, cycle)
+        existing = await db.tournament_budgets.find_one({
+            "tournament_id": tid,
+            "body_id": body_code,
+            "fiscal_cycle": cycle,
+            "status": {"$in": ["Draft", "Submitted", "Approved", "Returned"]},
+        }, {"_id": 0})
+        if existing:
+            skipped.append({"body_code": body_code, "role": role, "budget_no": existing.get("budget_no"), "reason": "budget exists"})
+            continue
+
+        heads_for_this = full_heads if role == "Host" else visitor_heads
+        head_allocs = [{"head": h["head"], "limit_inr": float(h["limit_inr"]), "spent_inr": 0.0, "notes": h.get("formula")} for h in heads_for_this]
+        total = round(sum(h["limit_inr"] for h in head_allocs), 2)
+
+        body = await db.bodies.find_one({"code": body_code}, {"_id": 0})
+        tb = TournamentBudget(
+            budget_no=await _budget_no(),
+            tournament_id=tid,
+            tournament_name=t.get("name"),
+            body_id=body_code,
+            body_name=(body or {}).get("name", body_code),
+            fiscal_cycle=cycle,
+            head_allocations=head_allocs,
+            total_ceiling_inr=total,
+            status="Draft",
+            notes=(f"Auto-split · {role} allocation · {scheme_code} · {len(head_allocs)} heads · "
+                   f"₹{total:,.0f}"),
+            participant_body_code=body_code,
+        )
+        await db.tournament_budgets.insert_one(tb.model_dump())
+        await link_budget_to_participant(tid, body_code, tb.id)
+        created.append({
+            "budget_id": tb.id,
+            "budget_no": tb.budget_no,
+            "body_code": body_code,
+            "role": role,
+            "total_inr": total,
+            "heads_count": len(head_allocs),
+        })
+
+    return {
+        "tournament_id": tid,
+        "scheme_code": scheme_code,
+        "created": created,
+        "skipped": skipped,
+        "created_count": len(created),
+        "skipped_count": len(skipped),
+    }
+
+
+
 class SetupMetaPayload(BaseModel):
     setup_meta: Dict[str, Any]
 
@@ -221,7 +341,7 @@ async def get_tournament_progress(tid: str):
         raise HTTPException(404, "Tournament not found")
 
     # Fetch related state
-    squad = await db.squads.find_one({"tournament_id": tid}, {"_id": 0}, sort=[("created_at", -1)])
+    squads = await db.squads.find({"tournament_id": tid}, {"_id": 0}).to_list(length=200)
     budget = await db.tournament_budgets.find_one({"tournament_id": tid}, {"_id": 0}, sort=[("created_at", -1)])
     claim = await db.reimbursement_claims.find_one({"tournament_id": tid}, {"_id": 0}, sort=[("created_at", -1)])
 
@@ -235,8 +355,15 @@ async def get_tournament_progress(tid: str):
     accepted = acceptance_status in ("Accepted", "Not_Required")
     status = t.get("status", "Draft")
 
-    squad_selected = bool(squad and (squad.get("members") or []))
-    squad_approved = bool(squad and squad.get("status") == "Approved")
+    # M31 · Multi-body squad progress. Consider a squad "selected" if it has
+    # any members; "approved" only when every squad with members has been
+    # signed off by MPCA (submission_status='Approved'). This handles both
+    # single-body and inter-body tournaments correctly.
+    squads_with_members = [s for s in squads if (s.get("members") or [])]
+    squad_selected = bool(squads_with_members)
+    squad_approved = bool(squads_with_members) and all(
+        (s.get("submission_status") or "Draft") == "Approved" for s in squads_with_members
+    )
 
     budget_created = budget is not None
     budget_approved = bool(budget and budget.get("status") == "Approved")

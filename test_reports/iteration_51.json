@@ -1,0 +1,23 @@
+{
+  "summary": "M31 sprint validated end-to-end. Backend: new POST /tournaments/{tid}/budget/auto-split works — returns shape {created, skipped, created_count, skipped_count}, is idempotent (0 created / N skipped on rerun), 404s on missing tournament, 400s when input_variables or scheme_code missing. Created budgets are status=Draft, body_id set, total_ceiling_inr > 0, and are auto-linked to participants. Progress endpoint's squad_approved derivation now correctly reads submission_status from ALL squads-with-members — SM Khan Trophy (DIV-IND Approved) returns squad phase 2/2 · COMPLETE. Frontend: TournamentSubTabs shows exactly [overview, squad] — the 4 removed tabs (finance/claim/officials/camps) are absent. InputVariablesPanel action bar now has iv-auto-split-btn next to iv-save-btn (verified visible + clickable + gated on usesBackend). Clicking it confirms twice, POSTs to auto-split, alerts summary, and refreshes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_m31_autosplit_progress.py",
+    "/app/test_reports/pytest/m31_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "In tournament_workspace.py `_is_visitor_head`, the substring match uses ' da ' (spaces) which correctly avoids matching 'grounds', but keywords like 'food'/'stay' are matched without word boundaries — could theoretically match 'seafood' or 'stayover' labels. Low risk given curated rate cards, but consider regex word-boundary if head labels grow.",
+    "Auto-split endpoint acceptance_status filter includes both 'Accepted' AND 'Pending' — this may create budgets for participants who ultimately reject the invitation. Consider restricting to Accepted only, or documenting this behavior in the confirm dialog copy.",
+    "Fallback branch (line 229) creates a synthetic 'Team Travel Subsidy' head at 20% of ceiling when no visitor-keyword heads exist — silent 20% is a magic constant; should be pulled from rate card or config."
+  ],
+  "updated_files": ["/app/backend/tests/test_m31_autosplit_progress.py"],
+  "success_rate": {"backend": "100% (8/8 executed passed, 1 skipped due to SM Khan having only 1 host participant with no visitor for host-vs-visitor comparison)", "frontend": "100%"},
+  "test_credentials": "persona-chip-secretary (Sanjeev Dua)",
+  "seed_data_creation": "Created + deleted TEST_M31_autosplit_bare tournament(s) for 400 error-case tests. Cleanup succeeded.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M31 mini-sprint (auto-split + subtab trim + squad_approved fix) fully verified. Backend pytest file at /app/backend/tests/test_m31_autosplit_progress.py — 8 passed, 1 skipped. To exercise host-vs-visitor allocation shape, use a multi-body tournament (SM Khan has only DIV-IND host). Progress endpoint's squad_approved now correctly flips per submission_status.",
+  "rca of the issue": "Not applicable — this iteration was feature verification, no bugs found."
+}

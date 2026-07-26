@@ -1118,3 +1118,39 @@ User asks:
 - `<span> cannot be a child of <option>` hydration warning in TournamentCreateModal
   step 2 (pre-existing since iter_40, source not located).
 
+
+---
+
+## Sprint M30 · Squad Workflow + Status Stepper + Action Inbox
+_Shipped 26 Jul 2026 · verified iter_50 (100% BE, 100% FE)_
+
+**Delivered:**
+- **Input Variables lockdown**: only MPCA personas (President / Hon. Secretary / Hon. Treasurer) can edit; others get a read-only banner (`iv-readonly-banner`). Save action is now a sticky bottom bar (`iv-action-bar`) with clear "Unsaved changes" ↔ "Saved" state. SetupBox note flips `Not filled · MPCA action pending` → `Filled · N vars set` on save.
+- **Multi-body Squad workflow** — Division picks their squad → **Submit to MPCA** → MPCA reviews → **Approve / Reject / Finalize**. MPCA can also **Reopen** an approved squad back to Draft. Backend endpoints: `POST /squads/{sid}/submit|review|reopen`.
+- **Full-detail Squad screen** (`/app/frontend/src/pages/SquadDetail.jsx` rewrite) — 2-column layout: LEFT player pool with search + role + category filters; RIGHT selected XV with Captain/WK badges + role breakdown tiles.
+- **Squad picks now work on Draft tournaments** — added `Draft` to allowed statuses in `/app/backend/routes/tournaments.py` (was blocking the whole workflow).
+- **Tournament Status Stepper** (`/app/frontend/src/components/TournamentStatusStepper.jsx`) — 6-pill lifecycle (Draft → Awaiting_Approval → Upcoming → Squad_Selection → In_Progress → Completed). MPCA-only "Advance" button (e.g. "Submit for Approval" on Draft) with confirmation. Persona-filtered "Pending With Me" chip strip using `GET /tournaments/{tid}/pending-actions`.
+- **MPCA Dashboard Action Inbox** (`/app/frontend/src/components/PendingWithMePanel.jsx`) — aggregates every ERP item awaiting MPCA sign-off via `GET /pending-actions/mpca`. Kind-grouped chip summary + deep-links for squad reviews, budget approvals, claim reviews, tournament approvals, input-vars pending, closure letters.
+- **Match Calendar labels** renamed "Home team / Away team" → **"Team 1 / Team 2"** in the picker + validation copy (backend field names unchanged for compat).
+
+**Files touched:**
+- **BE new:** endpoints in `/app/backend/routes/selection_console.py` (`POST /squads/{sid}/submit|review|reopen`, `GET /tournaments/{tid}/pending-actions`, `GET /pending-actions/mpca`).
+- **BE mod:** `/app/backend/routes/tournaments.py` — added `Draft` to squad-edit allowed statuses (lines 359 & 417).
+- **FE new:** `TournamentStatusStepper.jsx`, `PendingWithMePanel.jsx`.
+- **FE rewrite:** `SquadDetail.jsx` (2-column full-detail).
+- **FE mod:** `InputVariablesPanel.jsx` (RBAC + sticky action bar), `TournamentWorkspacePanels.jsx` (Team 1/Team 2), `TournamentDetail.jsx` (mount stepper + update SetupBox note copy), `Dashboard.jsx` (mount PendingWithMePanel for State personas), `TournamentSubTabs.jsx` (persona-aware squad tab), `App.js` (routes `/squads/:sid` and `/tournaments/:tid/squads/new`).
+
+**Tests:**
+- `/app/backend/tests/test_m30_squad_workflow.py` — 7 pass, 1 order-dep skip.
+- Frontend E2E via iter_50: all 14 checks green (stepper, action inbox, RBAC, squad workflow, Team 1/2 labels).
+
+### Deferred (rolling forward to next sprint)
+- **Auto-Split Budget** button in `InputVariablesPanel` (Host = full hosting scheme, Visitors = travel subsidy only).
+- **PapaParse** for Match Calendar CSV (currently splits on `,` naively).
+- **Persona-scoped filter** on Budgets / Invoices / Claims list pages by `participant_body_code`.
+- **AI document parsing** on Grant Claims (non-tournament).
+- **Closure Letter PDF** + consolidated dashboards.
+
+### Known non-blocking notes
+- Squad pool row testids use a `player_no`-derived key while squad-member testids use UUID `player_id`. Both are now exposed as data attrs on the pool row (`data-player-id`, `data-player-no`) for E2E consistency.
+- `/pending-actions/mpca` pagination is item-count based; if a tournament's only actionable item is not in the first N, it may be skipped — non-critical for current volumes.

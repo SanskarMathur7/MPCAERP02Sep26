@@ -405,7 +405,7 @@ const SquadDetail = () => {
                         ) : filteredPool.map((p) => {
                             const testKey = (p.player_id || p.id).replace(/\//g, "-");
                             return (
-                                <div key={p.id} className="px-5 py-3 grid grid-cols-12 items-center gap-3" data-testid={`squad-pool-row-${testKey}`}>
+                                <div key={p.id} className="px-5 py-3 grid grid-cols-12 items-center gap-3" data-testid={`squad-pool-row-${testKey}`} data-player-id={p.id} data-player-no={p.player_id}>
                                     <div className="col-span-1">
                                         <div className="w-9 h-9 rounded-full bg-mpca-parchment text-mpca-green-dark flex items-center justify-center text-[10px] font-serif shrink-0">
                                             {p.full_name.split(" ").map((w) => w[0]).slice(0, 2).join("")}

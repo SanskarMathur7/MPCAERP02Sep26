@@ -992,3 +992,66 @@ All lists, dashboards, participants matrix scope to 2026-27
 - Widen OpenAPI schema descriptions to document acceptable `scope`
   values (Inter_Divisional / Inter_District / Championship / Invitational).
 
+
+## Sprint M28 · Create-Form Polish + Multi-Body Squads · Feb 2026
+
+### Problem
+Three user asks:
+1. Cricketing season was a free-text field on the Create-Tournament form; user
+   wanted a dropdown tied to the global SeasonContext.
+2. Host body dropdown showed the entire body directory regardless of who was
+   creating — MPCA should only see Divisions, a Division should only see its
+   own Districts.
+3. Squads for multiple bodies under a single tournament — a bird's-eye view
+   was missing.
+
+### What was built
+- **`TournamentCreateModal`** — `trn-fy-input` is now a `<select>` populated
+  from `useSeason().seasons` (default = current global season). `hostOptions`
+  filtered by persona:
+    * State (MPCA) → 10 MP Divisions + MPCA itself.
+    * Division → Districts child of persona.body_code + self.
+    * District → self only.
+  Dynamic label ("Host Division *" / "Host District *") + helper text.
+  Auto-defaults `host_body_id` to the first eligible option.
+- **`Squad.participant_body_code`** — new Optional[str] mirror field.
+  `POST /api/squads` calls `resolve_participant_body_code()` to auto-link
+  when the (tournament, body_id) has an active participation row.
+- **`GET /participants/{code}/finance`** — now includes a `squad` object
+  (fallback via `$or: participant_body_code | body_id`).
+- **`TournamentSquadsPanel.jsx`** + new `box-squads` SetupBox — grid of
+  cards, one per active participant. Each card shows body, role, pool,
+  submission_status chip, member count, warnings, and a link to open or
+  start the squad. Persona's own body row shows a **"yours"** pill.
+
+### Fixes applied
+- Testing agent flagged missing `box-squads` SetupBox (render block existed
+  but no toggle) — added in the setup grid next to `box-participants`.
+- Duplicate `Users` import in `TournamentDetail.jsx` removed.
+
+### Test coverage
+- `test_m28_squad_link.py` — 6/6 backend PASS
+  (auto-link on create, null when no participant, drill-down squad key,
+  $or fallback).
+- Frontend Playwright — 5/6 passed initially; after box-squads fix, panel
+  reachable end-to-end. Iter_47.
+
+### Known tech-debt from iter_47 review
+- Legacy M26 phase D/E/F pytest files reference `MY_MEMORIAL_TID` which no
+  longer exists in DB (cleaned in test-data purge). Recommend converting
+  those tests to create their own fixture tournament.
+- `TournamentSquadsPanel` uses N+1 API calls (one `/participants` + one
+  `/finance` per participant). Consider a `?with_squad=true` param on
+  `/participants` in a future sprint.
+- Hydration warning `<span> cannot be a child of <option>` remains
+  (pre-existing since iter_40; source not yet located, non-blocking).
+- Consider `link_squad_to_participant` helper mirroring the budget/claim
+  linkage patterns for a symmetric API.
+
+### User's design question answered (in-conversation)
+- Squad management: 1 squad per participant × tournament (`unique(tid, body_id)`),
+  persona-scoped visibility; new SquadsPanel shows the roster at a glance.
+- Budget/Invoice/Claim/Receipt: already tagged with `participant_body_code`
+  since Phase B (M26). Variance summary + drill-down already surface totals.
+- Bulk NEFT + Closure guard (Phase D) close the payment loop symmetrically.
+

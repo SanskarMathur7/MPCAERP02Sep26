@@ -359,6 +359,11 @@ const SquadDetail = () => {
                             <button onClick={() => setPickerOpen(false)} className="text-mpca-gold-light text-2xl" data-testid="squad-picker-close"><X /></button>
                         </div>
                         <div className="p-5">
+                            {err && (
+                                <div className="mb-3 border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood text-[11px] px-3 py-2 flex items-center gap-2" data-testid="squad-picker-error">
+                                    <ShieldAlert size={12} /> {err}
+                                </div>
+                            )}
                             <div className="relative mb-4">
                                 <Search size={13} className="absolute left-3 top-3.5 text-mpca-brass" />
                                 <input

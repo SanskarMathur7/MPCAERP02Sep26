@@ -1154,3 +1154,30 @@ _Shipped 26 Jul 2026 · verified iter_50 (100% BE, 100% FE)_
 ### Known non-blocking notes
 - Squad pool row testids use a `player_no`-derived key while squad-member testids use UUID `player_id`. Both are now exposed as data attrs on the pool row (`data-player-id`, `data-player-no`) for E2E consistency.
 - `/pending-actions/mpca` pagination is item-count based; if a tournament's only actionable item is not in the first N, it may be skipped — non-critical for current volumes.
+
+---
+
+## Sprint M31 · Auto-Split Budget + Sub-tab Trim + Squad Progress Fix
+_Shipped 26 Jul 2026 · verified iter_51 (100% BE, 100% FE)_
+
+**Delivered:**
+- **Auto-Split Budget** button on `InputVariablesPanel` (`[data-testid='iv-auto-split-btn']`). Backend endpoint `POST /api/tournaments/{tid}/budget/auto-split` fans the scheme into per-body draft budgets: **Host** = all heads; **Visitor** = travel + DA + food + stay + lodging + contingency subset (keyword-classified via `_is_visitor_head`). Idempotent — existing budgets preserved.
+- **Tournament sub-tabs trimmed** from 6 → 2. `TournamentSubTabs` now shows only `Overview` + `Squad Selection`. Budget & Finance / Reimbursement / Match Officials / Camps stay accessible from the setup-box grid on the Overview page (no more duplicate navigation).
+- **Squad progress fix** — `tournament_workspace.get_tournament_progress` was checking `squad.status` (didn't exist) and using `find_one` (missed multi-body squads). Now iterates all squads and reads `submission_status`; `squad_approved` flips true only when EVERY squad-with-members is Approved. SM Khan Trophy now correctly shows `Squad · 2/2 · COMPLETE`.
+
+**Files touched:**
+- **BE:** `/app/backend/routes/tournament_workspace.py` — added `/budget/auto-split` endpoint + `_is_visitor_head` classifier; multi-squad progress derivation.
+- **FE:** `InputVariablesPanel.jsx` (button + `runAutoSplit` handler), `TournamentSubTabs.jsx` (trimmed TABS array + simplified `resolvedActive`).
+
+**Tests:** `/app/backend/tests/test_m31_autosplit_progress.py` — 8 pass / 1 skipped.
+
+### Non-blocking review notes (deferred)
+- `_is_visitor_head` uses substring match on head label — safe for curated rate cards but consider regex word-boundary if labels grow (e.g. 'seafood' would false-match 'food').
+- Auto-split includes participants with `acceptance_status='Pending'` too — may create budgets for participants who later decline. Documented in the confirm dialog copy.
+- Fallback branch creates a 20 % synthetic "Team Travel Subsidy" head if no visitor-keyword heads exist — magic constant; could move to rate card config later.
+
+### Deferred (rolling forward)
+- **PapaParse** for Match Calendar CSV.
+- **Persona-scoped filter** on Budgets / Invoices / Claims list pages by `participant_body_code`.
+- **AI document parsing** on Grant Claims.
+- **Closure Letter PDF** + consolidated dashboards.

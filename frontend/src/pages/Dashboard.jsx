@@ -8,6 +8,7 @@ import {
     Trophy, TrendingDown, Activity, ScrollText,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
+import PendingWithMePanel from "@/components/PendingWithMePanel";
 
 const fmtINR = (n) => {
     if (n == null) return "—";
@@ -269,6 +270,9 @@ const Dashboard = () => {
                     <KpiTile label="Disbursed YTD" value={fmtINR(totals.disbursed)} sub="Fiscal cycle 2025-26" icon={HandCoins} accent="green" testid="kpi-disbursed" />
                 </div>
             )}
+
+            {/* Sprint M30 · Pending With MPCA (State personas only) */}
+            {persona?.body_type === "State" && <PendingWithMePanel />}
 
             {/* District-only persona — show own claim queue stats */}
             {!childLabel && Array.isArray(claimsStats) && stateStats && (() => {

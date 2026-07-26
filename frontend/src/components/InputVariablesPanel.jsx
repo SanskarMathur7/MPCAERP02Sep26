@@ -208,6 +208,16 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
                 )}
             </div>
 
+            {/* MPCA-only banner for non-editable personas */}
+            {!canEdit && (
+                <div className="border border-mpca-brass/40 bg-mpca-brass/10 text-mpca-brass px-3 py-2 text-[11px] flex items-start gap-2" data-testid="iv-readonly-banner">
+                    <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    <div>
+                        <b className="uppercase tracking-widest text-[10px]">MPCA-only</b> · Only MPCA office-bearers (President, Hon. Secretary, Hon. Treasurer) can set the tournament input variables. You are viewing this panel in read-only mode.
+                    </div>
+                </div>
+            )}
+
             {loadingSpec ? (
                 <div className="py-10 text-center text-[11px] text-mpca-gray-dark"><Loader2 size={14} className="inline animate-spin mr-1" /> Loading specification…</div>
             ) : inputVars.length === 0 ? (
@@ -285,32 +295,42 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
                         </div>
                     )}
 
-                    {/* Actions */}
+                    {/* Actions — MPCA save/submit strip */}
                     {canEdit && !budgetIsLocked && (
-                        <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-mpca-brass/20">
-                            {dirty && <span className="text-[10px] text-mpca-oxblood uppercase tracking-widest">Unsaved changes</span>}
-                            <button
-                                onClick={saveAndUpsertBudget}
-                                disabled={saving || (usesBackend && !budgetPreview)}
-                                className="text-[11px] uppercase tracking-widest bg-mpca-brass/20 border border-mpca-brass text-mpca-green-dark px-3 py-1.5 flex items-center gap-1 disabled:opacity-40"
-                                data-testid="iv-save-btn"
-                            >
-                                {saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
-                                {existingBudget ? "Save & Update Budget" : "Save & Create Draft Budget"}
-                            </button>
-                            {existingBudget && ["Draft", "Returned"].includes(existingBudget.status) && (
+                        <div className="sticky bottom-0 -mx-5 -mb-5 mt-3 px-5 py-3 bg-mpca-green-dark text-mpca-ivory border-t-4 border-mpca-oxblood flex flex-wrap items-center justify-between gap-3" data-testid="iv-action-bar">
+                            <div className="text-[11px]">
+                                {dirty ? (
+                                    <span className="uppercase tracking-widest text-mpca-gold-light">● Unsaved changes — click Save to fill this step</span>
+                                ) : Object.keys(tournament.input_variables || {}).length > 0 ? (
+                                    <span className="uppercase tracking-widest text-mpca-green-light">✓ Input variables saved</span>
+                                ) : (
+                                    <span className="uppercase tracking-widest text-mpca-ivory/70">Fill the variables above, then click Save Input Variables</span>
+                                )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
                                 <button
-                                    onClick={submitBudget}
-                                    disabled={submitting || dirty}
-                                    className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40"
-                                    data-testid="iv-submit-budget-btn"
-                                    title={dirty ? "Save changes before submitting" : "Send to MPCA Treasurer for approval"}
+                                    onClick={saveAndUpsertBudget}
+                                    disabled={saving || (usesBackend && !budgetPreview)}
+                                    className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-4 py-2 flex items-center gap-1 disabled:opacity-40 hover:bg-mpca-burgundy-dark transition-colors border border-mpca-oxblood"
+                                    data-testid="iv-save-btn"
                                 >
-                                    {submitting ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
-                                    Submit Budget to MPCA
-                                    <ChevronRight size={11} />
+                                    {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                                    Save Input Variables{existingBudget ? " & Update Budget" : " & Create Draft Budget"}
                                 </button>
-                            )}
+                                {existingBudget && ["Draft", "Returned"].includes(existingBudget.status) && (
+                                    <button
+                                        onClick={submitBudget}
+                                        disabled={submitting || dirty}
+                                        className="text-[11px] uppercase tracking-widest bg-mpca-gold-light text-mpca-green-dark px-4 py-2 flex items-center gap-1 disabled:opacity-40 hover:bg-mpca-gold transition-colors border border-mpca-gold-light"
+                                        data-testid="iv-submit-budget-btn"
+                                        title={dirty ? "Save changes before submitting" : "Send to MPCA Treasurer for approval"}
+                                    >
+                                        {submitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                                        Submit Budget to MPCA
+                                        <ChevronRight size={12} />
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     )}
                 </>

@@ -1,0 +1,57 @@
+{
+  "summary": "M30 P0 bundle verified end-to-end. All 4 P0 items pass: (1) Input Variables MPCA-only edit with prominent Save + note flip from 'Not filled · MPCA action pending' → 'Filled · 9 vars set'; (2) Squad workflow submit/review/finalize/reopen backends + full 2-column Squad Detail page for Division; (3) Tournament Status Stepper (6 pills) with 'Submit for Approval' advance button on Draft for MPCA + Pending With Me strip and MPCA Dashboard Pending Panel; (4) Match Calendar labels renamed to 'Team 1…' / 'Team 2…'. Squad picks confirmed to work on Draft tournaments (12→13 members via UI on TRN-2026-27-009).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Match Calendar Add Match modal", "issues": ["Pre-existing hydration warning: <span> injected as child of <option> in Ground select (lovable-annotation). Cosmetic dev-only; carried over from iteration_49."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m30_squad_workflow.py",
+    "/app/test_reports/pytest/m30_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SquadDetail.jsx uses two different testid schemes: squad-pool-row-${testKey}/squad-pool-pick-${testKey} (derived from player_no/testKey) vs squad-member-${player_id} (UUID). This inconsistency makes end-to-end Playwright verification harder — recommend standardising on player_id everywhere OR expose both attrs (data-player-id + data-player-no) on every row.",
+    "selection_console.py lines 382-398: /pending-actions/mpca reuses per-tournament resolver in a loop with 'break' — early break may hide tournaments whose only actionable item is not squad_pick (e.g. closure_letter). Consider paginating by tournament instead of item count.",
+    "TournamentStatusStepper mounts on TournamentDetail — ensure it hides on Cancelled tournaments if that status is possible; currently only 6 statuses in stepper (spec says Draft→…→Completed, which is fine)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m30_squad_workflow.py (NEW)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "persona-chip-secretary (Sanjeev Dua · MPCA), persona-chip-division-secretary (Devashish Nilosey · DIV-IND). Login flow: click persona-chip → button 'Sign in to the Registrar'.",
+  "seed_data_creation": "Used existing SM Khan Trophy TRN-2026-27-009 (tid=58bd8f3c-2562-4231-b846-537103e8a542, Draft, DIV-IND) with squad 96329508-900d-4a8d-a044-46cf53dc0c9e. Tests add 11+ DIV-IND players, mark captain (via remove+re-add trick), submit→approve→finalize→reopen. Squad ended with 13 members in Draft (reset via /squads/{sid}/reopen).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M30 P0 items are ALL green. Backend tests: 7 passed 1 skipped (skip is order-dependent — 'submit_below_11' skips when full-cycle test runs first and leaves ≥11 members; the assertion logic itself is tested via the full-cycle test's initial state). No dedicated captain-setter endpoint exists — tests use DELETE then POST with is_captain=true to toggle. Post-M30, MPCA's IV note updates to 'Filled · N vars set' after save. Note that squad row/pick testids use player_no-derived testKey while squad-member uses UUID player_id (see critical code review). No production bugs found in this iteration.",
+  "verification_details": {
+    "backend_pytest": {
+      "TestPendingActions::test_tournament_pending_returns_shape": "PASS",
+      "TestPendingActions::test_tournament_pending_input_vars_item": "PASS (kind='input_vars' waiting_on=MPCA present on Draft tournament)",
+      "TestPendingActions::test_mpca_inbox_returns_items_with_tournament_meta": "PASS (items include tournament_no + tournament_name)",
+      "TestSquadPlayerAddOnDraft::test_add_player_on_draft_tournament_allowed": "PASS (200 OK on Draft — unblocked)",
+      "TestSquadSubmitFlow::test_submit_below_11_returns_400": "SKIPPED (order-dependent)",
+      "TestSquadSubmitFlow::test_full_submit_review_reopen_cycle": "PASS (submit→approve→finalize→reopen with proper status transitions and finalized_by_mpca=true)",
+      "TestSquadSubmitFlow::test_review_rbac_division_forbidden": "PASS (403 for division-secretary trying to approve)",
+      "TestSquadSubmitFlow::test_reopen_requires_mpca": "PASS (403 for division-secretary)"
+    },
+    "frontend": {
+      "MPCA dashboard pending-with-me-panel": "rendered · total-count=26 · 12 pending-item chips",
+      "Division dashboard pending-with-me-panel": "NOT rendered (correct)",
+      "Tournament Status Stepper": "6 pills (Draft, Awaiting_Approval, Upcoming, Squad_Selection, In_Progress, Completed) + advance-btn 'SUBMIT FOR APPROVAL' for MPCA on Draft",
+      "Stepper pending strip": "stepper-pending-count='1 item' + stepper-pending-list rendered",
+      "MPCA IV panel": "iv-save-btn + iv-action-bar visible, no iv-readonly-banner",
+      "IV note after save": "flipped 'Not filled · MPCA action pending' → 'Filled · 9 vars set' (page reload confirmed)",
+      "DIV-IND IV panel": "iv-readonly-banner visible, iv-save-btn NOT rendered",
+      "Match Calendar Add Match": "match-home-input first option 'Team 1…', match-away-input first option 'Team 2…'",
+      "Squad Detail (DIV-IND)": "squad-detail-page + squad-detail-body 2-col + squad-pool-card + squad-selected-card + squad-role-breakdown + search + role-filter + cat-filter all present; 23 pool rows + 12 members + squad-submit-mpca-btn visible",
+      "Squad pick on Draft": "Backend confirms 12→13 members after UI pick. No error surfaced. (Verifier testid mismatch was a test artefact, not a bug — see code review comment)"
+    }
+  }
+}

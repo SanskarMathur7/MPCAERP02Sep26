@@ -12,6 +12,7 @@ import CricketLoader from "@/components/CricketLoader";
 import TournamentSubTabs from "@/components/TournamentSubTabs";
 import TournamentProgress from "@/components/TournamentProgress";
 import InputVariablesPanel from "@/components/InputVariablesPanel";
+import TournamentStatusStepper from "@/components/TournamentStatusStepper";
 import TournamentBasicsPanel from "@/components/TournamentBasicsPanel";
 import ParticipantsMatrix from "@/components/ParticipantsMatrix";
 import TournamentSquadsPanel from "@/components/TournamentSquadsPanel";
@@ -180,6 +181,9 @@ const TournamentDetail = () => {
                 )}
             </div>
 
+            {/* Sprint M30 · Status stepper + Pending With Me */}
+            <TournamentStatusStepper tournament={t} persona={persona} onAction={() => { refreshProgress(); load(); }} />
+
             {/* Sprint M19 · Progress stepper (5 phases) */}
             <div className="mb-8">
                 <TournamentProgress tournamentId={id} refreshKey={progressKey} />
@@ -198,7 +202,7 @@ const TournamentDetail = () => {
                     <SetupBox testId="box-basics" icon={ListChecks} label="Tournament Basics" note={t.setup_meta?.category ? `${t.setup_meta.category} · ${t.setup_meta.age_group}` : "Category, teams, grounds"} onClick={() => setOpenBox(openBox === "basics" ? null : "basics")} active={openBox === "basics"} />
                     <SetupBox testId="box-participants" icon={UsersRound} label="Participants Matrix" note={(() => { const pools = (t.setup_meta?.division_pools || []).concat(t.setup_meta?.district_pools || []); const totalCodes = pools.flatMap(p => p.division_codes || p.district_codes || []).length; return pools.length ? `${totalCodes} bodies · ${pools.length} pool(s)` : "Set pools first"; })()} onClick={() => setOpenBox(openBox === "participants" ? null : "participants")} active={openBox === "participants"} />
                     <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} />
-                    <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `${Object.keys(t.input_variables).length} set` : "Not filled"} onClick={() => setOpenBox(openBox === "input-vars" ? null : "input-vars")} active={openBox === "input-vars"} />
+                    <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `Filled · ${Object.keys(t.input_variables).length} vars set` : "Not filled · MPCA action pending"} onClick={() => setOpenBox(openBox === "input-vars" ? null : "input-vars")} active={openBox === "input-vars"} />
                     <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
                     <SetupBox testId="box-squad" icon={Users} label="Squad Selection" note={persona?.body_type === "Division" || persona?.body_type === "District" ? `My body · ${persona?.body_code}` : (squads.length ? `${squads.length} squad(s)` : "Not started")} onClick={() => {
                         // Non-MPCA personas jump straight to their body's per-squad detail;

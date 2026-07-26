@@ -74,7 +74,7 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
     useEffect(() => { if (tournament?.id) load(); }, [tournament?.id]); // eslint-disable-line
 
     const addMatch = async () => {
-        if (!form.home_team || !form.away_team || !form.match_date) return alert("Date, home team and away team are required.");
+        if (!form.home_team || !form.away_team || !form.match_date) return alert("Date, Team 1 and Team 2 are required.");
         await api.post(`/tournaments/${tournament.id}/matches`, form);
         setForm({ ...form, home_team: "", away_team: "", match_date: "", notes: "" });
         setCreating(false);
@@ -226,11 +226,11 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                         <input type="date" className={inputCls} value={form.match_date} onChange={(e) => setForm({ ...form, match_date: e.target.value })} data-testid="match-date-input" />
                         <input type="time" className={inputCls} value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} data-testid="match-time-input" />
                         <select className={inputCls} value={form.home_team} onChange={(e) => setForm({ ...form, home_team: e.target.value })} data-testid="match-home-input">
-                            <option value="">Home team…</option>
+                            <option value="">Team 1…</option>
                             {teamOptions.map((t) => <option key={`h-${t}`} value={t}>{t}</option>)}
                         </select>
                         <select className={inputCls} value={form.away_team} onChange={(e) => setForm({ ...form, away_team: e.target.value })} data-testid="match-away-input">
-                            <option value="">Away team…</option>
+                            <option value="">Team 2…</option>
                             {teamOptions.filter((t) => t !== form.home_team).map((t) => <option key={`a-${t}`} value={t}>{t}</option>)}
                         </select>
                         <select className={inputCls + " col-span-2"} value={`${form.venue_name}|${form.ground_name}`} onChange={(e) => {

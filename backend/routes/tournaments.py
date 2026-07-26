@@ -356,7 +356,7 @@ async def add_player_to_squad(squad_id: str, payload: SquadAddPlayer):
     t = await db.tournaments.find_one({"id": squad["tournament_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
-    if t["status"] not in ("Upcoming", "Squad_Selection"):
+    if t["status"] not in ("Draft", "Upcoming", "Squad_Selection"):
         raise HTTPException(400, f"Cannot modify squad once tournament is {t['status']}")
     player = await db.players.find_one({"id": payload.player_id}, {"_id": 0})
     if not player:
@@ -414,7 +414,7 @@ async def remove_player_from_squad(squad_id: str, player_id: str):
     if not squad:
         raise HTTPException(404, "Squad not found")
     t = await db.tournaments.find_one({"id": squad["tournament_id"]}, {"_id": 0})
-    if t and t["status"] not in ("Upcoming", "Squad_Selection"):
+    if t and t["status"] not in ("Draft", "Upcoming", "Squad_Selection"):
         raise HTTPException(400, f"Cannot modify squad once tournament is {t['status']}")
     members = [m for m in (squad.get("members") or []) if m["player_id"] != player_id]
     if len(members) == len(squad.get("members") or []):

@@ -1201,7 +1201,7 @@ BudgetHead = Literal[
 ]
 
 TournamentBudgetStatus = Literal[
-    "Draft", "Submitted", "Approved", "Returned", "Rejected",
+    "Draft", "Submitted", "Approved", "Returned", "Rejected", "Cancelled",
 ]
 
 VariableItemStatus = Literal["Pending", "Approved", "Rejected"]

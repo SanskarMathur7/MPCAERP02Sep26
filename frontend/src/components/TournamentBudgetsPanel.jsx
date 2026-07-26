@@ -35,7 +35,8 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange }) => {
             const params = { tournament_id: tournament.id };
             if (!isMPCA && myBody) params.body_id = myBody;
             const { data } = await api.get("/tournament-budgets", { params });
-            setBudgets(data || []);
+            // M32.1 · Hide Cancelled (dedupe leftover) rows from the panel
+            setBudgets((data || []).filter((b) => b.status !== "Cancelled"));
         } catch (_) { setBudgets([]); }
         finally { setLoading(false); }
     };
@@ -77,7 +78,7 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange }) => {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    {!isMPCA && myBody && budgets.length === 0 && (
+                    {!isMPCA && myBody && !budgets.some((b) => ["Draft", "Submitted", "Approved", "Returned"].includes(b.status)) && (
                         <button onClick={generateForMe} disabled={submitting === "generate"} className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="tb-generate-mine-btn">
                             {submitting === "generate" ? <Loader2 size={11} className="animate-spin" /> : <PlusCircle size={11} />} Generate My Budget
                         </button>

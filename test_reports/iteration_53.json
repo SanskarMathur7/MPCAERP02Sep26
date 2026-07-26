@@ -1,0 +1,27 @@
+{
+  "summary": "M32.1 hotfix fully verified end-to-end. Backend (6/6 pytest passing at /app/backend/tests/test_m32_1_budget_guard.py): (1) GET /api/tournament-budgets loads Cancelled rows without validation errors — models.py TournamentBudgetStatus now includes 'Cancelled'. (2) POST /api/tournaments/{tid}/participants/DIV-IND/budget/generate returns HTTP 400 with detail 'Budget TB-2026-27-003 for DIV-IND is currently Submitted — cannot regenerate. Ask MPCA to Return it for revision before editing input variables again.' while the Submitted budget exists. (3) Round-trip works: /return flips status to Returned → generate succeeds (regenerated=true) → /submit flips back to Submitted. (4) /approve, /return, /reject endpoints exist and validate payloads. Frontend (all 4 UI checks pass via Playwright): (A) MPCA persona Sanjeev Dua on /tournaments/{tid}/finance sees [data-testid='budget-review-tray'] with all three action buttons (budget-approve-btn / budget-return-btn / budget-reject-btn) + Submitted badge. (B) Division persona Devashish Nilosey on the same page sees the badge but ZERO instances of the three MPCA action buttons. (C) Inline TournamentBudgetsPanel on /tournaments/{tid} (click box-budget) renders EXACTLY ONE row for DIV-IND (TB-2026-27-003 only; TB-002 and TB-001 Cancelled rows filtered out) and [data-testid='tb-generate-mine-btn'] is hidden because a live budget exists. (D) Division edits an input variable + clicks Save → captured alert reads 'Your input variables are saved, but the budget could not be regenerated: Budget TB-2026-27-003 for DIV-IND is currently Submitted — cannot regenerate...' AND panel still shows only TB-003 (no new TB-004 row spawned). Tournament left in Submitted TB-003 state at end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_m32_1_budget_guard.py",
+    "/app/test_reports/pytest/m32_1_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "generate_participant_budget: the guard checks {Submitted, Approved} but if an 'existing' Draft/Returned row is also present alongside a stale Submitted row (edge case from bad seed data), the code takes the Draft path and silently regenerates it, ignoring the Submitted row. Safe today because dedupe cleaned duplicates, but consider making the two lookups mutually exclusive (guard-first, then existing-draft) to be defensive.",
+    "The blocking-budget error message is user-friendly but backend-return-code detection in the FE alert path could race if the promise chain swallows the error. Current InputVariablesPanel catch works (verified in Playwright), but adding a status===400 check would make it explicit.",
+    "TournamentBudgetStatus 'Cancelled' is now a valid literal, but there is no admin endpoint to move a budget to Cancelled — only a one-shot dedupe script did it. If future dedupes are needed, consider a POST /api/tournament-budgets/{bid}/cancel endpoint restricted to MPCA persona.",
+    "TournamentBudgetsPanel client-side filters Cancelled rows in JS — for scale, a query param like ?exclude_status=Cancelled on GET /api/tournament-budgets would be more efficient and consistent across UIs.",
+    "Persona.body_type='State' gates the MPCA action tray. If another State-scope persona (e.g. Treasurer, President) is added later, they'd all see Approve/Return/Reject — consider narrowing to role_id in {'secretary','president'} if only Secretary should approve budgets."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m32_1_budget_guard.py"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (all 4 UI checks pass)"},
+  "test_credentials": "persona-chip-secretary (Sanjeev Dua · MPCA · State) and persona-chip-division-secretary (Devashish Nilosey · DIV-IND). MUST click persona chip THEN click 'Sign in to the Registrar' button — chip alone only autofills.",
+  "seed_data_creation": "Round-trip test flips TB-2026-27-003 to Returned then regenerates and re-submits it — verified end-state via API is 'Submitted' TB-003 (with TB-001/002 Cancelled). Tournament left in same state as found.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M32.1 budget guard + MPCA action tray fully green on SM Khan Trophy (id=58bd8f3c-2562-4231-b846-537103e8a542). Canonical state: TB-2026-27-003 Submitted DIV-IND; TB-002 & TB-001 Cancelled. The one Playwright gotcha: page.get_by_role('button', name=lambda...) does NOT work in this env (name expects str/regex, not callable). Use page.locator('button:has-text(...)') instead.",
+  "rca of the issue": "Original issues in review: (1) MPCA didn't see Approve/Return/Reject — root cause was UI only showed a bare badge for Submitted budgets. Fixed by adding persona.body_type==='State' conditional tray with 3 handler buttons in TournamentFinanceDetail.jsx. (2) Division could spawn duplicate budgets — root cause was generate_participant_budget's 'existing' lookup only matched Draft/Returned; when they got Submitted, generate would fall through to the 'fresh budget' path and insert TB-NNN+1 each save. Fixed by a pre-check: if a Submitted/Approved row exists AND no Draft/Returned row exists → HTTPException(400) with the blocking budget_no + status in the detail. Playwright confirms the alert bubbles through InputVariablesPanel's catch. Cancelled status added to the Literal so existing dedup-cancelled rows load."
+}

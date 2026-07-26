@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Upload, Sparkles, Plus, Trash2, FileText, Send, CheckCircle2, AlertTriangle, MessageSquare, ExternalLink, ClipboardList } from "lucide-react";
+import { ArrowLeft, Upload, Sparkles, Plus, Trash2, FileText, Send, CheckCircle2, AlertTriangle, MessageSquare, ExternalLink, ClipboardList, RotateCcw, XCircle } from "lucide-react";
 import { api, BACKEND_URL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
@@ -62,9 +62,14 @@ const TournamentFinanceDetail = () => {
             }
             const bodyForFetch = t.host_body_id?.startsWith("DIV-") ? t.host_body_id : t.host_body_id?.startsWith("DIST-") ? t.host_body_id : bodyForClaims;
 
-            // Try to get budget for this tournament + body
+            // Try to get budget for this tournament + body. M32.1 · prefer status by
+            // priority so MPCA sees the "hot" record (Submitted > Approved > Returned > Draft)
+            // and Cancelled dedupe leftovers are ignored.
             const { data: budgets } = await api.get(`/tournament-budgets`, { params: { tournament_id: id } });
-            const activeBudget = (budgets || []).find((b) => b.status === "Approved") || (budgets || [])[0];
+            const rank = { Submitted: 4, Returned: 3, Approved: 2, Draft: 1, Rejected: 0, Cancelled: -1 };
+            const live = (budgets || []).filter((b) => b.status !== "Cancelled");
+            live.sort((a, b) => (rank[b.status] ?? -2) - (rank[a.status] ?? -2));
+            const activeBudget = live[0];
             setBudget(activeBudget || null);
 
             const [{ data: invs }, { data: exps }, { data: claims }] = await Promise.all([
@@ -307,6 +312,53 @@ const TournamentFinanceDetail = () => {
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
 
+    // ─── M32.1 · MPCA review actions (Approve / Return / Reject) ───
+    const approveBudget = async () => {
+        if (!budget) return;
+        const note = window.prompt("Optional note for the Division:") ?? "";
+        try {
+            await api.post(`/tournament-budgets/${budget.id}/approve`, {
+                actor_name: persona?.name,
+                actor_post: persona?.post || "Hon. Secretary",
+                actor_body_id: persona?.body_code || "MPCA",
+                notes: note || "Approved via Finance console.",
+            });
+            await load();
+            alert("Budget approved.");
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const returnBudget = async () => {
+        if (!budget) return;
+        const note = window.prompt("Return-to-Division reason (required):");
+        if (!note) return;
+        try {
+            await api.post(`/tournament-budgets/${budget.id}/return`, {
+                actor_name: persona?.name,
+                actor_post: persona?.post || "Hon. Secretary",
+                actor_body_id: persona?.body_code || "MPCA",
+                notes: note,
+            });
+            await load();
+            alert("Budget returned to Division for revision.");
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const rejectBudget = async () => {
+        if (!budget) return;
+        const note = window.prompt("Rejection reason (required):");
+        if (!note) return;
+        if (!window.confirm(`Reject budget ${budget.budget_no}?\n\nThis is terminal — the Division will need to create a fresh budget.`)) return;
+        try {
+            await api.post(`/tournament-budgets/${budget.id}/reject`, {
+                actor_name: persona?.name,
+                actor_post: persona?.post || "Hon. Secretary",
+                actor_body_id: persona?.body_code || "MPCA",
+                notes: note,
+            });
+            await load();
+            alert("Budget rejected.");
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
     // ─── Reimbursement claim submission ───
     const submitClaim = async () => {
         try {
@@ -441,8 +493,39 @@ const TournamentFinanceDetail = () => {
                                         </button>
                                     )}
                                     {budget.status === "Submitted" && (
-                                        <div className="mt-3 text-[10px] uppercase tracking-widest bg-mpca-brass/20 border border-mpca-brass text-mpca-brass px-2 py-1 inline-block" data-testid="budget-submitted-badge">
-                                            Awaiting MPCA Approval
+                                        <div className="mt-3" data-testid="budget-review-tray">
+                                            <div className="text-[10px] uppercase tracking-widest bg-mpca-brass/20 border border-mpca-brass text-mpca-brass px-2 py-1 inline-block" data-testid="budget-submitted-badge">
+                                                Awaiting MPCA Approval
+                                            </div>
+                                            {persona?.body_type === "State" && (
+                                                <div className="flex flex-wrap items-center gap-2 mt-3" data-testid="budget-mpca-actions">
+                                                    <button
+                                                        onClick={approveBudget}
+                                                        className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory px-3 py-1.5 flex items-center gap-1 hover:bg-mpca-green transition-colors border border-mpca-green-dark"
+                                                        data-testid="budget-approve-btn"
+                                                    >
+                                                        <CheckCircle2 size={11} /> Approve as-submitted
+                                                    </button>
+                                                    <button
+                                                        onClick={returnBudget}
+                                                        className="text-[10px] uppercase tracking-widest bg-mpca-brass/20 border border-mpca-brass text-mpca-brass px-3 py-1.5 flex items-center gap-1 hover:bg-mpca-brass/30 transition-colors"
+                                                        data-testid="budget-return-btn"
+                                                        title="Send back to Division for revision"
+                                                    >
+                                                        <RotateCcw size={11} /> Return for revision
+                                                    </button>
+                                                    <button
+                                                        onClick={rejectBudget}
+                                                        className="text-[10px] uppercase tracking-widest bg-mpca-oxblood/10 border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 flex items-center gap-1 hover:bg-mpca-oxblood hover:text-mpca-ivory transition-colors"
+                                                        data-testid="budget-reject-btn"
+                                                    >
+                                                        <XCircle size={11} /> Reject
+                                                    </button>
+                                                    <span className="text-[10px] text-mpca-gray-dark italic">
+                                                        MPCA can edit values above before approving (upcoming) — for now use Return + Division re-submits.
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     {budget.status === "Approved" && (

@@ -148,8 +148,16 @@ const InputVariablesPanel = ({ tournament, persona, onChange }) => {
                 });
                 setDirty(false);
                 if (usesBackend) {
-                    const res = await api.post(`/tournaments/${tournament.id}/participants/${myParticipation.body_code}/budget/generate`).then((r) => r.data);
-                    if (res?.budget) setExistingBudget(res.budget);
+                    try {
+                        const res = await api.post(`/tournaments/${tournament.id}/participants/${myParticipation.body_code}/budget/generate`).then((r) => r.data);
+                        if (res?.budget) setExistingBudget(res.budget);
+                    } catch (be) {
+                        // Common case: Submitted/Approved budget blocks regeneration.
+                        const detail = be?.response?.data?.detail;
+                        if (detail) {
+                            alert(`Your input variables are saved, but the budget could not be regenerated:\n\n${detail}`);
+                        } else { throw be; }
+                    }
                 }
                 onChange?.();
                 return;

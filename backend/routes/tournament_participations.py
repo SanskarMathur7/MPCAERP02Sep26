@@ -523,6 +523,23 @@ async def generate_participant_budget(tid: str, body_code: str):
         "status": {"$in": ["Draft", "Returned"]},
     }, {"_id": 0})
 
+    # M32.1 · Guard: block regeneration when a non-terminal budget is already
+    # with MPCA (Submitted) or has been Approved. This prevents duplicate
+    # budgets piling up when Division users re-save their input variables.
+    blocking = await db.tournament_budgets.find_one({
+        "tournament_id": tid,
+        "body_id": body_code,
+        "fiscal_cycle": cycle,
+        "status": {"$in": ["Submitted", "Approved"]},
+    }, {"_id": 0})
+    if blocking and not existing:
+        raise HTTPException(
+            400,
+            f"Budget {blocking.get('budget_no')} for {body_code} is currently "
+            f"{blocking.get('status')} — cannot regenerate. Ask MPCA to Return it "
+            "for revision before editing input variables again."
+        )
+
     if existing:
         await db.tournament_budgets.update_one(
             {"id": existing["id"]},

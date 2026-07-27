@@ -58,6 +58,21 @@ export const PERSONAS = [
         body_name: "Indore Division",
     },
     {
+        // M39i · Gwalior Division Secretary — sample login for the northern
+        // division so the user can exercise multi-division RBAC end-to-end.
+        id: "division-secretary-gwl",
+        title: "Division Secretary",
+        honorific: "Shri",
+        name: "Kailash Vijayvargiya",
+        post: "Hon. Secretary, Gwalior Division",
+        scope: "Gwalior Division — 5 districts (Gwalior, Datia, Shivpuri, Guna, Ashoknagar)",
+        privileges: ["Recommend Grants", "Review Districts", "Submit Claims"],
+        accent: "navy",
+        body_type: "Division",
+        body_code: "DIV-GWL",
+        body_name: "Gwalior Division",
+    },
+    {
         id: "district-secretary",
         title: "District Secretary",
         honorific: "Shri",
@@ -128,7 +143,7 @@ export const AuthProvider = ({ children }) => {
             login,
             logout,
             isAuthed: !!persona,
-            isOfficeBearer: !!persona && ["president", "secretary", "treasurer", "division-secretary"].includes(persona.id),
+            isOfficeBearer: !!persona && ["president", "secretary", "treasurer", "division-secretary", "division-secretary-gwl"].includes(persona.id),
         }}>
             {children}
         </AuthContext.Provider>

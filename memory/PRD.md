@@ -1386,6 +1386,13 @@ _Shipped 27 Jul 2026 · verified via Playwright screenshot (collapsed + expanded
 
 ---
 
+## Sprint M39h · Clean-slate Purge + Gwalior Sample Login
+_Shipped 27 Jul 2026_
+
+**M39h · Data purge:** `scripts/purge_tournaments_grounds.py` wipes tournaments, tournament_budgets, tournament_closure_letters, tournament_invoices, tournament_matches, tournament_participations, tournament_receipts, tournament_reimbursement_claims, squads, fixtures, selection_funnels, match_official_da, grounds, venues, ground_expenses, extra_expense_requests plus tournament-scoped uploads/notifications/discussions. Sets `system_config.skip_seed_tournaments_and_grounds=true` so restarts don't re-populate. Total ≈4,600 docs cleared in the first run.
+
+**M39i · Gwalior Division Secretary persona:** Added `persona-chip-division-secretary-gwl` (Shri Kailash Vijayvargiya, DIV-GWL). Backend `_ACCEPTANCE_ROLE_PREFIXES` now matches any id starting with `division-secretary` / `district-secretary` so future per-division sample logins work without further backend changes.
+
 ## Sprint M39d · Strict Acceptance + Enhanced ID Card
 _Shipped 27 Jul 2026 · iteration_59 pass_
 - Item 7 · ID card on Member detail — now includes DOB and phone/email in the front card; button relabelled "ID Card · Download".

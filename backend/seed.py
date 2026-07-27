@@ -825,7 +825,12 @@ async def seed_data():
     await seed_claims()
     await seed_procurement()
     await seed_players()
-    await seed_tournaments()
+    # M39h · Honour the user-purged sentinel — skip tournament & grounds seeds
+    _skip = await db.system_config.find_one({"key": "skip_seed_tournaments_and_grounds"})
+    if not (_skip and _skip.get("value")):
+        await seed_tournaments()
+    else:
+        logger.info("Skip-seed flag set — bypassing seed_tournaments().")
     if await db.members.count_documents({}) == 0:
         logger.info("Seeding members…")
         for m in SEED_MEMBERS:
@@ -899,9 +904,13 @@ async def seed_data():
             )
             await db.fee_invoices.insert_one(inv.model_dump())
     await seed_vendors()
-    await seed_tournament_budgets()
-    await seed_venues_grounds()
-    await seed_selection_funnels()
+    # M39h · Honour the user-purged sentinel — skip tournament & grounds seeds
+    if not (_skip and _skip.get("value")):
+        await seed_tournament_budgets()
+        await seed_venues_grounds()
+        await seed_selection_funnels()
+    else:
+        logger.info("Skip-seed flag set — bypassing seed_tournament_budgets / venues_grounds / selection_funnels.")
     await seed_grant_scheme_rates()
     await seed_division_grants()
     await seed_vendor_kyc()

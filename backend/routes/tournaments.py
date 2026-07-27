@@ -16,7 +16,9 @@ from core.helpers import _next_tournament_no, _check_player_against_tournament, 
 # M39d · Strict acceptance — MPCA (president / secretary) may no longer act on
 # behalf of Division / District. Only division-secretary or district-secretary
 # personas belonging to the target body may accept or reject.
-_ACCEPTANCE_ROLES = {"division-secretary", "district-secretary"}
+# M39i · match "division-secretary" and any suffixed variants (e.g.
+# division-secretary-gwl) to support multiple sample logins per division.
+_ACCEPTANCE_ROLE_PREFIXES = ("division-secretary", "district-secretary")
 
 
 # ---------------- Routes: Tournaments (Phase IV.2 — M2) ----------------
@@ -249,7 +251,7 @@ async def act_on_tournament_acceptance(
 
     M39d · Strict: only the Division/District Secretary of the invited body may
     act. MPCA no longer acts on behalf of Divisions/Districts."""
-    if not x_role_id or x_role_id not in _ACCEPTANCE_ROLES:
+    if not x_role_id or not any(x_role_id.startswith(p) for p in _ACCEPTANCE_ROLE_PREFIXES):
         raise HTTPException(
             403,
             "Only the Division or District Secretary of the invited body may "

@@ -25,6 +25,27 @@ from pydantic import BaseModel, Field, ConfigDict
 from core.infra import db, api_router
 
 
+async def _ensure_indexes():
+    """Called once at import — creates the unique index on invite tokens so
+    two invites cannot collide even under concurrent inserts."""
+    try:
+        await db.player_registration_invites.create_index("token", unique=True)
+        await db.player_registration_campaigns.create_index("public_token", unique=True)
+    except Exception:  # noqa
+        pass
+
+
+import asyncio as _asyncio
+try:
+    _loop = _asyncio.get_event_loop()
+    if _loop.is_running():
+        _asyncio.ensure_future(_ensure_indexes())
+    else:
+        _loop.run_until_complete(_ensure_indexes())
+except Exception:  # noqa
+    pass
+
+
 MPCA_ROLES = {"secretary", "president", "treasurer", "hr_officer", "compliance_officer"}
 
 

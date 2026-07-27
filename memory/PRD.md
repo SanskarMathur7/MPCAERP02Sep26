@@ -1306,3 +1306,41 @@ _Shipped 27 Jul 2026 · verified iter_55 (100% BE 6/6, 100% FE 9/9)_
 - MPCA in-place head editing before budget approval.
 - PapaParse for Match Calendar CSV.
 - Persona-scoped filters on standalone list pages.
+
+---
+
+## Sprint M35 · Player Registration Campaigns (Season Onboarding)
+_Shipped 27 Jul 2026 · verified iter_56 (BE 26/26 pytest, FE 6/6 UI checks)_
+
+**Delivered:**
+- **Campaigns collection** `player_registration_campaigns` — MPCA or Division opens a season-scoped campaign; owns a `public_token` for the shareable URL + counters (invited/submitted/approved/rejected).
+- **Optional per-player invites** — bulk-paste `Name, email|phone` list generates unique tokens for each invitee. Copy links from the modal or export via CSV (future).
+- **No-auth public form** at `/register/player/:token` — form pre-fills from invite (name/email/mobile), sections: personal → cricket profile → contact → attachments (photo/aadhaar/address proof/birth cert) → optional bank. Consent gate. Rate-limited implicitly via token uniqueness.
+- **Admin console** at `/player-registrations` — two tabs (Campaigns + Inbox). Filter chips (Submitted/Approved/Rejected/Returned/all). Split-view inbox with full detail panel, Approve/Return/Reject action tray. Approve auto-creates a real `Player` (linked_player_id) with body_id + season_year stamped, status=Active.
+- **RBAC** — MPCA + Division may own campaigns; each Division sees only their own campaigns + registrations; MPCA sees everything.
+- **Public endpoints** — GET `/api/public/player-registration/token/:token` + POST `/api/public/player-registration/submit`, returning 410 on inactive/expired and 400 on duplicate invite submission. Unique indexes on invite.token + campaign.public_token.
+
+**Files touched:**
+- **BE new:** `/app/backend/routes/player_registrations.py` (with unique-index bootstrap).
+- **BE mod:** `server.py` (route registered).
+- **FE new:** `pages/PlayerRegistrations.jsx` (admin), `pages/PublicPlayerRegistration.jsx` (public form).
+- **FE mod:** `App.js` (public + admin routes), `components/AppLayout.jsx` (new sidebar link "Season Onboarding").
+
+**Tests:** `/app/backend/tests/test_m35_player_registrations.py` — 26/26 pass.
+
+### Known non-blocking review notes (deferred)
+- Player_id generation uses `count_documents` — theoretical race under concurrent approvals. Move to a Mongo counters collection when the flow gets high volume.
+- Districts currently read every Division campaign via a permissive prefix check (`_may_read` fallback). Not exposed in UI. Wire true parent lookup via `bodies.parent_code` later.
+- Non-owner Divisions could theoretically enter another body_code in the New Campaign dialog; BE returns 403 with clear message but disabling the field for Division persona would be a cleaner UX.
+- Notification: shareable URLs are copied to clipboard only; no email/SMS blast yet — hooking Resend/Twilio deferred (blocked on user preference).
+
+### Deferred (rolling forward)
+- Notification blast (email/SMS) on invite creation.
+- Doc expiry alerts widget on state dashboard.
+- MPCA in-place head editing before budget approval.
+- Reimbursement Claims + Vendor KYC vault picker.
+- Officials picker wired to `/officials` collection so DA form filing auto-links.
+- PapaParse for Match Calendar CSV.
+- Persona-scoped filters on standalone list pages (Budgets / Invoices / Claims).
+- AI document parsing deeper OCR, Closure Letter PDF, consolidated dashboards.
+- Tally API (BLOCKED on credentials), NEFT bulk file, Hindi i18n.

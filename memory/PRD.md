@@ -1274,3 +1274,35 @@ _Shipped 27 Jul 2026 · verified iter_54 (100% BE 13/13, 100% FE 8/8)_
 - PapaParse-based Match Calendar CSV parser.
 - Persona-scoped filtering on standalone list pages.
 - MPCA in-place head editing before budget approval (M32.1 stub).
+
+---
+
+## Sprint M34 · Squad Officials + Unified Squad Screen
+_Shipped 27 Jul 2026 · verified iter_55 (100% BE 6/6, 100% FE 9/9)_
+
+**Delivered:**
+- **Squad Match Officials nomination** — Division fills 8 slots (Manager, Coach, Trainer, Physio, Umpire #1/#2, Scorer, Match Referee) inside the SquadDetail page (`[data-testid='squad-officials-card']`). New endpoint `PATCH /api/squads/{sid}/officials` with owner|MPCA RBAC + workflow guard (locks while status ∈ Awaiting/Approved for non-MPCA). Officials submitted together with the XV via the existing `/submit` → `/review` flow.
+- **Unified Squad screen** — every persona (MPCA, Division, District) now lands on `SquadDetail` (`/squads/:sid`). MPCA gets the host body's squad (or first) via `TournamentSubTabs` + `box-squad` resolver. Legacy `SelectionConsole` still reachable via direct URL for backward compat but is no longer surfaced through any nav.
+- **Persona-scoped player pool** — MPCA sees ALL players (fetch limit 5000); Division sees own + child-district players; District sees own only. Pool header wording adapts to persona.
+- **Tournament list row cleanup** — removed the `Select` and `₹ Finance` quick-action buttons that duplicated in-detail navigation. Rows now show only status/type/format pills + Accept/Reject when applicable.
+
+**Files touched:**
+- **BE:** `routes/selection_console.py` (new PATCH endpoint).
+- **FE:** `pages/SquadDetail.jsx` (`SquadOfficialsSection` + persona-aware pool), `pages/TournamentDetail.jsx` (unified box-squad resolver), `components/TournamentSubTabs.jsx` (host-body squad resolver for MPCA), `pages/Tournaments.jsx` (removed action links).
+
+**Tests:** `/app/backend/tests/test_m34_squad_officials.py` (6/6 pass).
+
+### Known non-blocking review notes (deferred)
+- MPCA can edit officials on Approved squads (isMPCA short-circuits status guard). Both FE and BE agree; spec was ambiguous — leaving as-is per pragmatic flow.
+- Legacy `SelectionPatch.match_officials` field remains — consider removing to force the new endpoint as the sole write path.
+- `TournamentSubTabs` fetches /tournaments + /squads on every mount — memoize per tournamentId if it becomes hot.
+- `TournamentDetail.box-squad` still falls back to `/tournaments/<id>/selection` when host body is null; replace with a friendly notice later.
+- Match Officials on Squad are currently free-text names. Next: pick from `/officials` collection so **DA form filing** auto-populates for those named individuals (DA form endpoints already live at `/api/match-official-da`).
+
+### Deferred (rolling forward)
+- Wire officials picker to `/officials` collection so DA form flow auto-links.
+- Reimbursement Claims + Vendor KYC vault picker (Grant Claims already done).
+- Doc expiry alerts widget on state dashboard.
+- MPCA in-place head editing before budget approval.
+- PapaParse for Match Calendar CSV.
+- Persona-scoped filters on standalone list pages.

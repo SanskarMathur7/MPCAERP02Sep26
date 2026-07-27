@@ -379,7 +379,9 @@ const SquadDetail = () => {
                         <div>
                             <div className="overline">Player Pool</div>
                             <div className="font-serif text-lg text-mpca-green-dark mt-0.5">
-                                {filteredPool.length} available in {squad.body_id}{squad.body_id.startsWith("DIV-") && " + child districts"}
+                                {persona?.body_type === "State"
+                                    ? `${filteredPool.length} available across MPCA state`
+                                    : `${filteredPool.length} available in ${squad.body_id}${squad.body_id.startsWith("DIV-") ? " + child districts" : ""}`}
                             </div>
                         </div>
                     </div>

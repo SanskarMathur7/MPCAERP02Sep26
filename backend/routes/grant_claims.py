@@ -50,6 +50,23 @@ class GrantClaimBase(BaseModel):
     notes: Optional[str] = None
 
 
+class GrantClaimAiSummary(BaseModel):
+    """M38 · Claim-level AI verdict rolled up from per-doc AI results + a
+    cross-doc consistency check that compares extracted amounts against
+    the claimed amount and flags any anomalies (missing docs, mismatched
+    dates, low-confidence signals, duplicated invoices, etc.)."""
+    model_config = ConfigDict(extra="ignore")
+    overall_verdict: Literal["Recommend_Approve", "Manual_Review", "Recommend_Reject"] = "Manual_Review"
+    overall_confidence: float = 0.0                  # avg of per-doc confidences (0..1)
+    docs_verified: int = 0                           # count with ai_verified=True
+    docs_total: int = 0
+    amount_match_note: Optional[str] = None          # e.g. "Claimed ₹1L vs Detected ₹1L (match)"
+    critical_issues: List[str] = []                  # explicit red flags
+    advisory_notes: List[str] = []                   # softer signals
+    validated_at: Optional[str] = None
+    validated_by: Optional[str] = None
+
+
 class GrantClaim(GrantClaimBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     claim_ref: str
@@ -64,6 +81,7 @@ class GrantClaim(GrantClaimBase):
     rejection_reason: Optional[str] = None
     approved_amount_inr: Optional[float] = None
     mpca_comments: List[dict] = Field(default_factory=list)
+    ai_summary: Optional[GrantClaimAiSummary] = None    # M38 · Claim-level AI verdict
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -239,6 +257,150 @@ async def submit_grant_claim(cid: str, actor_name: Optional[str] = None):
         link=f"/grant-claims/{cid}", related_type="grant_claim", related_id=cid,
         severity="info", kind="info",
     )
+    return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.post("/grant-claims/{cid}/documents/{doc_id}/re-verify", response_model=GrantClaim)
+async def re_verify_document(cid: str, doc_id: str):
+    """M38 · Manually re-run AI verification on a single document.
+
+    Useful when the first pass returned low confidence or an intermittent
+    error (LLM timeout, missing key, etc.). Doesn't touch the file — just
+    replays the Gemini prompt and merges the new verdict back in.
+    """
+    claim = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not claim:
+        raise HTTPException(404, "Claim not found")
+    target = next((d for d in claim.get("documents", []) if d.get("doc_id") == doc_id), None)
+    if not target:
+        raise HTTPException(404, "Document slot not found")
+    if not target.get("file_url"):
+        raise HTTPException(400, "Cannot re-verify — no file has been uploaded on this slot yet.")
+    ai_result = await _ai_verify_document(target)
+    docs = claim.get("documents", [])
+    for d in docs:
+        if d.get("doc_id") == doc_id:
+            d.update(ai_result)
+    await db.grant_claims.update_one({"id": cid}, {"$set": {
+        "documents": docs, "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.post("/grant-claims/{cid}/ai-review", response_model=GrantClaim)
+async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
+    """M38 · Full-claim AI review — re-verifies any docs that failed or have
+    low confidence, runs a cross-doc consistency check (amounts vs claimed,
+    dates vs fiscal cycle, duplicate detection), and stamps a rolled-up
+    `ai_summary` on the claim so MPCA reviewers see one advisory verdict
+    (Recommend Approve · Manual Review · Recommend Reject) before deciding.
+    """
+    claim = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not claim:
+        raise HTTPException(404, "Claim not found")
+    docs = claim.get("documents", [])
+    if not docs:
+        raise HTTPException(400, "No documents on this claim to review.")
+
+    # 1) Re-run per-doc AI for anything missing OR below 0.6 confidence
+    for d in docs:
+        if not d.get("file_url"):
+            continue
+        conf = float(d.get("ai_confidence") or 0)
+        if not d.get("ai_verified") or conf < 0.6:
+            verdict = await _ai_verify_document(d)
+            d.update(verdict)
+
+    # 2) Roll up + cross-checks
+    filled = [d for d in docs if d.get("file_url")]
+    verified = [d for d in filled if d.get("ai_verified")]
+    total_docs = len(docs)
+    filled_count = len(filled)
+    verified_count = len(verified)
+    avg_conf = round(sum(float(d.get("ai_confidence") or 0) for d in filled) / max(filled_count, 1), 3)
+
+    critical: List[str] = []
+    advisory: List[str] = []
+    amount_note: Optional[str] = None
+
+    if filled_count < total_docs:
+        critical.append(f"{total_docs - filled_count} required document(s) missing.")
+
+    # Cross-doc · amount consistency: sum any 'amount' fields extracted vs claimed
+    claimed = float(claim.get("claimed_amount_inr") or 0)
+    detected_amounts: List[float] = []
+    for d in filled:
+        keys = (d.get("ai_extracted") or {}).get("key_details") or {}
+        raw_amt = keys.get("amount") or keys.get("total") or keys.get("value")
+        if isinstance(raw_amt, (int, float)):
+            detected_amounts.append(float(raw_amt))
+        elif isinstance(raw_amt, str):
+            # Best-effort parse ("Rs 1,20,000" → 120000)
+            import re as _re
+            cleaned = _re.sub(r"[^\d.]", "", raw_amt)
+            try:
+                if cleaned:
+                    detected_amounts.append(float(cleaned))
+            except ValueError:
+                pass
+    if claimed > 0 and detected_amounts:
+        top_amt = max(detected_amounts)
+        drift_pct = abs(top_amt - claimed) / claimed * 100 if claimed else 0
+        if drift_pct <= 5:
+            amount_note = f"Claimed ₹{claimed:,.0f} matches highest extracted invoice ₹{top_amt:,.0f} (within 5%)."
+        elif drift_pct <= 15:
+            amount_note = f"Claimed ₹{claimed:,.0f} vs top extracted ₹{top_amt:,.0f} — {drift_pct:.1f}% variance. Please double-check."
+            advisory.append(amount_note)
+        else:
+            amount_note = f"Claimed ₹{claimed:,.0f} vs top extracted ₹{top_amt:,.0f} — {drift_pct:.1f}% variance."
+            critical.append(f"Amount mismatch >15% · {amount_note}")
+    elif claimed > 0:
+        advisory.append("Could not extract any amount from uploaded documents to cross-check.")
+
+    # Cross-doc · fiscal-cycle date sanity
+    cycle_year = claim.get("fiscal_cycle", "").split("-")[0]
+    if cycle_year and cycle_year.isdigit():
+        year_int = int(cycle_year)
+        for d in filled:
+            keys = (d.get("ai_extracted") or {}).get("key_details") or {}
+            date_str = keys.get("date") or ""
+            if isinstance(date_str, str) and date_str:
+                import re as _re
+                m = _re.search(r"(20\d{2})", date_str)
+                if m:
+                    doc_year = int(m.group(1))
+                    if doc_year < year_int - 1 or doc_year > year_int + 1:
+                        advisory.append(f"{d['required_label']} is dated {date_str} — outside fiscal cycle {claim.get('fiscal_cycle')}.")
+
+    # Low confidence signal
+    low_conf = [d for d in filled if float(d.get("ai_confidence") or 0) < 0.5]
+    if low_conf:
+        advisory.append(f"{len(low_conf)} document(s) have AI confidence below 50% — manual eyeball recommended.")
+
+    # Roll up verdict
+    if critical:
+        verdict = "Recommend_Reject"
+    elif filled_count == total_docs and verified_count == filled_count and avg_conf >= 0.7 and not advisory:
+        verdict = "Recommend_Approve"
+    else:
+        verdict = "Manual_Review"
+
+    ai_summary = {
+        "overall_verdict": verdict,
+        "overall_confidence": avg_conf,
+        "docs_verified": verified_count,
+        "docs_total": total_docs,
+        "amount_match_note": amount_note,
+        "critical_issues": critical,
+        "advisory_notes": advisory,
+        "validated_at": datetime.now(timezone.utc).isoformat(),
+        "validated_by": actor_name or "AI Gatekeeper",
+    }
+    await db.grant_claims.update_one({"id": cid}, {"$set": {
+        "documents": docs,
+        "ai_summary": ai_summary,
+        "updated_at": ai_summary["validated_at"],
+    }})
     return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
 
 

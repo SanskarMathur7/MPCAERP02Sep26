@@ -140,6 +140,31 @@ const GrantClaims = () => {
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
 
+    // M38 · Manually re-run Gemini on a single doc (retry low-confidence / errored verdicts)
+    const [reVerifyingId, setReVerifyingId] = useState(null);
+    const reVerifyDoc = async (claim, docSlot) => {
+        setReVerifyingId(docSlot.doc_id);
+        try {
+            const { data } = await api.post(`/grant-claims/${claim.id}/documents/${docSlot.doc_id}/re-verify`);
+            setSelected(data);
+            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setReVerifyingId(null); }
+    };
+
+    // M38 · Full-claim AI review — cross-doc consistency + rolled-up verdict for MPCA reviewers
+    const [aiReviewing, setAiReviewing] = useState(false);
+    const runAiReview = async () => {
+        if (!selected) return;
+        setAiReviewing(true);
+        try {
+            const { data } = await api.post(`/grant-claims/${selected.id}/ai-review`, null, { params: { actor_name: persona?.name } });
+            setSelected(data);
+            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setAiReviewing(false); }
+    };
+
     if (loading) return <CricketLoader label="Loading grant claims..." />;
 
     const allDocsUploaded = selected && (selected.documents || []).every((d) => d.file_url);
@@ -207,7 +232,16 @@ const GrantClaims = () => {
                                         {selected.approved_amount_inr != null && <> · Approved <span className="font-mono text-mpca-green-dark">{fmt(selected.approved_amount_inr)}</span></>}
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 flex-wrap">
+                                    <button
+                                        className="text-[10px] uppercase tracking-widest px-3 py-1.5 border border-mpca-brass text-mpca-brass flex items-center gap-1 hover:bg-mpca-brass/10 disabled:opacity-40"
+                                        onClick={runAiReview}
+                                        disabled={aiReviewing || !(selected.documents || []).some((d) => d.file_url)}
+                                        title="Run Gemini cross-doc consistency check + rolled-up verdict"
+                                        data-testid="ai-review-claim-btn"
+                                    >
+                                        <Sparkles size={11} className={aiReviewing ? "animate-pulse" : ""} /> {aiReviewing ? "AI Reviewing…" : "AI Review"}
+                                    </button>
                                     {canSubmit && (
                                         <button className="btn-heritage-primary" onClick={submitClaim} data-testid="submit-claim-btn"><Send size={12} /> Submit</button>
                                     )}
@@ -219,6 +253,56 @@ const GrantClaims = () => {
                                     )}
                                 </div>
                             </div>
+
+                            {/* M38 · Claim-level AI Summary — visible whenever AI has run at least once */}
+                            {selected.ai_summary && (
+                                <div className={`mb-4 p-4 border-2 ${
+                                    selected.ai_summary.overall_verdict === "Recommend_Approve" ? "border-mpca-green-dark bg-mpca-green-dark/5" :
+                                    selected.ai_summary.overall_verdict === "Recommend_Reject" ? "border-mpca-oxblood bg-mpca-oxblood/5" :
+                                    "border-mpca-brass bg-mpca-gold-light/10"
+                                }`} data-testid="ai-summary-panel">
+                                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <Sparkles size={14} className={`${selected.ai_summary.overall_verdict === "Recommend_Approve" ? "text-mpca-green-dark" : selected.ai_summary.overall_verdict === "Recommend_Reject" ? "text-mpca-oxblood" : "text-mpca-brass"}`} />
+                                                <div className={`font-serif text-lg ${selected.ai_summary.overall_verdict === "Recommend_Approve" ? "text-mpca-green-dark" : selected.ai_summary.overall_verdict === "Recommend_Reject" ? "text-mpca-oxblood" : "text-mpca-brass"}`} data-testid="ai-verdict">
+                                                    {selected.ai_summary.overall_verdict.replace(/_/g, " ")}
+                                                </div>
+                                                <span className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">
+                                                    {selected.ai_summary.docs_verified} / {selected.ai_summary.docs_total} docs verified · avg confidence {Math.round((selected.ai_summary.overall_confidence || 0) * 100)}%
+                                                </span>
+                                            </div>
+                                            {selected.ai_summary.amount_match_note && (
+                                                <div className="text-[11px] text-mpca-gray-dark mt-2 italic" data-testid="ai-amount-note">
+                                                    <IndianRupee size={10} className="inline mr-0.5" /> {selected.ai_summary.amount_match_note}
+                                                </div>
+                                            )}
+                                            {(selected.ai_summary.critical_issues || []).length > 0 && (
+                                                <ul className="mt-2 space-y-0.5" data-testid="ai-critical-issues">
+                                                    {selected.ai_summary.critical_issues.map((c, i) => (
+                                                        <li key={i} className="text-[11px] text-mpca-oxblood flex items-start gap-1"><AlertTriangle size={10} className="mt-0.5 shrink-0" /> {c}</li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                            {(selected.ai_summary.advisory_notes || []).length > 0 && (
+                                                <ul className="mt-2 space-y-0.5" data-testid="ai-advisory-notes">
+                                                    {selected.ai_summary.advisory_notes.map((a, i) => (
+                                                        <li key={i} className="text-[11px] text-mpca-brass flex items-start gap-1">· {a}</li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                        <div className="text-right text-[9px] text-mpca-gray-dark shrink-0">
+                                            {selected.ai_summary.validated_at && (
+                                                <div>{new Date(selected.ai_summary.validated_at).toLocaleString("en-IN")}</div>
+                                            )}
+                                            {selected.ai_summary.validated_by && (
+                                                <div className="italic">by {selected.ai_summary.validated_by}</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Documents */}
                             <div>
@@ -242,7 +326,7 @@ const GrantClaims = () => {
                                                         </a>
                                                     )}
                                                     {d.file_url && (
-                                                        <div className="mt-1 text-[11px]">
+                                                        <div className="mt-1 text-[11px] flex items-center gap-2 flex-wrap">
                                                             {d.ai_verified ? (
                                                                 <span className="text-mpca-green-dark flex items-center gap-1">
                                                                     <CheckCircle2 size={11} /> AI verified · {Math.round((d.ai_confidence || 0) * 100)}% confidence
@@ -252,8 +336,17 @@ const GrantClaims = () => {
                                                                     <AlertTriangle size={11} /> AI flag · {d.ai_notes}
                                                                 </span>
                                                             )}
+                                                            <button
+                                                                onClick={() => reVerifyDoc(selected, d)}
+                                                                disabled={reVerifyingId === d.doc_id}
+                                                                className="text-[9px] uppercase tracking-widest text-mpca-brass hover:text-mpca-oxblood underline underline-offset-2 disabled:opacity-40"
+                                                                data-testid={`doc-reverify-${d.doc_id}`}
+                                                                title="Retry Gemini verification on this document"
+                                                            >
+                                                                {reVerifyingId === d.doc_id ? "Re-verifying…" : "Re-verify"}
+                                                            </button>
                                                             {d.ai_extracted?.document_type_detected && (
-                                                                <div className="text-mpca-gray-dark text-[10px] mt-0.5">Detected: {d.ai_extracted.document_type_detected}</div>
+                                                                <span className="text-mpca-gray-dark text-[10px]">· Detected: {d.ai_extracted.document_type_detected}</span>
                                                             )}
                                                         </div>
                                                     )}

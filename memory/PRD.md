@@ -1239,3 +1239,38 @@ _Shipped 26 Jul 2026 · verified iter_53 (100% BE, 100% FE)_
 - Cancelled budgets can only be created via admin script (no `/cancel` endpoint). Add one if manual cancellation becomes a common workflow.
 - Client-side Cancelled filter — for scale prefer a backend `?exclude_status=Cancelled` query param eventually.
 - Persona gate for the action tray uses `body_type='State'`. If Treasurer / President should be restricted from budget approvals in future, narrow to `role_id in {'secretary', 'president'}`.
+
+---
+
+## Sprint M33 · Body Data Warehouse
+_Shipped 27 Jul 2026 · verified iter_54 (100% BE 13/13, 100% FE 8/8)_
+
+**Delivered:**
+- **Per-body document vault** at `/api/bodies/{code}/documents` with strict RBAC — owner can R/W, MPCA (state role) can read every vault, parent body (Division) can read its child districts, BCCI can read all, everyone else 403.
+- **13 supported doc kinds** — GST_Certificate, PAN_Card, Bank_Account, Balance_Sheet, Profit_Loss, Audit_Report, Constitution_Bye_Laws, MOA_AOA, Registration_Certificate, Board_Resolution, Address_Proof, Insurance_Policy, Other. Each kind carries structured `metadata` fields (Bank_Account → bank/account/IFSC/branch; GST/PAN → doc_no).
+- **Essentials scoreboard** — GET `/kinds/summary` returns count-per-kind + essential_filled/4 tracker; UI renders a scoreboard chip at the top of the vault so bodies immediately see what's missing.
+- **File integration** — reuses existing `/api/uploads` pipeline (PDF/image/DOCX/XLSX ≤20 MB). Metadata + file_url stored on `body_documents`; downloads via the upload's public URL.
+- **Reusable `<VaultDocumentPicker />`** — modal that lists vault docs and returns a `{file_url, file_name}` pair. Wired into Grant Claims doc slots alongside the fresh-upload button. Best-effort `inferDocKindFromLabel()` filters the picker to relevant kinds per slot.
+- **`from_vault` tracking** — the claim doc slot now records `from_vault=true` + the source `vault_doc_id`. UI renders a small "From Vault" badge so MPCA reviewers can distinguish a vault re-use from a fresh AI-verified upload.
+
+**Files touched:**
+- **BE new:** `/app/backend/routes/body_documents.py`.
+- **BE mod:** `server.py` (register route), `routes/grant_claims.py` (from_vault fields + params on attach_document).
+- **FE new:** `BodyDocumentsVault.jsx`, `VaultDocumentPicker.jsx`.
+- **FE mod:** `pages/BodyDetail.jsx` (mount vault), `pages/GrantClaims.jsx` (picker + from_vault badge + kind inference).
+
+**Tests:** `/app/backend/tests/test_m33_body_documents.py` — 13/13 pass.
+
+### Known non-blocking review notes
+- PATCH endpoint's `if v is not None` filter prevents clearing a field via null — consider `model_fields_set` sentinel later if that becomes a real workflow.
+- `_can_read` uses `caller_body == "MPCA"` string literal — should switch to a `body_type=='State'` lookup once BCCI hierarchy or renaming is on the table.
+- Soft-delete returns `{deleted, hard}` instead of REST-conventional 204 — non-blocking.
+- Delete confirm uses `window.confirm`; app-wide shadcn AlertDialog would be more consistent (deferred).
+
+### Deferred (rolling forward)
+- Reimbursement Claims + Vendor KYC vault picker (only Grant Claims hooked in this sprint).
+- Expiry-alerts widget on Dashboard: docs expiring in ≤30 days.
+- Bulk vault import CSV/PDF pack.
+- PapaParse-based Match Calendar CSV parser.
+- Persona-scoped filtering on standalone list pages.
+- MPCA in-place head editing before budget approval (M32.1 stub).

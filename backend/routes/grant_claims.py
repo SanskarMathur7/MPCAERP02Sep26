@@ -37,6 +37,8 @@ class GrantClaimDoc(BaseModel):
     ai_confidence: float = 0.0                       # 0-1
     ai_notes: Optional[str] = None
     ai_extracted: dict = Field(default_factory=dict)  # amounts, dates, party names etc.
+    from_vault: bool = False                         # M33 · true when attached from Body Data Warehouse
+    vault_doc_id: Optional[str] = None
 
 
 class GrantClaimBase(BaseModel):
@@ -124,7 +126,7 @@ async def create_grant_claim(payload: GrantClaimCreate):
 
 
 @api_router.post("/grant-claims/{cid}/document/{doc_id}")
-async def attach_document(cid: str, doc_id: str, file_url: str, filename: str):
+async def attach_document(cid: str, doc_id: str, file_url: str, filename: str, from_vault: bool = False, vault_doc_id: Optional[str] = None):
     doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
@@ -136,6 +138,8 @@ async def attach_document(cid: str, doc_id: str, file_url: str, filename: str):
             d["file_url"] = file_url
             d["filename"] = filename
             d["uploaded_at"] = now
+            d["from_vault"] = from_vault
+            d["vault_doc_id"] = vault_doc_id
             updated = True
             break
     if not updated:

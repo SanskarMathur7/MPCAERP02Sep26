@@ -6,6 +6,26 @@ import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import VaultDocumentPicker from "@/components/VaultDocumentPicker";
 
+// M33 · Best-effort mapping of a scheme's `required_label` (free-text) to
+// the closest Data Warehouse doc_kind so the picker only shows relevant docs.
+// Falls back to null → picker lists every kind.
+const inferDocKindFromLabel = (label = "") => {
+    const s = label.toLowerCase();
+    if (/gst/.test(s)) return "GST_Certificate";
+    if (/\bpan\b/.test(s)) return "PAN_Card";
+    if (/bank|cheque|passbook|nach|neft|ifsc|account.*detail/.test(s)) return "Bank_Account";
+    if (/balance\s*sheet/.test(s)) return "Balance_Sheet";
+    if (/(profit.*loss|income.*expense|receipts.*payments)/.test(s)) return "Profit_Loss";
+    if (/audit/.test(s)) return "Audit_Report";
+    if (/constitution|bye.*law/.test(s)) return "Constitution_Bye_Laws";
+    if (/(moa|aoa|memorandum|articles)/.test(s)) return "MOA_AOA";
+    if (/registration.*cert|regd.*cert|reg\.?\s*no/.test(s)) return "Registration_Certificate";
+    if (/resolution/.test(s)) return "Board_Resolution";
+    if (/address.*proof|utility.*bill/.test(s)) return "Address_Proof";
+    if (/insurance|policy/.test(s)) return "Insurance_Policy";
+    return null;   // no filter → picker shows all vault docs
+};
+
 const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 
 // Tournament schemes flow through Tournament Reimbursement Matrix, not Grant Claims.
@@ -75,7 +95,12 @@ const GrantClaims = () => {
         setUploadingDoc(docSlot.doc_id);
         try {
             const { data: updated } = await api.post(`/grant-claims/${claim.id}/document/${docSlot.doc_id}`, null, {
-                params: { file_url: vaultDoc.file_url, filename: vaultDoc.file_name || vaultDoc.label },
+                params: {
+                    file_url: vaultDoc.file_url,
+                    filename: vaultDoc.file_name || vaultDoc.label,
+                    from_vault: true,
+                    vault_doc_id: vaultDoc.id,
+                },
             });
             setSelected(updated);
             setClaims((prev) => prev.map((c) => c.id === updated.id ? updated : c));
@@ -203,7 +228,14 @@ const GrantClaims = () => {
                                         <div key={d.doc_id} className={`p-3 border ${d.file_url ? (d.ai_verified ? "border-mpca-green-dark/40 bg-mpca-green-dark/5" : "border-mpca-brass/40 bg-mpca-brass/5") : "border-mpca-gray-dark/20"}`} data-testid={`doc-${d.doc_id}`}>
                                             <div className="flex justify-between items-start gap-3">
                                                 <div className="flex-1">
-                                                    <div className="font-serif text-sm text-mpca-green-dark">{d.required_label}</div>
+                                                    <div className="font-serif text-sm text-mpca-green-dark flex items-center gap-2">
+                                                        {d.required_label}
+                                                        {d.from_vault && (
+                                                            <span className="text-[8px] uppercase tracking-widest bg-mpca-brass/20 text-mpca-brass border border-mpca-brass/40 px-1 py-0.5" data-testid={`doc-from-vault-${d.doc_id}`} title="Attached from the body's Data Warehouse">
+                                                                From Vault
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     {d.filename && (
                                                         <a href={`${BACKEND_URL}${d.file_url}`} target="_blank" rel="noreferrer" className="text-[10px] text-mpca-brass mt-1 flex items-center gap-1">
                                                             <FileText size={10} /> {d.filename}
@@ -234,6 +266,7 @@ const GrantClaims = () => {
                                                         </label>
                                                         <VaultDocumentPicker
                                                             bodyCode={selected.body_id || persona?.body_code}
+                                                            docKind={inferDocKindFromLabel(d.required_label)}
                                                             onPick={(vaultDoc) => attachFromVault(selected, d, vaultDoc)}
                                                             triggerLabel="From Vault"
                                                             testId={`doc-vault-${d.doc_id}`}

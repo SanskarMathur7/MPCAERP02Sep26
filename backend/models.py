@@ -1781,29 +1781,103 @@ class TournamentInvoiceCreate(TournamentInvoiceBase):
 DAStatus = Literal["Draft", "Submitted", "Approved", "Rejected", "Paid"]
 
 
+class DATravelSegment(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    from_place: str = ""
+    to_place: str = ""
+    fare_class: str = "III_AC"        # III_AC | II_AC | I_AC | Air | Bus | Own_Vehicle
+    one_way_fare_inr: float = 0.0
+    both_ways_amount_inr: float = 0.0
+    ticket_url: Optional[str] = None  # supporting ticket / e-ticket
+
+
+class DAMiscItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    description: str = ""
+    amount_inr: float = 0.0
+    receipt_url: Optional[str] = None
+
+
+class DAAttachment(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    label: str = ""
+    url: str = ""
+
+
+class DAComplianceFlag(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    field: str                          # "da_rate_inr" | "journey_rate_per_12h_inr" | "conveyance_rate_inr" | "night_halt_amount_inr"
+    claimed: float
+    scheme_ceiling: Optional[float] = None
+    severity: str = "warning"           # warning | info
+    note: str
+
+
 class MatchOfficialDA(BaseModel):
-    """Pre-built DA form per allocated official; official fills + submits."""
+    """Pre-built DA form per allocated official; official fills + submits.
+
+    Mirrors the MPCA physical **T.A. & D.A. Claim Form (FMPCA 037)** — 8
+    sections: Header · Travel-fare segments · Journey expenses · DA
+    (days×rate) · Conveyance · Incidental · Night Halt · Misc.  A compliance
+    snapshot is stamped on submit so MPCA/Division reviewers can see which
+    lines exceed the scheme rate.
+    """
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     da_ref: str                                  # "DA-2025-26-0001"
     tournament_id: str
     tournament_name: Optional[str] = None
+    # ── Header (auto-filled from match_officials profile) ──
+    official_id: Optional[str] = None            # link back to match_officials.id
     official_name: str
     official_role: str                           # umpire/scorer/etc.
     official_phone: Optional[str] = None
     body_id: Optional[str] = None                # owning division/district
-    # Rate & days come pre-filled from Grant Scheme; official can edit hotel/food
+    association_division: Optional[str] = None   # display name of body (e.g. "Rewa Division")
+    place_of_visit: Optional[str] = None         # e.g. "Gwalior"
+    purpose_of_visit: Optional[str] = None       # e.g. "Umpiring · Girls U-18 LO Overs Inter-Div Trophy 2025-26"
+    # ── Travel Fare (multiple legs) ──
+    travel_segments: List[DATravelSegment] = Field(default_factory=list)
+    travel_amount_inr: float = 0.0               # sum of segments (auto)
+    # ── Journey Expenses (₹300 / 12 hrs) ──
+    journey_hours: float = 0.0
+    journey_rate_per_12h_inr: float = 300.0
+    journey_amount_inr: float = 0.0              # rate × ceil(hours/12) (auto)
+    # ── DA (days × rate) ──
     days: int = 0
     da_rate_inr: float = 0.0                     # per-day rate from rate card
     da_amount_inr: float = 0.0                   # days × rate (auto)
-    travel_amount_inr: float = 0.0
+    da_date_from: Optional[str] = None
+    da_date_to: Optional[str] = None
+    # ── Conveyance Allowance ──
+    conveyance_rate_inr: float = 0.0             # per-trip rate (e.g. ₹200)
+    conveyance_count: int = 0                    # number of trips
+    conveyance_amount_inr: float = 0.0           # rate × count (auto)
+    # ── Incidental Charges ──
+    incidental_rate_inr: float = 0.0             # per-day rate
+    incidental_days: int = 0
+    incidental_amount_inr: float = 0.0           # rate × days (auto)
+    # ── Night Halt ──
+    night_halt_place: Optional[str] = None
+    night_halt_amount_inr: float = 0.0
+    night_halt_bill_url: Optional[str] = None    # hotel bill
+    # ── Misc Expenses (multi-line) ──
+    misc_items: List[DAMiscItem] = Field(default_factory=list)
+    misc_amount_inr: float = 0.0                 # sum of misc_items (auto)
+    # legacy — kept for backward-compat with old rows
     food_amount_inr: float = 0.0
-    misc_amount_inr: float = 0.0
-    total_inr: float = 0.0                       # sum of all
+    # ── Totals ──
+    total_inr: float = 0.0                       # grand total (auto)
+    total_in_words: Optional[str] = None
+    # ── Attachments (overflow bucket) ──
+    attachments: List[DAAttachment] = Field(default_factory=list)
+    # ── Bank + PAN ──
     bank_account_no: Optional[str] = None
     bank_ifsc: Optional[str] = None
     pan: Optional[str] = None
+    # ── Workflow ──
     status: DAStatus = "Draft"
+    compliance_flags: List[DAComplianceFlag] = Field(default_factory=list)   # stamped on submit
     submitted_at: Optional[str] = None
     approved_by: Optional[str] = None
     approved_at: Optional[str] = None
@@ -1813,16 +1887,35 @@ class MatchOfficialDA(BaseModel):
 
 
 class MatchOfficialDAUpdate(BaseModel):
-    """Payload the official uses to fill their DA before submitting."""
+    """Payload the official uses to fill their DA before submitting.
+    All fields optional; server recomputes derived totals + compliance."""
     model_config = ConfigDict(extra="ignore")
+    place_of_visit: Optional[str] = None
+    purpose_of_visit: Optional[str] = None
+    travel_segments: Optional[List[DATravelSegment]] = None
+    journey_hours: Optional[float] = None
+    journey_rate_per_12h_inr: Optional[float] = None
     days: Optional[int] = None
-    travel_amount_inr: Optional[float] = None
-    food_amount_inr: Optional[float] = None
-    misc_amount_inr: Optional[float] = None
+    da_rate_inr: Optional[float] = None
+    da_date_from: Optional[str] = None
+    da_date_to: Optional[str] = None
+    conveyance_rate_inr: Optional[float] = None
+    conveyance_count: Optional[int] = None
+    incidental_rate_inr: Optional[float] = None
+    incidental_days: Optional[int] = None
+    night_halt_place: Optional[str] = None
+    night_halt_amount_inr: Optional[float] = None
+    night_halt_bill_url: Optional[str] = None
+    misc_items: Optional[List[DAMiscItem]] = None
+    attachments: Optional[List[DAAttachment]] = None
     bank_account_no: Optional[str] = None
     bank_ifsc: Optional[str] = None
     pan: Optional[str] = None
     notes: Optional[str] = None
+    # ── Legacy single-value fallbacks (kept so old MyDAForms UI still works) ──
+    travel_amount_inr: Optional[float] = None
+    food_amount_inr: Optional[float] = None
+    misc_amount_inr: Optional[float] = None
 
 # ---------------- Phase T5 · Extra Expense Approval ----------------
 # Division requests MPCA approval for expenses NOT covered by the original

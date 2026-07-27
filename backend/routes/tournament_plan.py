@@ -13,6 +13,7 @@ from models import (
     GrantSchemeRate, RateCardUnit,
     TournamentBudget, BudgetHeadAllocation, ApprovalStep,
     MatchOfficialDA, MatchOfficialDAUpdate, DAStatus,
+    DATravelSegment, DAMiscItem, DAAttachment, DAComplianceFlag,
 )
 
 
@@ -416,26 +417,269 @@ async def get_da_form(did: str):
 
 @api_router.patch("/match-official-da/{did}", response_model=MatchOfficialDA)
 async def update_da_form(did: str, patch: MatchOfficialDAUpdate):
-    """Match official fills their DA form."""
+    """Match official fills their DA form.
+
+    Server recomputes every derived total (travel, journey, DA amount,
+    conveyance, incidental, misc) and the grand total on every save so the
+    client never has to trust its own arithmetic. Compliance flags are NOT
+    stamped here — only on submit (see `submit_da_form`).
+    """
     doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "DA form not found")
     if doc["status"] not in ("Draft", "Rejected"):
         raise HTTPException(409, f"Cannot edit DA in status {doc['status']}")
     p = patch.model_dump(exclude_none=True)
-    # Re-compute totals
-    days = int(p.get("days", doc.get("days") or 0))
-    da_rate = float(doc.get("da_rate_inr") or 0)
-    da_amt = round(days * da_rate, 2)
-    travel = float(p.get("travel_amount_inr", doc.get("travel_amount_inr") or 0))
-    food = float(p.get("food_amount_inr", doc.get("food_amount_inr") or 0))
-    misc = float(p.get("misc_amount_inr", doc.get("misc_amount_inr") or 0))
-    total = round(da_amt + travel + food + misc, 2)
-    p["da_amount_inr"] = da_amt
-    p["total_inr"] = total
-    p["status"] = "Draft" if doc["status"] == "Rejected" else doc["status"]
-    await db.match_official_da.update_one({"id": did}, {"$set": p})
+
+    # ── Merge patch onto doc for derived-value computation ──
+    merged = {**doc, **p}
+    # Normalise nested lists into plain dicts for storage
+    if "travel_segments" in p:
+        merged["travel_segments"] = [
+            s if isinstance(s, dict) else s.model_dump() for s in p["travel_segments"]
+        ]
+    if "misc_items" in p:
+        merged["misc_items"] = [
+            m if isinstance(m, dict) else m.model_dump() for m in p["misc_items"]
+        ]
+    if "attachments" in p:
+        merged["attachments"] = [
+            a if isinstance(a, dict) else a.model_dump() for a in p["attachments"]
+        ]
+
+    # ── Derived totals ──
+    import math
+    # Travel (sum of segments · both-ways amount) — fall back to legacy scalar
+    if "travel_segments" in p:
+        travel_total = round(sum(float(s.get("both_ways_amount_inr") or 0) for s in merged["travel_segments"]), 2)
+    else:
+        travel_total = float(merged.get("travel_amount_inr") or 0)
+    merged["travel_amount_inr"] = travel_total
+
+    # Journey — 300 per every 12 hrs OR part thereof
+    j_hours = float(merged.get("journey_hours") or 0)
+    j_rate = float(merged.get("journey_rate_per_12h_inr") or 300)
+    journey_units = math.ceil(j_hours / 12) if j_hours > 0 else 0
+    merged["journey_amount_inr"] = round(journey_units * j_rate, 2)
+
+    # DA amount
+    days = int(merged.get("days") or 0)
+    da_rate = float(merged.get("da_rate_inr") or 0)
+    merged["da_amount_inr"] = round(days * da_rate, 2)
+
+    # Conveyance
+    conv_rate = float(merged.get("conveyance_rate_inr") or 0)
+    conv_count = int(merged.get("conveyance_count") or 0)
+    merged["conveyance_amount_inr"] = round(conv_rate * conv_count, 2)
+
+    # Incidental
+    inc_rate = float(merged.get("incidental_rate_inr") or 0)
+    inc_days = int(merged.get("incidental_days") or 0)
+    merged["incidental_amount_inr"] = round(inc_rate * inc_days, 2)
+
+    # Misc (sum of items) — fall back to legacy scalar
+    if "misc_items" in p:
+        misc_total = round(sum(float(m.get("amount_inr") or 0) for m in merged["misc_items"]), 2)
+    else:
+        misc_total = float(merged.get("misc_amount_inr") or 0)
+    merged["misc_amount_inr"] = misc_total
+
+    # Grand Total
+    night_halt = float(merged.get("night_halt_amount_inr") or 0)
+    food_legacy = float(merged.get("food_amount_inr") or 0)   # only for old rows
+    grand_total = round(
+        merged["da_amount_inr"] + merged["travel_amount_inr"] + merged["journey_amount_inr"] +
+        merged["conveyance_amount_inr"] + merged["incidental_amount_inr"] + night_halt +
+        merged["misc_amount_inr"] + food_legacy,
+        2,
+    )
+    merged["total_inr"] = grand_total
+    merged["total_in_words"] = _rupees_in_words(grand_total)
+
+    # Persist ONLY the fields we touched + derived
+    to_set = {
+        **{k: merged[k] for k in p.keys() if k in merged},
+        "da_amount_inr": merged["da_amount_inr"],
+        "travel_amount_inr": merged["travel_amount_inr"],
+        "journey_amount_inr": merged["journey_amount_inr"],
+        "conveyance_amount_inr": merged["conveyance_amount_inr"],
+        "incidental_amount_inr": merged["incidental_amount_inr"],
+        "misc_amount_inr": merged["misc_amount_inr"],
+        "total_inr": grand_total,
+        "total_in_words": merged["total_in_words"],
+        "status": "Draft" if doc["status"] == "Rejected" else doc["status"],
+    }
+    await db.match_official_da.update_one({"id": did}, {"$set": to_set})
     return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+# ─── ₹ in-words helper (Indian numbering system, up to 99,99,99,999) ───
+def _rupees_in_words(n: float) -> str:
+    if n is None:
+        return ""
+    n = int(round(float(n)))
+    if n == 0:
+        return "Zero Rupees Only"
+    ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+            "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+            "Seventeen", "Eighteen", "Nineteen"]
+    tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+
+    def _two(x: int) -> str:
+        if x < 20:
+            return ones[x]
+        return tens[x // 10] + (" " + ones[x % 10] if x % 10 else "")
+
+    def _three(x: int) -> str:
+        h, rest = divmod(x, 100)
+        s = ""
+        if h:
+            s = ones[h] + " Hundred"
+            if rest:
+                s += " "
+        if rest:
+            s += _two(rest)
+        return s
+
+    parts: List[str] = []
+    crore = n // 10_000_000; n %= 10_000_000
+    lakh = n // 100_000; n %= 100_000
+    thou = n // 1000; n %= 1000
+    hund = n
+    if crore:
+        parts.append(_two(crore) + " Crore")
+    if lakh:
+        parts.append(_two(lakh) + " Lakh")
+    if thou:
+        parts.append(_two(thou) + " Thousand")
+    if hund:
+        parts.append(_three(hund))
+    return " ".join(parts).strip() + " Rupees Only"
+
+
+# ─── Scheme compliance snapshot ───
+async def _compute_da_compliance(doc: dict) -> List[dict]:
+    """Build advisory badges: DA rate, journey rate, night halt vs scheme."""
+    cycle = None
+    if doc.get("tournament_id"):
+        t = await db.tournaments.find_one({"id": doc["tournament_id"]}, {"_id": 0, "fiscal_cycle": 1})
+        cycle = (t or {}).get("fiscal_cycle") or "2025-26"
+    else:
+        cycle = "2025-26"
+    flags: List[dict] = []
+
+    async def _rate(head_code: str) -> Optional[float]:
+        row = await db.grant_scheme_rates.find_one(
+            {"head_code": head_code, "is_active": True, "fiscal_cycle": cycle}, {"_id": 0},
+        )
+        return float(row.get("rate_inr")) if row else None
+
+    da_ceiling = await _rate("MATCH_OFFICIAL_DA")
+    if da_ceiling is not None and float(doc.get("da_rate_inr") or 0) > da_ceiling:
+        flags.append({
+            "field": "da_rate_inr",
+            "claimed": float(doc.get("da_rate_inr") or 0),
+            "scheme_ceiling": da_ceiling,
+            "severity": "warning",
+            "note": f"Claimed ₹{doc.get('da_rate_inr'):,.0f}/day exceeds scheme cap of ₹{da_ceiling:,.0f}/day",
+        })
+
+    # Journey allowance: MPCA standard ₹300 / 12 hrs
+    j_rate = float(doc.get("journey_rate_per_12h_inr") or 0)
+    if j_rate > 300:
+        flags.append({
+            "field": "journey_rate_per_12h_inr",
+            "claimed": j_rate,
+            "scheme_ceiling": 300.0,
+            "severity": "warning",
+            "note": f"Journey rate ₹{j_rate:,.0f}/12hrs exceeds MPCA standard of ₹300/12hrs",
+        })
+
+    # Night Halt vs scheme (if configured)
+    nh_ceiling = await _rate("MATCH_OFFICIAL_NIGHT_HALT")
+    if nh_ceiling is not None and float(doc.get("night_halt_amount_inr") or 0) > nh_ceiling:
+        flags.append({
+            "field": "night_halt_amount_inr",
+            "claimed": float(doc.get("night_halt_amount_inr") or 0),
+            "scheme_ceiling": nh_ceiling,
+            "severity": "warning",
+            "note": f"Night halt ₹{doc.get('night_halt_amount_inr'):,.0f} exceeds scheme cap of ₹{nh_ceiling:,.0f}",
+        })
+
+    return flags
+
+
+@api_router.post("/match-official-da/self-create", response_model=MatchOfficialDA)
+async def self_create_da_form(
+    request: Request,
+    tournament_id: str,
+    official_id: Optional[str] = None,
+    official_name: Optional[str] = None,
+):
+    """Match official self-creates a DA form for a tournament they officiated.
+
+    Fills the header from their profile (`match_officials` collection).
+    If a form already exists for (tournament_id, official_name) it is
+    returned instead of creating a duplicate.
+    """
+    scope = get_scope(request)
+    t = await db.tournaments.find_one({"id": tournament_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+
+    # Resolve official from either the id, the passed name, or the caller scope
+    off = None
+    if official_id:
+        off = await db.match_officials.find_one({"id": official_id}, {"_id": 0})
+    elif official_name:
+        off = await db.match_officials.find_one({"full_name": official_name}, {"_id": 0})
+    elif scope.is_official and scope.name:
+        off = await db.match_officials.find_one({"full_name": scope.name}, {"_id": 0})
+    if not off:
+        raise HTTPException(404, "Match official profile not found — please ensure your profile exists first.")
+
+    name = off["full_name"]
+    # Return existing draft if present
+    exists = await db.match_official_da.find_one({
+        "tournament_id": tournament_id, "official_name": name,
+    }, {"_id": 0})
+    if exists:
+        return exists
+
+    cycle = t.get("fiscal_cycle") or "2025-26"
+    # Look up DA rate from grant scheme
+    da_rate_row = await db.grant_scheme_rates.find_one({
+        "head_code": "MATCH_OFFICIAL_DA", "is_active": True, "fiscal_cycle": cycle,
+    }, {"_id": 0})
+    da_rate = float((da_rate_row or {}).get("rate_inr") or 0)
+
+    # Body display name for the "Association/Division" line
+    body_id = off.get("body_id") or scope.body_code
+    body_name = None
+    if body_id:
+        body_doc = await db.bodies.find_one({"code": body_id}, {"_id": 0, "name": 1})
+        body_name = (body_doc or {}).get("name")
+
+    purpose = f"{off.get('role')} for {t.get('name')}"
+    da = MatchOfficialDA(
+        da_ref=await _next_da_ref(cycle),
+        tournament_id=tournament_id,
+        tournament_name=t.get("name"),
+        official_id=off["id"],
+        official_name=name,
+        official_role=off.get("role") or "Umpire",
+        official_phone=off.get("phone"),
+        body_id=body_id,
+        association_division=body_name,
+        purpose_of_visit=purpose,
+        place_of_visit=t.get("venue_city") or t.get("host_city") or None,
+        days=0,
+        da_rate_inr=da_rate,
+        journey_rate_per_12h_inr=300.0,
+        conveyance_rate_inr=200.0,          # MPCA typical default
+    )
+    await db.match_official_da.insert_one(da.model_dump())
+    return da
 
 
 @api_router.post("/match-official-da/{did}/submit", response_model=MatchOfficialDA)
@@ -445,17 +689,25 @@ async def submit_da_form(did: str):
         raise HTTPException(404, "DA form not found")
     if doc["status"] not in ("Draft", "Rejected"):
         raise HTTPException(409, f"Cannot submit from status {doc['status']}")
+    if float(doc.get("total_inr") or 0) <= 0:
+        raise HTTPException(400, "Cannot submit an empty DA form. Please fill days + amounts first.")
+
+    # Compliance snapshot — advisory only, does NOT block submission
+    flags = await _compute_da_compliance(doc)
+
     now = datetime.now(timezone.utc).isoformat()
     await db.match_official_da.update_one({"id": did}, {"$set": {
         "status": "Submitted", "submitted_at": now,
+        "compliance_flags": flags,
     }})
     # Notify Division for approval
     await _create_notification(
         recipient_role_id="division-secretary", recipient_body_id=doc.get("body_id") or "MPCA",
         title=f"DA form submitted · {doc.get('official_name')}",
-        message=f"{doc.get('tournament_name')} · ₹{doc.get('total_inr'):,.0f}",
-        link="/tournaments", related_type="match_official_da", related_id=did,
-        severity="info", kind="info",
+        message=f"{doc.get('tournament_name')} · ₹{doc.get('total_inr'):,.0f}"
+                + (f" · {len(flags)} scheme flag(s)" if flags else ""),
+        link=f"/tournaments/{doc.get('tournament_id')}", related_type="match_official_da", related_id=did,
+        severity="warning" if flags else "info", kind="info",
     )
     return await db.match_official_da.find_one({"id": did}, {"_id": 0})
 

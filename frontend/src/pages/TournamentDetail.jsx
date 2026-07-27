@@ -22,7 +22,8 @@ import {
     MatchCalendarPanel, TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
 } from "@/components/TournamentWorkspacePanels";
 import { getTypeByCode } from "@/lib/tournamentCatalog";
-import { Wallet, ArrowRight, Sliders, Receipt, ScrollText, Activity, HandCoins, Landmark, ListChecks, UsersRound } from "lucide-react";
+import { Wallet, ArrowRight, Sliders, Receipt, ScrollText, Activity, HandCoins, Landmark, ListChecks, UsersRound, ClipboardEdit } from "lucide-react";
+import MatchOfficialDAPanel from "@/components/MatchOfficialDAPanel";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
@@ -202,27 +203,36 @@ const TournamentDetail = () => {
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="setup-boxes">
                     <SetupBox testId="box-basics" icon={ListChecks} label="Tournament Basics" note={t.setup_meta?.category ? `${t.setup_meta.category} · ${t.setup_meta.age_group}` : "Category, teams, grounds"} onClick={() => setOpenBox(openBox === "basics" ? null : "basics")} active={openBox === "basics"} />
-                    <SetupBox testId="box-participants" icon={UsersRound} label="Participants Matrix" note={(() => { const pools = (t.setup_meta?.division_pools || []).concat(t.setup_meta?.district_pools || []); const totalCodes = pools.flatMap(p => p.division_codes || p.district_codes || []).length; return pools.length ? `${totalCodes} bodies · ${pools.length} pool(s)` : "Set pools first"; })()} onClick={() => setOpenBox(openBox === "participants" ? null : "participants")} active={openBox === "participants"} />
-                    <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} />
-                    <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `Filled · ${Object.keys(t.input_variables).length} vars set` : "Not filled · MPCA action pending"} onClick={() => setOpenBox(openBox === "input-vars" ? null : "input-vars")} active={openBox === "input-vars"} />
-                    <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
-                    <SetupBox testId="box-squad" icon={Users} label="Squad Selection" note={persona?.body_type === "Division" || persona?.body_type === "District" ? `My body · ${persona?.body_code}` : (squads.length ? `${squads.length} squad(s)` : "Not started")} onClick={() => {
-                        // M34 · Unified squad screen — everyone lands on SquadDetail now.
-                        // MPCA persona: if a squad exists for the host body, open it directly;
-                        // else start a new one for the host body. Division/District open theirs.
-                        const targetBody = (persona?.body_type === "Division" || persona?.body_type === "District")
-                            ? persona.body_code
-                            : (t.host_body_id || (squads[0]?.body_id));
-                        if (!targetBody) return navigate(`/tournaments/${id}/selection`);
-                        const existing = squads.find((s) => s.body_id === targetBody);
-                        if (existing) navigate(`/squads/${existing.id}`);
-                        else navigate(`/tournaments/${id}/squads/new?body=${targetBody}`);
-                    }} />
-                    <SetupBox testId="box-budget" icon={Wallet} label="Budget & Extras" note="Draft budgets · per body" onClick={() => setOpenBox(openBox === "budget" ? null : "budget")} active={openBox === "budget"} />
-                    <SetupBox testId="box-invoices" icon={Receipt} label="Invoices + DA Forms" note="Uploaded, extracted, approved" onClick={() => setOpenBox(openBox === "invoices" ? null : "invoices")} active={openBox === "invoices"} />
-                    <SetupBox testId="box-summary" icon={Activity} label="Financial Summary" note="Auto-rollup" onClick={() => setOpenBox(openBox === "summary" ? null : "summary")} active={openBox === "summary"} />
-                    <SetupBox testId="box-receipts" icon={HandCoins} label="MPCA Receipts" note="Payments received" onClick={() => setOpenBox(openBox === "receipts" ? null : "receipts")} active={openBox === "receipts"} />
-                    <SetupBox testId="box-closure" icon={ScrollText} label="Closure Letter" note={t.closure_letter_generated_at ? "Issued" : "Not issued"} onClick={() => setOpenBox(openBox === "closure" ? null : "closure")} active={openBox === "closure"} />
+                    {persona?.id === "match-official" ? (
+                        <>
+                            <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked · view fixtures" : "View fixtures"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
+                            <SetupBox testId="box-my-da" icon={ClipboardEdit} label="My DA / TA Form" note="Fill T.A. & D.A. claim for this tournament" onClick={() => setOpenBox(openBox === "my-da" ? null : "my-da")} active={openBox === "my-da"} />
+                        </>
+                    ) : (
+                        <>
+                            <SetupBox testId="box-participants" icon={UsersRound} label="Participants Matrix" note={(() => { const pools = (t.setup_meta?.division_pools || []).concat(t.setup_meta?.district_pools || []); const totalCodes = pools.flatMap(p => p.division_codes || p.district_codes || []).length; return pools.length ? `${totalCodes} bodies · ${pools.length} pool(s)` : "Set pools first"; })()} onClick={() => setOpenBox(openBox === "participants" ? null : "participants")} active={openBox === "participants"} />
+                            <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} />
+                            <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `Filled · ${Object.keys(t.input_variables).length} vars set` : "Not filled · MPCA action pending"} onClick={() => setOpenBox(openBox === "input-vars" ? null : "input-vars")} active={openBox === "input-vars"} />
+                            <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
+                            <SetupBox testId="box-squad" icon={Users} label="Squad Selection" note={persona?.body_type === "Division" || persona?.body_type === "District" ? `My body · ${persona?.body_code}` : (squads.length ? `${squads.length} squad(s)` : "Not started")} onClick={() => {
+                                // M34 · Unified squad screen — everyone lands on SquadDetail now.
+                                // MPCA persona: if a squad exists for the host body, open it directly;
+                                // else start a new one for the host body. Division/District open theirs.
+                                const targetBody = (persona?.body_type === "Division" || persona?.body_type === "District")
+                                    ? persona.body_code
+                                    : (t.host_body_id || (squads[0]?.body_id));
+                                if (!targetBody) return navigate(`/tournaments/${id}/selection`);
+                                const existing = squads.find((s) => s.body_id === targetBody);
+                                if (existing) navigate(`/squads/${existing.id}`);
+                                else navigate(`/tournaments/${id}/squads/new?body=${targetBody}`);
+                            }} />
+                            <SetupBox testId="box-budget" icon={Wallet} label="Budget & Extras" note="Draft budgets · per body" onClick={() => setOpenBox(openBox === "budget" ? null : "budget")} active={openBox === "budget"} />
+                            <SetupBox testId="box-invoices" icon={Receipt} label="Invoices + DA Forms" note="Uploaded, extracted, approved" onClick={() => setOpenBox(openBox === "invoices" ? null : "invoices")} active={openBox === "invoices"} />
+                            <SetupBox testId="box-summary" icon={Activity} label="Financial Summary" note="Auto-rollup" onClick={() => setOpenBox(openBox === "summary" ? null : "summary")} active={openBox === "summary"} />
+                            <SetupBox testId="box-receipts" icon={HandCoins} label="MPCA Receipts" note="Payments received" onClick={() => setOpenBox(openBox === "receipts" ? null : "receipts")} active={openBox === "receipts"} />
+                            <SetupBox testId="box-closure" icon={ScrollText} label="Closure Letter" note={t.closure_letter_generated_at ? "Issued" : "Not issued"} onClick={() => setOpenBox(openBox === "closure" ? null : "closure")} active={openBox === "closure"} />
+                        </>
+                    )}
                 </div>
                 {openBox === "basics" && (
                     <div className="mt-4"><TournamentBasicsPanel tournament={t} canEdit={canEdit || persona?.body_type === "Division"} onChange={() => { refreshProgress(); load(); }} /></div>
@@ -254,9 +264,13 @@ const TournamentDetail = () => {
                 {openBox === "closure" && (
                     <div className="mt-4"><ClosureLetterPanel tournament={t} persona={persona} canGenerate={canEdit} /></div>
                 )}
+                {openBox === "my-da" && (
+                    <div className="mt-4"><MatchOfficialDAPanel tournamentId={id} onChange={() => { refreshProgress(); load(); }} /></div>
+                )}
             </div>
 
-            {/* Squads */}
+            {/* Squads — hidden for match-official persona (no roster / financial context needed) */}
+            {persona?.id !== "match-official" && (<>
             <div className="flex items-end justify-between mb-6">
                 <div>
                     <div className="overline">Participating Teams</div>
@@ -327,6 +341,7 @@ const TournamentDetail = () => {
                     ))}
                 </div>
             )}
+            </>)}
 
             {/* New squad dialog */}
             {newSquad.open && (

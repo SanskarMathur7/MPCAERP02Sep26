@@ -1375,14 +1375,42 @@ _Shipped 27 Jul 2026 · verified via Playwright screenshot (collapsed + expanded
 
 **Files touched:** `frontend/src/components/AppLayout.jsx`.
 
-**Backlog (from user's 11-point ask, remaining):**
-- ~~Event Calendar tab on MPCA (all-member visible) + Birthday reminders~~ ✅ Shipped in M39b.
-- Strict Tournament Acceptance (Division-only).
-- ~~MPCA Scheme register: signed-PDF re-upload gate.~~ ✅ Shipped in M39c.
-- Grounds & Venue overhaul (drop Venues, retain Grounds with owner + BCCI approval + allowed tournament types).
-- Meeting Tab AI summary of signed minutes.
-- Squad Document AI review during MPCA approval.
-- ID Card generator (P2) on Member detail pages.
+**Backlog (from user's 11-point ask):**
+- ~~Event Calendar tab on MPCA + Birthday reminders~~ ✅ M39b.
+- ~~Strict Tournament Acceptance (Division-only).~~ ✅ M39d.
+- ~~MPCA Scheme register: signed-PDF re-upload gate.~~ ✅ M39c.
+- ~~Grounds & Venue overhaul (Venues dropped).~~ ✅ M39e.
+- ~~Meeting Tab AI summary of signed minutes.~~ ✅ M39f.
+- ~~Squad Document AI review during MPCA approval.~~ ✅ M39g.
+- ~~ID Card generator on Member detail pages.~~ ✅ M39d (extended existing ID card with DOB + contact).
+
+---
+
+## Sprint M39d · Strict Acceptance + Enhanced ID Card
+_Shipped 27 Jul 2026 · iteration_59 pass_
+- Item 7 · ID card on Member detail — now includes DOB and phone/email in the front card; button relabelled "ID Card · Download".
+- Item 8 · Only the invited Division/District Secretary can accept or reject their tournament allocation. MPCA (President/Secretary) roles removed from `_ACCEPTANCE_ROLES`. Both endpoints (`PATCH /tournaments/{tid}/participants/{body}` and `POST /tournaments/{tid}/acceptance`) enforce persona-body match with clear 403 messages. Frontend ParticipantsMatrix now hides Accept/Decline buttons for non-self rows.
+
+## Sprint M39e · Grounds-only Overhaul
+_Shipped 27 Jul 2026 · iteration_60 pass_
+- Venues collection deprecated (retained for backward-compat reads; new grounds do not need `venue_id`).
+- Ground model now carries owner (body + free-text), category, address_line, city, pincode, capacity_seats, floodlights, and a new `allowed_tournament_types` list (MPCA_InterDivisional / MPCA_Championship / BCCI / Invitational / Other).
+- Frontend: `VenuesGrounds.jsx` reduced to two tabs — Grounds + Ground Expenses. New GroundForm captures every venue field inline. Sidebar link renamed to "Grounds". Ground list rows show owner pill + tournament-type count + BCCI badge.
+
+## Sprint M39f · Meeting Minutes AI Summariser
+_Shipped 27 Jul 2026 · iteration_60 pass_
+- MPCA uploads signed minutes PDF/image → Gemini (`gemini-3-flash-preview`) extracts one Resolution per agenda item.
+- New endpoints: `POST /meetings/{id}/signed-minutes` + `POST /meetings/{id}/ai-summary`. Both MPCA-only.
+- Old AI-generated resolutions purged on re-run; human-entered ones preserved.
+- Frontend: MeetingDetail shows a "Signed Minutes · AI Summariser" section with upload + re-run buttons for MPCA. Resolutions carry an "AI" pill when auto-generated.
+- New file: `backend/core/ai_signed_docs.py` (shared helper for signed-PDF AI flows).
+
+## Sprint M39g · Squad Signed-PDF AI Review (Advisory)
+_Shipped 27 Jul 2026 · iteration_61 pass_
+- On upload of signed squad PDF, an ADVISORY Gemini review fires inline. Verdict = Looks_Good / Needs_Attention / Reject_Recommended.
+- New endpoint: `POST /squads/{sid}/ai-review` (re-run). Existing `POST /squads/{sid}/signed-copy` now triggers the AI pipeline automatically.
+- Panel visible only to MPCA reviewers on `/squads/{sid}` — shows verdict + confidence + comment bullets + Re-run button. Copy explicitly says "MPCA makes the final call — AI verdict is informational."
+- Bonus: fixed a long-standing SquadDetail bootstrap bug (iterated all tournaments instead of calling `GET /squads/{sid}` directly).
 
 ---
 

@@ -27,10 +27,14 @@ from core.infra import db, api_router
 
 async def _ensure_indexes():
     """Called once at import — creates the unique index on invite tokens so
-    two invites cannot collide even under concurrent inserts."""
+    two invites cannot collide even under concurrent inserts. Also builds a
+    dedupe helper index on (campaign_id, normalised email)."""
     try:
         await db.player_registration_invites.create_index("token", unique=True)
         await db.player_registration_campaigns.create_index("public_token", unique=True)
+        # NOT unique (older rows may have empty emails); the dedupe check is
+        # enforced at write-time inside `public_submit`.
+        await db.player_registrations.create_index([("campaign_id", 1), ("email_key", 1)])
     except Exception:  # noqa
         pass
 
@@ -381,6 +385,24 @@ async def public_submit(payload: PublicSubmit):
     if invite_id and envelope.get("already_submitted"):
         raise HTTPException(400, "This invite has already been submitted. Contact your Division secretary if you need to edit it.")
 
+    # ── One-submission-per-email guard (per campaign) ──
+    email = (payload.player.email or "").strip().lower()
+    if not email:
+        raise HTTPException(400, "Email is required so we can prevent duplicate registrations on this link.")
+    dup = await db.player_registrations.find_one(
+        {
+            "campaign_id": campaign_id,
+            "email_key": email,
+            "status": {"$in": ["Submitted", "Approved"]},
+        },
+        {"_id": 0, "id": 1, "status": 1},
+    )
+    if dup:
+        raise HTTPException(
+            409,
+            "This email has already submitted a registration on this link. If you need to update your details, please contact your Division secretary.",
+        )
+
     reg = PlayerRegistration(
         campaign_id=campaign_id,
         invite_id=invite_id,
@@ -389,7 +411,9 @@ async def public_submit(payload: PublicSubmit):
         status="Submitted",
         player_data=payload.player,
     )
-    await db.player_registrations.insert_one(reg.model_dump())
+    row = reg.model_dump()
+    row["email_key"] = email  # normalised dedupe key (never surfaced to Pydantic model)
+    await db.player_registrations.insert_one(row)
     if invite_id:
         await db.player_registration_invites.update_one(
             {"id": invite_id}, {"$set": {"status": "Submitted", "submission_id": reg.id}},

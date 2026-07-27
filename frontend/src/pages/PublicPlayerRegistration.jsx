@@ -31,6 +31,7 @@ const PublicPlayerRegistration = () => {
     const [form, setForm] = useState(emptyPlayer);
     const [submitting, setSubmitting] = useState(false);
     const [done, setDone] = useState(null);
+    const [submitErr, setSubmitErr] = useState("");
     const [uploadingKey, setUploadingKey] = useState(null);
 
     useEffect(() => {
@@ -67,12 +68,19 @@ const PublicPlayerRegistration = () => {
 
     const submit = async (e) => {
         e.preventDefault();
+        setSubmitErr("");
         if (!form.consent) return alert("Please tick the consent box before submitting.");
+        if (!form.email?.trim()) { setSubmitErr("Email is required."); return; }
         setSubmitting(true);
         try {
             const { data } = await public_api.post("/public/player-registration/submit", { token, player: form });
             setDone(data);
-        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        } catch (e) {
+            const msg = e?.response?.data?.detail || e.message;
+            setSubmitErr(msg);
+            // scroll to top so the user sees the banner
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
         finally { setSubmitting(false); }
     };
 
@@ -118,6 +126,15 @@ const PublicPlayerRegistration = () => {
                     </div>
 
                     <form onSubmit={submit} className="p-6 space-y-4" data-testid="pr-public-form">
+                        {submitErr && (
+                            <div className="border-2 border-mpca-oxblood bg-mpca-oxblood/10 p-3 text-[11px] text-mpca-oxblood flex items-start gap-2" data-testid="pr-pub-submit-err">
+                                <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+                                <div>{submitErr}</div>
+                            </div>
+                        )}
+                        <div className="text-[10px] text-mpca-brass uppercase tracking-widest bg-mpca-gold-light/20 border border-mpca-brass/40 px-3 py-2" data-testid="pr-pub-once-note">
+                            Note · One registration per email on this link. Please double-check your email before submitting.
+                        </div>
                         <Section title="Personal Details">
                             <Grid>
                                 <Field label="Full name" required><input required value={form.full_name} onChange={(e) => setField("full_name", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-name" /></Field>
@@ -161,7 +178,7 @@ const PublicPlayerRegistration = () => {
                         <Section title="Contact">
                             <Grid>
                                 <Field label="Mobile" required><input required value={form.mobile} onChange={(e) => setField("mobile", e.target.value)} placeholder="10-digit mobile" className="input-heritage font-mono !py-1.5 !text-xs" data-testid="pr-pub-mobile" /></Field>
-                                <Field label="Email"><input type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} className="input-heritage !py-1.5 !text-xs" /></Field>
+                                <Field label="Email" required><input required type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="you@example.com" className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-email" /></Field>
                                 <Field label="Guardian name (if under 18)"><input value={form.guardian_name} onChange={(e) => setField("guardian_name", e.target.value)} className="input-heritage !py-1.5 !text-xs" /></Field>
                                 <Field label="Aadhaar no."><input value={form.aadhaar_no} onChange={(e) => setField("aadhaar_no", e.target.value)} placeholder="12-digit" className="input-heritage font-mono !py-1.5 !text-xs" /></Field>
                                 <Field label="Address" span={2}><textarea rows={2} value={form.address} onChange={(e) => setField("address", e.target.value)} className="input-heritage !py-1.5 !text-xs" /></Field>

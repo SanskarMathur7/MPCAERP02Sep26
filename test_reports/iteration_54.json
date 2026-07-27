@@ -1,0 +1,28 @@
+{
+  "summary": "M33 Body Data Warehouse fully verified end-to-end. Backend 13/13 passing (/app/backend/tests/test_m33_body_documents.py): (1) GET RBAC — owner 200, MPCA 200, Division reading its DIST child 200, unrelated DIV-BPL→DIV-IND 403. (2) POST as owner returns BodyDocument with id/doc_kind/label/metadata; POST from another body 403. (3) PATCH updates + stamps updated_at, empty patch 400, cross-body patch 403. (4) DELETE soft (is_active=False, disappears from active list but returns with include_inactive=true) then ?hard=true wipes row; cross-body delete 403. (5) kinds/summary returns essential_total=4, essential_missing shrinks after adding GST/PAN/Bank/Constitution to reach essential_filled=4. (6) POST /api/uploads PDF → attach as body_document persists file_url. Frontend (all 8 UI checks pass via Playwright as division-secretary & MPCA-secretary personas): (A) /org/DIV-IND — [data-testid='body-documents-vault'] mounts, essentials pill '1/4' visible, kind chip for GST rendered, [data-testid='vault-add-btn'] visible. (B) Add Document dialog opens; kind/label/doc-no fields present; switching to Bank_Account renders vault-form-meta-bankname/accountno/ifsc/branch; submit saves and row appears. (C) Kind chip click filters, vault-kind-clear resets; search filter narrows list by label. (D) Delete flow — soft archives row (removed from active list). (E) Division on /org/DIV-BPL → vault-forbidden shown, no vault mount. (F) MPCA on /org/DIV-BPL → vault mounts read-only, NO vault-add-btn. (G) /grant-claims → open GRC-2025-26-0003 (Documents_Pending, 3 doc slots) — each slot has both doc-upload-<slot> and doc-vault-<slot>-trigger. (H) Clicking a vault trigger opens doc-vault-<slot>-dialog; picking a vault item closes modal and attaches (dialog gone). Empty picker path validated in code (Tip copy present in VaultDocumentPicker.jsx line 81).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_m33_body_documents.py",
+    "/app/test_reports/pytest/m33_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VaultDocumentPicker in GrantClaims.jsx does NOT pass docKind — so every slot lists ALL vault docs regardless of required_label. Consider mapping required_label → doc_kind (e.g. 'GST Certificate'→'GST_Certificate') so Division sees only relevant docs. Non-blocking, but improves UX and enforces correctness (e.g. attaching a Bank_Account for a PAN slot is currently possible).",
+    "body_documents._can_read grants read access to any State body_code=='MPCA' with role in MPCA_READ_ROLES, but the header check uses caller_body=='MPCA' string literal. If BCCI hierarchy is introduced or MPCA code changes, this string breaks — extract to a constant / config lookup (bodies collection body_type=='State').",
+    "PATCH endpoint drops keys whose value is None via `if v is not None` — this means a client CANNOT clear a field (e.g. remove doc_no by sending null). Consider distinguishing 'unset' from 'null' via model_fields_set or a sentinel.",
+    "Soft-delete returns 200 with body {deleted:true, hard:false}; REST convention would be 204 No Content or 200 with the archived object. Minor.",
+    "BodyDocumentsVault.jsx handleDelete uses window.confirm — for consistency with rest of app (which uses shadcn AlertDialog elsewhere), replace with a themed confirm dialog. Non-blocking.",
+    "attachFromVault in GrantClaims should also update ai_verified / ai_confidence / ai_extracted or mark 'from_vault=true' so MPCA reviewer can distinguish a re-used vault doc from a fresh AI-verified upload."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m33_body_documents.py"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (8/8 UI checks)"},
+  "test_credentials": "persona-chip-division-secretary (Devashish · DIV-IND) and persona-chip-secretary (Sanjeev · MPCA). Click chip then 'Sign in to the Registrar' button.",
+  "seed_data_creation": "Pytest module fixture creates + hard-deletes several TEST_ docs. Left DIV-IND vault with: (a) the original 'MPCA Indore Division GSTIN' seed (b) essential-fill docs for PAN/Bank_Account/Constitution added during essentials test that were NOT cleaned (they were auto-added when counts==0; created_doc_ids list retained them — actually cleanup ran, so they may have been removed). Verified via curl at end of run: DIV-IND vault has 1 active doc (the original GST). Grant claim GRC-2025-26-0003 got 1 doc attached from vault during picker test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M33 is fully green. Test file: /app/backend/tests/test_m33_body_documents.py — run with `REACT_APP_BACKEND_URL=<url> pytest backend/tests/test_m33_body_documents.py -v`. Fixture prefix is TEST_M33_. Vault RBAC uses X-User-Body-Code + X-Role-Id headers only (no JWT). Frontend picker in GrantClaims doesn't filter by docKind — worth fixing per code-review comment above.",
+  "rca of the issue": "No bugs found. Implementation matches spec: (a) RBAC helpers _can_read (owner|MPCA-role|BCCI|parent) and _can_write (owner only) are correct. (b) essential list = [GST, PAN, Bank, Constitution] returns essential_total=4 as documented. (c) VaultDocumentPicker mounts alongside file input in every doc slot for owning Division user. (d) attachFromVault copies file_url + file_name into the claim doc slot."
+}

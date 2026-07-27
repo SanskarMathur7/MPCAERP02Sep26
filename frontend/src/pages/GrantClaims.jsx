@@ -4,6 +4,7 @@ import { Upload, CheckCircle2, AlertTriangle, Send, IndianRupee, Sparkles, FileT
 import { api, BACKEND_URL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
+import VaultDocumentPicker from "@/components/VaultDocumentPicker";
 
 const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 
@@ -61,6 +62,20 @@ const GrantClaims = () => {
             const { data: upload } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
             const { data: updated } = await api.post(`/grant-claims/${claim.id}/document/${docSlot.doc_id}`, null, {
                 params: { file_url: upload.url, filename: upload.original_name },
+            });
+            setSelected(updated);
+            setClaims((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setUploadingDoc(null); }
+    };
+
+    // M33 · Attach a document from the body's Data Warehouse without re-uploading.
+    const attachFromVault = async (claim, docSlot, vaultDoc) => {
+        if (!vaultDoc?.file_url) return alert("This vault entry has no file attached — upload one to the vault first.");
+        setUploadingDoc(docSlot.doc_id);
+        try {
+            const { data: updated } = await api.post(`/grant-claims/${claim.id}/document/${docSlot.doc_id}`, null, {
+                params: { file_url: vaultDoc.file_url, filename: vaultDoc.file_name || vaultDoc.label },
             });
             setSelected(updated);
             setClaims((prev) => prev.map((c) => c.id === updated.id ? updated : c));
@@ -212,10 +227,18 @@ const GrantClaims = () => {
                                                     )}
                                                 </div>
                                                 {["Draft", "Documents_Pending", "Rejected"].includes(selected.status) && !isMPCA && (
-                                                    <label className="btn-heritage-secondary shrink-0 cursor-pointer">
-                                                        <Upload size={11} /> {uploadingDoc === d.doc_id ? "Uploading & verifying..." : d.file_url ? "Replace" : "Upload"}
-                                                        <input type="file" className="hidden" accept="application/pdf,image/*" onChange={(e) => e.target.files?.[0] && uploadDoc(selected, d, e.target.files[0])} data-testid={`doc-upload-${d.doc_id}`} />
-                                                    </label>
+                                                    <div className="flex flex-col gap-1 shrink-0">
+                                                        <label className="btn-heritage-secondary cursor-pointer">
+                                                            <Upload size={11} /> {uploadingDoc === d.doc_id ? "Uploading & verifying..." : d.file_url ? "Replace" : "Upload"}
+                                                            <input type="file" className="hidden" accept="application/pdf,image/*" onChange={(e) => e.target.files?.[0] && uploadDoc(selected, d, e.target.files[0])} data-testid={`doc-upload-${d.doc_id}`} />
+                                                        </label>
+                                                        <VaultDocumentPicker
+                                                            bodyCode={selected.body_id || persona?.body_code}
+                                                            onPick={(vaultDoc) => attachFromVault(selected, d, vaultDoc)}
+                                                            triggerLabel="From Vault"
+                                                            testId={`doc-vault-${d.doc_id}`}
+                                                        />
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

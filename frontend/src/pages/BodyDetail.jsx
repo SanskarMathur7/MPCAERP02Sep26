@@ -18,6 +18,8 @@ import {
     CalendarClock,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
+import BodyDocumentsVault from "@/components/BodyDocumentsVault";
+import { useAuth } from "@/context/AuthContext";
 
 const ICON_BY_TYPE = { BCCI: Landmark, State: Landmark, Division: Building2, District: MapPin };
 const fmtINR = (n) =>
@@ -27,6 +29,7 @@ const isCurrent = (a) => !a.end_date || new Date(a.end_date) >= new Date();
 
 const BodyDetail = () => {
     const { code } = useParams();
+    const { persona } = useAuth();
     const [body, setBody] = useState(null);
     const [summary, setSummary] = useState(null);
     const [activity, setActivity] = useState(null);
@@ -251,6 +254,9 @@ const BodyDetail = () => {
                     </ul>
                 )}
             </div>
+
+            {/* Sprint M33 · Body Data Warehouse (per-body document vault) */}
+            <BodyDocumentsVault body={body} persona={persona} />
         </div>
     );
 };

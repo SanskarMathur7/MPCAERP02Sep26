@@ -178,30 +178,66 @@ const VenueForm = ({ open, onClose, onSaved, persona, bodies }) => {
 };
 
 // ─────────── Ground form ───────────
-const GroundForm = ({ open, onClose, onSaved, venues, bodies }) => {
-    const [form, setForm] = useState({
-        venue_id: "", name: "", type: "Main", pitch_type: "Red Soil",
-        boundaries_metres: "", is_active: true,
-        bcci_approval: "None", managed_by_body_id: "",
-        suitable_formats: [],
+const TOURNAMENT_TYPES = [
+    { id: "MPCA_InterDivisional", label: "MPCA Inter-Divisional" },
+    { id: "MPCA_Championship", label: "MPCA Championship" },
+    { id: "BCCI", label: "BCCI (Ranji / ODI / T20)" },
+    { id: "Invitational", label: "Invitational" },
+    { id: "Other", label: "Other" },
+];
+
+const GroundForm = ({ open, onClose, onSaved, bodies, existing = null }) => {
+    const [form, setForm] = useState(() => existing ? {
+        name: existing.name || "",
+        type: existing.type || "Main",
+        pitch_type: existing.pitch_type || "Red Soil",
+        boundaries_metres: existing.boundaries_metres || "",
+        is_active: existing.is_active ?? true,
+        bcci_approval: existing.bcci_approval || "None",
+        managed_by_body_id: existing.managed_by_body_id || "",
+        owner_body_id: existing.owner_body_id || "MPCA",
+        owner_name: existing.owner_name || "",
+        category: existing.category || "MPCA_State",
+        address_line: existing.address_line || "",
+        city: existing.city || "",
+        pincode: existing.pincode || "",
+        capacity_seats: existing.capacity_seats || "",
+        floodlights: existing.floodlights || false,
+        notes: existing.notes || "",
+        suitable_formats: existing.suitable_formats || [],
+        allowed_tournament_types: existing.allowed_tournament_types || [],
+    } : {
+        name: "", type: "Main", pitch_type: "Red Soil", boundaries_metres: "",
+        is_active: true, bcci_approval: "None", managed_by_body_id: "",
+        owner_body_id: "MPCA", owner_name: "", category: "MPCA_State",
+        address_line: "", city: "", pincode: "", capacity_seats: "", floodlights: false,
+        notes: "", suitable_formats: [], allowed_tournament_types: [],
     });
     const [busy, setBusy] = useState(false);
     if (!open) return null;
-    const toggleFormat = (f) => setForm((p) => ({
+    const toggleArr = (key, val) => setForm((p) => ({
         ...p,
-        suitable_formats: p.suitable_formats.includes(f) ? p.suitable_formats.filter((x) => x !== f) : [...p.suitable_formats, f],
+        [key]: p[key].includes(val) ? p[key].filter((x) => x !== val) : [...p[key], val],
     }));
     const submit = async (e) => {
         e.preventDefault();
         setBusy(true);
         try {
-            const g = await createGround({
+            const payload = {
                 ...form,
                 boundaries_metres: form.boundaries_metres ? parseInt(form.boundaries_metres, 10) : null,
+                capacity_seats: form.capacity_seats ? parseInt(form.capacity_seats, 10) : null,
                 managed_by_body_id: form.managed_by_body_id || null,
-                ground_staff: [],
-            });
-            onSaved(g);
+                ground_staff: existing?.ground_staff || [],
+            };
+            let saved;
+            if (existing?.id) {
+                const { patchGround } = await import("@/lib/api");
+                saved = await patchGround(existing.id, payload);
+            } else {
+                saved = await createGround(payload);
+            }
+            onSaved(saved);
             onClose();
         } catch (err) {
             alert(err?.response?.data?.detail || err.message);
@@ -212,32 +248,66 @@ const GroundForm = ({ open, onClose, onSaved, venues, bodies }) => {
     const bodyOptions = (bodies || []).filter((b) => ["State", "Division", "District"].includes(b.body_type));
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" data-testid="ground-form">
-            <form onSubmit={submit} className="bg-mpca-ivory border-2 border-mpca-brass max-w-xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="bg-mpca-green-dark text-mpca-ivory px-6 py-4 sticky top-0 flex items-center justify-between">
-                    <div className="font-serif text-xl">Add Ground to Venue</div>
+            <form onSubmit={submit} className="bg-mpca-ivory border-2 border-mpca-brass max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="bg-mpca-green-dark text-mpca-ivory px-6 py-4 sticky top-0 flex items-center justify-between z-10">
+                    <div className="font-serif text-xl">{existing ? "Edit Ground" : "Add Ground"}</div>
                     <button type="button" onClick={onClose} className="text-mpca-gold-light text-2xl">×</button>
                 </div>
                 <div className="p-6 space-y-4">
-                    <div>
-                        <label className="label-heritage">Parent Venue *</label>
-                        <select required value={form.venue_id} onChange={(e) => setForm((f) => ({ ...f, venue_id: e.target.value }))} className="input-heritage" data-testid="ground-venue">
-                            <option value="">— Choose venue —</option>
-                            {venues.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.city}</option>)}
-                        </select>
-                    </div>
+                    {/* Basics */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="label-heritage">Ground Name *</label>
-                            <input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="input-heritage" data-testid="ground-name" />
+                            <input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="input-heritage" data-testid="ground-name" placeholder="e.g. Holkar Stadium Main Ground" />
                         </div>
                         <div>
                             <label className="label-heritage">Type</label>
-                            <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} className="input-heritage">
+                            <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} className="input-heritage" data-testid="ground-type">
                                 {GROUND_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
                             </select>
                         </div>
                     </div>
+
+                    {/* Owner */}
                     <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="label-heritage">Owner (Body) *</label>
+                            <select required value={form.owner_body_id} onChange={(e) => setForm((f) => ({ ...f, owner_body_id: e.target.value }))} className="input-heritage" data-testid="ground-owner-body">
+                                {bodyOptions.map((b) => (
+                                    <option key={b.code} value={b.code}>[{b.body_type}] {b.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="label-heritage">Owner Name (free-text, optional)</label>
+                            <input value={form.owner_name} onChange={(e) => setForm((f) => ({ ...f, owner_name: e.target.value }))} className="input-heritage" data-testid="ground-owner-name" placeholder="e.g. Indore District Cricket Association" />
+                        </div>
+                    </div>
+
+                    {/* Address / whereabouts */}
+                    <div>
+                        <label className="label-heritage">Address (Whereabouts)</label>
+                        <input value={form.address_line} onChange={(e) => setForm((f) => ({ ...f, address_line: e.target.value }))} className="input-heritage" data-testid="ground-address" placeholder="Street / Landmark" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className="label-heritage">City *</label>
+                            <input required value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} className="input-heritage" data-testid="ground-city" />
+                        </div>
+                        <div>
+                            <label className="label-heritage">Pincode</label>
+                            <input value={form.pincode} onChange={(e) => setForm((f) => ({ ...f, pincode: e.target.value }))} className="input-heritage" data-testid="ground-pincode" />
+                        </div>
+                        <div>
+                            <label className="label-heritage">Category</label>
+                            <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="input-heritage" data-testid="ground-category">
+                                {VENUE_CATS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Cricket-specific */}
+                    <div className="grid grid-cols-3 gap-3">
                         <div>
                             <label className="label-heritage">Pitch Type</label>
                             <input value={form.pitch_type} onChange={(e) => setForm((f) => ({ ...f, pitch_type: e.target.value }))} className="input-heritage" placeholder="Red Soil / Black Soil / Turf" />
@@ -246,51 +316,74 @@ const GroundForm = ({ open, onClose, onSaved, venues, bodies }) => {
                             <label className="label-heritage">Boundaries (m)</label>
                             <input type="number" value={form.boundaries_metres} onChange={(e) => setForm((f) => ({ ...f, boundaries_metres: e.target.value }))} className="input-heritage" />
                         </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="label-heritage">BCCI Approval (this ground)</label>
-                            <select
-                                value={form.bcci_approval}
-                                onChange={(e) => setForm((f) => ({ ...f, bcci_approval: e.target.value }))}
-                                className="input-heritage"
-                                data-testid="ground-bcci-approval-select"
-                            >
+                            <label className="label-heritage">Capacity (seats)</label>
+                            <input type="number" value={form.capacity_seats} onChange={(e) => setForm((f) => ({ ...f, capacity_seats: e.target.value }))} className="input-heritage" data-testid="ground-capacity" />
+                        </div>
+                    </div>
+
+                    {/* BCCI + Floodlights */}
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className="label-heritage">BCCI Approval</label>
+                            <select value={form.bcci_approval} onChange={(e) => setForm((f) => ({ ...f, bcci_approval: e.target.value }))} className="input-heritage" data-testid="ground-bcci-approval-select">
                                 <option value="None">Not Approved</option>
                                 <option value="Domestic">BCCI · Domestic</option>
                                 <option value="International">BCCI · International</option>
                             </select>
                         </div>
                         <div>
-                            <label className="label-heritage">Managed By (override venue)</label>
-                            <select
-                                value={form.managed_by_body_id}
-                                onChange={(e) => setForm((f) => ({ ...f, managed_by_body_id: e.target.value }))}
-                                className="input-heritage"
-                                data-testid="ground-manager-select"
-                            >
-                                <option value="">— Inherit from venue —</option>
+                            <label className="label-heritage">Managed By (day-to-day)</label>
+                            <select value={form.managed_by_body_id} onChange={(e) => setForm((f) => ({ ...f, managed_by_body_id: e.target.value }))} className="input-heritage" data-testid="ground-manager-select">
+                                <option value="">— Same as owner —</option>
                                 {bodyOptions.map((b) => (
-                                    <option key={b.code} value={b.code}>[{b.body_type}] {b.name} ({b.code})</option>
+                                    <option key={b.code} value={b.code}>[{b.body_type}] {b.name}</option>
                                 ))}
                             </select>
                         </div>
+                        <div className="flex items-end">
+                            <label className="inline-flex items-center gap-2 text-sm text-mpca-charcoal">
+                                <input type="checkbox" checked={form.floodlights} onChange={(e) => setForm((f) => ({ ...f, floodlights: e.target.checked }))} data-testid="ground-floodlights" />
+                                Floodlights available
+                            </label>
+                        </div>
                     </div>
+
+                    {/* Allowed tournament formats */}
                     <div>
-                        <label className="label-heritage">Suitable Formats</label>
+                        <label className="label-heritage">Allowed Match Formats</label>
                         <div className="flex flex-wrap gap-1.5 mt-1">
                             {FORMATS.map((f) => (
-                                <button type="button" key={f} onClick={() => toggleFormat(f)} className={"px-2 py-1 text-[10px] border " + (form.suitable_formats.includes(f) ? "border-mpca-oxblood bg-mpca-oxblood/10 text-mpca-oxblood" : "border-mpca-brass/40 text-mpca-gray-dark")} data-testid={`fmt-${f}`}>
+                                <button type="button" key={f} onClick={() => toggleArr("suitable_formats", f)} className={"px-2 py-1 text-[10px] border " + (form.suitable_formats.includes(f) ? "border-mpca-oxblood bg-mpca-oxblood/10 text-mpca-oxblood" : "border-mpca-brass/40 text-mpca-gray-dark")} data-testid={`fmt-${f}`}>
                                     {f.replace(/_/g, " ")}
                                 </button>
                             ))}
                         </div>
                     </div>
+
+                    {/* Allowed tournament TYPES (M39e) */}
+                    <div>
+                        <label className="label-heritage">Allowed Tournament Types</label>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                            {TOURNAMENT_TYPES.map((t) => (
+                                <button type="button" key={t.id} onClick={() => toggleArr("allowed_tournament_types", t.id)} className={"px-2 py-1 text-[10px] border " + (form.allowed_tournament_types.includes(t.id) ? "border-mpca-brass bg-mpca-brass/10 text-mpca-brass" : "border-mpca-brass/40 text-mpca-gray-dark")} data-testid={`type-${t.id}`}>
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="text-[10px] text-mpca-gray-dark italic mt-1">Empty ⇒ any tournament type permitted on this ground.</div>
+                    </div>
+
+                    {/* Notes */}
+                    <div>
+                        <label className="label-heritage">Notes</label>
+                        <textarea rows={2} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} className="input-heritage text-sm" data-testid="ground-notes" placeholder="Directions, contact person on-site, anything else…" />
+                    </div>
                 </div>
                 <div className="bg-mpca-cream px-6 py-4 flex justify-end gap-3 border-t border-mpca-brass/40 sticky bottom-0">
                     <button type="button" onClick={onClose} className="btn-heritage-ghost">Cancel</button>
-                    <button type="submit" disabled={busy || !form.venue_id || !form.name} className="btn-heritage-primary" data-testid="ground-save">
-                        {busy ? "Saving…" : "Add Ground"}
+                    <button type="submit" disabled={busy || !form.name || !form.city} className="btn-heritage-primary" data-testid="ground-save">
+                        {busy ? "Saving…" : existing ? "Save Changes" : "Add Ground"}
                     </button>
                 </div>
             </form>
@@ -375,7 +468,7 @@ const ExpenseForm = ({ open, onClose, onSaved, grounds, persona }) => {
 // ─────────── Main page ───────────
 export default function VenuesGrounds() {
     const { persona } = useAuth();
-    const [tab, setTab] = useState("venues");
+    const [tab, setTab] = useState("grounds");
     const [venues, setVenues] = useState([]);
     const [grounds, setGrounds] = useState([]);
     const [expenses, setExpenses] = useState([]);
@@ -466,17 +559,16 @@ export default function VenuesGrounds() {
             <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
                     <div className="overline">Operations · Infrastructure</div>
-                    <h1 className="font-serif text-4xl text-mpca-navy mt-1">Venues & Grounds</h1>
+                    <h1 className="font-serif text-4xl text-mpca-navy mt-1">Grounds</h1>
                     <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        BCCI-categorised venue master, per-venue grounds with playable-format mapping + ground-staff salary register, and a ground-expense sub-ledger covering pitch maintenance, payroll, utilities and equipment.
+                        Every ground the MPCA ecosystem plays on — with owner, BCCI approval, allowed formats & tournament types, whereabouts, and a ground-expense sub-ledger for pitch maintenance, payroll, and utilities.
                     </p>
                 </div>
             </div>
 
-            {/* Tabs */}
+            {/* Tabs — M39e · Venues tab removed. Grounds is the sole entity. */}
             <div className="flex gap-2 border-b border-mpca-brass/30" data-testid="vg-tabs">
                 {[
-                    { id: "venues", label: `Venues (${venues.length})`, icon: Building2 },
                     { id: "grounds", label: `Grounds (${grounds.length})`, icon: MapPin },
                     { id: "expenses", label: `Ground Expenses (${expenses.length})`, icon: Wallet },
                 ].map((t) => (
@@ -489,7 +581,7 @@ export default function VenuesGrounds() {
 
             {loading ? (
                 <CricketLoader label="Loading…" />
-            ) : tab === "venues" ? (
+            ) : tab === "venues_disabled_M39e" ? (
                 <div className="space-y-6">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {VENUE_CATS.slice(0, 4).map((c) => (
@@ -568,14 +660,18 @@ export default function VenuesGrounds() {
                                         <Trophy className="w-6 h-6 text-mpca-navy shrink-0" />
                                         <div className="flex-1 min-w-0">
                                             <div className="overline">{g.ground_no} · {g.type.replace(/_/g, " ")}</div>
-                                            <div className="font-serif text-lg text-mpca-navy mt-1 truncate">{g.name} <span className="text-mpca-gray-dark text-sm">· {g.venue_name}</span></div>
+                                            <div className="font-serif text-lg text-mpca-navy mt-1 truncate">{g.name}{g.venue_name ? <span className="text-mpca-gray-dark text-sm"> · {g.venue_name}</span> : null}</div>
                                             <div className="text-xs text-mpca-gray-dark mt-1 flex flex-wrap gap-x-3">
+                                                <span>📍 {g.city || "—"}{g.pincode ? ` · ${g.pincode}` : ""}</span>
                                                 <span>Pitch: {g.pitch_type || "—"}</span>
                                                 {g.boundaries_metres && <span>Boundaries: {g.boundaries_metres}m</span>}
-                                                <span>Staff: {(g.ground_staff || []).length}</span>
-                                                <span>Formats: {(g.suitable_formats || []).length}</span>
+                                                {g.capacity_seats && <span>👥 {g.capacity_seats.toLocaleString("en-IN")} seats</span>}
+                                                {g.floodlights && <span>💡 Floodlights</span>}
                                             </div>
                                             <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-mono uppercase tracking-wider">
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 border border-mpca-brass/40 text-mpca-charcoal" data-testid={`ground-owner-${g.id}`}>
+                                                    Owner · {g.owner_body_id}{g.owner_name ? ` (${g.owner_name})` : ""}
+                                                </span>
                                                 {g.bcci_approval && g.bcci_approval !== "None" ? (
                                                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 ${g.bcci_approval === "International" ? "bg-mpca-oxblood text-mpca-ivory" : "bg-mpca-brass/20 text-mpca-brass border border-mpca-brass/50"}`} data-testid={`ground-bcci-${g.id}`}>
                                                         ★ BCCI · {g.bcci_approval}
@@ -590,15 +686,35 @@ export default function VenuesGrounds() {
                                                         Mgr · {g.managed_by_body_id}
                                                     </span>
                                                 )}
+                                                {(g.allowed_tournament_types?.length || 0) > 0 && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 border border-mpca-brass/40 text-mpca-brass" data-testid={`ground-types-${g.id}`}>
+                                                        {g.allowed_tournament_types.length} tournament types
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                         <ChevronRight className={"w-5 h-5 text-mpca-gray-dark transition-transform " + (open ? "rotate-90" : "")} />
                                     </button>
                                     {open && (
                                         <div className="border-t border-mpca-brass/30 p-4 space-y-4 bg-mpca-cream/30">
+                                            {g.address_line && (
+                                                <div className="text-xs text-mpca-gray-dark">
+                                                    <span className="overline mr-2">Whereabouts</span>{g.address_line}, {g.city}{g.pincode ? ` — ${g.pincode}` : ""}
+                                                </div>
+                                            )}
+                                            {(g.allowed_tournament_types?.length || 0) > 0 && (
+                                                <div>
+                                                    <div className="overline mb-2">Allowed Tournament Types</div>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {g.allowed_tournament_types.map((t) => (
+                                                            <span key={t} className="px-1.5 py-0.5 bg-mpca-brass/15 text-mpca-brass text-[10px] uppercase tracking-wider">{t.replace(/_/g, " ")}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                             {(g.suitable_formats?.length || 0) > 0 && (
                                                 <div>
-                                                    <div className="overline mb-2">Suitable Formats</div>
+                                                    <div className="overline mb-2">Match Formats</div>
                                                     <div className="flex flex-wrap gap-1">
                                                         {g.suitable_formats.map((f) => (
                                                             <span key={f} className="px-1.5 py-0.5 bg-mpca-navy/10 text-mpca-navy text-[10px] uppercase tracking-wider">{f.replace(/_/g, " ")}</span>
@@ -606,6 +722,7 @@ export default function VenuesGrounds() {
                                                     </div>
                                                 </div>
                                             )}
+                                            {g.notes && <div className="text-xs italic text-mpca-charcoal">{g.notes}</div>}
                                             <div>
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="overline">Ground Staff Register ({(g.ground_staff || []).length})</div>
@@ -720,7 +837,7 @@ export default function VenuesGrounds() {
             )}
 
             <VenueForm open={venueFormOpen} onClose={() => setVenueFormOpen(false)} onSaved={() => reload()} persona={persona || {}} bodies={bodies} />
-            <GroundForm open={groundFormOpen} onClose={() => setGroundFormOpen(false)} onSaved={() => reload()} venues={venues} bodies={bodies} />
+            <GroundForm open={groundFormOpen} onClose={() => setGroundFormOpen(false)} onSaved={() => reload()} bodies={bodies} />
             <ExpenseForm open={expFormOpen} onClose={() => setExpFormOpen(false)} onSaved={() => reload()} grounds={grounds} persona={persona || {}} />
         </div>
     );

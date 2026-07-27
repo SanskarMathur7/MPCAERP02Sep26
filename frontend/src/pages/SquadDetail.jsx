@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom"
 import {
     ArrowLeft, Users, Plus, X, Crown, BadgeCheck, ShieldCheck, ShieldAlert,
     Send, Loader2, Search, Filter, Lock, RotateCcw, CheckCircle2, XCircle, Info,
-    Download, Upload, FileCheck,
+    Download, Upload, FileCheck, Sparkles, RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
@@ -395,6 +395,54 @@ const SquadDetail = () => {
                     </div>
                 </div>
             )}
+
+            {/* M39g · AI Review of signed squad PDF — visible to MPCA reviewers */}
+            {isMPCA && squad.signed_copy_url && (squad.ai_review_status || squad.ai_review_verdict) && (() => {
+                const verdict = squad.ai_review_verdict;
+                const status = squad.ai_review_status;
+                const tone = verdict === "Looks_Good" ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                    : verdict === "Reject_Recommended" ? "border-mpca-oxblood bg-mpca-oxblood/5 text-mpca-oxblood"
+                    : "border-mpca-brass bg-mpca-brass/10 text-mpca-brass";
+                const rerun = async () => {
+                    try {
+                        setBusy(true);
+                        const { data } = await api.post(`/squads/${squad.id}/ai-review`);
+                        setSquad(data);
+                    } catch (e) { alert(e?.response?.data?.detail || e.message); }
+                    finally { setBusy(false); }
+                };
+                return (
+                    <div className={`mb-4 border ${tone} px-4 py-3 text-[11px]`} data-testid="squad-ai-review-panel">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div className="flex items-start gap-2 flex-1 min-w-0">
+                                <Sparkles size={14} className="mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <div className="uppercase tracking-widest text-[9px] mb-1">
+                                        AI Review · Advisory Only
+                                        {typeof squad.ai_review_confidence === "number" && <span className="ml-2 font-mono opacity-70">confidence {(squad.ai_review_confidence * 100).toFixed(0)}%</span>}
+                                    </div>
+                                    <div className="font-serif text-sm" data-testid="squad-ai-verdict">
+                                        {status === "Pending" && "AI is reviewing the signed PDF…"}
+                                        {status === "Completed" && verdict && (
+                                            <>Verdict: <b>{verdict.replace(/_/g, " ")}</b></>
+                                        )}
+                                        {status === "Failed" && "AI review failed — click Re-run below."}
+                                    </div>
+                                    {Array.isArray(squad.ai_review_comments) && squad.ai_review_comments.length > 0 && (
+                                        <ul className="mt-2 list-disc pl-5 space-y-0.5" data-testid="squad-ai-comments">
+                                            {squad.ai_review_comments.map((c, i) => <li key={i}>{c}</li>)}
+                                        </ul>
+                                    )}
+                                    <div className="mt-2 text-[10px] italic opacity-80">MPCA makes the final call — AI verdict is informational.</div>
+                                </div>
+                            </div>
+                            <button onClick={rerun} disabled={busy} className="text-[10px] uppercase tracking-widest border border-current px-2 py-1 hover:bg-white/40 disabled:opacity-40 inline-flex items-center gap-1" data-testid="squad-rerun-ai-btn">
+                                <RefreshCw size={10} /> Re-run
+                            </button>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {status === "Approved" && (
                 <div className="mb-4 border border-mpca-green-dark/40 bg-mpca-green-dark/10 text-mpca-green-dark px-4 py-2 text-[11px] flex items-start gap-2" data-testid="squad-approved-hint">

@@ -244,7 +244,9 @@ async def upload_signed_copy(
     x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
 ):
     """M37 · Division/District uploads the signed nomination copy for a squad.
-    The URL is stamped on the squad so submission-to-MPCA can proceed."""
+    The URL is stamped on the squad so submission-to-MPCA can proceed.
+    M39g · Kicks off an ADVISORY Gemini review of the signed PDF whose
+    verdict + comments surface on the MPCA approval screen."""
     doc = await db.squads.find_one({"id": sid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Squad not found")
@@ -255,6 +257,53 @@ async def upload_signed_copy(
         "signed_copy_url": payload.signed_copy_url,
         "signed_copy_uploaded_at": now,
         "signed_copy_uploaded_by": x_user_name or x_role_id,
+        "ai_review_status": "Pending",
+        "ai_review_verdict": None,
+        "ai_review_comments": [],
+    }})
+    # Fire the AI review synchronously — endpoint takes a few seconds but the
+    # UI shows a spinner during upload, so this is acceptable. If it fails we
+    # still return the updated squad; MPCA can trigger POST /ai-review to retry.
+    try:
+        squad_now = await db.squads.find_one({"id": sid}, {"_id": 0})
+        tournament = await db.tournaments.find_one({"id": squad_now.get("tournament_id")}, {"_id": 0})
+        from core.ai_signed_docs import review_signed_squad
+        verdict = await review_signed_squad(squad_now, tournament or {})
+        await db.squads.update_one({"id": sid}, {"$set": {
+            "ai_review_status": "Completed" if not verdict.get("warnings") else "Completed",
+            "ai_review_verdict": verdict.get("verdict"),
+            "ai_review_comments": verdict.get("comments") or [],
+            "ai_review_confidence": verdict.get("confidence"),
+            "ai_review_generated_at": datetime.now(timezone.utc).isoformat(),
+        }})
+    except Exception as e:  # pragma: no cover — best-effort
+        await db.squads.update_one({"id": sid}, {"$set": {
+            "ai_review_status": "Failed",
+            "ai_review_verdict": None,
+            "ai_review_comments": [f"AI review failed: {type(e).__name__}: {str(e)[:200]}"],
+        }})
+    return await db.squads.find_one({"id": sid}, {"_id": 0})
+
+
+@api_router.post("/squads/{sid}/ai-review")
+async def rerun_squad_ai_review(sid: str):
+    """M39g · Re-run the AI advisory verdict on the signed squad PDF.
+    Useful when the AI errored on upload or MPCA wants a fresh pass."""
+    doc = await db.squads.find_one({"id": sid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Squad not found")
+    if not doc.get("signed_copy_url"):
+        raise HTTPException(400, "Upload the signed PDF first before re-running AI review.")
+    tournament = await db.tournaments.find_one({"id": doc.get("tournament_id")}, {"_id": 0})
+    from core.ai_signed_docs import review_signed_squad
+    verdict = await review_signed_squad(doc, tournament or {})
+    now = datetime.now(timezone.utc).isoformat()
+    await db.squads.update_one({"id": sid}, {"$set": {
+        "ai_review_status": "Completed",
+        "ai_review_verdict": verdict.get("verdict"),
+        "ai_review_comments": verdict.get("comments") or [],
+        "ai_review_confidence": verdict.get("confidence"),
+        "ai_review_generated_at": now,
     }})
     return await db.squads.find_one({"id": sid}, {"_id": 0})
 

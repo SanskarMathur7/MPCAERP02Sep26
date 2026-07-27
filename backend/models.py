@@ -201,6 +201,13 @@ class MeetingBase(BaseModel):
     attendees: List[str] = []  # list of member UIDs
     minutes: Optional[str] = None
     minutes_url: Optional[str] = None
+    # M39f · Signed-minutes AI summarisation
+    signed_minutes_url: Optional[str] = None
+    signed_minutes_uploaded_at: Optional[str] = None
+    signed_minutes_uploaded_by: Optional[str] = None
+    ai_summary_status: Optional[str] = None      # "Pending" | "Completed" | "Failed"
+    ai_summary_text: Optional[str] = None        # narrative summary
+    ai_summary_generated_at: Optional[str] = None
     status: MeetingStatus = "Scheduled"
     notes: Optional[str] = None
 
@@ -235,6 +242,8 @@ class ResolutionBase(BaseModel):
 class Resolution(ResolutionBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    ai_generated: bool = False                   # M39f · true when created by AI summariser
+    ai_source_agenda_no: Optional[int] = None    # links back to source agenda item
 
 
 class ResolutionCreate(ResolutionBase):
@@ -1021,6 +1030,12 @@ class Squad(BaseModel):
     signed_copy_url: Optional[str] = None      # M37 · Mandatory signed nomination PDF for Division/District submissions
     signed_copy_uploaded_at: Optional[str] = None
     signed_copy_uploaded_by: Optional[str] = None
+    # M39g · AI review of signed squad PDF
+    ai_review_status: Optional[str] = None       # "Pending" | "Completed" | "Failed"
+    ai_review_verdict: Optional[str] = None      # "Looks_Good" | "Needs_Attention" | "Reject_Recommended"
+    ai_review_comments: List[str] = []           # bullet points
+    ai_review_confidence: Optional[float] = None
+    ai_review_generated_at: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -1359,15 +1374,29 @@ class GroundStaffMember(BaseModel):
 
 class GroundBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    venue_id: str
+    # M39e · Grounds are now the sole entity — Venues collection is deprecated.
+    # `venue_id` retained only for legacy read-side lookups; new grounds omit it.
+    venue_id: Optional[str] = None
     name: str                              # "Main Ground", "Practice A"
     type: GroundType = "Main"
     pitch_type: Optional[str] = None       # "Red Soil", "Black Soil", "Turf", "Matting"
     boundaries_metres: Optional[int] = None
     suitable_formats: List[TournamentFormat] = []  # which formats this ground supports
+    # M39e · which types of tournament this ground may host (Inter-Divisional / Ranji /
+    # Invitational etc.). Empty list ⇒ any type permitted.
+    allowed_tournament_types: List[TournamentType] = []
     # M9 · per-ground BCCI accreditation + optional override of managing body.
     bcci_approval: BCCIApproval = "None"
     managed_by_body_id: Optional[str] = None  # None ⇒ inherit from venue.managed_by_body_id
+    # M39e · owner + location fields moved down from Venue so Grounds are self-contained.
+    owner_body_id: str = "MPCA"            # who OWNS this ground (usually MPCA)
+    owner_name: Optional[str] = None       # free-text owner label (e.g. "Indore District Cricket Assoc.")
+    category: Optional[VenueCategory] = None
+    address_line: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+    capacity_seats: Optional[int] = None
+    floodlights: bool = False
     is_active: bool = True
     notes: Optional[str] = None
 

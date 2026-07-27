@@ -1,0 +1,45 @@
+{
+  "summary": "Batch B (Items 9/10/11) tested. Backend 11 passed, 1 skipped (test_batch_b_9_10_11.py). Frontend: Item 9 fully verified (Grounds heading, sidebar 'Grounds', no Venues tab, all 15 modal data-testids present, Add Ground modal opens). Item 10 fully verified (MPCA sees Signed Minutes section with upload-signed-minutes-btn; Division sees section without button and message 'MPCA has not yet uploaded signed minutes'). Item 11 UI panel could NOT be verified end-to-end because /squads/{sid} SquadDetail page throws 'Squad not found in your scope.' even for MPCA persona (pre-existing bootstrap bug — see RCA). Source of SquadDetail.jsx does contain all required data-testids (squad-ai-review-panel/verdict/rerun/comments and the 'MPCA makes the final call' string), so the panel implementation is present; only the page's loading path is broken.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "SquadDetail",
+        "issue": "Opening /squads/{sid} directly renders 'Squad not found in your scope.' even for MPCA persona. Bootstrap calls /squads/{sid}/recommendation (404) then iterates /tournaments + fetchSquads for each — this fallback fails to locate the squad even though direct GET /squads/{sid} and /tournaments/{tid}/squads both work via curl. Should simply call GET /squads/{sid} which the backend already exposes.",
+        "selector": "/squads/{sid}",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Item 11 AI advisory review UI verification",
+        "issue": "AI review panel testids exist in SquadDetail.jsx (lines 415/424/432/439) but cannot be reached at runtime because the page bootstrap fails before rendering. Cannot confirm MPCA-only visibility live; source-inspection shows the panel is gated on isMpcaReviewer.",
+        "affected_selectors": ["squad-ai-review-panel", "squad-ai-verdict", "squad-rerun-ai-btn", "squad-ai-comments"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_batch_b_9_10_11.py",
+    "/app/test_reports/pytest/batch_b_results.xml"
+  ],
+  "action_items": [
+    "Fix SquadDetail.jsx bootstrap to use GET /squads/{sid} directly (endpoint exists at routes/selection_console.py:28) instead of iterating /tournaments then /tournaments/{tid}/squads.",
+    "After fix, re-verify Item 11 UI: MPCA sees squad-ai-review-panel with verdict/rerun/comments testids and 'MPCA makes the final call — AI verdict is informational.'; Division persona should NOT see it."
+  ],
+  "critical_code_review_comments": [
+    "routes/selection_console.py:266-273 — upload_signed_copy always sets ai_review_status='Completed' (both branches of the ternary return 'Completed'). It should be 'Failed' when warnings-only (bogus file) — for consistency with the meeting ai-summary flow which correctly returns 'Failed' on warnings-only.",
+    "core/ai_signed_docs.py — graceful warning payloads on missing files are well-shaped. No changes needed.",
+    "routes/venues_grounds.py:216-233 — create_ground correctly handles venue_id=None; ground_no derivation via city prefix verified (GRD-BHOPA-...).",
+    "routes/meetings.py:84-102 — signed-minutes upload correctly 403s for non-state scope. Good.",
+    "frontend/SquadDetail.jsx:59-82 — bootstrap is fragile: calls a non-existent /squads/{sid}/recommendation then iterates tournaments. Replace with direct GET /squads/{sid} + GET /tournaments/{squad.tournament_id}."
+  ],
+  "updated_files": ["/app/backend/tests/test_batch_b_9_10_11.py (new)"],
+  "success_rate": {"backend": "100% (11/11 executed, 1 skipped by design)", "frontend": "Items 9 & 10 fully verified; Item 11 blocked by SquadDetail loading bug"},
+  "test_credentials": "persona chips at /login (no passwords)",
+  "seed_data_creation": "Created & cleaned up TEST_Batch_B_Ground, TEST_Batch_B_AGM meeting, TEST_Batch_B_NoMinutes meeting. Squad a56f4b41... on CT Sarwate Trophy had signed_copy_url and ai_review_verdict set to Needs_Attention during backend tests (bogus URL — safe).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live in /app/backend/tests/test_batch_b_9_10_11.py — reusable. Run: REACT_APP_BACKEND_URL=<url> pytest backend/tests/test_batch_b_9_10_11.py -v. For Item 11 frontend after fix, navigate to /squads/a56f4b41-a323-4d0f-99bd-59b831f46620 as MPCA secretary.",
+  "rca of the issue": "SquadDetail.jsx (lines 59-82) tries GET /squads/{sid}/recommendation first (endpoint doesn't exist → 404), then falls back to iterating GET /tournaments and calling fetchSquads per tournament. Even though the squad and its tournament are reachable via direct API calls (curl verified for MPCA persona), the browser-side iteration ends up throwing 'Squad not found in your scope.' — the fallback path is not reliable. Fix: replace bootstrap with GET /squads/{sid} directly (routes/selection_console.py:28 already provides it) and use squad.tournament_id to fetch the tournament."
+}

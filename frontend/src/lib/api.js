@@ -1119,6 +1119,7 @@ export const updateGround = async (id, payload) => {
     const { data } = await api.patch(`/grounds/${id}`, payload);
     return data;
 };
+export const patchGround = updateGround;  // M39e · alias
 export const deleteGround = async (id) => {
     const { data } = await api.delete(`/grounds/${id}`);
     return data;

@@ -61,7 +61,7 @@ const NAV_DOMAINS = [
         items: [
             { to: "/tournaments", label: "Tournaments", icon: TrophyIcon },
             { to: "/tournament-calendar", label: "Tournament Calendar", icon: Calendar },
-            { to: "/venues", label: "Venues & Grounds", icon: MapPinIcon },
+            { to: "/venues", label: "Grounds", icon: MapPinIcon },
             { to: "/players", label: "Player Register", icon: Users },
             { to: "/player-registrations", label: "Season Onboarding", icon: Users },
             { to: "/match-officials", label: "Match Officials", icon: ShieldCheck },

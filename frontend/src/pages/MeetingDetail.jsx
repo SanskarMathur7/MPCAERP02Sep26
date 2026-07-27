@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchMeeting, fetchResolutions, addResolution, updateMeeting } from "@/lib/api";
-import { ArrowLeft, Calendar, MapPin, Clock, Users, CheckCircle2, XCircle, Plus, Gavel } from "lucide-react";
+import { api, API_BASE } from "@/lib/api";
+import { ArrowLeft, Calendar, MapPin, Clock, Users, CheckCircle2, XCircle, Plus, Gavel, Upload, Sparkles, FileText, RefreshCw, Loader2 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 
 const STATUS_PILL = {
@@ -81,6 +83,107 @@ const NewResolution = ({ meetingId, onAdded }) => {
     );
 };
 
+const SignedMinutesPanel = ({ meeting, onReload }) => {
+    const { persona } = useAuth();
+    const isMPCA = persona?.body_type === "State";
+    const [uploading, setUploading] = useState(false);
+    const [running, setRunning] = useState(false);
+    const fileRef = useRef(null);
+
+    const upload = async (file) => {
+        if (!file) return;
+        setUploading(true);
+        try {
+            const form = new FormData();
+            form.append("file", file);
+            form.append("body_id", persona?.body_code || "MPCA");
+            form.append("uploaded_by", persona?.name || "MPCA");
+            form.append("related_type", "meeting_minutes");
+            form.append("related_id", meeting.id);
+            const { data: rec } = await api.post("/uploads", form, { headers: { "Content-Type": "multipart/form-data" } });
+            await api.post(`/meetings/${meeting.id}/signed-minutes`, {
+                signed_minutes_url: rec.url,
+                uploaded_by: persona?.name,
+            });
+            // Auto-run AI summary
+            setRunning(true);
+            await api.post(`/meetings/${meeting.id}/ai-summary`);
+            await onReload();
+        } catch (e) {
+            alert(e?.response?.data?.detail || e.message);
+        } finally {
+            setUploading(false); setRunning(false);
+            if (fileRef.current) fileRef.current.value = "";
+        }
+    };
+
+    const rerunAI = async () => {
+        setRunning(true);
+        try {
+            await api.post(`/meetings/${meeting.id}/ai-summary`);
+            await onReload();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setRunning(false); }
+    };
+
+    const status = meeting.ai_summary_status;
+    return (
+        <section className="mb-12" data-testid="signed-minutes-section">
+            <div className="flex items-end justify-between mb-4 flex-wrap gap-4">
+                <div>
+                    <div className="overline mb-2">Signed Minutes · AI Summariser</div>
+                    <h2 className="font-serif text-3xl text-mpca-green-dark">Upload signed minutes for AI summary</h2>
+                </div>
+                {isMPCA && (
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => fileRef.current?.click()} disabled={uploading || running} className="btn-heritage-primary disabled:opacity-60" data-testid="upload-signed-minutes-btn">
+                            {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                            {meeting.signed_minutes_url ? "Re-upload Signed Minutes" : "Upload Signed Minutes"}
+                        </button>
+                        {meeting.signed_minutes_url && (
+                            <button onClick={rerunAI} disabled={running || uploading} className="btn-heritage-secondary disabled:opacity-60" data-testid="rerun-ai-summary-btn" title="Re-run AI summary">
+                                {running ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Re-run AI
+                            </button>
+                        )}
+                        <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => upload(e.target.files?.[0])} data-testid="signed-minutes-input" />
+                    </div>
+                )}
+            </div>
+            {!meeting.signed_minutes_url ? (
+                <div className="bulletin-card p-6 text-sm text-mpca-gray-dark italic">
+                    {isMPCA
+                        ? "Upload the signed minutes PDF (or image). Gemini will read it and drop each identified resolution into the register below — no manual re-entry needed."
+                        : "MPCA has not yet uploaded signed minutes for this meeting."}
+                </div>
+            ) : (
+                <div className="bulletin-card p-6 space-y-3">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <a href={`${API_BASE.replace(/\/api$/, "")}${meeting.signed_minutes_url}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-mpca-oxblood hover:underline text-sm" data-testid="view-signed-minutes">
+                            <FileText size={14} /> View Signed Minutes
+                        </a>
+                        <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest">
+                            {status === "Pending" && <span className="text-mpca-brass inline-flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> AI running…</span>}
+                            {status === "Completed" && <span className="text-emerald-700 inline-flex items-center gap-1"><Sparkles size={10} /> AI summary complete</span>}
+                            {status === "Failed" && <span className="text-mpca-oxblood inline-flex items-center gap-1"><XCircle size={10} /> AI failed — retry</span>}
+                        </div>
+                    </div>
+                    {meeting.ai_summary_text && (
+                        <div className="text-sm text-mpca-charcoal leading-relaxed border-l-2 border-mpca-brass/40 pl-4 italic" data-testid="ai-summary-text">
+                            {meeting.ai_summary_text}
+                        </div>
+                    )}
+                    {meeting.signed_minutes_uploaded_at && (
+                        <div className="text-[10px] text-mpca-brass/80 uppercase tracking-widest">
+                            Uploaded {new Date(meeting.signed_minutes_uploaded_at).toLocaleString("en-IN")} by {meeting.signed_minutes_uploaded_by || "MPCA"}
+                        </div>
+                    )}
+                </div>
+            )}
+        </section>
+    );
+};
+
+
 const MeetingDetail = () => {
     const { id } = useParams();
     const [meeting, setMeeting] = useState(null);
@@ -101,7 +204,7 @@ const MeetingDetail = () => {
                 setLoading(false);
             }
         })();
-    }, [id]); // eslint-disable-line
+    }, [id]);
 
     const advanceStatus = async (status) => {
         const updated = await updateMeeting(id, { ...meeting, status });
@@ -239,6 +342,9 @@ const MeetingDetail = () => {
                 </div>
             </section>
 
+            {/* M39f · Signed Minutes AI Summary */}
+            <SignedMinutesPanel meeting={meeting} onReload={load} />
+
             {/* Resolutions */}
             <section className="mb-12" data-testid="resolutions-section">
                 <div className="flex items-end justify-between mb-6">
@@ -261,7 +367,9 @@ const MeetingDetail = () => {
                                     <div className="flex items-start gap-3">
                                         <Gavel className="text-mpca-brass mt-1" size={18} strokeWidth={1.5} />
                                         <div>
-                                            <div className="overline">Resolution № {idx + 1}</div>
+                                            <div className="overline flex items-center gap-1.5">Resolution № {idx + 1}
+                                                {r.ai_generated && <span className="inline-flex items-center gap-0.5 text-[8px] uppercase tracking-widest bg-mpca-brass/15 text-mpca-brass px-1 py-0.5" title="Auto-generated from signed minutes"><Sparkles size={8} /> AI</span>}
+                                            </div>
                                             <div className="font-serif text-xl text-mpca-green-dark mt-1 leading-tight">
                                                 {r.title}
                                             </div>

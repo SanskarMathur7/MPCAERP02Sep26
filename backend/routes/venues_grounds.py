@@ -214,13 +214,19 @@ async def list_grounds(
 
 @api_router.post("/grounds", response_model=Ground)
 async def create_ground(payload: GroundCreate):
-    venue = await db.venues.find_one({"id": payload.venue_id}, {"_id": 0})
-    if not venue:
-        raise HTTPException(404, "Venue not found")
-    ground_no = await _next_ground_no(venue.get("city") or venue.get("venue_no", "GEN"))
+    # M39e · venue_id is now optional. When provided, snapshot venue_name from the
+    # legacy venues collection. Otherwise auto-derive a ground_no from the city or
+    # a generic "GEN" fallback so we no longer depend on Venue records.
+    venue = None
+    if payload.venue_id:
+        venue = await db.venues.find_one({"id": payload.venue_id}, {"_id": 0})
+        if not venue:
+            raise HTTPException(404, "Venue not found (venue_id supplied but does not exist)")
+    prefix = (venue.get("city") if venue else payload.city) or "GEN"
+    ground_no = await _next_ground_no(prefix.upper()[:5])
     g = Ground(
         ground_no=ground_no,
-        venue_name=venue.get("name"),
+        venue_name=venue.get("name") if venue else None,
         **payload.model_dump(),
     )
     await db.grounds.insert_one(g.model_dump())

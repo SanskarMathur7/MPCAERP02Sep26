@@ -309,6 +309,19 @@ const SquadDetail = () => {
 
                     {/* ─── Workflow action strip ─── */}
                     <div className="flex flex-wrap items-center gap-2" data-testid="squad-actions">
+                        {/* M38d · Signed nomination link — visible to EVERYONE (MPCA reviewers included) */}
+                        {squad.signed_copy_url && (
+                            <a
+                                href={squad.signed_copy_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory px-3 py-2 flex items-center gap-1 hover:bg-mpca-green transition-colors"
+                                data-testid="squad-view-signed-link"
+                                title={squad.signed_copy_uploaded_at ? `Uploaded ${new Date(squad.signed_copy_uploaded_at).toLocaleString("en-IN")}${squad.signed_copy_uploaded_by ? ` by ${squad.signed_copy_uploaded_by}` : ""}` : "View signed nomination copy"}
+                            >
+                                <FileCheck size={12} /> View Signed Copy
+                            </a>
+                        )}
                         {canSubmit && !isMPCA && members.length >= 11 && captain && (
                             <>
                                 <a href={`/squads/${squad.id}/nomination-form`} target="_blank" rel="noreferrer" className="text-[11px] uppercase tracking-widest bg-mpca-ivory text-mpca-green-dark px-3 py-2 flex items-center gap-1 hover:bg-mpca-gold-light transition-colors" data-testid="squad-download-nomination-btn">
@@ -318,11 +331,6 @@ const SquadDetail = () => {
                                     <Upload size={12} /> {squad.signed_copy_url ? "Replace Signed Copy" : "Upload Signed Copy"}
                                     <input type="file" className="hidden" accept="application/pdf,image/*" onChange={handleSignedCopyUpload} />
                                 </label>
-                                {squad.signed_copy_url && (
-                                    <a href={squad.signed_copy_url} target="_blank" rel="noreferrer" className="text-[10px] text-mpca-gold-light underline flex items-center gap-1" data-testid="squad-view-signed-link">
-                                        <FileCheck size={11} /> Signed copy ✓
-                                    </a>
-                                )}
                             </>
                         )}
                         {canSubmit && members.length >= 11 && captain && (

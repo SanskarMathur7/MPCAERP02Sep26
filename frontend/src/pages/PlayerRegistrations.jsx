@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
     UserPlus, Plus, Copy, Loader2, Check, X, Inbox, ExternalLink, ShieldAlert,
     RotateCcw, CheckCircle2, XCircle, Send, Mail, Phone, Calendar, ChevronRight,
+    Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useSeason } from "@/context/SeasonContext";
@@ -112,7 +113,7 @@ const PlayerRegistrations = () => {
 const CampaignsList = ({ campaigns, onCopy, onOpen, onChanged, persona }) => {
     if (!campaigns.length) return (
         <div className="py-16 text-center border border-dashed border-mpca-brass/30 text-[11px] italic text-mpca-gray-dark" data-testid="pr-campaigns-empty">
-            No campaigns yet. Click "New Campaign" to open your first season registration window.
+            No campaigns yet. Click &quot;New Campaign&quot; to open your first season registration window.
         </div>
     );
     return (
@@ -164,6 +165,15 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
     const filtered = useMemo(() => filter === "all" ? regs : regs.filter((r) => r.status === filter), [regs, filter]);
 
     const doAction = async (rid, action, note = null) => {
+        // M38i · '_refresh' pseudo-action → just re-fetch the row (used after AI review)
+        if (action === "_refresh") {
+            try {
+                const { data } = await api.get(`/player-registrations/${rid}`);
+                setSelected(data);
+                onChanged?.();
+            } catch { /* silent */ }
+            return;
+        }
         setBusy(true);
         try {
             const { data } = await api.post(`/player-registrations/${rid}/${action}`, { reviewer_name: persona?.name, note });
@@ -224,17 +234,73 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
     const camp = campaigns.find((c) => c.id === reg.campaign_id);
     const pd = reg.player_data || {};
     const isPending = reg.status === "Submitted" || reg.status === "Returned";
+    const ai = reg.ai_summary;
+    const [aiBusy, setAiBusy] = useState(false);
+
+    const runAiReview = async () => {
+        setAiBusy(true);
+        try {
+            await api.post(`/player-registrations/${reg.id}/ai-review`);
+            // Signal parent to refresh
+            onAction(reg.id, "_refresh");
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setAiBusy(false); }
+    };
+
     return (
         <div className="bulletin-card" data-testid="pr-inbox-detail">
-            <div className="px-5 py-3 border-b border-mpca-brass/20">
-                <div className="overline">{camp?.title || reg.campaign_id}</div>
-                <div className="font-serif text-2xl text-mpca-green-dark mt-1" data-testid="pr-detail-name">{pd.full_name}</div>
-                <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-mpca-brass font-mono">
-                    <span>{reg.body_code}</span><span>·</span><span>{reg.cycle_code}</span>
-                    <span>·</span><span>Role: {pd.role?.replace(/_/g, " ")}</span>
-                    <span>·</span><span>Category: {pd.category?.replace(/_/g, " ")}</span>
+            <div className="px-5 py-3 border-b border-mpca-brass/20 flex items-start justify-between gap-3">
+                <div>
+                    <div className="overline">{camp?.title || reg.campaign_id}</div>
+                    <div className="font-serif text-2xl text-mpca-green-dark mt-1" data-testid="pr-detail-name">{pd.full_name}</div>
+                    <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-mpca-brass font-mono">
+                        <span>{reg.body_code}</span><span>·</span><span>{reg.cycle_code}</span>
+                        <span>·</span><span>Role: {pd.role?.replace(/_/g, " ")}</span>
+                        <span>·</span><span>Category: {pd.category?.replace(/_/g, " ")}</span>
+                        {pd.preferred_division_code && (<><span>·</span><span>Host Div: {pd.preferred_division_code}</span></>)}
+                    </div>
                 </div>
+                <button
+                    onClick={runAiReview}
+                    disabled={aiBusy}
+                    title="Run Gemini KYC verification on uploaded documents"
+                    className="text-[10px] uppercase tracking-widest px-3 py-1.5 border border-mpca-brass text-mpca-brass hover:bg-mpca-brass/10 flex items-center gap-1 disabled:opacity-40 shrink-0"
+                    data-testid="pr-ai-review-btn"
+                >
+                    <Sparkles size={11} className={aiBusy ? "animate-pulse" : ""} /> {aiBusy ? "Reviewing…" : (ai ? "Re-run AI" : "AI Review")}
+                </button>
             </div>
+
+            {/* M38i · AI KYC verdict summary — visible after AI review has run */}
+            {ai && (
+                <div className={`mx-5 mt-4 p-3 border-2 ${
+                    ai.overall_verdict === "Recommend_Approve" ? "border-mpca-green-dark bg-mpca-green-dark/5" :
+                    ai.overall_verdict === "Recommend_Reject" ? "border-mpca-oxblood bg-mpca-oxblood/5" :
+                    "border-mpca-brass bg-mpca-gold-light/10"
+                }`} data-testid="pr-ai-summary">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <Sparkles size={12} className={ai.overall_verdict === "Recommend_Approve" ? "text-mpca-green-dark" : ai.overall_verdict === "Recommend_Reject" ? "text-mpca-oxblood" : "text-mpca-brass"} />
+                        <span className={`font-serif text-base ${ai.overall_verdict === "Recommend_Approve" ? "text-mpca-green-dark" : ai.overall_verdict === "Recommend_Reject" ? "text-mpca-oxblood" : "text-mpca-brass"}`} data-testid="pr-ai-verdict">{(ai.overall_verdict || "").replace(/_/g, " ")}</span>
+                        <span className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">
+                            {ai.docs_verified} / {ai.docs_total} docs verified · avg confidence {Math.round((ai.overall_confidence || 0) * 100)}%
+                        </span>
+                    </div>
+                    {(ai.critical_issues || []).length > 0 && (
+                        <ul className="mt-2 space-y-0.5" data-testid="pr-ai-critical">
+                            {ai.critical_issues.map((c, i) => <li key={i} className="text-[10px] text-mpca-oxblood">⚠ {c}</li>)}
+                        </ul>
+                    )}
+                    {(ai.advisory_notes || []).filter(Boolean).length > 0 && (
+                        <ul className="mt-1 space-y-0.5">
+                            {ai.advisory_notes.filter(Boolean).map((a, i) => <li key={i} className="text-[10px] text-mpca-brass italic">· {a}</li>)}
+                        </ul>
+                    )}
+                    <div className="text-right text-[9px] text-mpca-gray-dark mt-1">
+                        {ai.validated_at && new Date(ai.validated_at).toLocaleString("en-IN")}
+                        {ai.validated_by && <> · {ai.validated_by}</>}
+                    </div>
+                </div>
+            )}
             <div className="p-5 grid grid-cols-2 gap-4 text-[12px]">
                 <Field label="DOB" value={pd.dob} />
                 <Field label="Gender" value={pd.gender} />
@@ -242,6 +308,7 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                 <Field label="Bowling" value={pd.bowling_style} />
                 <Field label="Mobile" value={pd.mobile} icon={Phone} />
                 <Field label="Email" value={pd.email} icon={Mail} />
+                <Field label="Host Division" value={pd.preferred_division_code} />
                 <Field label="Home District" value={pd.home_district_code} />
                 <Field label="Aadhaar" value={pd.aadhaar_no ? `••••${pd.aadhaar_no.slice(-4)}` : null} />
                 <Field label="Guardian" value={pd.guardian_name} />

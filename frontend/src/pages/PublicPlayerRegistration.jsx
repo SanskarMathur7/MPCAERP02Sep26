@@ -17,7 +17,7 @@ const public_api = axios.create({ baseURL: `${BACKEND_URL}/api` });
 const emptyPlayer = {
     full_name: "", dob: "", gender: "M", role: "Batter",
     batting_style: "Right_Hand", bowling_style: "None",
-    mobile: "", email: "", home_district_code: "", category: "Local_MP",
+    mobile: "", email: "", home_district_code: "", preferred_division_code: "", category: "Local_MP",
     guardian_name: "", address: "", aadhaar_no: "",
     consent: false, photo_url: "", aadhaar_url: "",
     bank_account_no: "", bank_ifsc: "",
@@ -179,6 +179,20 @@ const PublicPlayerRegistration = () => {
                             <Grid>
                                 <Field label="Mobile" required><input required value={form.mobile} onChange={(e) => setField("mobile", e.target.value)} placeholder="10-digit mobile" className="input-heritage font-mono !py-1.5 !text-xs" data-testid="pr-pub-mobile" /></Field>
                                 <Field label="Email" required><input required type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="you@example.com" className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-email" /></Field>
+                                <Field label="Host Division" required>
+                                    <select
+                                        required
+                                        value={form.preferred_division_code}
+                                        onChange={(e) => setField("preferred_division_code", e.target.value)}
+                                        className="input-heritage !py-1.5 !text-xs"
+                                        data-testid="pr-pub-host-division"
+                                    >
+                                        <option value="">— Select the division you want to register under —</option>
+                                        {(env?.divisions || []).map((d) => (
+                                            <option key={d.code} value={d.code}>{d.name} ({d.code})</option>
+                                        ))}
+                                    </select>
+                                </Field>
                                 <Field label="Guardian name (if under 18)"><input value={form.guardian_name} onChange={(e) => setField("guardian_name", e.target.value)} className="input-heritage !py-1.5 !text-xs" /></Field>
                                 <Field label="Aadhaar no."><input value={form.aadhaar_no} onChange={(e) => setField("aadhaar_no", e.target.value)} placeholder="12-digit" className="input-heritage font-mono !py-1.5 !text-xs" /></Field>
                                 <Field label="Address" span={2}><textarea rows={2} value={form.address} onChange={(e) => setField("address", e.target.value)} className="input-heritage !py-1.5 !text-xs" /></Field>

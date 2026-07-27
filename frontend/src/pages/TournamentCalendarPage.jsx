@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { fetchTournaments, fetchBodies } from "@/lib/api";
-import { LayoutList, LayoutGrid, Filter } from "lucide-react";
+import { fetchTournaments, fetchBodies, api } from "@/lib/api";
+import { LayoutList, LayoutGrid, Filter, CalendarClock } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentCalendarView from "@/components/TournamentCalendarView";
+import { useSeason } from "@/context/SeasonContext";
 
 const fmtDate = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
@@ -50,7 +51,9 @@ const TournamentCalendarPage = () => {
     const { persona } = useAuth();
     const [list, setList] = useState([]);
     const [bodies, setBodies] = useState([]);
+    const [matches, setMatches] = useState([]);      // M38f · individual fixtures
     const [loading, setLoading] = useState(true);
+    const { cycleCode } = useSeason() || {};
     // MPCA defaults to Month grid; Divisions default to List (per user choice).
     const [viewMode, setViewMode] = useState(persona?.body_type === "State" ? "calendar" : "list");
     const [typeFilter, setTypeFilter] = useState("all");
@@ -58,17 +61,21 @@ const TournamentCalendarPage = () => {
     useEffect(() => {
         (async () => {
             try {
-                const [t, b] = await Promise.all([
+                const [t, b, m] = await Promise.all([
                     fetchTournaments().catch(() => []),
                     fetchBodies().catch(() => []),
+                    // M38f · pull individual fixtures (from Tournament Match Calendars) so they appear here too
+                    api.get("/matches", { params: cycleCode ? { fiscal_cycle: cycleCode } : {} })
+                        .then((r) => r.data || []).catch(() => []),
                 ]);
                 setList(t || []);
                 setBodies(b || []);
+                setMatches(m);
             } finally {
                 setLoading(false);
             }
         })();
-    }, []);
+    }, [cycleCode]);
 
     const scoped = useMemo(() => scopeTournamentsForPersona(list, persona), [list, persona]);
 
@@ -84,6 +91,17 @@ const TournamentCalendarPage = () => {
             return da - db;
         });
     }, [typeFiltered]);
+
+    // M38f · Individual match fixtures scoped to the currently filtered tournaments
+    const fixturesInScope = useMemo(() => {
+        const allowedTids = new Set(typeFiltered.map((t) => t.id));
+        const tByTid = Object.fromEntries(typeFiltered.map((t) => [t.id, t]));
+        return (matches || [])
+            .filter((m) => allowedTids.has(m.tournament_id))
+            .map((m) => ({ ...m, _tournament: tByTid[m.tournament_id] }))
+            .sort((a, b) => (a.match_date || "").localeCompare(b.match_date || "") || (a.start_time || "").localeCompare(b.start_time || ""));
+    }, [matches, typeFiltered]);
+
 
     if (loading)
         return (
@@ -129,6 +147,13 @@ const TournamentCalendarPage = () => {
                     >
                         <LayoutGrid size={12} strokeWidth={1.5} /> Month
                     </button>
+                    <button
+                        onClick={() => setViewMode("fixtures")}
+                        className={`px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-semibold flex items-center gap-1.5 border-l border-mpca-brass/40 ${viewMode === "fixtures" ? "bg-mpca-green-dark text-mpca-ivory" : "text-mpca-green-dark hover:bg-mpca-parchment"}`}
+                        data-testid="cal-view-fixtures"
+                    >
+                        <CalendarClock size={12} strokeWidth={1.5} /> Fixtures ({fixturesInScope.length})
+                    </button>
                 </div>
 
                 <Filter size={12} className="text-mpca-gray-dark" />
@@ -154,7 +179,45 @@ const TournamentCalendarPage = () => {
             </div>
 
             {viewMode === "calendar" ? (
-                <TournamentCalendarView tournaments={typeFiltered} bodies={bodies} />
+                <TournamentCalendarView tournaments={typeFiltered} bodies={bodies} matches={fixturesInScope} />
+            ) : viewMode === "fixtures" ? (
+                <div className="bulletin-card overflow-hidden" data-testid="cal-fixtures-list">
+                    {fixturesInScope.length === 0 ? (
+                        <div className="p-12 text-center text-mpca-gray-dark italic font-serif" data-testid="cal-fixtures-empty">
+                            No individual match fixtures scheduled yet. Add matches inside a tournament&apos;s Match Calendar.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-mpca-brass/15">
+                            {fixturesInScope.map((m) => (
+                                <Link
+                                    key={m.id}
+                                    to={`/tournaments/${m.tournament_id}`}
+                                    className="block px-6 py-3 hover:bg-mpca-parchment/40 transition-colors"
+                                    data-testid={`cal-fixture-${m.id}`}
+                                >
+                                    <div className="flex items-center gap-4 flex-wrap">
+                                        <div className="w-24 shrink-0">
+                                            <div className="font-mono text-[10px] text-mpca-brass">{m.match_date || "—"}</div>
+                                            <div className="text-[10px] text-mpca-gray-dark">{m.start_time || "—"}</div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-serif text-sm text-mpca-green-dark">
+                                                {m.home_team} <span className="text-mpca-brass mx-1">vs</span> {m.away_team}
+                                            </div>
+                                            <div className="text-[10px] text-mpca-gray-dark mt-0.5">
+                                                {(m.stage || "League")} · {m._tournament?.name || "—"}
+                                                {m.venue_name && <> · {m.venue_name}{m.ground_name ? ` (${m.ground_name})` : ""}</>}
+                                            </div>
+                                        </div>
+                                        {m.result && (
+                                            <span className="text-[10px] tracking-widest uppercase text-mpca-green-dark border border-mpca-green-dark/40 px-2 py-0.5">{m.result}</span>
+                                        )}
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                </div>
             ) : (
                 <div className="bulletin-card overflow-hidden" data-testid="cal-list">
                     {sortedByDate.length === 0 ? (

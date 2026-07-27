@@ -100,6 +100,7 @@ class PlayerRegistrationData(BaseModel):
     mobile: str
     email: Optional[str] = None
     home_district_code: Optional[str] = None
+    preferred_division_code: Optional[str] = None       # M38h · Player picks their host Division from dropdown
     category: str = "Local_MP"                          # Local_MP | Guest | Foreign
     guardian_name: Optional[str] = None
     address: Optional[str] = None
@@ -128,6 +129,7 @@ class PlayerRegistration(BaseModel):
     submitted_ip: Optional[str] = None
     reviewed_at: Optional[str] = None
     reviewed_by: Optional[str] = None
+    ai_summary: Optional[Dict[str, Any]] = None         # M38i · Gemini KYC verification summary
     review_note: Optional[str] = None
     return_reason: Optional[str] = None
     linked_player_id: Optional[str] = None
@@ -323,6 +325,13 @@ async def resolve_token(token: str):
     Returns a lightweight envelope safe for public consumption."""
     now = datetime.now(timezone.utc).isoformat()
 
+    # Fetch the list of divisions once — needed for the Host Division dropdown
+    divisions_cur = db.bodies.find(
+        {"body_type": "Division"},
+        {"_id": 0, "code": 1, "name": 1},
+    ).sort("name", 1)
+    divisions = await divisions_cur.to_list(200)
+
     # 1) Try invite first (more specific).
     invite = await db.player_registration_invites.find_one({"token": token}, {"_id": 0})
     if invite:
@@ -340,6 +349,7 @@ async def resolve_token(token: str):
             "body_name": camp.get("body_name"),
             "cycle_code": camp["cycle_code"],
             "expires_on": camp.get("expires_on"),
+            "divisions": divisions,       # M38h · for Host Division dropdown
             "prefill": {
                 "full_name": invite.get("prefill_name"),
                 "email": invite.get("prefill_email"),
@@ -364,6 +374,7 @@ async def resolve_token(token: str):
         "body_name": camp.get("body_name"),
         "cycle_code": camp["cycle_code"],
         "expires_on": camp.get("expires_on"),
+        "divisions": divisions,           # M38h · for Host Division dropdown
         "prefill": {},
     }
 
@@ -458,6 +469,88 @@ async def get_registration(
     if not _may_own(doc["body_code"], x_user_body_code, x_role_id):
         raise HTTPException(403, "Not permitted to view this registration.")
     return doc
+
+
+@api_router.post("/player-registrations/{rid}/ai-review", response_model=PlayerRegistration)
+async def ai_review_registration(
+    rid: str,
+    actor_name: Optional[str] = None,
+    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+):
+    """M38i · Run Gemini on the player-submitted KYC documents (photo,
+    Aadhaar, address proof, birth certificate) and stamp a summary verdict
+    on the registration so MPCA/Division reviewers can eyeball authenticity.
+    Reuses the same `_run_player_doc_validation` helper that already powers
+    the registered-Player AI OCR + fraud check.
+    """
+    doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Registration not found")
+    if not _may_own(doc["body_code"], x_user_body_code, x_role_id):
+        raise HTTPException(403, "Not permitted to review this registration.")
+
+    from core.ai_validator import _run_player_doc_validation
+    pd = doc.get("player_data") or {}
+    # Shape the registration into the format `_run_player_doc_validation` expects
+    docs_for_ai: List[dict] = []
+    for key, doc_type in [("photo_url", "photo"), ("aadhaar_url", "aadhaar"),
+                          ("address_proof_url", "address_proof"),
+                          ("birth_cert_url", "birth_certificate")]:
+        url = pd.get(key)
+        if url:
+            docs_for_ai.append({"doc_type": doc_type, "url": url, "filename": key})
+
+    if not docs_for_ai:
+        ai_summary = {
+            "overall_verdict": "Recommend_Reject",
+            "overall_confidence": 0.0,
+            "docs_verified": 0, "docs_total": 4,
+            "critical_issues": ["No KYC documents uploaded — cannot verify."],
+            "advisory_notes": [],
+            "per_doc": [],
+            "validated_at": datetime.now(timezone.utc).isoformat(),
+            "validated_by": actor_name or "AI Gatekeeper",
+        }
+    else:
+        adapter = {
+            "id": rid,
+            "player_display_id": rid,
+            "full_name": pd.get("full_name"),
+            "father_name": pd.get("guardian_name"),
+            "mother_name": None,
+            "date_of_birth": pd.get("dob"),
+            "gender": pd.get("gender"),
+            "category": pd.get("category"),
+            "body_id": doc.get("body_code"),
+            "documents": docs_for_ai,
+        }
+        verdict = await _run_player_doc_validation(adapter)
+        # Map Gemini decision → our verdict pill
+        decision = verdict.get("decision", "FLAGGED")
+        if decision == "CLEAN":
+            overall = "Recommend_Approve"
+        elif decision in ("FLAGGED", "SUSPECTED_FRAUD"):
+            overall = "Recommend_Reject"
+        else:
+            overall = "Manual_Review"
+        per_doc = verdict.get("documents") or []
+        ai_summary = {
+            "overall_verdict": overall,
+            "overall_confidence": float(verdict.get("confidence") or 0.0),
+            "docs_verified": len([d for d in per_doc if str(d.get("verdict", "")).lower() in ("ok", "clean", "verified", "matches")]),
+            "docs_total": len(docs_for_ai),
+            "critical_issues": verdict.get("warnings") or [],
+            "advisory_notes": [verdict.get("reasoning") or ""] if verdict.get("reasoning") else [],
+            "per_doc": per_doc,
+            "raw_decision": decision,
+            "validated_at": datetime.now(timezone.utc).isoformat(),
+            "validated_by": actor_name or "AI Gatekeeper",
+        }
+    await db.player_registrations.update_one({"id": rid}, {"$set": {"ai_summary": ai_summary}})
+    return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+
+
 
 
 @api_router.post("/player-registrations/{rid}/approve", response_model=PlayerRegistration)

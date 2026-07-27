@@ -71,6 +71,29 @@ async def list_tournament_matches(tid: str):
     return docs
 
 
+@api_router.get("/matches", response_model=List[TournamentMatch])
+async def list_all_matches(
+    fiscal_cycle: Optional[str] = None,
+    month: Optional[str] = None,        # e.g. "2026-04"
+):
+    """M38f · Global match feed for the Tournament Calendar tab so individual
+    match fixtures added inside a tournament's Match Calendar appear
+    alongside the tournament blocks in the org-wide calendar view."""
+    q: dict = {}
+    if fiscal_cycle:
+        # Look up tournaments in this cycle and filter matches by tournament_id
+        tids = [t["id"] async for t in db.tournaments.find(
+            {"fiscal_cycle": fiscal_cycle}, {"_id": 0, "id": 1},
+        )]
+        q["tournament_id"] = {"$in": tids}
+    if month and len(month) == 7:      # "YYYY-MM"
+        q["match_date"] = {"$regex": f"^{month}"}
+    docs = await db.tournament_matches.find(q, {"_id": 0}).sort([("match_date", 1), ("start_time", 1)]).to_list(2000)
+    return docs
+
+
+
+
 @api_router.post("/tournaments/{tid}/matches", response_model=TournamentMatch)
 async def create_tournament_match(tid: str, payload: TournamentMatchCreate):
     if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):

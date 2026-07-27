@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
     LayoutDashboard,
@@ -13,6 +14,8 @@ import {
     Sparkles,
     LogOut,
     ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
     BookOpen,
     Scale,
     HandCoins,
@@ -160,6 +163,15 @@ import AIAssistantPanel from "@/components/AIAssistantPanel";
 const AppLayout = ({ children }) => {
     const { persona, logout } = useAuth();
     const navigate = useNavigate();
+    // M38e · Persistable sidebar collapse
+    const [collapsed, setCollapsed] = useState(() => {
+        try { return localStorage.getItem("sidebar:collapsed") === "1"; }
+        catch { return false; }
+    });
+    useEffect(() => {
+        try { localStorage.setItem("sidebar:collapsed", collapsed ? "1" : "0"); }
+        catch { /* no-op */ }
+    }, [collapsed]);
 
     const handleLogout = () => {
         logout();
@@ -167,21 +179,22 @@ const AppLayout = ({ children }) => {
     };
 
     return (
-        <div className="min-h-screen flex bg-mpca-ivory" data-testid="app-layout">
-            {/* Sidebar */}
+        <div className="h-screen flex bg-mpca-ivory overflow-hidden" data-testid="app-layout">
+            {/* Sidebar · independent scroll · collapsible */}
             <aside
-                className="w-72 bg-mpca-green-dark text-mpca-ivory flex-shrink-0 flex flex-col"
+                className={`${collapsed ? "w-16" : "w-72"} bg-mpca-green-dark text-mpca-ivory flex-shrink-0 flex flex-col h-full transition-[width] duration-300`}
                 data-testid="app-sidebar"
+                data-collapsed={collapsed ? "1" : "0"}
                 style={{
                     backgroundImage:
                         "linear-gradient(180deg, var(--mpca-green-dark) 0%, #0a1e15 100%)",
                 }}
             >
-                {/* Brand */}
-                <div className="px-6 pt-8 pb-6 border-b-2 border-mpca-oxblood">
-                    <div className="flex items-center gap-3">
-                        <MPCACrest className="w-11 h-11 text-mpca-brass" />
-                        <div>
+                {/* Brand + collapse toggle */}
+                <div className="px-4 pt-6 pb-6 border-b-2 border-mpca-oxblood flex items-center gap-2">
+                    <MPCACrest className={`${collapsed ? "w-9 h-9 mx-auto" : "w-11 h-11 ml-2"} text-mpca-brass shrink-0`} />
+                    {!collapsed && (
+                        <div className="flex-1 min-w-0">
                             <div className="font-serif text-xl text-mpca-ivory leading-none">
                                 MPCA · ERP
                             </div>
@@ -189,11 +202,19 @@ const AppLayout = ({ children }) => {
                                 BCCI Affiliated · Est. 1957
                             </div>
                         </div>
-                    </div>
+                    )}
+                    <button
+                        onClick={() => setCollapsed((c) => !c)}
+                        data-testid="sidebar-collapse-btn"
+                        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                        className={`${collapsed ? "" : "ml-auto"} shrink-0 p-1.5 text-mpca-gold-light/60 hover:text-mpca-gold-light hover:bg-white/5 transition-colors`}
+                    >
+                        {collapsed ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
+                    </button>
                 </div>
 
-                {/* Persona / Tenant card */}
-                {persona && (
+                {/* Persona / Tenant card — hidden when collapsed */}
+                {persona && !collapsed && (
                     <div className="px-6 py-5 border-b border-mpca-brass/20 bg-black/30">
                         <div className="flex items-start justify-between gap-3">
                             <div className="overline text-[9px] !text-mpca-gold-light/70 mb-2">
@@ -251,7 +272,7 @@ const AppLayout = ({ children }) => {
                                 }
                             >
                                 <DASHBOARD_LINK.icon size={16} strokeWidth={1.5} />
-                                <span className="tracking-wide">{DASHBOARD_LINK.label}</span>
+                                {!collapsed && <span className="tracking-wide">{DASHBOARD_LINK.label}</span>}
                             </NavLink>
                         </li>
                         <li>
@@ -265,10 +286,13 @@ const AppLayout = ({ children }) => {
                                             : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
                                     }`
                                 }
+                                title={collapsed ? ORG_LINK.label : undefined}
                             >
                                 <ORG_LINK.icon size={16} strokeWidth={1.5} />
-                                <span className="tracking-wide">{ORG_LINK.label}</span>
-                                <span className="ml-auto text-[9px] font-mono text-mpca-brass/70 tracking-widest">10·54</span>
+                                {!collapsed && <>
+                                    <span className="tracking-wide">{ORG_LINK.label}</span>
+                                    <span className="ml-auto text-[9px] font-mono text-mpca-brass/70 tracking-widest">10·54</span>
+                                </>}
                             </NavLink>
                         </li>
                     </ul>
@@ -284,12 +308,14 @@ const AppLayout = ({ children }) => {
                         })
                         .map((group) => (
                         <div key={group.domain} className="mb-6">
-                            <div
-                                className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2"
-                                data-testid={`nav-domain-${group.domain.toLowerCase()}`}
-                            >
-                                {group.domain}
-                            </div>
+                            {!collapsed && (
+                                <div
+                                    className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2"
+                                    data-testid={`nav-domain-${group.domain.toLowerCase()}`}
+                                >
+                                    {group.domain}
+                                </div>
+                            )}
                             <ul className="space-y-0.5">
                                 {group.items.map((item) => (
                                     <li key={item.to}>
@@ -303,9 +329,10 @@ const AppLayout = ({ children }) => {
                                                         : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
                                                 }`
                                             }
+                                            title={collapsed ? item.label : undefined}
                                         >
                                             <item.icon size={16} strokeWidth={1.5} />
-                                            <span className="tracking-wide">{item.label}</span>
+                                            {!collapsed && <span className="tracking-wide">{item.label}</span>}
                                         </NavLink>
                                     </li>
                                 ))}
@@ -313,7 +340,7 @@ const AppLayout = ({ children }) => {
                         </div>
                     ))}
 
-                    {persona?.id !== "match-official" && (
+                    {persona?.id !== "match-official" && !collapsed && (
                     <div className="border-t border-mpca-brass/15 pt-4">
                         <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
                             Coming Soon
@@ -352,13 +379,14 @@ const AppLayout = ({ children }) => {
                     <button
                         onClick={handleLogout}
                         data-testid="logout-btn"
+                        title={collapsed ? "Sign Out" : undefined}
                         className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-mpca-ivory/80 hover:text-mpca-oxblood hover:bg-white/5 transition-colors duration-300"
                     >
                         <span className="flex items-center gap-3">
                             <LogOut size={16} strokeWidth={1.5} />
-                            <span className="tracking-wide">Sign Out</span>
+                            {!collapsed && <span className="tracking-wide">Sign Out</span>}
                         </span>
-                        <ChevronRight size={14} strokeWidth={1.5} />
+                        {!collapsed && <ChevronRight size={14} strokeWidth={1.5} />}
                     </button>
                 </div>
             </aside>

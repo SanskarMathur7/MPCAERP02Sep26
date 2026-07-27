@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Plus, X, Trash2, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -55,7 +56,7 @@ const MatchOfficials = () => {
                 <div>
                     <div className="overline">Article VII.4 · Officials Directory</div>
                     <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">Match Officials</h1>
-                    <p className="text-mpca-gray-dark mt-2 max-w-2xl">Roster of umpires, scorers, referees and team support staff. Divisions pick from their own body's list when submitting squads to MPCA.</p>
+                    <p className="text-mpca-gray-dark mt-2 max-w-2xl">Roster of umpires, scorers, referees and team support staff. Divisions pick from their own body&apos;s list when submitting squads to MPCA.</p>
                 </div>
                 {isOfficeBearer && (
                     <button className="btn-heritage-primary" onClick={() => setShowForm(true)} data-testid="new-official-btn">
@@ -105,7 +106,10 @@ const MatchOfficials = () => {
                             <div className="col-span-1 text-xs font-mono">{o.years_of_experience}y</div>
                             <div className="col-span-2 text-[11px] text-mpca-gray-dark truncate">{o.phone || o.email || "—"}</div>
                             <div className="col-span-1 text-xs font-mono">{o.fee_per_match_inr ? `₹${o.fee_per_match_inr}` : "—"}</div>
-                            <div className="col-span-1 text-right">{isOfficeBearer && <button onClick={() => del(o.id)} className="text-mpca-oxblood" data-testid={`del-off-${o.id}`}><Trash2 size={12} /></button>}</div>
+                            <div className="col-span-1 text-right flex items-center justify-end gap-2">
+                                <Link to={`/match-officials/${o.id}`} className="text-[9px] uppercase tracking-widest text-mpca-brass hover:text-mpca-oxblood underline underline-offset-2" data-testid={`view-off-${o.id}`}>View</Link>
+                                {isOfficeBearer && <button onClick={() => del(o.id)} className="text-mpca-oxblood" data-testid={`del-off-${o.id}`}><Trash2 size={12} /></button>}
+                            </div>
                         </div>
                     ))}
                 </div>

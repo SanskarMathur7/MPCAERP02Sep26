@@ -27,6 +27,26 @@ class MatchOfficialBase(BaseModel):
     fee_per_match_inr: Optional[float] = None
     is_active: bool = True
     notes: Optional[str] = None
+    # ── M38g · KYC + Bank profile (editable by MPCA · owning Division · the Official themselves) ──
+    date_of_birth: Optional[str] = None
+    gender: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    photo_url: Optional[str] = None
+    pan_no: Optional[str] = None
+    pan_doc_url: Optional[str] = None
+    aadhaar_last4: Optional[str] = None
+    aadhaar_doc_url: Optional[str] = None
+    bank_account_no: Optional[str] = None
+    bank_ifsc: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_cancelled_cheque_url: Optional[str] = None
+    kyc_status: Literal["Not_Started", "Docs_Submitted", "KYC_Verified", "Rejected"] = "Not_Started"
+    kyc_verified_at: Optional[str] = None
+    kyc_verified_by: Optional[str] = None
+    kyc_notes: Optional[str] = None
 
 
 class MatchOfficial(MatchOfficialBase):
@@ -68,18 +88,41 @@ async def create_official(
     return off
 
 
+@api_router.get("/match-officials/{oid}", response_model=MatchOfficial)
+async def get_official(oid: str):
+    """M38g · Detail fetch for the Match Official profile / KYC page."""
+    doc = await db.match_officials.find_one({"id": oid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Match official not found")
+    return doc
+
+
 @api_router.patch("/match-officials/{oid}", response_model=MatchOfficial)
 async def update_official(
     oid: str,
     payload: MatchOfficialBase,
     x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+    x_body_code: Optional[str] = Header(None, alias="X-Body-Code"),
 ):
-    if x_role_id and x_role_id not in _ADMIN_ROLES:
-        raise HTTPException(403, "Only office bearers may edit match officials.")
     doc = await db.match_officials.find_one({"id": oid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Match official not found")
-    await db.match_officials.update_one({"id": oid}, {"$set": payload.model_dump(exclude_unset=True)})
+    # M38g · Edit-permission rules:
+    #   · MPCA state-level office bearers → always allowed
+    #   · Owning Division / District office bearers (body_id match) → allowed
+    #   · The official themselves (persona name match) → allowed to edit KYC / bank / address / contact
+    is_admin = x_role_id in _ADMIN_ROLES
+    is_owning_body = x_body_code and doc.get("body_id") == x_body_code
+    is_self = x_persona_name and x_persona_name.strip().lower() == (doc.get("full_name") or "").strip().lower()
+    if not (is_admin or is_owning_body or is_self):
+        raise HTTPException(403, "You do not have permission to edit this match official.")
+    # If self-editing, do NOT allow changing role / grade / body_id / accreditation
+    patch_data = payload.model_dump(exclude_unset=True)
+    if is_self and not is_admin and not is_owning_body:
+        for guard in ("role", "grade", "body_id", "accreditation_no", "is_active", "kyc_status", "kyc_verified_at", "kyc_verified_by"):
+            patch_data.pop(guard, None)
+    await db.match_officials.update_one({"id": oid}, {"$set": patch_data})
     return await db.match_officials.find_one({"id": oid}, {"_id": 0})
 
 

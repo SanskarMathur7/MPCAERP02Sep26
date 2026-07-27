@@ -69,6 +69,7 @@ const SquadReview = lazy(() => import("@/pages/SquadReview"));
 const SquadDetail = lazy(() => import("@/pages/SquadDetail"));
 const SquadNominationForm = lazy(() => import("@/pages/SquadNominationForm"));
 const DAReview = lazy(() => import("@/pages/DAReview"));
+const MatchOfficialDetail = lazy(() => import("@/pages/MatchOfficialDetail"));
 const PlayerRegistrations = lazy(() => import("@/pages/PlayerRegistrations"));
 const PublicPlayerRegistration = lazy(() => import("@/pages/PublicPlayerRegistration"));
 const CampsPage = lazy(() => import("@/pages/Camps"));
@@ -166,6 +167,7 @@ function App() {
                             <Route path="/tournaments/:id/selection" element={<Protected><SelectionConsole /></Protected>} />
                             <Route path="/selection-funnel" element={<Protected><SelectionFunnel /></Protected>} />
                             <Route path="/match-officials" element={<Protected><MatchOfficials /></Protected>} />
+                            <Route path="/match-officials/:id" element={<Protected><MatchOfficialDetail /></Protected>} />
 
                             {/* Protected — Sprint 1: Finance Rails */}
                             <Route path="/division-grants" element={<Protected><DivisionGrants /></Protected>} />

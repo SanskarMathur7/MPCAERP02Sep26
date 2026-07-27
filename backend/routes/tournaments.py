@@ -51,6 +51,33 @@ def _tournament_scope_query(scope) -> dict:
     return {}
 
 
+async def _official_visible_tids(scope) -> List[str]:
+    """M37 · A match-official only sees tournaments in which they are
+    listed on a squad's `match_officials.{umpire_1|umpire_2|scorer|referee}`
+    slot OR have a DA form for. Returns the de-duplicated list of tournament
+    ids visible to `scope.name`."""
+    if not scope.name:
+        return []
+    tids: set[str] = set()
+    slot_or = [
+        {"match_officials.umpire_1": scope.name},
+        {"match_officials.umpire_2": scope.name},
+        {"match_officials.scorer": scope.name},
+        {"match_officials.referee": scope.name},
+    ]
+    async for s in db.squads.find(
+        {"$or": slot_or}, {"_id": 0, "tournament_id": 1},
+    ):
+        if s.get("tournament_id"):
+            tids.add(s["tournament_id"])
+    async for d in db.match_official_da.find(
+        {"official_name": scope.name}, {"_id": 0, "tournament_id": 1},
+    ):
+        if d.get("tournament_id"):
+            tids.add(d["tournament_id"])
+    return list(tids)
+
+
 @api_router.get("/tournaments", response_model=List[Tournament])
 async def list_tournaments(
     request: Request,
@@ -70,14 +97,20 @@ async def list_tournaments(
         query["fiscal_cycle"] = fiscal_cycle
     if format:
         query["format"] = format
-    # Sprint M13: merge scope filter (works with $or already in query)
     req_scope = get_scope(request)
-    scope_q = _tournament_scope_query(req_scope)
-    if scope_q:
-        if "$or" in query:
-            query["$and"] = [{"$or": query.pop("$or")}, scope_q]
-        else:
-            query.update(scope_q)
+    # M37 · Match officials only see tournaments they're allocated to
+    if req_scope.is_official:
+        allowed = await _official_visible_tids(req_scope)
+        if not allowed:
+            return []
+        query["id"] = {"$in": allowed}
+    else:
+        scope_q = _tournament_scope_query(req_scope)
+        if scope_q:
+            if "$or" in query:
+                query["$and"] = [{"$or": query.pop("$or")}, scope_q]
+            else:
+                query.update(scope_q)
     docs = await db.tournaments.find(query, {"_id": 0}).sort("start_date", 1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
@@ -101,10 +134,16 @@ async def list_pending_acceptance(x_body_code: Optional[str] = Header(None, alia
 
 
 @api_router.get("/tournaments/{tid}", response_model=Tournament)
-async def get_tournament(tid: str):
+async def get_tournament(tid: str, request: Request):
     doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Tournament not found")
+    # M37 · Match officials cannot open tournaments they're not allocated to
+    req_scope = get_scope(request)
+    if req_scope.is_official and req_scope.name:
+        allowed = await _official_visible_tids(req_scope)
+        if tid not in allowed:
+            raise HTTPException(403, "You are not allocated to this tournament.")
     return doc
 
 

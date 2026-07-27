@@ -1,0 +1,46 @@
+{
+  "summary": "M37 (DA Review + Match Officials workflow) fully tested. Backend pytest 15/15 passing + 2 skipped (existing state). Frontend acceptance criteria verified via Playwright: (1) Match Official sidebar restricted to 'My DA / TA Forms' + 'Tournament Calendar' + 'Coming Soon' — no financial nav domains visible; (2) MO /tournaments only shows allocated tournaments (respected in list; note default 'Live' chip may hide Upcoming allocations — minor UX); (3) Division-secretary sees 'DA Review Inbox' under Operations; /da-review renders da-review-filter-{all,submitted,approved,rejected,draft,paid} chips + da-review-stats + stat-flagged; (4) Squad detail (DIV-IND squad 96329508… on SM Khan Trophy) exposes ALL 7 M37 testids — 4 dropdown selects (squad-official-select-umpire_1/2/scorer/referee) backed by /api/match-officials filtered by role (umpires show 4 options incl. Chandrakant/Umesh/Anil Chaudhary; scorer/referee show only default '— select —' since no seeded records for those roles), plus squad-download-nomination-btn, squad-upload-signed-btn, squad-submit-mpca-btn (submit correctly DISABLED until signed copy uploaded); (5) PapaParse import present at TournamentWorkspacePanels.jsx L3 and used at L112 (Papa.parse). One backend bug found + fixed inline: reject_da_form's _create_notification call used kind='warning' but Notification.kind Literal only allows {'claim_event','sla_breach','info'} — caused 500 on every DA reject. Fixed by changing kind='warning' → kind='info' (severity='warning' preserved). Retested: reject flow now 200 and status flips to Rejected with rejection_reason stored + warning-severity notification created.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/match-official-da/{did}/reject", "issue": "FIXED — was returning 500 because _create_notification was called with kind='warning', an invalid Literal for Notification.kind. Changed to kind='info' (severity='warning' remains)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Direct navigation to /squads/{sid} when the squad's tournament is on a different fiscal_cycle than the currently-selected season", "issue": "SquadDetail bootstrap iterates /api/tournaments (which the axios interceptor scopes to the active fiscal_cycle) and reports 'Squad not found in your scope.' even for squads the user is entitled to see. Not an M37 change but was surfaced during testing (Vijay Merchant Trophy squad is on cycle 2025-26 while default season is 2026-27). Consider not injecting fiscal_cycle for /squads/{sid} bootstrap or falling back to /squads/{sid} direct lookup.", "affected_selectors": []},
+      {"flow": "Match Official tournament list default filter", "issue": "Default 'Live' filter hides Upcoming tournaments; user must click 'All' / 'Upcoming' to see allocated tournaments. UX nit — consider defaulting Match-Official persona to 'All'.", "affected_selectors": []}
+    ],
+    "design_issues": [
+      {"screen": "Squad Detail · SquadOfficialsSection", "issues": ["React dev hydration warning: <span> cannot be a child of <option> — appears to be caused by external ve-dynamic wrapper injecting <span data-ve-dynamic> inside <option>. Non-functional but noisy in console."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m37_da_workflow.py",
+    "/app/test_reports/pytest/m37_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Investigate SquadDetail season-filter friction: /squads/{sid} URL breaks when squad's tournament is not on the currently selected fiscal_cycle — bootstrap should look up the tournament id via /squads/{sid} directly (or /squads/{sid}/recommendation) without season scoping, then fetch that specific tournament.",
+    "(Optional) Consider seeding at least one Scorer and one Referee in match_officials so the scorer/referee dropdowns are populated. Currently only Umpire records exist so those two selects only show the default '— select —' option.",
+    "(Optional) Silence the ve-dynamic <span>-inside-<option> hydration warning in SquadOfficialsSection option rendering."
+  ],
+  "critical_code_review_comments": [
+    "backend/routes/tournament_plan.py::reject_da_form was passing kind='warning' to _create_notification which is a Literal type (claim_event|sla_breach|info) — fixed inline, but suggests the type should be widened OR a lint step should catch this. Approve path was correct (kind='info').",
+    "backend/routes/tournament_plan.py::list_da_forms imports _tournament_scope_query lazily inside the function — works, but tightly couples DA scoping to tournaments route implementation. Consider extracting a shared 'body-scoped tournament ids' helper into core/scoping.py.",
+    "backend/routes/tournaments.py::_official_visible_tids performs a full scan over squads + match_official_da for every /tournaments listing call for match-official personas. Add a compound index on (match_officials.umpire_1, umpire_2, scorer, referee) or maintain a denormalised allocated_officials array on the tournament document.",
+    "backend/routes/selection_console.py::submit_squad_to_mpca — the exemption for MPCA host-body relies on `is_mpca = x_role_id in _MPCA_APPROVER_ROLES`. A Division persona submitting a MPCA-hosted squad (edge case) would still be blocked by the RBAC check earlier, so this is correct, but the comment should call out the exemption is by ROLE not by BODY.",
+    "frontend/src/pages/SquadDetail.jsx bootstrap: recommendation response has no tournament_id field so the code always falls through to O(N tournaments) squad-list iteration. Add tournament_id to the recommendation payload OR call GET /squads/{sid} directly to short-circuit."
+  ],
+  "updated_files": [
+    "/app/backend/routes/tournament_plan.py (kind='warning' → kind='info' in reject_da_form notification)",
+    "/app/backend/tests/test_m37_da_workflow.py (new test file — 15 pytest cases across all 6 M37 items)"
+  ],
+  "success_rate": {"backend": "100% (15/15 executed, 2 skipped due to persistent state)", "frontend": "100% of M37 acceptance criteria verified"},
+  "test_credentials": "persona-chip-match-official, persona-chip-division-secretary, persona-chip-secretary — all password-less persona chips.",
+  "seed_data_creation": "Allocated Chandrakant Pandit as umpire_1 on an existing squad of the first non-visible MPCA tournament (idempotent — reuses existing squad if present). Created 1 Draft DA + 1 Submitted DA + 1 Approved DA + 1 Rejected DA for Chandrakant. Reopened DIV-IND squad 5d0f47db… (Vijay Merchant Trophy) and 96329508… (SM Khan Trophy) to Draft state, stamped signed_copy_url='/uploads/TEST_M37_signed.pdf' on 5d0f47db. All test data prefixed TEST_M37 where new squads were created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M37 signed off. Squad 96329508-900d-4a8d-a044-46cf53dc0c9e (SM Khan Trophy, cycle 2026-27) is a good fixture for future signed-copy / squad-officials testing — has 15 members + captain + DIV-IND body. Squad 5d0f47db (Vijay Merchant Trophy, cycle 2025-26) has been re-submitted to MPCA with a fake signed_copy_url — reset if you need it in Draft. If SquadDetail season-filter bug is fixed, remove the workaround in frontend UI tests that switches to the tournament's cycle.",
+  "rca of the issue": "reject_da_form 500: Notification.kind is a Pydantic Literal restricted to 'claim_event'|'sla_breach'|'info'; the reject handler passed kind='warning' (probably auto-completed from severity='warning'). Since Notification is constructed inside _create_notification, validation fails → 500 propagates. Fix is a one-line kind='warning' → kind='info' (severity='warning' preserved so UI can still render warning tint). Recommend either widening the Literal to include 'warning' as an alias, OR adding a pytest that constructs Notification with all four call-site kinds in the codebase."
+}

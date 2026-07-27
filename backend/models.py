@@ -1016,6 +1016,9 @@ class Squad(BaseModel):
     reviewed_at: Optional[str] = None
     reviewed_by: Optional[str] = None
     review_note: Optional[str] = None
+    signed_copy_url: Optional[str] = None      # M37 · Mandatory signed nomination PDF for Division/District submissions
+    signed_copy_uploaded_at: Optional[str] = None
+    signed_copy_uploaded_by: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -2051,6 +2054,7 @@ class TournamentReimbursementClaim(TournamentReimbursementClaimBase):
 
     invoice_ids: List[str] = []                   # snapshot of tournament_invoices referenced
     extra_expense_ids: List[str] = []
+    da_form_ids: List[str] = []                   # M37 · Match Official DA forms bundled into this claim
 
     submitted_by: Optional[str] = None
     submitted_at: Optional[str] = None

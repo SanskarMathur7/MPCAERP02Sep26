@@ -397,12 +397,20 @@ async def list_da_forms(request: Request, tournament_id: Optional[str] = None, s
         q["tournament_id"] = tournament_id
     if status:
         q["status"] = status
-    # Sprint M13: match-official persona sees only own DA forms
     scope = get_scope(request)
+    # Sprint M13: match-official persona sees only own DA forms
     if scope.is_official and scope.name and not official_name:
         official_name = scope.name
     if official_name:
         q["official_name"] = {"$regex": re.escape(official_name), "$options": "i"}
+    # M37 · Division / District reviewers see DA forms for tournaments they host
+    if (scope.is_division or scope.is_district) and not tournament_id and not scope.is_official:
+        # Resolve tournaments visible to this body-scope
+        from routes.tournaments import _tournament_scope_query
+        tscope = _tournament_scope_query(scope)
+        if tscope:
+            allowed_tids = [t["id"] async for t in db.tournaments.find(tscope, {"_id": 0, "id": 1})]
+            q["tournament_id"] = {"$in": allowed_tids}
     docs = await db.match_official_da.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return docs
 
@@ -639,6 +647,20 @@ async def self_create_da_form(
         raise HTTPException(404, "Match official profile not found — please ensure your profile exists first.")
 
     name = off["full_name"]
+    # M37 · A match-official can only self-create a DA for a tournament they're allocated to
+    if scope.is_official and scope.name and scope.name == name:
+        squad_hit = await db.squads.find_one({
+            "tournament_id": tournament_id,
+            "$or": [
+                {"match_officials.umpire_1": name},
+                {"match_officials.umpire_2": name},
+                {"match_officials.scorer": name},
+                {"match_officials.referee": name},
+            ],
+        }, {"_id": 0, "id": 1})
+        if not squad_hit:
+            raise HTTPException(403, "You are not allocated to this tournament — please contact your Division/MPCA to be added to the squad first.")
+
     # Return existing draft if present
     exists = await db.match_official_da.find_one({
         "tournament_id": tournament_id, "official_name": name,
@@ -714,6 +736,9 @@ async def submit_da_form(did: str):
 
 @api_router.post("/match-official-da/{did}/approve", response_model=MatchOfficialDA)
 async def approve_da_form(did: str, actor_name: str, actor_body_id: str = "MPCA"):
+    """M37 · Division approves the DA form. Approved DAs are eligible to be
+    bundled into the Division's Reimbursement Claim to MPCA (no separate
+    MPCA approval)."""
     doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "DA form not found")
@@ -723,6 +748,16 @@ async def approve_da_form(did: str, actor_name: str, actor_body_id: str = "MPCA"
     await db.match_official_da.update_one({"id": did}, {"$set": {
         "status": "Approved", "approved_by": actor_name, "approved_at": now,
     }})
+    # Notify the match official
+    await _create_notification(
+        recipient_role_id="match-official",
+        recipient_body_id=doc.get("body_id") or "MPCA",
+        title=f"DA form approved · {doc.get('da_ref')}",
+        message=f"{doc.get('tournament_name')} · ₹{doc.get('total_inr'):,.0f} · Approved by {actor_name}. Will be bundled with the Division's reimbursement claim to MPCA.",
+        link="/my-da-forms",
+        related_type="match_official_da", related_id=did,
+        severity="info", kind="info",
+    )
     return await db.match_official_da.find_one({"id": did}, {"_id": 0})
 
 
@@ -737,6 +772,16 @@ async def reject_da_form(did: str, actor_name: str, reason: str, actor_body_id: 
         "status": "Rejected", "rejection_reason": reason,
         "approved_by": actor_name,
     }})
+    # Notify the match official so they can edit + re-submit
+    await _create_notification(
+        recipient_role_id="match-official",
+        recipient_body_id=doc.get("body_id") or "MPCA",
+        title=f"DA form returned · {doc.get('da_ref')}",
+        message=f"{doc.get('tournament_name')} · Rejected by {actor_name}. Reason · {reason}",
+        link="/my-da-forms",
+        related_type="match_official_da", related_id=did,
+        severity="warning", kind="info",
+    )
     return await db.match_official_da.find_one({"id": did}, {"_id": 0})
 
 

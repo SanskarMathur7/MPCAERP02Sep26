@@ -67,6 +67,8 @@ const ReimbursementClaimDetail = lazy(() =>
 const MyDAForms = lazy(() => import("@/pages/MyDAForms"));
 const SquadReview = lazy(() => import("@/pages/SquadReview"));
 const SquadDetail = lazy(() => import("@/pages/SquadDetail"));
+const SquadNominationForm = lazy(() => import("@/pages/SquadNominationForm"));
+const DAReview = lazy(() => import("@/pages/DAReview"));
 const PlayerRegistrations = lazy(() => import("@/pages/PlayerRegistrations"));
 const PublicPlayerRegistration = lazy(() => import("@/pages/PublicPlayerRegistration"));
 const CampsPage = lazy(() => import("@/pages/Camps"));
@@ -188,8 +190,10 @@ function App() {
                             <Route path="/reimbursement-claims" element={<Protected><ReimbursementClaimsList /></Protected>} />
                             <Route path="/reimbursement-claims/:id" element={<Protected><ReimbursementClaimDetail /></Protected>} />
                             <Route path="/my-da-forms" element={<Protected><MyDAForms /></Protected>} />
+                            <Route path="/da-review" element={<Protected><DAReview /></Protected>} />
                             <Route path="/squads/:sid/review" element={<Protected><SquadReview /></Protected>} />
                             <Route path="/squads/:sid" element={<Protected><SquadDetail /></Protected>} />
+                            <Route path="/squads/:id/nomination-form" element={<Protected><SquadNominationForm /></Protected>} />
                             <Route path="/tournaments/:tid/squads/new" element={<Protected><SquadDetail /></Protected>} />
                             <Route path="/player-registrations" element={<Protected><PlayerRegistrations /></Protected>} />
                             <Route path="/camps" element={<Protected><CampsPage /></Protected>} />

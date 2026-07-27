@@ -59,6 +59,14 @@ async def _compute_summary(tournament_id: str, body_id: str) -> dict:
         "status": "Approved",
     }, {"_id": 0}).to_list(200)
 
+    # M37 · Approved DA forms for this tournament — bundled into the Division's claim
+    # (No separate MPCA approval for DA; Division-approved DAs auto-attach here)
+    da_forms = await db.match_official_da.find({
+        "tournament_id": tournament_id,
+        "status": "Approved",
+    }, {"_id": 0}).to_list(500)
+    da_total = float(sum((d.get("total_inr") or 0) for d in da_forms))
+
     heads_ref = (tb or {}).get("approved_head_allocations") or (tb or {}).get("head_allocations") or []
     head_index = {h.get("head"): float(h.get("limit_inr") or 0) for h in heads_ref}
 
@@ -115,11 +123,14 @@ async def _compute_summary(tournament_id: str, body_id: str) -> dict:
     return {
         "budget_total_inr": round(budget_total, 2),
         "invoiced_total_inr": round(invoiced_total, 2),
-        "eligible_total_inr": round(grand_eligible, 2),
+        "eligible_total_inr": round(grand_eligible + da_total, 2),
         "over_budget_inr": round(grand_over, 2),
         "extra_expense_approved_inr": round(extra_approved_total, 2),
         "invoice_count": len(invoices),
         "extra_expense_count": len(extras),
+        # M37 · DA (Match Officials) rollup
+        "da_total_inr": round(da_total, 2),
+        "da_form_count": len(da_forms),
         "heads": rows,
     }
 
@@ -229,6 +240,9 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
         "body_id": doc["body_id"],
         "status": "Approved",
     }, {"_id": 0}).to_list(200)
+    da_forms = await db.match_official_da.find({
+        "tournament_id": doc["tournament_id"], "status": "Approved",
+    }, {"_id": 0}).to_list(500)
 
     now = datetime.now(timezone.utc).isoformat()
     step = ApprovalStep(
@@ -242,6 +256,7 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
         "summary": summary,
         "invoice_ids": [i["id"] for i in invoices],
         "extra_expense_ids": [e["id"] for e in extras],
+        "da_form_ids": [d["id"] for d in da_forms],
         "submitted_by": action.actor_name,
         "submitted_at": now,
         "approval_chain": chain,

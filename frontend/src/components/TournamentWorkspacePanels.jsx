@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Save, X, Loader2, Lock, LockOpen, Calendar as CalIcon, Upload } from "lucide-react";
+import Papa from "papaparse";
 import { api } from "@/lib/api";
 
 const inputCls = "input-heritage !py-1.5 !text-xs";
@@ -107,23 +108,30 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
         setImporting(true); setImportResult(null);
         try {
             const text = await file.text();
-            const lines = text.split(/\r?\n/).filter((l) => l.trim());
-            if (lines.length < 2) throw new Error("CSV needs a header row + at least one data row.");
-            const header = lines[0].split(",").map((h) => h.trim());
-            const idx = (col) => header.indexOf(col);
-            const rows = lines.slice(1).map((ln) => {
-                const cells = ln.split(",").map((c) => c.trim());
-                return {
-                    stage: cells[idx("stage")] || "League",
-                    match_date: cells[idx("match_date")],
-                    start_time: cells[idx("start_time")] || "10:00",
-                    home_team: cells[idx("home_team")],
-                    away_team: cells[idx("away_team")],
-                    venue_name: cells[idx("venue_name")] || "",
-                    ground_name: cells[idx("ground_name")] || "",
-                    notes: cells[idx("notes")] || "",
-                };
-            }).filter((r) => r.home_team && r.away_team && r.match_date);
+            // M37 · Use PapaParse so commas inside quoted `notes` values don't break parsing
+            const parsed = Papa.parse(text, {
+                header: true,
+                skipEmptyLines: true,
+                transformHeader: (h) => h.trim(),
+                transform: (v) => (typeof v === "string" ? v.trim() : v),
+            });
+            if (parsed.errors?.length) {
+                // Non-fatal — surface a soft warning; still process rows that parsed
+                console.warn("[CSV import] parse warnings:", parsed.errors.slice(0, 3));
+            }
+            const rows = (parsed.data || [])
+                .map((r) => ({
+                    stage: r.stage || "League",
+                    match_date: r.match_date,
+                    start_time: r.start_time || "10:00",
+                    home_team: r.home_team,
+                    away_team: r.away_team,
+                    venue_name: r.venue_name || "",
+                    ground_name: r.ground_name || "",
+                    notes: r.notes || "",
+                }))
+                .filter((r) => r.home_team && r.away_team && r.match_date);
+            if (!rows.length) throw new Error("No valid rows found. Ensure the CSV has a header row and columns: stage, match_date, start_time, home_team, away_team, venue_name, ground_name, notes.");
             let created = 0, errors = 0;
             for (const row of rows) {
                 try { await api.post(`/tournaments/${tournament.id}/matches`, row); created++; }

@@ -158,6 +158,12 @@ async def review_selection(
 
 class SquadSubmitPayload(BaseModel):
     note: Optional[str] = None
+    signed_copy_url: Optional[str] = None       # M37 · Mandatory for Division/District submissions
+    model_config = ConfigDict(extra="ignore")
+
+
+class SquadSignedCopyPayload(BaseModel):
+    signed_copy_url: str
     model_config = ConfigDict(extra="ignore")
 
 
@@ -194,13 +200,50 @@ async def submit_squad_to_mpca(
     if not any(m.get("is_captain") for m in members):
         raise HTTPException(400, "A Captain must be marked before submission.")
 
+    # ── M37 · Signed nomination copy is MANDATORY for Division / District submissions ──
+    # MPCA host-body drafts (self-approving) are exempt.
+    signed_url = payload.signed_copy_url or doc.get("signed_copy_url")
+    if not is_mpca and not signed_url:
+        raise HTTPException(
+            400,
+            "Signed nomination copy is required · Please download the nomination form, get it signed by the Division office bearers, and upload the signed PDF before submitting to MPCA.",
+        )
+
     now = datetime.now(timezone.utc).isoformat()
-    await db.squads.update_one({"id": sid}, {"$set": {
+    updates = {
         "submission_status": "Awaiting_MPCA_Approval",
         "submitted_at": now,
         "submitted_by": x_user_name or x_role_id,
         "submitted_by_body": x_body_code,
         "review_note": payload.note,
+    }
+    if payload.signed_copy_url:
+        updates["signed_copy_url"] = payload.signed_copy_url
+        updates["signed_copy_uploaded_at"] = now
+        updates["signed_copy_uploaded_by"] = x_user_name or x_role_id
+    await db.squads.update_one({"id": sid}, {"$set": updates})
+    return await db.squads.find_one({"id": sid}, {"_id": 0})
+
+
+@api_router.post("/squads/{sid}/signed-copy")
+async def upload_signed_copy(
+    sid: str,
+    payload: SquadSignedCopyPayload,
+    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+):
+    """M37 · Division/District uploads the signed nomination copy for a squad.
+    The URL is stamped on the squad so submission-to-MPCA can proceed."""
+    doc = await db.squads.find_one({"id": sid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Squad not found")
+    if not payload.signed_copy_url:
+        raise HTTPException(400, "signed_copy_url is required")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.squads.update_one({"id": sid}, {"$set": {
+        "signed_copy_url": payload.signed_copy_url,
+        "signed_copy_uploaded_at": now,
+        "signed_copy_uploaded_by": x_user_name or x_role_id,
     }})
     return await db.squads.find_one({"id": sid}, {"_id": 0})
 

@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom"
 import {
     ArrowLeft, Users, Plus, X, Crown, BadgeCheck, ShieldCheck, ShieldAlert,
     Send, Loader2, Search, Filter, Lock, RotateCcw, CheckCircle2, XCircle, Info,
+    Download, Upload, FileCheck,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
@@ -172,6 +173,11 @@ const SquadDetail = () => {
     };
 
     const handleSubmit = async () => {
+        // M37 · Signed nomination copy is mandatory for Division/District submissions to MPCA.
+        if (!isMPCA && !squad.signed_copy_url) {
+            alert("Signed nomination copy is required. Please download the nomination form, get it signed by the Division office bearers, and upload the signed PDF before submitting to MPCA.");
+            return;
+        }
         const note = window.prompt("Optional note for MPCA reviewer:") ?? "";
         await guardAsync(async () => {
             const { data: updated } = await api.post(`/squads/${squad.id}/submit`, { note: note || null });
@@ -179,6 +185,20 @@ const SquadDetail = () => {
             try { await api.post(`/squads/${updated.id}/notify-ai-review`); } catch (_) { /* non-fatal */ }
             alert("Submitted to MPCA for review.");
         });
+    };
+
+    const handleSignedCopyUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("related_type", "squad_signed_copy");
+            const { data: upload } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+            const { data: updated } = await api.post(`/squads/${squad.id}/signed-copy`, { signed_copy_url: upload.url });
+            setSquad(updated);
+        } catch (err) { alert(err?.response?.data?.detail || err.message); }
+        finally { e.target.value = ""; }
     };
 
     const handleReview = async (action) => {
@@ -289,8 +309,30 @@ const SquadDetail = () => {
 
                     {/* ─── Workflow action strip ─── */}
                     <div className="flex flex-wrap items-center gap-2" data-testid="squad-actions">
+                        {canSubmit && !isMPCA && members.length >= 11 && captain && (
+                            <>
+                                <a href={`/squads/${squad.id}/nomination-form`} target="_blank" rel="noreferrer" className="text-[11px] uppercase tracking-widest bg-mpca-ivory text-mpca-green-dark px-3 py-2 flex items-center gap-1 hover:bg-mpca-gold-light transition-colors" data-testid="squad-download-nomination-btn">
+                                    <Download size={12} /> Download Nomination
+                                </a>
+                                <label className="text-[11px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-3 py-2 flex items-center gap-1 cursor-pointer hover:bg-mpca-brass/80 transition-colors" data-testid="squad-upload-signed-btn">
+                                    <Upload size={12} /> {squad.signed_copy_url ? "Replace Signed Copy" : "Upload Signed Copy"}
+                                    <input type="file" className="hidden" accept="application/pdf,image/*" onChange={handleSignedCopyUpload} />
+                                </label>
+                                {squad.signed_copy_url && (
+                                    <a href={squad.signed_copy_url} target="_blank" rel="noreferrer" className="text-[10px] text-mpca-gold-light underline flex items-center gap-1" data-testid="squad-view-signed-link">
+                                        <FileCheck size={11} /> Signed copy ✓
+                                    </a>
+                                )}
+                            </>
+                        )}
                         {canSubmit && members.length >= 11 && captain && (
-                            <button onClick={handleSubmit} disabled={busy} className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-4 py-2 flex items-center gap-1 disabled:opacity-40 hover:bg-mpca-burgundy-dark transition-colors" data-testid="squad-submit-mpca-btn">
+                            <button
+                                onClick={handleSubmit}
+                                disabled={busy || (!isMPCA && !squad.signed_copy_url)}
+                                title={!isMPCA && !squad.signed_copy_url ? "Upload signed nomination copy first" : ""}
+                                className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-4 py-2 flex items-center gap-1 disabled:opacity-40 hover:bg-mpca-burgundy-dark transition-colors"
+                                data-testid="squad-submit-mpca-btn"
+                            >
                                 {busy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Submit to MPCA
                             </button>
                         )}
@@ -516,14 +558,14 @@ const SquadDetail = () => {
 // ────────────────── M34 · Officials sub-component ──────────────────
 
 const OFFICIAL_SLOTS = [
-    { key: "manager", label: "Team Manager" },
-    { key: "coach", label: "Head Coach" },
-    { key: "trainer", label: "Trainer" },
-    { key: "physio", label: "Physio" },
-    { key: "umpire_1", label: "Umpire #1 (On-field)" },
-    { key: "umpire_2", label: "Umpire #2 (On-field)" },
-    { key: "scorer", label: "Scorer" },
-    { key: "referee", label: "Match Referee" },
+    { key: "manager", label: "Team Manager", isMatchOfficial: false },
+    { key: "coach", label: "Head Coach", isMatchOfficial: false },
+    { key: "trainer", label: "Trainer", isMatchOfficial: false },
+    { key: "physio", label: "Physio", isMatchOfficial: false },
+    { key: "umpire_1", label: "Umpire #1 (On-field)", isMatchOfficial: true, roleFilter: "Umpire" },
+    { key: "umpire_2", label: "Umpire #2 (On-field)", isMatchOfficial: true, roleFilter: "Umpire" },
+    { key: "scorer", label: "Scorer", isMatchOfficial: true, roleFilter: "Scorer" },
+    { key: "referee", label: "Match Referee", isMatchOfficial: true, roleFilter: "Referee" },
 ];
 
 const SquadOfficialsSection = ({ squad, canEdit, onSaved }) => {
@@ -531,8 +573,32 @@ const SquadOfficialsSection = ({ squad, canEdit, onSaved }) => {
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState("");
+    // M37 · Match Officials fetched from DB (dropdown source)
+    const [officialsDb, setOfficialsDb] = useState([]);
+    const [loadingDb, setLoadingDb] = useState(true);
 
     useEffect(() => { setOfficials(squad.match_officials || {}); setDirty(false); }, [squad.id, squad.match_officials]);
+
+    useEffect(() => {
+        // Fetch pool of match officials — server will apply scope but for Divisions we
+        // want to also see MPCA state-panel officials, so we do two fetches and merge.
+        (async () => {
+            setLoadingDb(true);
+            try {
+                const [ownRes, mpcaRes] = await Promise.all([
+                    api.get("/match-officials"),
+                    // MPCA-panel officials (only fetched separately if squad body is a division/district)
+                    (squad.body_id && squad.body_id !== "MPCA")
+                        ? api.get("/match-officials", { params: { body_id: "MPCA" } }).catch(() => ({ data: [] }))
+                        : Promise.resolve({ data: [] }),
+                ]);
+                const merged = [...(ownRes.data || []), ...(mpcaRes.data || [])];
+                const dedup = Object.values(Object.fromEntries(merged.map((o) => [o.id, o])));
+                setOfficialsDb(dedup);
+            } catch { setOfficialsDb([]); }
+            finally { setLoadingDb(false); }
+        })();
+    }, [squad.body_id]);
 
     const setField = (k, v) => { setOfficials((o) => ({ ...o, [k]: v })); setDirty(true); };
 
@@ -559,7 +625,7 @@ const SquadOfficialsSection = ({ squad, canEdit, onSaved }) => {
                         {filled} of {OFFICIAL_SLOTS.length} slots filled
                     </div>
                     <div className="text-[10px] text-mpca-gray-dark mt-1">
-                        Nominated by {squad.body_id} along with the XV. MPCA reviews these with the squad before approval. Selected officials can submit their DA forms after the tournament.
+                        Nominated by {squad.body_id} along with the XV. On-field officials (Umpires · Scorer · Referee) are picked from the MPCA / Division match-officials panel so their login can access this tournament&apos;s DA form. Support staff (Manager, Coach, Trainer, Physio) are free-text.
                     </div>
                 </div>
                 {canEdit && dirty && (
@@ -576,18 +642,54 @@ const SquadOfficialsSection = ({ squad, canEdit, onSaved }) => {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3 p-5">
-                {OFFICIAL_SLOTS.map((slot) => (
-                    <label key={slot.key} className="block" data-testid={`squad-official-field-${slot.key}`}>
-                        <div className="text-[10px] uppercase tracking-widest text-mpca-brass font-mono mb-1">{slot.label}</div>
-                        <input
-                            value={officials[slot.key] || ""}
-                            onChange={(e) => setField(slot.key, e.target.value)}
-                            disabled={!canEdit}
-                            placeholder="Full name"
-                            className="input-heritage !py-1.5 !text-xs"
-                        />
-                    </label>
-                ))}
+                {OFFICIAL_SLOTS.map((slot) => {
+                    const currentVal = officials[slot.key] || "";
+                    if (slot.isMatchOfficial) {
+                        // Filter DB to relevant role for this slot
+                        const opts = officialsDb.filter((o) => o.role === slot.roleFilter);
+                        const matchInDb = opts.some((o) => o.full_name === currentVal);
+                        return (
+                            <label key={slot.key} className="block" data-testid={`squad-official-field-${slot.key}`}>
+                                <div className="text-[10px] uppercase tracking-widest text-mpca-brass font-mono mb-1 flex items-center justify-between">
+                                    <span>{slot.label}</span>
+                                    <span className="text-[9px] text-mpca-gray-dark normal-case tracking-normal">{loadingDb ? "loading…" : `${opts.length} available`}</span>
+                                </div>
+                                <select
+                                    value={matchInDb || !currentVal ? currentVal : "__legacy__"}
+                                    onChange={(e) => {
+                                        if (e.target.value === "__legacy__") return;
+                                        setField(slot.key, e.target.value);
+                                    }}
+                                    disabled={!canEdit || loadingDb}
+                                    className="input-heritage !py-1.5 !text-xs"
+                                    data-testid={`squad-official-select-${slot.key}`}
+                                >
+                                    <option value="">— Select from panel —</option>
+                                    {!matchInDb && currentVal && (
+                                        <option value="__legacy__">{currentVal} (legacy · not linked)</option>
+                                    )}
+                                    {opts.map((o) => (
+                                        <option key={o.id} value={o.full_name}>
+                                            {o.full_name} · {o.grade?.replace(/_/g, " ")} · {o.body_id === "MPCA" ? "MPCA State" : o.body_id}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        );
+                    }
+                    return (
+                        <label key={slot.key} className="block" data-testid={`squad-official-field-${slot.key}`}>
+                            <div className="text-[10px] uppercase tracking-widest text-mpca-brass font-mono mb-1">{slot.label}</div>
+                            <input
+                                value={currentVal}
+                                onChange={(e) => setField(slot.key, e.target.value)}
+                                disabled={!canEdit}
+                                placeholder="Full name"
+                                className="input-heritage !py-1.5 !text-xs"
+                            />
+                        </label>
+                    );
+                })}
             </div>
         </div>
     );

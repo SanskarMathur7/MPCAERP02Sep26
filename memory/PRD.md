@@ -1376,10 +1376,42 @@ _Shipped 27 Jul 2026 · verified via Playwright screenshot (collapsed + expanded
 **Files touched:** `frontend/src/components/AppLayout.jsx`.
 
 **Backlog (from user's 11-point ask, remaining):**
-- Event Calendar tab on MPCA (all-member visible) + Birthday reminders (dashboard-only for now, email blast MOCKED until SMTP creds provided).
+- ~~Event Calendar tab on MPCA (all-member visible) + Birthday reminders~~ ✅ Shipped in M39b.
 - Strict Tournament Acceptance (Division-only).
-- MPCA Scheme register: signed-PDF re-upload gate.
+- ~~MPCA Scheme register: signed-PDF re-upload gate.~~ ✅ Shipped in M39c.
 - Grounds & Venue overhaul (drop Venues, retain Grounds with owner + BCCI approval + allowed tournament types).
 - Meeting Tab AI summary of signed minutes.
 - Squad Document AI review during MPCA approval.
 - ID Card generator (P2) on Member detail pages.
+
+---
+
+## Sprint M39b · Event Calendar + Birthday Reminders
+_Shipped 27 Jul 2026 · 20/20 pytest + full Playwright pass (iteration_58)_
+
+**Feature 4 (Event Calendar):** Single MPCA-owned calendar visible to every persona; only MPCA (State body) may create / edit / delete. Monthly grid with click-to-select + double-click-to-create; right rail shows selected-day events, today's birthdays, and next-14-day birthday preview. Backend endpoints gated via `_require_mpca(scope)` from `core.scoping`.
+
+**Feature 5 (Birthdays):** Member DOB added to `MemberBase` / `MemberUpdate` (optional ISO date). Endpoints `GET /api/events/birthdays/today` and `GET /api/events/birthdays/upcoming?days=N` compute matches via month-day regex on `date_of_birth`. `POST /api/events/birthdays/send-daily-emails` is MOCKED (logs recipients only — per user's "dashboard-only for now" choice). Age = current year − DOB year (turning-age).
+
+**Files:**
+- `backend/routes/events.py` (NEW, 260 lines)
+- `backend/routes/tournaments.py` + `backend/routes/grant_claims.py` (activation gates added)
+- `backend/models.py` (`date_of_birth` on member models)
+- `backend/server.py` (route wiring + bootstrap seed for pre-existing seasons)
+- `frontend/src/pages/EventCalendar.jsx` (NEW, 300+ lines)
+- `frontend/src/pages/MemberDetail.jsx` + `MemberNew.jsx` (DOB field)
+- `frontend/src/components/AppLayout.jsx` (nav entry under Secretarial)
+- `frontend/src/App.js` (route)
+
+---
+
+## Sprint M39c · Scheme Season Activation Gate
+_Shipped 27 Jul 2026 · covered in iteration_58 above_
+
+**Feature 6:** Before the cricketing season starts, MPCA must (1) edit schemes in ERP, (2) Export the master PDF (from the Schemes Register banner), (3) get signed by office bearers, (4) re-upload the signed PDF. Only then may Divisions create new tournaments or grant claims for that fiscal cycle.
+
+- New collection `scheme_activation_seasons { fiscal_cycle, is_active, signed_pdf_url, signed_by, signed_at, bootstrap }`.
+- Endpoints `GET /api/schemes/season-activation?fiscal_cycle=X`, `POST /api/schemes/season-activation`, `POST /api/schemes/season-activation/reset`.
+- `POST /api/tournaments` and `POST /api/grant-claims` now call `is_season_activated(fiscal_cycle)` and return 403 with a user-friendly message when the season is not activated.
+- Frontend banner on `SchemesMaster.jsx` — green when activated, oxblood when not, MPCA-only Export PDF (print-to-PDF) + Upload Signed PDF + Deactivate controls. Non-MPCA sees "Awaiting MPCA" badge.
+- Bootstrap: fiscal cycles 2024-25 / 2025-26 / 2026-27 auto-activated at startup so existing dev data still works. MPCA can re-upload anytime to formalize (bootstrap flag prompts them to do so).

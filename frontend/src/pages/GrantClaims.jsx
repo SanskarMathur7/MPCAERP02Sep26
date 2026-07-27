@@ -196,25 +196,45 @@ const GrantClaims = () => {
                 <div className="space-y-2" data-testid="claims-list">
                     {claims.length === 0 ? (
                         <div className="bulletin-card p-8 text-center text-sm text-mpca-gray-dark">No grant claims yet.</div>
-                    ) : claims.map((c) => (
+                    ) : claims.map((c) => {
+                        // M38 · AI verdict badge on list — reviewers can triage without opening each claim
+                        const v = c.ai_summary?.overall_verdict;
+                        const aiBadge = v === "Recommend_Approve"
+                            ? { txt: "AI ✓", cls: "bg-mpca-green-dark text-mpca-ivory", title: "AI recommends approval" }
+                            : v === "Recommend_Reject"
+                                ? { txt: "AI ⚠", cls: "bg-mpca-oxblood text-mpca-ivory", title: "AI recommends rejection · critical issues found" }
+                                : v === "Manual_Review"
+                                    ? { txt: "AI ?", cls: "bg-mpca-brass text-mpca-ivory", title: "AI recommends manual review" }
+                                    : null;
+                        return (
                         <button key={c.id} onClick={() => setSelected(c)}
                             className={`w-full text-left p-3 border ${selected?.id === c.id ? "border-mpca-oxblood bg-mpca-cream/40" : "border-mpca-brass/30 hover:bg-mpca-cream/30"}`}
                             data-testid={`claim-row-${c.id}`}>
                             <div className="flex justify-between items-start">
-                                <div>
+                                <div className="min-w-0 flex-1">
                                     <div className="font-mono text-[10px] text-mpca-brass">{c.claim_ref}</div>
-                                    <div className="font-serif text-sm text-mpca-green-dark mt-0.5">{c.scheme_name}</div>
+                                    <div className="font-serif text-sm text-mpca-green-dark mt-0.5 truncate">{c.scheme_name}</div>
                                     <div className="text-[10px] text-mpca-gray-dark">{c.body_name} · {fmt(c.claimed_amount_inr)}</div>
                                 </div>
-                                <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 border ${
-                                    c.status === "Approved" ? "border-mpca-green-dark text-mpca-green-dark" :
-                                    c.status === "Rejected" ? "border-mpca-oxblood text-mpca-oxblood" :
-                                    c.status === "Submitted" || c.status === "Under_Review" ? "border-mpca-brass text-mpca-brass" :
-                                    "border-mpca-gray-dark text-mpca-gray-dark"
-                                }`}>{c.status.replace(/_/g, " ")}</span>
+                                <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+                                    <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 border ${
+                                        c.status === "Approved" ? "border-mpca-green-dark text-mpca-green-dark" :
+                                        c.status === "Rejected" ? "border-mpca-oxblood text-mpca-oxblood" :
+                                        c.status === "Submitted" || c.status === "Under_Review" ? "border-mpca-brass text-mpca-brass" :
+                                        "border-mpca-gray-dark text-mpca-gray-dark"
+                                    }`}>{c.status.replace(/_/g, " ")}</span>
+                                    {aiBadge && (
+                                        <span
+                                            title={aiBadge.title}
+                                            className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 font-mono ${aiBadge.cls}`}
+                                            data-testid={`claim-row-ai-badge-${c.id}`}
+                                        >{aiBadge.txt}</span>
+                                    )}
+                                </div>
                             </div>
                         </button>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {/* Detail */}

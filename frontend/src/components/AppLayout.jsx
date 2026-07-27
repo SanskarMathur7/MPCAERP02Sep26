@@ -65,6 +65,8 @@ const NAV_DOMAINS = [
             { to: "/player-registrations", label: "Season Onboarding", icon: Users },
             { to: "/match-officials", label: "Match Officials", icon: ShieldCheck },
             { to: "/da-review", label: "DA Review Inbox", icon: FileCheck },
+            { to: "/action-center", label: "Action Center", icon: AlertTriangle },
+            { to: "/discussions", label: "Discussions", icon: FileText },
         ],
     },
     {

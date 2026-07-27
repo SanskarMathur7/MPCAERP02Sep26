@@ -1,10 +1,11 @@
 """Routes · M12 · Selection Console (post-acceptance squad workflow)."""
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Request
 from pydantic import BaseModel, ConfigDict
 
 from core.infra import db, api_router
+from core.scoping import get_scope
 from models import Squad, SquadMember, MatchOfficials, SquadWaiver
 
 _DIVISION_ROLES = {"division-secretary", "district-secretary", "president", "secretary"}
@@ -496,3 +497,75 @@ async def mpca_pending_inbox(limit: int = 50):
         if len(inbox) >= limit:
             break
     return {"items": inbox, "count": len(inbox)}
+
+
+# ─────────────── M39 · Persona-agnostic Action Center feed ───────────────
+@api_router.get("/pending-actions/me")
+async def my_pending_inbox(
+    request: Request,
+    kind: Optional[str] = None,          # optional filter by action kind (squad_review, budget_approval, etc.)
+    limit: int = 200,
+):
+    """Returns the list of pending items the current caller's persona should
+    action on — the Action Center. Body-scoped:
+
+      · MPCA state office bearers   → everything `waiting_on == "MPCA"`
+      · Division / District bodies  → items where `waiting_on == body_code`
+                                     OR `waiting_on == "Division"` and body
+                                     matches the tournament participation
+      · Match Officials             → their own DA-form draft/rejected forms
+    """
+    scope = get_scope(request)
+    inbox: List[dict] = []
+
+    # ── Match Officials: their own DA draft/rejected forms ──
+    if scope.is_official and scope.name:
+        async for d in db.match_official_da.find(
+            {"official_name": scope.name, "status": {"$in": ["Draft", "Rejected"]}},
+            {"_id": 0},
+        ).limit(limit):
+            inbox.append({
+                "kind": "da_fill",
+                "waiting_on": scope.name,
+                "record_id": d["id"],
+                "label": ("Fill DA form" if d["status"] == "Draft" else "DA rejected · please revise"),
+                "cta": "Open DA",
+                "link": f"/tournaments/{d.get('tournament_id')}",
+                "tournament_id": d.get("tournament_id"),
+                "tournament_name": d.get("tournament_name"),
+            })
+        return {"items": inbox[:limit], "count": len(inbox), "scope": "official"}
+
+    # ── State / Division / District: iterate tournaments in scope ──
+    from routes.tournaments import _tournament_scope_query
+    t_query = _tournament_scope_query(scope) or {}
+    t_query["status"] = {"$nin": ["Completed", "Cancelled"]}
+    is_mpca = scope.body_code == "MPCA" or scope.is_state
+    my_body = scope.body_code
+
+    async for t in db.tournaments.find(t_query, {"_id": 0}):
+        try:
+            data = await tournament_pending_actions(t["id"])
+        except HTTPException:
+            continue
+        for item in data.get("items", []):
+            waiting = item.get("waiting_on")
+            matches = False
+            if is_mpca and waiting == "MPCA":
+                matches = True
+            elif not is_mpca and my_body and (waiting == my_body or waiting == "Division"):
+                matches = True
+            if matches and (not kind or item.get("kind") == kind):
+                inbox.append({
+                    **item,
+                    "tournament_id": t["id"],
+                    "tournament_name": t.get("name"),
+                    "tournament_no": t.get("tournament_no"),
+                })
+                if len(inbox) >= limit:
+                    break
+        if len(inbox) >= limit:
+            break
+
+    return {"items": inbox[:limit], "count": len(inbox), "scope": ("mpca" if is_mpca else my_body or "user")}
+

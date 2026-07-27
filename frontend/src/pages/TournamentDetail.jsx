@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
     fetchTournament, fetchSquads, createSquad, addPlayerToSquad, removePlayerFromSquad,
-    setTournamentStatus, fetchPlayers, fetchBodies,
+    setTournamentStatus, fetchPlayers, fetchBodies, api,
 } from "@/lib/api";
 import {
     Trophy, Calendar, MapPin, Users, ChevronLeft, Plus, X, ShieldCheck, AlertTriangle, Crown, BadgeCheck,
@@ -22,8 +22,10 @@ import {
     MatchCalendarPanel, TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
 } from "@/components/TournamentWorkspacePanels";
 import { getTypeByCode } from "@/lib/tournamentCatalog";
-import { Wallet, ArrowRight, Sliders, Receipt, ScrollText, Activity, HandCoins, Landmark, ListChecks, UsersRound, ClipboardEdit } from "lucide-react";
+import { Wallet, ArrowRight, Sliders, Receipt, ScrollText, Activity, HandCoins, Landmark, ListChecks, UsersRound, ClipboardEdit, History, MessageSquare } from "lucide-react";
 import MatchOfficialDAPanel from "@/components/MatchOfficialDAPanel";
+import TournamentActivityLog from "@/components/TournamentActivityLog";
+import DiscussionThread from "@/components/DiscussionThread";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
@@ -231,6 +233,8 @@ const TournamentDetail = () => {
                             <SetupBox testId="box-summary" icon={Activity} label="Financial Summary" note="Auto-rollup" onClick={() => setOpenBox(openBox === "summary" ? null : "summary")} active={openBox === "summary"} />
                             <SetupBox testId="box-receipts" icon={HandCoins} label="MPCA Receipts" note="Payments received" onClick={() => setOpenBox(openBox === "receipts" ? null : "receipts")} active={openBox === "receipts"} />
                             <SetupBox testId="box-closure" icon={ScrollText} label="Closure Letter" note={t.closure_letter_generated_at ? "Issued" : "Not issued"} onClick={() => setOpenBox(openBox === "closure" ? null : "closure")} active={openBox === "closure"} />
+                            <SetupBox testId="box-activity" icon={History} label="Activity Log" note="Chronological trail of all actions" onClick={() => setOpenBox(openBox === "activity" ? null : "activity")} active={openBox === "activity"} />
+                            <SetupBox testId="box-discussion" icon={MessageSquare} label="Discussion" note="MPCA · Division chat for this tournament" onClick={() => setOpenBox(openBox === "discussion" ? null : "discussion")} active={openBox === "discussion"} />
                         </>
                     )}
                 </div>
@@ -266,6 +270,12 @@ const TournamentDetail = () => {
                 )}
                 {openBox === "my-da" && (
                     <div className="mt-4"><MatchOfficialDAPanel tournamentId={id} onChange={() => { refreshProgress(); load(); }} /></div>
+                )}
+                {openBox === "activity" && (
+                    <div className="mt-4"><TournamentActivityLog tournamentId={id} /></div>
+                )}
+                {openBox === "discussion" && (
+                    <div className="mt-4"><TournamentDiscussionBox tournamentId={id} /></div>
                 )}
             </div>
 
@@ -425,3 +435,18 @@ const TournamentDetail = () => {
 };
 
 export default TournamentDetail;
+
+// M39 · Thin wrapper that resolves the tournament's discussion thread id then renders the shared thread UI
+const TournamentDiscussionBox = ({ tournamentId }) => {
+    const [threadId, setThreadId] = useState(null);
+    useEffect(() => {
+        (async () => {
+            try {
+                const { data } = await api.get(`/discussions/tournament/${tournamentId}`);
+                setThreadId(data.id);
+            } catch { /* silent */ }
+        })();
+    }, [tournamentId]);
+    if (!threadId) return <div className="bulletin-card p-6 text-[11px] text-mpca-brass">Opening discussion thread…</div>;
+    return <DiscussionThread threadId={threadId} height="60vh" />;
+};

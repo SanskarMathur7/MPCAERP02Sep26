@@ -193,9 +193,21 @@ const AppLayout = ({ children }) => {
                 }}
             >
                 {/* Brand + collapse toggle */}
-                <div className="px-4 pt-6 pb-6 border-b-2 border-mpca-oxblood flex items-center gap-2">
-                    <MPCACrest className={`${collapsed ? "w-9 h-9 mx-auto" : "w-11 h-11 ml-2"} text-mpca-brass shrink-0`} />
-                    {!collapsed && (
+                {collapsed ? (
+                    <div className="px-2 pt-4 pb-4 border-b-2 border-mpca-oxblood flex flex-col items-center gap-2">
+                        <MPCACrest className="w-8 h-8 text-mpca-brass shrink-0" />
+                        <button
+                            onClick={() => setCollapsed(false)}
+                            data-testid="sidebar-collapse-btn"
+                            title="Expand sidebar"
+                            className="w-full flex items-center justify-center p-1.5 rounded text-mpca-gold-light/80 hover:text-mpca-gold-light hover:bg-white/10 border border-mpca-brass/30 hover:border-mpca-brass transition-colors"
+                        >
+                            <ChevronsRight size={16} />
+                        </button>
+                    </div>
+                ) : (
+                    <div className="px-4 pt-6 pb-6 border-b-2 border-mpca-oxblood flex items-center gap-2">
+                        <MPCACrest className="w-11 h-11 ml-2 text-mpca-brass shrink-0" />
                         <div className="flex-1 min-w-0">
                             <div className="font-serif text-xl text-mpca-ivory leading-none">
                                 MPCA · ERP
@@ -204,16 +216,16 @@ const AppLayout = ({ children }) => {
                                 BCCI Affiliated · Est. 1957
                             </div>
                         </div>
-                    )}
-                    <button
-                        onClick={() => setCollapsed((c) => !c)}
-                        data-testid="sidebar-collapse-btn"
-                        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                        className={`${collapsed ? "" : "ml-auto"} shrink-0 p-1.5 text-mpca-gold-light/60 hover:text-mpca-gold-light hover:bg-white/5 transition-colors`}
-                    >
-                        {collapsed ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
-                    </button>
-                </div>
+                        <button
+                            onClick={() => setCollapsed(true)}
+                            data-testid="sidebar-collapse-btn"
+                            title="Collapse sidebar"
+                            className="ml-auto shrink-0 p-1.5 text-mpca-gold-light/60 hover:text-mpca-gold-light hover:bg-white/5 transition-colors"
+                        >
+                            <ChevronsLeft size={14} />
+                        </button>
+                    </div>
+                )}
 
                 {/* Persona / Tenant card — hidden when collapsed */}
                 {persona && !collapsed && (
@@ -258,15 +270,16 @@ const AppLayout = ({ children }) => {
                 )}
 
                 {/* Primary nav */}
-                <nav className="flex-1 px-4 py-6 overflow-y-auto">
+                <nav className={`flex-1 ${collapsed ? "px-2" : "px-4"} py-6 overflow-y-auto`}>
                     {persona?.id !== "match-official" && (
                     <ul className="space-y-0.5 mb-6">
                         <li>
                             <NavLink
                                 to={DASHBOARD_LINK.to}
                                 data-testid="nav-dashboard"
+                                title={collapsed ? DASHBOARD_LINK.label : undefined}
                                 className={({ isActive }) =>
-                                    `group flex items-center gap-3 px-3 py-2.5 text-sm transition-all duration-300 border-l-2 ${
+                                    `group flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} py-2.5 text-sm transition-all duration-300 border-l-2 ${
                                         isActive
                                             ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
                                             : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
@@ -274,7 +287,7 @@ const AppLayout = ({ children }) => {
                                 }
                             >
                                 <DASHBOARD_LINK.icon size={16} strokeWidth={1.5} />
-                                {!collapsed && <span className="tracking-wide">{DASHBOARD_LINK.label}</span>}
+                                {!collapsed && <span className="tracking-wide ml-3">{DASHBOARD_LINK.label}</span>}
                             </NavLink>
                         </li>
                         <li>
@@ -282,7 +295,7 @@ const AppLayout = ({ children }) => {
                                 to={ORG_LINK.to}
                                 data-testid="nav-organisation"
                                 className={({ isActive }) =>
-                                    `group flex items-center gap-3 px-3 py-2.5 text-sm transition-all duration-300 border-l-2 ${
+                                    `group flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} py-2.5 text-sm transition-all duration-300 border-l-2 ${
                                         isActive
                                             ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
                                             : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
@@ -292,7 +305,7 @@ const AppLayout = ({ children }) => {
                             >
                                 <ORG_LINK.icon size={16} strokeWidth={1.5} />
                                 {!collapsed && <>
-                                    <span className="tracking-wide">{ORG_LINK.label}</span>
+                                    <span className="tracking-wide ml-3">{ORG_LINK.label}</span>
                                     <span className="ml-auto text-[9px] font-mono text-mpca-brass/70 tracking-widest">10·54</span>
                                 </>}
                             </NavLink>
@@ -325,7 +338,7 @@ const AppLayout = ({ children }) => {
                                             to={item.to}
                                             data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
                                             className={({ isActive }) =>
-                                                `group flex items-center gap-3 px-3 py-2.5 text-sm transition-all duration-300 border-l-2 ${
+                                                `group flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} py-2.5 text-sm transition-all duration-300 border-l-2 ${
                                                     isActive
                                                         ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
                                                         : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
@@ -334,7 +347,7 @@ const AppLayout = ({ children }) => {
                                             title={collapsed ? item.label : undefined}
                                         >
                                             <item.icon size={16} strokeWidth={1.5} />
-                                            {!collapsed && <span className="tracking-wide">{item.label}</span>}
+                                            {!collapsed && <span className="tracking-wide ml-3">{item.label}</span>}
                                         </NavLink>
                                     </li>
                                 ))}
@@ -377,14 +390,14 @@ const AppLayout = ({ children }) => {
                 </nav>
 
                 {/* Logout */}
-                <div className="px-4 py-5 border-t border-mpca-brass/20">
+                <div className={`${collapsed ? "px-2" : "px-4"} py-5 border-t border-mpca-brass/20`}>
                     <button
                         onClick={handleLogout}
                         data-testid="logout-btn"
                         title={collapsed ? "Sign Out" : undefined}
-                        className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-mpca-ivory/80 hover:text-mpca-oxblood hover:bg-white/5 transition-colors duration-300"
+                        className={`w-full flex items-center ${collapsed ? "justify-center px-2" : "justify-between px-3"} py-2.5 text-sm text-mpca-ivory/80 hover:text-mpca-oxblood hover:bg-white/5 transition-colors duration-300`}
                     >
-                        <span className="flex items-center gap-3">
+                        <span className={`flex items-center ${collapsed ? "" : "gap-3"}`}>
                             <LogOut size={16} strokeWidth={1.5} />
                             {!collapsed && <span className="tracking-wide">Sign Out</span>}
                         </span>

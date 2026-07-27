@@ -1360,3 +1360,26 @@ _Shipped 27 Jul 2026 · verified iter_56 (BE 26/26 pytest, FE 6/6 UI checks)_
 - Persona-scoped filters on standalone list pages (Budgets / Invoices / Claims).
 - AI document parsing deeper OCR, Closure Letter PDF, consolidated dashboards.
 - Tally API (BLOCKED on credentials), NEFT bulk file, Hindi i18n.
+
+---
+
+## Sprint M39a · Sidebar Collapse UX Fix
+_Shipped 27 Jul 2026 · verified via Playwright screenshot (collapsed + expanded)_
+
+**Problem:** After M38e persistable sidebar collapse landed, the collapsed rail hid the tab icons and clipped the expand toggle button (`w-16` container with `px-4` nav + `px-3` items only left ~8px of icon space; `w-9` crest with `mx-auto` pushed the toggle button off-screen).
+
+**Fix:**
+- Split header into two flavours: collapsed renders a stacked, centered mini-crest + full-width bordered expand button; expanded keeps the original inline layout.
+- Reduced sidebar horizontal padding to `px-2` (from `px-4`) when collapsed, and switched every nav row to `justify-center px-2` when collapsed so all Lucide icons render cleanly on the 64px rail.
+- Sign Out row and coming-soon block obey the same collapse-aware padding.
+
+**Files touched:** `frontend/src/components/AppLayout.jsx`.
+
+**Backlog (from user's 11-point ask, remaining):**
+- Event Calendar tab on MPCA (all-member visible) + Birthday reminders (dashboard-only for now, email blast MOCKED until SMTP creds provided).
+- Strict Tournament Acceptance (Division-only).
+- MPCA Scheme register: signed-PDF re-upload gate.
+- Grounds & Venue overhaul (drop Venues, retain Grounds with owner + BCCI approval + allowed tournament types).
+- Meeting Tab AI summary of signed minutes.
+- Squad Document AI review during MPCA approval.
+- ID Card generator (P2) on Member detail pages.

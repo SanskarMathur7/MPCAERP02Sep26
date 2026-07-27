@@ -261,7 +261,10 @@ const ParticipantsMatrix = ({ tournament, persona, canManage, onChange }) => {
                         <tbody>
                             {activeRows.map((r) => {
                                 const isSelf = persona?.body_code === r.body_code;
-                                const canAct = isSelf || canManage;
+                                // M39d · Strict acceptance — only the exact participant body may
+                                // flip its own acceptance. MPCA / higher bodies no longer act on
+                                // behalf of a Division.
+                                const canAct = isSelf;
                                 const isExpanded = expandedCode === r.body_code;
                                 const drill = drilldown[r.body_code];
                                 return (

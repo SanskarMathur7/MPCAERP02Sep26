@@ -147,9 +147,11 @@ const MemberCard = () => {
                                         </div>
                                     </div>
                                     <div>
-                                        <div className="overline !text-[7px]">Sub-Category</div>
-                                        <div className="text-[10px] text-mpca-charcoal mt-0.5 truncate">
-                                            {member.sub_category || "—"}
+                                        <div className="overline !text-[7px]">Date of Birth</div>
+                                        <div className="font-mono text-[10px] text-mpca-charcoal mt-0.5">
+                                            {member.date_of_birth
+                                                ? new Date(member.date_of_birth).toLocaleDateString("en-GB")
+                                                : "—"}
                                         </div>
                                     </div>
                                     <div>
@@ -158,6 +160,12 @@ const MemberCard = () => {
                                             {member.membership_date
                                                 ? new Date(member.membership_date).toLocaleDateString("en-GB")
                                                 : "—"}
+                                        </div>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <div className="overline !text-[7px]">Phone / Email</div>
+                                        <div className="text-[10px] text-mpca-charcoal mt-0.5 truncate">
+                                            {member.phone || "—"}{member.email ? ` · ${member.email}` : ""}
                                         </div>
                                     </div>
                                 </div>

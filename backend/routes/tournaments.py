@@ -13,7 +13,10 @@ from core.helpers import _next_tournament_no, _check_player_against_tournament, 
 
 
 # M11 · Persona role IDs that may accept a tournament on behalf of their body
-_ACCEPTANCE_ROLES = {"division-secretary", "district-secretary", "president", "secretary"}
+# M39d · Strict acceptance — MPCA (president / secretary) may no longer act on
+# behalf of Division / District. Only division-secretary or district-secretary
+# personas belonging to the target body may accept or reject.
+_ACCEPTANCE_ROLES = {"division-secretary", "district-secretary"}
 
 
 # ---------------- Routes: Tournaments (Phase IV.2 — M2) ----------------
@@ -236,16 +239,34 @@ async def act_on_tournament_acceptance(
     payload: TournamentAcceptancePayload,
     x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
     x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_persona_body: Optional[str] = Header(None, alias="X-Body-Code"),
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     """A Division or District secretary accepts (or rejects) a tournament that
     MPCA has allotted to their body. When ALL required bodies have accepted →
     acceptance.status becomes 'Accepted' and the tournament moves from 'Draft'
-    → 'Upcoming'. If any required body rejects → status becomes 'Rejected'."""
+    → 'Upcoming'. If any required body rejects → status becomes 'Rejected'.
+
+    M39d · Strict: only the Division/District Secretary of the invited body may
+    act. MPCA no longer acts on behalf of Divisions/Districts."""
     if not x_role_id or x_role_id not in _ACCEPTANCE_ROLES:
-        raise HTTPException(403, "Only Division / District secretaries (or MPCA officers on their behalf) may act on acceptance.")
+        raise HTTPException(
+            403,
+            "Only the Division or District Secretary of the invited body may "
+            "accept or reject this tournament. MPCA officers can no longer act "
+            "on behalf of Divisions or Districts.",
+        )
     if not x_body_code:
         raise HTTPException(400, "X-User-Body-Code header is required — indicates which body you are acting on behalf of.")
+
+    # M39d · Persona-body must match target-body. Prevents anyone from
+    # spoofing X-User-Body-Code to a different body than their own persona.
+    if x_persona_body and x_persona_body != x_body_code:
+        raise HTTPException(
+            403,
+            f"Your persona ({x_persona_body}) cannot act on behalf of {x_body_code}. "
+            "Each body must accept or reject its own invitations.",
+        )
 
     doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not doc:

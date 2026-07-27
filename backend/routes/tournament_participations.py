@@ -23,10 +23,11 @@ from typing import List, Optional, Dict, Any
 import copy
 import uuid
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.infra import db, api_router
+from core.scoping import get_scope
 
 
 # ─── Phase E · Notification helper ───
@@ -402,7 +403,7 @@ async def participant_finance_snapshot(tid: str, body_code: str):
     }
 
 @api_router.patch("/tournaments/{tid}/participants/{body_code}")
-async def patch_tournament_participant(tid: str, body_code: str, patch: ParticipationPatch):
+async def patch_tournament_participant(tid: str, body_code: str, patch: ParticipationPatch, request: Request):
     updates: Dict[str, Any] = {k: v for k, v in patch.model_dump(exclude_none=True).items()}
     if not updates:
         raise HTTPException(400, "No fields to update")
@@ -410,6 +411,16 @@ async def patch_tournament_participant(tid: str, body_code: str, patch: Particip
     if "acceptance_status" in updates:
         if updates["acceptance_status"] not in {"Pending", "Accepted", "Declined", "Not_Required"}:
             raise HTTPException(400, "Invalid acceptance_status")
+        # M39d · Strict acceptance — only the participant body itself may flip
+        # its acceptance. MPCA / State personas can no longer accept or decline
+        # on behalf of a Division / District.
+        scope = get_scope(request)
+        if scope.body_code and scope.body_code != body_code:
+            raise HTTPException(
+                403,
+                f"Only {body_code} can accept or decline this tournament invite. "
+                "MPCA cannot act on behalf of Divisions or Districts.",
+            )
         updates["acceptance_at"] = now_iso
     updates["updated_at"] = now_iso
     r = await db.tournament_participations.update_one(

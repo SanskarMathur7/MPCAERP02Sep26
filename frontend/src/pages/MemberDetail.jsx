@@ -170,7 +170,7 @@ const MemberDetail = () => {
                     <Wallet size={14} strokeWidth={1.5} /> Member Portal
                 </Link>
                 <Link to={`/members/${id}/card`} className="btn-heritage-secondary" data-testid="view-card-btn">
-                    <IdCard size={14} strokeWidth={1.5} /> View Identity Card
+                    <IdCard size={14} strokeWidth={1.5} /> ID Card · Download
                 </Link>
             </div>
 

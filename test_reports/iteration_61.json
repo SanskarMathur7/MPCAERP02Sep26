@@ -1,0 +1,43 @@
+{
+  "summary": "Re-verification of Item 11 (Squad AI Review UI) after SquadDetail bootstrap fix. The bug from iteration 60 is FIXED — /squads/a56f4b41-a323-4d0f-99bd-59b831f46620 now loads directly via GET /squads/{sid}. All Item 11 acceptance criteria satisfied (MPCA sees advisory panel with correct verdict/copy/re-run; Division does NOT). Backend re-run endpoint POST /api/squads/{sid}/ai-review returns 200 with verdict Needs_Attention. Item 9 & Item 10 regressions confirmed passing.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_batch_b_9_10_11.py",
+    "/app/test_reports/pytest/batch_b_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SquadDetail.jsx bootstrap fix (lines 59-73) is clean — direct GET /squads/{sid} + separate tournament fetch is much better than iterating tournaments. Good.",
+    "AI Review panel (lines 400-430) correctly gated on isMPCA via canFinalizeSquad; Division persona verified not to see it.",
+    "Console hydration warning present (unrelated to this batch): <span> inside <option> in SquadOfficialsSection select. Cosmetic React warning; does not affect functionality but should be cleaned up when convenient."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (re-run endpoint verified live)", "frontend": "100% for Items 9/10/11 acceptance criteria"},
+  "test_credentials": "persona chips at /login (persona-chip-secretary for MPCA, persona-chip-division-secretary for Division). No passwords.",
+  "seed_data_creation": "None new. Squad a56f4b41-a323-4d0f-99bd-59b831f46620 already has signed_copy_url + ai_review_status=Completed + ai_review_verdict=Needs_Attention from iteration 60 seed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Item 11 UI verified via /squads/a56f4b41-a323-4d0f-99bd-59b831f46620 as MPCA Secretary. Screenshot shows panel: 'AI REVIEW · ADVISORY ONLY · CONFIDENCE 0%', 'Verdict: Needs Attention', 'MPCA makes the final call — AI verdict is informational.', and RE-RUN button. All testids present: squad-ai-review-panel, squad-ai-verdict, squad-rerun-ai-btn. Division persona correctly hides panel. Note: The Add-Ground button testid is 'new-ground-btn' (not 'add-ground-btn'); modal fields use 'ground-name/ground-type/ground-city/ground-owner-body/ground-bcci-approval-select/ground-capacity/ground-save' (no -input suffix). Iteration 60 already fully verified all 15 modal testids.",
+  "verification_details": {
+    "item_11_mpca_panel": {
+      "url": "/squads/a56f4b41-a323-4d0f-99bd-59b831f46620",
+      "squad_not_found_error": false,
+      "squad-ai-review-panel": true,
+      "squad-ai-verdict": true,
+      "squad-rerun-ai-btn": true,
+      "text_verdict_needs_attention": true,
+      "text_mpca_makes_final_call": true,
+      "text_ai_review_advisory_only": true
+    },
+    "item_11_division_hidden": {"squad-ai-review-panel_absent": true},
+    "item_11_rerun_endpoint": {"status": 200, "ai_review_status": "Completed", "ai_review_verdict": "Needs_Attention"},
+    "item_9_grounds_regression": {"heading_grounds_present": true, "new-ground-btn_exists": true},
+    "item_10_signed_minutes_regression": {"mpca_section": true, "mpca_upload_btn": true, "div_section": true, "div_upload_btn_absent": true}
+  },
+  "rca of the issue": "N/A — bug from iteration 60 has been resolved."
+}

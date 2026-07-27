@@ -61,29 +61,15 @@ const SquadDetail = () => {
         setErr("");
         try {
             if (sid) {
-                let tId = null;
-                try {
-                    const { data: rec } = await api.get(`/squads/${sid}/recommendation`);
-                    tId = rec?.squad?.tournament_id || rec?.tournament_id;
-                } catch (_) { /* rec optional */ }
-                if (!tId) {
-                    const { data: ts } = await api.get("/tournaments");
-                    for (const t of ts || []) {
-                        const list = await fetchSquads(t.id).catch(() => []);
-                        const found = (list || []).find((s) => s.id === sid);
-                        if (found) { tId = t.id; setSquad(found); break; }
-                    }
-                    if (!tId) throw new Error("Squad not found in your scope.");
-                } else {
-                    const list = await fetchSquads(tId).catch(() => []);
-                    const found = (list || []).find((s) => s.id === sid);
-                    if (!found) throw new Error("Squad not found on the tournament.");
-                    setSquad(found);
-                }
+                // M39g fix · Use the direct GET /squads/{sid} endpoint instead of
+                // iterating all tournaments (which was slow AND broke scope-checks).
+                const { data: found } = await api.get(`/squads/${sid}`);
+                if (!found) throw new Error("Squad not found.");
+                setSquad(found);
+                const tId = found.tournament_id;
                 const t = await fetchTournament(tId);
                 setTournament(t);
-                const list = await fetchSquads(tId).catch(() => []);
-                await loadPlayersForSquad(list.find((s) => s.id === sid));
+                await loadPlayersForSquad(found);
             } else if (tidParam) {
                 const bodyCode = searchParams.get("body");
                 if (!bodyCode) throw new Error("Missing ?body=<CODE> in URL.");

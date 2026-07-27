@@ -1,0 +1,36 @@
+{
+  "summary": "M34 Squad Officials + Squad-screen unification fully verified. Backend 6/6 (test_m34_squad_officials.py): PATCH /api/squads/{sid}/officials — (1) owner (X-User-Body-Code=DIV-IND) sets manager+umpire_1, response mirrors payload; (2) partial patch preserves untouched keys (coach updated, scorer preserved); (3) empty string clears field (present-key semantics); (4) unrelated body (DIV-BPL) -> 403; (5) MPCA X-Role-Id=secretary -> 200 across states; (6) workflow guard: after Division submits, owner PATCH -> 400 ('ask MPCA to reopen') while MPCA still 200; reopen restores Draft. Frontend (Playwright, both personas): (A) /tournaments list — 0 [data-testid^='trn-select-'] and 0 [data-testid^='trn-finance-'] as required. (B) Division on /squads/<sid> Approved -> officials-card mounts, 8 [data-testid^='squad-official-field-'] inputs, first input disabled=True (correct). (C) After MPCA reopen to Draft -> Division inputs enabled, filling Manager+Umpire#1 shows squad-officials-save-btn, clicking saves, button hides, values persist after refresh (Manager='UI Test Manager', Umpire_1='UI Test Umpire 1'). (D) TournamentSubTabs squad href resolves to /squads/<sid> for BOTH Division and MPCA (never ends in /selection). (E) box-squad onClick — Division nav -> /squads/<sid>, MPCA nav -> /squads/<sid> (host body DIV-IND). (F) Division pool header reads '242 available in DIV-IND + child districts'. (G) MPCA pool header on same squad also shows large pool (257 total loaded, 242 available after member exclusion — ALL players fetched via /api/players?limit=5000 per persona.body_type==State branch). (H) MPCA can edit officials on Approved squad (canEdit rule allows MPCA at any status — matches BE which lets is_mpca bypass the Awaiting/Approved lock). (I) Legacy /tournaments/<id>/selection still renders SelectionConsole via direct URL (out-of-scope legacy access preserved).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "SquadDetail (MPCA persona)", "issues": ["Pool card header still reads '<n> available in DIV-IND + child districts' even when MPCA is viewing — spec calls for wording that reflects the wider ALL-players scope. Cosmetic; the underlying pool IS state-wide (5000 limit fetch, 257 loaded)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m34_squad_officials.py",
+    "/app/test_reports/pytest/m34_results.xml"
+  ],
+  "action_items": [
+    "(minor cosmetic) In SquadDetail.jsx line ~382, when persona.body_type==='State' render header like 'X available across MPCA state' instead of the hardcoded 'in <body_id> + child districts' string."
+  ],
+  "critical_code_review_comments": [
+    "SquadDetail.jsx canEdit rule allows MPCA to edit officials even on Approved squads (isMPCA short-circuits without checking status). Spec text said 'enabled while the squad is not Approved (they can also edit after Reopen)'. Backend actually permits it too (is_mpca bypasses the Awaiting/Approved guard). Either tighten FE to require Reopen OR loosen spec wording — currently FE and BE agree with each other but slightly deviate from spec. Non-blocking.",
+    "SelectionPatch model still has match_officials field but M34 introduces a dedicated /squads/{sid}/officials PATCH. Consider removing match_officials from SelectionPatch to keep a single source of truth (currently a Division could still update officials via the legacy /tournaments/{tid}/selection PATCH bypassing the new workflow guard).",
+    "SquadOfficialsSection.save() posts every slot on save (payload[s.key] = officials[s.key] || null) — sending null for cleared slots is fine, but it means an untouched empty field also POSTs null overwriting any prior value. Backend uses exclude_unset so this specific request actually sets ALL keys — desired here. Just calling it out.",
+    "TournamentSubTabs.jsx computes squad_url via an extra /tournaments/{id} + /squads GET on every mount — memoize per tournamentId to avoid redundant network calls on tab switches.",
+    "TournamentDetail.jsx box-squad fallback still navigates to `/tournaments/${id}/selection` if targetBody is null — this is the only remaining code path that could lead a user to the legacy console via UI click. Consider replacing with a friendly 'No host body configured' notice."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m34_squad_officials.py",
+    "/app/test_reports/pytest/m34_results.xml"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (9/9 UI checks; 1 minor cosmetic wording note)"},
+  "test_credentials": "persona-chip-division-secretary (Devashish · DIV-IND), persona-chip-secretary (Sanjeev · MPCA). Click chip then Sign-in button.",
+  "seed_data_creation": "Backend test fixture reopens squad 96329508-... (DIV-IND / SM Khan Trophy tid=58bd8f3c-...) at start; runs owner+MPCA PATCH cycles + Division submit/re-open. Test finished with squad in Draft, officials={manager:'UI Test Manager', umpire_1:'UI Test Umpire 1'} from the frontend save test. Original state was Approved with officials={manager:'Test Manager', umpire_1:'Rajesh U'}. Restore hook re-finalizes only when captain+11 members present. Note for next agent: squad currently sits in Draft state (per M34 write-path testing), members intact (15/18), a captain WAS assigned during the workflow-guard test (first member marked is_captain via /tournaments/{tid}/selection PATCH).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M34 complete. Test file /app/backend/tests/test_m34_squad_officials.py runs with `REACT_APP_BACKEND_URL=<url> pytest backend/tests/test_m34_squad_officials.py`. The DIV-IND squad on tid=58bd8f3c is left in Draft with a captain — if next test needs Approved, re-submit via POST /api/squads/{sid}/submit (X-Role-Id: division-secretary, X-User-Body-Code: DIV-IND) then finalize via POST /api/squads/{sid}/review action='finalize' (X-Role-Id: secretary).",
+  "rca of the issue": "No bugs found. All 9 requested M34 acceptance criteria pass. Only minor observations: (a) MPCA pool header wording still says 'in DIV-IND + child districts' — cosmetic, backend behaviour is correct (fetches all players). (b) SquadDetail.canEdit lets MPCA edit officials on Approved squads (FE and BE consistent, minor deviation from spec verbiage)."
+}

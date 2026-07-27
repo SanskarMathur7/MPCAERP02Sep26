@@ -115,8 +115,18 @@ const SquadDetail = () => {
 
     const loadPlayersForSquad = async (sq) => {
         if (!sq) return;
+        // M34 · Scope rules:
+        //   • MPCA (State) — sees ALL players across the state.
+        //   • Division   — sees own division + its child districts.
+        //   • District   — sees own district only.
+        // Backend already enforces the scoping via the persona headers; this
+        // client-side branch is a defensive filter so the UI matches the rule
+        // even if a caller passes a broader response.
         let pool = [];
-        if (sq.body_id.startsWith("DIV-")) {
+        if (persona?.body_type === "State") {
+            const { data: all } = await api.get("/players", { params: { limit: 5000 } });
+            pool = all || [];
+        } else if (sq.body_id.startsWith("DIV-")) {
             const shortCode = sq.body_id.slice(-3);
             const { data: all } = await api.get("/players", { params: { limit: 2000 } });
             pool = (all || []).filter((p) => p.body_id === sq.body_id || (p.body_id || "").endsWith(shortCode));
@@ -491,8 +501,91 @@ const SquadDetail = () => {
                 </div>
             </div>
 
+            {/* M34 · Match Officials — nominated by Division, approved by MPCA */}
+            <SquadOfficialsSection squad={squad} canEdit={canEdit && !busy} onSaved={refresh} />
+
             <div className="mt-6 text-[11px] text-mpca-gray-dark italic">
                 Rich review · <Link to={`/squads/${squad.id}/review`} className="text-mpca-oxblood hover:underline">Open AI-assisted review console →</Link>
+            </div>
+        </div>
+    );
+};
+
+// ────────────────── M34 · Officials sub-component ──────────────────
+
+const OFFICIAL_SLOTS = [
+    { key: "manager", label: "Team Manager" },
+    { key: "coach", label: "Head Coach" },
+    { key: "trainer", label: "Trainer" },
+    { key: "physio", label: "Physio" },
+    { key: "umpire_1", label: "Umpire #1 (On-field)" },
+    { key: "umpire_2", label: "Umpire #2 (On-field)" },
+    { key: "scorer", label: "Scorer" },
+    { key: "referee", label: "Match Referee" },
+];
+
+const SquadOfficialsSection = ({ squad, canEdit, onSaved }) => {
+    const [officials, setOfficials] = useState(squad.match_officials || {});
+    const [dirty, setDirty] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [err, setErr] = useState("");
+
+    useEffect(() => { setOfficials(squad.match_officials || {}); setDirty(false); }, [squad.id, squad.match_officials]);
+
+    const setField = (k, v) => { setOfficials((o) => ({ ...o, [k]: v })); setDirty(true); };
+
+    const save = async () => {
+        setSaving(true); setErr("");
+        try {
+            const payload = {};
+            OFFICIAL_SLOTS.forEach((s) => { payload[s.key] = officials[s.key] || null; });
+            await api.patch(`/squads/${squad.id}/officials`, payload);
+            setDirty(false);
+            onSaved?.();
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setSaving(false); }
+    };
+
+    const filled = OFFICIAL_SLOTS.filter((s) => (officials[s.key] || "").trim()).length;
+
+    return (
+        <div className="mt-8 bulletin-card" data-testid="squad-officials-card">
+            <div className="px-5 py-3 border-b border-mpca-brass/20 flex items-center justify-between">
+                <div>
+                    <div className="overline">Match Officials</div>
+                    <div className="font-serif text-lg text-mpca-green-dark mt-0.5">
+                        {filled} of {OFFICIAL_SLOTS.length} slots filled
+                    </div>
+                    <div className="text-[10px] text-mpca-gray-dark mt-1">
+                        Nominated by {squad.body_id} along with the XV. MPCA reviews these with the squad before approval. Selected officials can submit their DA forms after the tournament.
+                    </div>
+                </div>
+                {canEdit && dirty && (
+                    <button onClick={save} disabled={saving} className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="squad-officials-save-btn">
+                        {saving ? <Loader2 size={11} className="animate-spin" /> : <ShieldCheck size={11} />} Save Officials
+                    </button>
+                )}
+            </div>
+
+            {err && (
+                <div className="mx-5 mt-3 border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood text-[11px] px-3 py-2 flex items-center gap-2" data-testid="squad-officials-error">
+                    <ShieldAlert size={11} /> {err}
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3 p-5">
+                {OFFICIAL_SLOTS.map((slot) => (
+                    <label key={slot.key} className="block" data-testid={`squad-official-field-${slot.key}`}>
+                        <div className="text-[10px] uppercase tracking-widest text-mpca-brass font-mono mb-1">{slot.label}</div>
+                        <input
+                            value={officials[slot.key] || ""}
+                            onChange={(e) => setField(slot.key, e.target.value)}
+                            disabled={!canEdit}
+                            placeholder="Full name"
+                            className="input-heritage !py-1.5 !text-xs"
+                        />
+                    </label>
+                ))}
             </div>
         </div>
     );

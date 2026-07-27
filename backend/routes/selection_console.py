@@ -272,6 +272,52 @@ async def reopen_squad(
     return await db.squads.find_one({"id": sid}, {"_id": 0})
 
 
+
+
+# ─────────────── M34 · Match Officials on the Squad ───────────────
+
+class SquadOfficialsPatch(BaseModel):
+    """Bag of officials that the Division nominates alongside the XV.
+    Every field is a free-text name of a person — future upgrade wires these
+    to the /officials or /users collection so DA forms auto-populate."""
+    manager: Optional[str] = None
+    coach: Optional[str] = None
+    trainer: Optional[str] = None
+    physio: Optional[str] = None
+    umpire_1: Optional[str] = None
+    umpire_2: Optional[str] = None
+    scorer: Optional[str] = None
+    referee: Optional[str] = None
+    model_config = ConfigDict(extra="ignore")
+
+
+@api_router.patch("/squads/{sid}/officials")
+async def patch_squad_officials(
+    sid: str,
+    payload: SquadOfficialsPatch,
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+):
+    """Division/District secretary sets the manager, coach, umpires, scorer,
+    physio and match referee for the tournament. Locked once submitted."""
+    doc = await db.squads.find_one({"id": sid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Squad not found")
+    body_code = doc.get("body_id")
+    is_mpca = x_role_id in _MPCA_APPROVER_ROLES
+    if not is_mpca and x_body_code != body_code:
+        raise HTTPException(403, f"Only {body_code} or MPCA may edit these officials.")
+    if not is_mpca and doc.get("submission_status") in ("Awaiting_MPCA_Approval", "Approved"):
+        raise HTTPException(
+            400,
+            f"Squad is {doc['submission_status']} — ask MPCA to reopen it before editing officials."
+        )
+    updates = {f"match_officials.{k}": v for k, v in payload.model_dump(exclude_unset=True).items()}
+    if not updates:
+        raise HTTPException(400, "Empty payload")
+    await db.squads.update_one({"id": sid}, {"$set": {**updates, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return await db.squads.find_one({"id": sid}, {"_id": 0})
+
 # ─────────────── M30 · Tournament pending-actions endpoint ───────────────
 @api_router.get("/tournaments/{tid}/pending-actions")
 async def tournament_pending_actions(tid: str):

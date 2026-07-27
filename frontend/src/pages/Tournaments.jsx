@@ -301,24 +301,6 @@ const Tournaments = () => {
                                 {t.is_womens && <span className="pill bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/50" data-testid={"trn-womens-" + t.tournament_no}>Women&apos;s</span>}
                                 {t.allows_guests && <span className="pill bg-mpca-brass/15 text-mpca-gold border-mpca-brass/50">+ Guest</span>}
                                 <Pill tone={st.tone} label={st.label} testId={"trn-status-" + t.status} />
-                                {(acc.status === "Accepted" || acc.status === "Not_Required") && (
-                                    <Link
-                                        to={`/tournaments/${t.id}/selection`}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="px-3 py-1 text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory hover:bg-mpca-green transition inline-flex items-center gap-1"
-                                        data-testid={"trn-select-" + t.tournament_no}
-                                    >
-                                        <Users size={11} strokeWidth={1.5} /> Select
-                                    </Link>
-                                )}
-                                <Link
-                                    to={`/tournaments/${t.id}/finance`}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="px-3 py-1 text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-green-dark hover:bg-mpca-brass/80 transition inline-flex items-center gap-1"
-                                    data-testid={"trn-finance-" + t.tournament_no}
-                                >
-                                    ₹ Finance
-                                </Link>
                                 {iMustAccept && (
                                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                         <button

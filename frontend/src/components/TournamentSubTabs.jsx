@@ -26,11 +26,19 @@ const TournamentSubTabs = ({ tournamentId, active }) => {
         if (!tournamentId) return;
         (async () => {
             try {
+                // M34 · Unified squad screen — every persona resolves to their body's SquadDetail.
+                // MPCA/State picks the host body's squad (or its first squad if host unknown).
                 let squadUrl = null;
+                const squads = await api.get(`/tournaments/${tournamentId}/squads`).then((r) => r.data).catch(() => []);
                 if (persona?.body_type === "Division" || persona?.body_type === "District") {
-                    const squads = await api.get(`/tournaments/${tournamentId}/squads`).then((r) => r.data).catch(() => []);
                     const mine = (squads || []).find((s) => s.body_id === persona.body_code);
                     squadUrl = mine ? `/squads/${mine.id}` : `/tournaments/${tournamentId}/squads/new?body=${persona.body_code}`;
+                } else if (persona?.body_type === "State") {
+                    // Prefer the tournament's host body squad; fallback to the first squad.
+                    const t = await api.get(`/tournaments/${tournamentId}`).then((r) => r.data).catch(() => null);
+                    const target = (squads || []).find((s) => s.body_id === t?.host_body_id) || (squads || [])[0];
+                    if (target) squadUrl = `/squads/${target.id}`;
+                    else if (t?.host_body_id) squadUrl = `/tournaments/${tournamentId}/squads/new?body=${t.host_body_id}`;
                 }
                 setMeta({ squad_url: squadUrl });
             } catch (_) { /* non-fatal */ }

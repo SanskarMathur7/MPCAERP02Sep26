@@ -207,15 +207,16 @@ const TournamentDetail = () => {
                     <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `Filled · ${Object.keys(t.input_variables).length} vars set` : "Not filled · MPCA action pending"} onClick={() => setOpenBox(openBox === "input-vars" ? null : "input-vars")} active={openBox === "input-vars"} />
                     <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
                     <SetupBox testId="box-squad" icon={Users} label="Squad Selection" note={persona?.body_type === "Division" || persona?.body_type === "District" ? `My body · ${persona?.body_code}` : (squads.length ? `${squads.length} squad(s)` : "Not started")} onClick={() => {
-                        // Non-MPCA personas jump straight to their body's per-squad detail;
-                        // MPCA continues to the multi-body Selection Console.
-                        if (persona?.body_type === "Division" || persona?.body_type === "District") {
-                            const existing = squads.find((s) => s.body_id === persona.body_code);
-                            if (existing) navigate(`/squads/${existing.id}`);
-                            else navigate(`/tournaments/${id}/squads/new?body=${persona.body_code}`);
-                        } else {
-                            navigate(`/tournaments/${id}/selection`);
-                        }
+                        // M34 · Unified squad screen — everyone lands on SquadDetail now.
+                        // MPCA persona: if a squad exists for the host body, open it directly;
+                        // else start a new one for the host body. Division/District open theirs.
+                        const targetBody = (persona?.body_type === "Division" || persona?.body_type === "District")
+                            ? persona.body_code
+                            : (t.host_body_id || (squads[0]?.body_id));
+                        if (!targetBody) return navigate(`/tournaments/${id}/selection`);
+                        const existing = squads.find((s) => s.body_id === targetBody);
+                        if (existing) navigate(`/squads/${existing.id}`);
+                        else navigate(`/tournaments/${id}/squads/new?body=${targetBody}`);
                     }} />
                     <SetupBox testId="box-budget" icon={Wallet} label="Budget & Extras" note="Draft budgets · per body" onClick={() => setOpenBox(openBox === "budget" ? null : "budget")} active={openBox === "budget"} />
                     <SetupBox testId="box-invoices" icon={Receipt} label="Invoices + DA Forms" note="Uploaded, extracted, approved" onClick={() => setOpenBox(openBox === "invoices" ? null : "invoices")} active={openBox === "invoices"} />

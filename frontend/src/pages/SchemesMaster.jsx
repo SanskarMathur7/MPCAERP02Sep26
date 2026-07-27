@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { BookOpen, Edit3, X, Save, Sparkles, ChevronRight, IndianRupee } from "lucide-react";
-import { api } from "@/lib/api";
+import { BookOpen, Edit3, X, Save, Sparkles, ChevronRight, IndianRupee, Lock, CheckCircle2, Upload, Download, RefreshCw, AlertTriangle } from "lucide-react";
+import { api, API_BASE } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useSeason } from "@/context/SeasonContext";
 import CricketLoader from "@/components/CricketLoader";
 
 const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
@@ -19,28 +20,115 @@ const isTournamentScheme = (s) => s && (TOURNAMENT_SCHEME_CODES.has(s.scheme_cod
 
 const SchemesMaster = () => {
     const { persona } = useAuth();
+    const { season } = useSeason();
     const [schemes, setSchemes] = useState([]);
     const [recos, setRecos] = useState(null);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("All");
     const [selected, setSelected] = useState(null);
     const [editing, setEditing] = useState(null);
+    const [activation, setActivation] = useState(null);
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef(null);
 
     const isMPCA = persona?.body_type === "State";
     const canEdit = isMPCA;
+    const isActivated = !!activation?.is_active;
 
     const load = async () => {
         setLoading(true);
         try {
-            const [{ data: s }, { data: r }] = await Promise.all([
+            const [{ data: s }, { data: r }, { data: act }] = await Promise.all([
                 api.get("/reimbursement-schemes", { params: { active_only: false } }),
                 api.get("/schemes-recommendations").catch(() => ({ data: null })),
+                api.get("/schemes/season-activation", { params: { fiscal_cycle: season } }),
             ]);
             setSchemes(s || []);
             setRecos(r);
+            setActivation(act);
         } finally { setLoading(false); }
     };
-    useEffect(() => { load(); }, []);
+    useEffect(() => { load(); }, [season]);
+
+    const uploadSignedPdf = async (file) => {
+        if (!file) return;
+        if (file.type !== "application/pdf") { alert("Please upload a PDF."); return; }
+        setUploading(true);
+        try {
+            // 1. Upload the file to /uploads
+            const form = new FormData();
+            form.append("file", file);
+            form.append("body_id", persona?.body_code || "MPCA");
+            form.append("uploaded_by", persona?.name || "MPCA");
+            form.append("related_type", "scheme_activation");
+            form.append("related_id", season);
+            const { data: rec } = await api.post("/uploads", form, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            // 2. Register the activation
+            await api.post("/schemes/season-activation", {
+                fiscal_cycle: season,
+                signed_pdf_url: rec.url,
+                signed_by: persona?.name,
+                notes: `Signed master PDF uploaded ${new Date().toLocaleDateString("en-IN")}.`,
+            });
+            await load();
+        } catch (e) {
+            alert(e?.response?.data?.detail || e.message);
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
+
+    const resetActivation = async () => {
+        if (!window.confirm(`Deactivate schemes for ${season}? Divisions won't be able to create new claims or tournaments until you re-upload a signed PDF.`)) return;
+        try {
+            await api.post("/schemes/season-activation/reset", null, { params: { fiscal_cycle: season } });
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
+    const downloadExport = () => {
+        // Print-to-PDF the current schemes list via a new window (matches the
+        // existing dynamic-PDF pattern used elsewhere in the app).
+        const w = window.open("", "_blank");
+        if (!w) return;
+        const rows = schemes.map((s) => `
+            <tr>
+                <td>${s.scheme_code}</td>
+                <td>${s.name}</td>
+                <td>${(s.scheme_type || "").replace(/_/g, " ")}</td>
+                <td>${s.frequency || ""}</td>
+                <td>${(s.eligible_bodies || []).join(", ")}</td>
+                <td>${(s.heads || []).map((h) => `${h.label} — ${h.rate_display || h.rate_inr}`).join("<br/>")}</td>
+            </tr>`).join("");
+        w.document.write(`<!doctype html><html><head><title>MPCA Schemes Register · ${season}</title>
+            <style>
+                body { font-family: 'Georgia', serif; padding: 24px; color: #1a1a1a; }
+                h1 { color: #0f2818; font-size: 22px; margin: 0 0 4px; }
+                .sub { color: #a67c3a; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px; }
+                table { width: 100%; border-collapse: collapse; font-size: 10px; }
+                th, td { border: 1px solid #d4c9b5; padding: 6px; vertical-align: top; text-align: left; }
+                th { background: #f5efe3; color: #0f2818; text-transform: uppercase; letter-spacing: 1px; font-size: 9px; }
+                .sig { margin-top: 60px; display: flex; justify-content: space-between; }
+                .sig div { border-top: 1px solid #1a1a1a; padding-top: 6px; width: 30%; font-size: 10px; text-align: center; }
+            </style></head><body>
+            <h1>MPCA Schemes Register · ${season}</h1>
+            <div class="sub">Master Reimbursement / Grant / Camp Schemes — awaiting activation</div>
+            <table>
+                <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Frequency</th><th>Eligible</th><th>Budget Heads</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+            <div class="sig">
+                <div>President</div>
+                <div>Hon. Secretary</div>
+                <div>Hon. Treasurer</div>
+            </div>
+            <script>window.onload = () => window.print();</script>
+            </body></html>`);
+        w.document.close();
+    };
 
     const filtered = useMemo(() => {
         let list = schemes;
@@ -90,6 +178,60 @@ const SchemesMaster = () => {
                         </div>
                     )}
                 </div>
+            </div>
+
+            {/* M39c · Season activation banner */}
+            <div className={`mb-5 border p-4 flex items-start gap-3 ${isActivated ? "border-emerald-300 bg-emerald-50" : "border-mpca-oxblood bg-mpca-oxblood/5"}`} data-testid="activation-banner">
+                <div className="pt-0.5">
+                    {isActivated ? <CheckCircle2 className="text-emerald-700" size={20} /> : <Lock className="text-mpca-oxblood" size={20} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className={`font-serif text-sm ${isActivated ? "text-emerald-900" : "text-mpca-oxblood"}`}>
+                        {isActivated ? `Schemes ACTIVATED · Season ${season}` : `Schemes NOT ACTIVATED · Season ${season}`}
+                    </div>
+                    <div className="text-[11px] text-mpca-gray-dark mt-1 leading-relaxed">
+                        {isActivated ? (
+                            <>
+                                Divisions may create new grant claims and tournaments for this season.
+                                {activation?.signed_by && <> Signed by <strong>{activation.signed_by}</strong>{activation?.signed_at ? ` · ${new Date(activation.signed_at).toLocaleDateString("en-IN")}` : ""}.</>}
+                                {activation?.bootstrap && <span className="ml-1 text-mpca-brass">(Bootstrap · re-upload the signed PDF anytime to formalize.)</span>}
+                            </>
+                        ) : (
+                            <>
+                                Before the season can start, MPCA must (1) edit the schemes, (2) download the master PDF, (3) get it signed by office bearers, (4) re-upload it here.
+                                No new tournaments or grant claims can be created for {season} until this is done.
+                            </>
+                        )}
+                    </div>
+                    {activation?.signed_pdf_url && (
+                        <a href={`${API_BASE.replace(/\/api$/, "")}${activation.signed_pdf_url}`} target="_blank" rel="noreferrer"
+                           className="inline-block text-[10px] uppercase tracking-widest text-mpca-oxblood mt-2 hover:underline" data-testid="view-signed-pdf">
+                            View signed PDF →
+                        </a>
+                    )}
+                </div>
+                {isMPCA && (
+                    <div className="flex flex-col gap-2 shrink-0">
+                        <button onClick={downloadExport} className="btn-heritage-secondary" data-testid="download-schemes-pdf">
+                            <Download size={12} /> Export PDF
+                        </button>
+                        <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="btn-heritage-primary disabled:opacity-60" data-testid="upload-signed-pdf-btn">
+                            <Upload size={12} /> {uploading ? "Uploading…" : isActivated ? "Re-upload Signed" : "Upload Signed PDF"}
+                        </button>
+                        <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
+                               onChange={(e) => uploadSignedPdf(e.target.files?.[0])} data-testid="signed-pdf-input" />
+                        {isActivated && !activation?.bootstrap && (
+                            <button onClick={resetActivation} className="text-[10px] uppercase tracking-widest text-mpca-oxblood/70 hover:text-mpca-oxblood inline-flex items-center gap-1" data-testid="reset-activation-btn">
+                                <RefreshCw size={10} /> Deactivate
+                            </button>
+                        )}
+                    </div>
+                )}
+                {!isMPCA && !isActivated && (
+                    <div className="shrink-0 text-[10px] uppercase tracking-widest text-mpca-oxblood inline-flex items-center gap-1">
+                        <AlertTriangle size={12} /> Awaiting MPCA
+                    </div>
+                )}
             </div>
 
             {/* Filter chips */}

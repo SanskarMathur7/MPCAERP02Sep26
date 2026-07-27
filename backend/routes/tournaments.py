@@ -162,6 +162,16 @@ async def patch_tournament(tid: str, patch: dict):
 
 @api_router.post("/tournaments", response_model=Tournament)
 async def create_tournament(payload: TournamentCreate):
+    # M39c · Block new tournaments until MPCA has activated the schemes for
+    # the requested fiscal cycle by uploading the signed master PDF.
+    from routes.events import is_season_activated
+    if not await is_season_activated(payload.fiscal_cycle):
+        raise HTTPException(
+            403,
+            f"Schemes for {payload.fiscal_cycle} are not yet activated. MPCA must "
+            "export the MPCA Schemes PDF, get it signed by the office bearers, "
+            "and upload it under Schemes Register before any tournament can be created.",
+        )
     host = await db.bodies.find_one({"code": payload.host_body_id}, {"_id": 0})
     if not host:
         raise HTTPException(400, f"Host body {payload.host_body_id} does not exist")

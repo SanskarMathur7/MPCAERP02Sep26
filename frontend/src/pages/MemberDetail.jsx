@@ -10,6 +10,7 @@ const EDITABLE_FIELDS = [
     { key: "name", label: "Full Name", type: "text", required: true },
     { key: "email", label: "Email", type: "email" },
     { key: "phone", label: "Phone", type: "tel" },
+    { key: "date_of_birth", label: "Date of Birth", type: "date" },
     { key: "address", label: "Address", type: "textarea", required: true },
     { key: "role", label: "Role / Designation", type: "text" },
     { key: "membership_id", label: "Membership Id", type: "text" },
@@ -79,6 +80,7 @@ const MemberDetail = () => {
             name: member.name || "",
             email: member.email || "",
             phone: member.phone || "",
+            date_of_birth: member.date_of_birth || "",
             address: member.address || "",
             role: member.role || "",
             membership_id: member.membership_id || "",
@@ -332,6 +334,10 @@ const MemberDetail = () => {
                                 <div className="flex items-start gap-3" data-testid="member-email">
                                     <Mail size={14} className="text-mpca-brass mt-1" strokeWidth={1.5} />
                                     <span className="text-mpca-charcoal break-all">{member.email || "—"}</span>
+                                </div>
+                                <div className="flex items-start gap-3" data-testid="member-dob">
+                                    <Calendar size={14} className="text-mpca-brass mt-1" strokeWidth={1.5} />
+                                    <span className="text-mpca-charcoal font-mono">{member.date_of_birth || <span className="text-mpca-gray italic">DOB not on record</span>}</span>
                                 </div>
                                 <div className="flex items-start gap-3" data-testid="member-address">
                                     <MapPin size={14} className="text-mpca-brass mt-1" strokeWidth={1.5} />

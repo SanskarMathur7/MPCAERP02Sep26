@@ -72,6 +72,7 @@ const DAReview = lazy(() => import("@/pages/DAReview"));
 const MatchOfficialDetail = lazy(() => import("@/pages/MatchOfficialDetail"));
 const ActionCenter = lazy(() => import("@/pages/ActionCenter"));
 const Discussions = lazy(() => import("@/pages/Discussions"));
+const EventCalendar = lazy(() => import("@/pages/EventCalendar"));
 const PlayerRegistrations = lazy(() => import("@/pages/PlayerRegistrations"));
 const PublicPlayerRegistration = lazy(() => import("@/pages/PublicPlayerRegistration"));
 const CampsPage = lazy(() => import("@/pages/Camps"));
@@ -197,6 +198,7 @@ function App() {
                             <Route path="/da-review" element={<Protected><DAReview /></Protected>} />
                             <Route path="/action-center" element={<Protected><ActionCenter /></Protected>} />
                             <Route path="/discussions" element={<Protected><Discussions /></Protected>} />
+                            <Route path="/events" element={<Protected><EventCalendar /></Protected>} />
                             <Route path="/squads/:sid/review" element={<Protected><SquadReview /></Protected>} />
                             <Route path="/squads/:sid" element={<Protected><SquadDetail /></Protected>} />
                             <Route path="/squads/:id/nomination-form" element={<Protected><SquadNominationForm /></Protected>} />

@@ -57,6 +57,7 @@ class MemberBase(BaseModel):
     address: str
     phone: Optional[str] = None
     email: Optional[str] = None
+    date_of_birth: Optional[str] = None  # M39b · ISO YYYY-MM-DD for birthday reminders
     eligibility_factor: Optional[str] = None
     membership_date: Optional[str] = None  # ISO date string
     effectiveness: Optional[str] = None  # validity window
@@ -97,6 +98,7 @@ class MemberUpdate(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    date_of_birth: Optional[str] = None
     eligibility_factor: Optional[str] = None
     membership_date: Optional[str] = None
     effectiveness: Optional[str] = None

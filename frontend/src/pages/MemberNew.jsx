@@ -10,6 +10,7 @@ const initial = {
     address: "",
     phone: "",
     email: "",
+    date_of_birth: "",
     eligibility_factor: "",
     membership_date: new Date().toISOString().slice(0, 10),
     effectiveness: "",
@@ -156,6 +157,7 @@ const MemberNew = () => {
                 <Section title="Contact & Address">
                     <FormField label="Phone" name="phone" value={form.phone} onChange={update} placeholder="+91 …" />
                     <FormField label="Email" name="email" type="email" value={form.email} onChange={update} />
+                    <FormField label="Date of Birth" name="date_of_birth" type="date" value={form.date_of_birth} onChange={update} />
                     <div className="md:col-span-2">
                         <FormField label="Address" name="address" value={form.address} onChange={update} required />
                     </div>

@@ -45,6 +45,7 @@ const NAV_DOMAINS = [
         items: [
             { to: "/members", label: "Membership Register", icon: Users },
             { to: "/meetings", label: "AGM & Meetings", icon: Calendar },
+            { to: "/events", label: "Event Calendar", icon: Calendar },
             { to: "/disclosures", label: "Disclosures", icon: FileText },
         ],
     },

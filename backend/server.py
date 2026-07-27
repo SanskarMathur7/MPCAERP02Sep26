@@ -22,7 +22,7 @@ from routes import (  # noqa: F401
     assets, hr_payroll, dms, compliance, audit_pack, selection_console, match_officials,
     reimbursement_schemes, reimbursement_claims, camps, squad_ai, grant_claims, scheme_calc,
     tournament_workspace, rbac, tournament_participations, body_documents, player_registrations,
-    discussions,
+    discussions, events,
 )
 from seed import seed_data
 
@@ -44,6 +44,25 @@ async def lifespan(app: FastAPI):
         # Sprint T-RIM: seed reimbursement schemes from MPCA Master Document
         from routes.reimbursement_schemes import seed_reimbursement_schemes
         await seed_reimbursement_schemes()
+        # M39c · Bootstrap scheme activation for existing fiscal cycles so live
+        # data continues to work. Only runs when no activation doc exists.
+        from datetime import datetime, timezone
+        from core.infra import db as _db
+        for cycle in ("2024-25", "2025-26", "2026-27"):
+            has = await _db.scheme_activation_seasons.find_one(
+                {"fiscal_cycle": cycle}
+            )
+            if not has:
+                await _db.scheme_activation_seasons.insert_one({
+                    "fiscal_cycle": cycle,
+                    "is_active": True,
+                    "signed_pdf_url": None,
+                    "signed_by": "Bootstrap · Pre-M39c",
+                    "signed_by_body_code": "MPCA",
+                    "signed_at": datetime.now(timezone.utc).isoformat(),
+                    "notes": "Auto-activated for pre-existing data. MPCA can re-upload signed PDF anytime.",
+                    "bootstrap": True,
+                })
         # Sprint M21: seed 13 RBAC roles + bootstrap 6 users from personas
         from routes.rbac import seed_roles_and_permissions
         await seed_roles_and_permissions()

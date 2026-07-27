@@ -1,0 +1,36 @@
+{
+  "summary": "M39b (Event Calendar + Birthday Reminders) and M39c (Scheme Season Activation Gate) tested end-to-end. Backend pytest: 20/20 passing (test_m39_events.py) covering Event CRUD RBAC (MPCA can C/U/D, Division 403 on all writes, Division can read), Birthday today/upcoming/mocked-email endpoints, Scheme activation GET/POST/reset with MPCA-only write RBAC, and the tournament + grant-claim POST gates that return 403 with 'not yet activated' on novel fiscal_cycle 2098-99, plus Member DOB persistence via PATCH /api/members/{id}. Frontend Playwright: MPCA persona sees /events with add-event-btn + birthdays-panel (Devendra Bundela · Turns 50), can open event-modal (fields: event-title/event-desc/event-date/event-location/event-type + save-event-btn), the created event immediately renders inside day-cell-2026-07-27 AND day-panel; Division Secretary sees same event read-only (add-event-btn absent, event content visible in day cell) and same birthday panel; /schemes shows activation-banner 'Schemes ACTIVATED · Season 2026-27' with download-schemes-pdf + upload-signed-pdf-btn + signed-pdf-input for MPCA, upload buttons hidden for Division; MemberDetail exposes data-testid='member-dob' with the ISO 1976-07-27 value; sidebar-collapse-btn is clickable and toggles both states without error. Bootstrap seasons 2024-25/2025-26/2026-27 confirmed active. Note: task spec referenced login testid 'sign-in-btn' but actual is 'login-submit-btn' — used the correct one.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m39_events.py",
+    "/app/test_reports/pytest/m39_results.xml"
+  ],
+  "action_items": [
+    "(Doc-only nit) Task-spec referenced login testid 'sign-in-btn' but actual data-testid on Login.jsx L299 is 'login-submit-btn' — update task doc or add an alias.",
+    "(Optional) Event modal input testids are 'event-title'/'event-date'/'event-location'/'event-type' — spec mentioned '-input' suffix which does not exist. Consider standardising on the '-input' suffix pattern used elsewhere for consistency.",
+    "(Not tested by this run) Season switcher to 2027-28 showing NOT ACTIVATED banner + Division 'Awaiting MPCA' badge — testids 'season-switcher' and 'season-switcher-select' exist; unit-tested equivalent via GET /schemes/season-activation?fiscal_cycle=2099-99 → is_active=false which passed. Recommend a follow-up UI regression pass on the season-switcher flip once other visual polish lands.",
+    "(Not tested by this run) MPCA re-uploading a signed PDF via signed-pdf-input then verifying banner flips to 'signed by <persona>' — backend endpoint POST /schemes/season-activation was directly exercised in tests (test_mpca_can_activate). UI file-upload flow not automated."
+  ],
+  "critical_code_review_comments": [
+    "routes/events.py::list_events accepts scope but ignores auth (comment says 'auth handled at frontend for now'). This is fine given the persona-chip model but means anyone with the public URL and any x-body-code header can read events. Add a small guard requiring at least persona headers to be present.",
+    "routes/events.py::birthdays_today/upcoming return the member's phone/email/photo_url without any auth. Since the app is persona-headers-only anyway this is consistent, but worth adding a scope check if this endpoint ever becomes internet-facing.",
+    "routes/events.py::update_event accepts a raw dict patch — good for flexibility but callers can send arbitrary fields (though they're intersected with `allowed`). Consider using an EventUpdate Pydantic model for stronger typing and OpenAPI docs.",
+    "routes/tournaments.py L163: gate on scheme activation happens BEFORE host/date validation (correct — fail-fast with clearest message). Good ordering.",
+    "routes/grant_claims.py L119-123: gate placed correctly at start of create_grant_claim. Consistent with tournaments."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m39_events.py (NEW — 20 tests, 4 classes)"
+  ],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "100% of tested acceptance criteria"},
+  "test_credentials": "Persona chips at /login (no passwords). Login CTA testid: 'login-submit-btn' (NOT 'sign-in-btn' as stated in the request).",
+  "seed_data_creation": "Created 1 event 'TEST_M39 Executive Council Meeting' on 2026-07-27 via UI, then DELETED via API. Created 1 season-activation record for fiscal_cycle='TEST-2099-99' (harmless — a test-only cycle no real flow uses). Reverted Member 70981d75-6613-490d-9183-31007d58350f DOB after mutation test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M39b/M39c signed off. Bootstrap fiscal_cycles 2024-25/2025-26/2026-27 are active in scheme_activation_seasons. Use 2098-99 or 2099-99 as guaranteed-inactive cycles for gate testing. Persona login: click persona chip then '[data-testid=login-submit-btn]'. Event modal input testids: event-title, event-desc, event-date, event-location, event-type, save-event-btn (no '-input' suffix). If UI needs to test the Division 'Awaiting MPCA' badge, switch season to '2027-28' via [data-testid=season-switcher-select] on /schemes.",
+  "rca of the issue": "No bugs found in this iteration. All acceptance criteria met."
+}

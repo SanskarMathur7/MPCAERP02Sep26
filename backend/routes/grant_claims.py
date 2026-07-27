@@ -117,6 +117,16 @@ async def get_grant_claim(cid: str):
 
 @api_router.post("/grant-claims", response_model=GrantClaim)
 async def create_grant_claim(payload: GrantClaimCreate):
+    # M39c · Block new claims until MPCA has activated the schemes for the
+    # requested fiscal cycle by uploading the signed master PDF.
+    from routes.events import is_season_activated
+    if not await is_season_activated(payload.fiscal_cycle):
+        raise HTTPException(
+            403,
+            f"Schemes for {payload.fiscal_cycle} are not yet activated. Please wait "
+            "until MPCA uploads the signed Schemes PDF for this season under the "
+            "MPCA Schemes Register.",
+        )
     scheme = await db.reimbursement_schemes.find_one({"scheme_code": payload.scheme_code}, {"_id": 0})
     if not scheme:
         raise HTTPException(404, f"Scheme {payload.scheme_code} not found")

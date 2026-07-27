@@ -24,6 +24,16 @@ async def _ensure_accepted(t: dict):
         raise HTTPException(400, f"Squad selection is locked until the host body accepts this tournament (current: {acc.get('status')}).")
 
 
+@api_router.get("/squads/{sid}", response_model=Squad)
+async def get_squad_by_id(sid: str):
+    """M38 · Direct-fetch by squad id (needed by SquadNominationForm printable route)."""
+    doc = await db.squads.find_one({"id": sid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Squad not found")
+    return doc
+
+
+
 @api_router.get("/tournaments/{tid}/selection", response_model=Squad)
 async def get_selection(tid: str):
     t = await _tournament_or_404(tid)

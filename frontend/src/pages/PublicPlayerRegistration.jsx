@@ -239,7 +239,7 @@ const PublicPlayerRegistration = () => {
                                 </Field>
                                 <Field label="Bowling style">
                                     <select value={form.bowling_style} onChange={(e) => setField("bowling_style", e.target.value)} className="input-heritage !py-1.5 !text-xs">
-                                        {["None", "Right_Arm_Fast", "Right_Arm_Medium", "Right_Arm_Off_Spin", "Right_Arm_Leg_Spin", "Left_Arm_Fast", "Left_Arm_Medium", "Left_Arm_Orthodox", "Left_Arm_Chinaman"].map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
+                                        {["None", "Right_Arm_Fast", "Right_Arm_Off_Spin", "Right_Arm_Leg_Spin", "Left_Arm_Fast", "Left_Arm_Orthodox", "Left_Arm_Chinaman"].map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
                                     </select>
                                 </Field>
                                 <Field label="Home district (code)">

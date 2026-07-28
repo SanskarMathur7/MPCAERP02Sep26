@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import {
     UserPlus, Plus, Copy, Loader2, Check, X, Inbox, ExternalLink, ShieldAlert,
     RotateCcw, CheckCircle2, XCircle, Send, Mail, Phone, Calendar, ChevronRight,
-    Sparkles,
+    Sparkles, FileText, Upload, Edit3, History, AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useSeason } from "@/context/SeasonContext";
@@ -12,9 +12,10 @@ import CricketLoader from "@/components/CricketLoader";
 
 const STATUS_TONE = {
     Submitted: "bg-mpca-navy/15 text-mpca-navy border-mpca-navy/40",
+    Division_Approved: "bg-mpca-brass/15 text-mpca-brass border-mpca-brass/40",
     Approved: "bg-mpca-green-dark/15 text-mpca-green-dark border-mpca-green-dark/40",
     Rejected: "bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/40",
-    Returned: "bg-mpca-brass/15 text-mpca-brass border-mpca-brass/40",
+    Returned: "bg-amber-100 text-amber-800 border-amber-300",
 };
 
 const publicUrlFor = (token) => `${window.location.origin}/register/player/${token}`;
@@ -164,7 +165,7 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
 
     const filtered = useMemo(() => filter === "all" ? regs : regs.filter((r) => r.status === filter), [regs, filter]);
 
-    const doAction = async (rid, action, note = null) => {
+    const doAction = async (rid, action, arg = null) => {
         // M38i · '_refresh' pseudo-action → just re-fetch the row (used after AI review)
         if (action === "_refresh") {
             try {
@@ -174,12 +175,63 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
             } catch { /* silent */ }
             return;
         }
+        // M39n · Inline "amend data" flow — collect field + value from prompts
+        if (action === "edit") {
+            const field = window.prompt("Which field to amend? (e.g. full_name, dob, mobile, email, address, aadhaar_no, home_district_code, preferred_division_code, guardian_name)");
+            if (!field) return;
+            const value = window.prompt(`New value for ${field}?`);
+            if (value === null) return;
+            setBusy(true);
+            try {
+                const { data } = await api.post(`/player-registrations/${rid}/edit`, {
+                    patch: { [field]: value },
+                    actor_name: persona?.name,
+                });
+                setSelected(data); onChanged?.();
+            } catch (e) { alert(e?.response?.data?.detail || e.message); }
+            finally { setBusy(false); }
+            return;
+        }
+        // M39n · Upload doc on behalf — pick a file, upload to /uploads, patch slot
+        if (action === "upload-doc") {
+            const key = window.prompt("Which doc slot? (photo_url | aadhaar_url | address_proof_url | birth_cert_url)");
+            if (!key) return;
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/*,application/pdf";
+            input.onchange = async (ev) => {
+                const file = ev.target.files?.[0];
+                if (!file) return;
+                setBusy(true);
+                try {
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    fd.append("related_type", "player_registration");
+                    fd.append("related_id", rid);
+                    fd.append("body_id", persona?.body_code || "MPCA");
+                    fd.append("uploaded_by", persona?.name || "");
+                    const { data: rec } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+                    const { data } = await api.post(`/player-registrations/${rid}/upload-doc`, {
+                        doc_key: key, doc_url: rec.url, actor_name: persona?.name,
+                    });
+                    setSelected(data); onChanged?.();
+                } catch (e) { alert(e?.response?.data?.detail || e.message); }
+                finally { setBusy(false); }
+            };
+            input.click();
+            return;
+        }
         setBusy(true);
         try {
-            const { data } = await api.post(`/player-registrations/${rid}/${action}`, { reviewer_name: persona?.name, note });
+            // M39n · Two-stage endpoints use `remark` field; legacy /reject uses `note`
+            const body = ["division-approve", "mpca-approve", "return-to-player"].includes(action)
+                ? { remark: arg, actor_name: persona?.name }
+                : { reviewer_name: persona?.name, note: arg };
+            const { data } = await api.post(`/player-registrations/${rid}/${action}`, body);
             setSelected(data);
             onChanged?.();
-            alert(`Registration ${action === "approve" ? "approved" : action === "reject" ? "rejected" : "returned"}.`);
+            const verb = action.replace(/-/g, " ");
+            alert(`Registration · ${verb} complete.`);
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
         finally { setBusy(false); }
     };
@@ -187,9 +239,9 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
     return (
         <div>
             <div className="flex flex-wrap gap-2 mb-3">
-                {["Submitted", "Approved", "Rejected", "Returned", "all"].map((s) => (
+                {["Submitted", "Division_Approved", "Approved", "Returned", "Rejected", "all"].map((s) => (
                     <button key={s} onClick={() => setFilter(s)} className={`text-[10px] uppercase tracking-widest px-3 py-1 border ${filter === s ? "bg-mpca-oxblood text-mpca-ivory border-mpca-oxblood" : "border-mpca-brass/40 text-mpca-brass"}`} data-testid={`pr-filter-${s}`}>
-                        {s === "all" ? "All" : s} · {s === "all" ? regs.length : regs.filter((r) => r.status === s).length}
+                        {s === "all" ? "All" : s.replace(/_/g, " ")} · {s === "all" ? regs.length : regs.filter((r) => r.status === s).length}
                     </button>
                 ))}
             </div>
@@ -231,9 +283,18 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
 };
 
 const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
+    const { persona } = useAuth();
     const camp = campaigns.find((c) => c.id === reg.campaign_id);
     const pd = reg.player_data || {};
-    const isPending = reg.status === "Submitted" || reg.status === "Returned";
+    const isMPCA = persona?.body_type === "State";
+    const isHomeDiv = persona && (
+        persona.body_code === reg.body_code ||
+        persona.body_code === pd?.preferred_division_code
+    );
+    const canDivisionApprove = isHomeDiv && ["Submitted", "Returned"].includes(reg.status);
+    const canMPCAApprove = isMPCA && ["Submitted", "Returned", "Division_Approved"].includes(reg.status);
+    const canReturn = (isHomeDiv || isMPCA) && !["Approved", "Rejected"].includes(reg.status);
+    const canEdit = (isHomeDiv || isMPCA) && !["Approved", "Rejected"].includes(reg.status);
     const ai = reg.ai_summary;
     const [aiBusy, setAiBusy] = useState(false);
 
@@ -328,22 +389,81 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                     </div>
                 </div>
             )}
-            {reg.review_note && (
-                <div className="px-5 py-3 border-t border-mpca-brass/20 text-[11px]">
-                    <span className="overline mr-1">Note</span> {reg.review_note}
+            {reg.division_remark && (
+                <div className="px-5 py-3 border-t border-mpca-brass/20 bg-mpca-brass/5" data-testid="division-remark-banner">
+                    <div className="overline mb-1 text-mpca-brass">Division Remark · {reg.division_reviewed_by || "—"}{reg.division_reviewed_at ? ` · ${reg.division_reviewed_at.slice(0, 10)}` : ""}</div>
+                    <div className="text-[11px] text-mpca-charcoal italic">{reg.division_remark}</div>
                 </div>
             )}
-            {isPending && (
+            {reg.mpca_remark && (
+                <div className="px-5 py-3 border-t border-mpca-brass/20 bg-emerald-50" data-testid="mpca-remark-banner">
+                    <div className="overline mb-1 text-emerald-800">MPCA Remark {reg.mpca_shortcut_used ? "(Shortcut — Division bypassed)" : ""} · {reg.mpca_reviewed_by || "—"}{reg.mpca_reviewed_at ? ` · ${reg.mpca_reviewed_at.slice(0, 10)}` : ""}</div>
+                    <div className="text-[11px] text-mpca-charcoal italic">{reg.mpca_remark}</div>
+                </div>
+            )}
+            {reg.return_reason && reg.status === "Returned" && (
+                <div className="px-5 py-3 border-t border-mpca-brass/20 bg-amber-50" data-testid="return-reason-banner">
+                    <div className="overline mb-1 text-amber-800">Returned to Player</div>
+                    <div className="text-[11px] text-mpca-charcoal italic">{reg.return_reason}</div>
+                </div>
+            )}
+
+            {(canDivisionApprove || canMPCAApprove || canReturn || canEdit) && (
                 <div className="border-t border-mpca-brass/20 px-5 py-3 bg-mpca-parchment/50 flex flex-wrap gap-2 justify-end" data-testid="pr-detail-actions">
-                    <button onClick={() => onAction(reg.id, "approve", window.prompt("Optional note:"))} disabled={busy} className="text-[11px] uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-approve-btn">
-                        {busy ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />} Approve → create Player
-                    </button>
-                    <button onClick={() => { const n = window.prompt("Return reason (required):"); if (n) onAction(reg.id, "return", n); }} disabled={busy} className="text-[11px] uppercase tracking-widest border border-mpca-brass text-mpca-brass px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-return-btn">
-                        <RotateCcw size={11} /> Return for edits
-                    </button>
-                    <button onClick={() => { const n = window.prompt("Rejection reason (required):"); if (n) onAction(reg.id, "reject", n); }} disabled={busy} className="text-[11px] uppercase tracking-widest border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-reject-btn">
-                        <XCircle size={11} /> Reject
-                    </button>
+                    {canEdit && (
+                        <button onClick={() => onAction(reg.id, "edit")} disabled={busy} className="text-[11px] uppercase tracking-widest border border-mpca-navy text-mpca-navy px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-edit-btn">
+                            <Edit3 size={11} /> Amend Data
+                        </button>
+                    )}
+                    {canEdit && (
+                        <button onClick={() => onAction(reg.id, "upload-doc")} disabled={busy} className="text-[11px] uppercase tracking-widest border border-mpca-brass text-mpca-brass px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-upload-doc-btn">
+                            <Upload size={11} /> Upload Doc on Behalf
+                        </button>
+                    )}
+                    {canDivisionApprove && (
+                        <button onClick={() => { const n = window.prompt("Division approval remark (required):"); if (n) onAction(reg.id, "division-approve", n); }} disabled={busy} className="text-[11px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-div-approve-btn">
+                            {busy ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />} Division Approve
+                        </button>
+                    )}
+                    {canMPCAApprove && (
+                        <button onClick={() => {
+                            const shortcut = reg.status !== "Division_Approved";
+                            if (shortcut && !window.confirm("⚠️ Division has NOT approved this yet. MPCA-Approve will BYPASS the Division stage. Continue?")) return;
+                            const n = window.prompt("MPCA approval remark (required):"); if (n) onAction(reg.id, "mpca-approve", n);
+                        }} disabled={busy} className={`text-[11px] uppercase tracking-widest ${reg.status === "Division_Approved" ? "bg-mpca-green-dark" : "bg-mpca-oxblood"} text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40`} data-testid="pr-mpca-approve-btn">
+                            {busy ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                            {reg.status === "Division_Approved" ? "MPCA Approve · Create Player" : "MPCA Shortcut Approve"}
+                            {reg.status !== "Division_Approved" && <AlertTriangle size={11} />}
+                        </button>
+                    )}
+                    {canReturn && (
+                        <button onClick={() => { const n = window.prompt("Return reason (required):"); if (n) onAction(reg.id, "return-to-player", n); }} disabled={busy} className="text-[11px] uppercase tracking-widest border border-amber-700 text-amber-700 px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-return-btn">
+                            <RotateCcw size={11} /> Return to Player
+                        </button>
+                    )}
+                    {canReturn && (
+                        <button onClick={() => { const n = window.prompt("Rejection reason (required):"); if (n) onAction(reg.id, "reject", n); }} disabled={busy} className="text-[11px] uppercase tracking-widest border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-reject-btn">
+                            <XCircle size={11} /> Reject
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {(reg.audit_events || []).length > 0 && (
+                <div className="border-t border-mpca-brass/20 px-5 py-3" data-testid="audit-trail-section">
+                    <div className="overline flex items-center gap-1 mb-2"><History size={10} /> Audit Trail · {reg.audit_events.length} events</div>
+                    <ol className="space-y-1 text-[11px]">
+                        {reg.audit_events.slice().reverse().map((e) => (
+                            <li key={e.id} className="flex items-start gap-2" data-testid={`audit-${e.id}`}>
+                                <span className="text-mpca-brass font-mono shrink-0">{e.timestamp?.slice(11, 16)}</span>
+                                <span className="text-[9px] uppercase tracking-widest px-1 py-0.5 border border-mpca-brass/30 text-mpca-brass shrink-0">{e.event.replace(/_/g, " ")}</span>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-mpca-charcoal truncate">{e.actor_name || "—"}{e.actor_body_id ? ` · ${e.actor_body_id}` : ""}</div>
+                                    {e.note && <div className="text-mpca-gray-dark italic">{e.note}</div>}
+                                </div>
+                            </li>
+                        ))}
+                    </ol>
                 </div>
             )}
             {reg.status === "Approved" && reg.linked_player_id && (
@@ -445,7 +565,7 @@ const InvitesDialog = ({ campaign, onClose, onCopy, onChanged }) => {
         setInvites(data || []);
         setLoading(false);
     };
-    useEffect(() => { load(); /* eslint-disable-next-line */ }, [campaign.id]);
+    useEffect(() => { load(); }, [campaign.id]);
 
     const submitBulk = async () => {
         const rows = bulk.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {

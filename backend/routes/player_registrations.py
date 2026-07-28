@@ -116,6 +116,19 @@ class PlayerRegistrationData(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class PlayerRegistrationAuditEvent(BaseModel):
+    """M39n · Append-only audit event for a single registration."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    event: str                                          # "submitted" / "division_approved" / "mpca_approved" / "returned" / "rejected" / "doc_uploaded" / "edited"
+    actor_name: Optional[str] = None
+    actor_body_id: Optional[str] = None
+    actor_role: Optional[str] = None
+    note: Optional[str] = None
+    diff: Optional[Dict[str, Any]] = None               # {field: [old, new]}
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class PlayerRegistration(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
@@ -123,15 +136,27 @@ class PlayerRegistration(BaseModel):
     invite_id: Optional[str] = None
     body_code: str
     cycle_code: str
-    status: str = "Submitted"                           # Submitted | Approved | Rejected | Returned
+    # M39n · Two-stage flow — Submitted → Division_Approved → Approved. Terminal
+    # states: Rejected. Interim resubmit path: Returned → player edits → Submitted.
+    status: str = "Submitted"
     player_data: PlayerRegistrationData
     submitted_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     submitted_ip: Optional[str] = None
+    # Retained for backwards compat (used by legacy /approve endpoint)
     reviewed_at: Optional[str] = None
     reviewed_by: Optional[str] = None
-    ai_summary: Optional[Dict[str, Any]] = None         # M38i · Gemini KYC verification summary
     review_note: Optional[str] = None
     return_reason: Optional[str] = None
+    ai_summary: Optional[Dict[str, Any]] = None
+    # M39n · Two-stage approval trail
+    division_remark: Optional[str] = None
+    division_reviewed_by: Optional[str] = None
+    division_reviewed_at: Optional[str] = None
+    mpca_remark: Optional[str] = None
+    mpca_reviewed_by: Optional[str] = None
+    mpca_reviewed_at: Optional[str] = None
+    mpca_shortcut_used: bool = False                    # true if MPCA approved before Division
+    audit_events: List[PlayerRegistrationAuditEvent] = Field(default_factory=list)
     linked_player_id: Optional[str] = None
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -196,6 +221,274 @@ async def _touch_counts(campaign_id: str, delta: Dict[str, int]):
     await db.player_registration_campaigns.update_one(
         {"id": campaign_id}, {"$inc": delta, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
     )
+
+
+async def _log_event(rid: str, event: str, *, actor_name=None, actor_body_id=None, actor_role=None, note=None, diff=None) -> None:
+    """M39n · Append an audit event to a registration."""
+    entry = PlayerRegistrationAuditEvent(
+        event=event, actor_name=actor_name, actor_body_id=actor_body_id,
+        actor_role=actor_role, note=note, diff=diff,
+    ).model_dump()
+    await db.player_registrations.update_one(
+        {"id": rid},
+        {"$push": {"audit_events": entry}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+
+
+def _is_home_division(reg_doc: Dict[str, Any], caller_body: Optional[str], caller_role: Optional[str]) -> bool:
+    """M39n · The 'home division' is preferred_division_code on the payload, or
+    the registration's body_code if that already refers to a Division / District."""
+    pd = reg_doc.get("player_data") or {}
+    pref = pd.get("preferred_division_code")
+    body = reg_doc.get("body_code")
+    candidates = {c for c in [pref, body] if c}
+    if caller_body and caller_body in candidates:
+        return True
+    # A District under a Division can also approve if the pref matches its parent
+    if caller_body and caller_body.startswith("DIST-") and pref and pref.startswith("DIV-"):
+        # Cheap suffix match: DIST-*-INDO shares suffix with DIV-IND? No, use trailing token
+        return caller_body.endswith(pref.split("-")[-1])
+    return False
+
+
+class RemarkAction(BaseModel):
+    """M39n · Remark required on approve; optional on other actions."""
+    remark: Optional[str] = None
+    actor_name: Optional[str] = None
+
+
+class EditAction(BaseModel):
+    """M39n · Division can amend any field in `player_data`. Diff is logged."""
+    patch: Dict[str, Any]
+    actor_name: Optional[str] = None
+
+
+class DocUploadAction(BaseModel):
+    """M39n · Division adds a doc URL on player's behalf (photo, aadhaar, etc.)."""
+    doc_key: str        # "photo_url" | "aadhaar_url" | "address_proof_url" | "birth_cert_url"
+    doc_url: str
+    actor_name: Optional[str] = None
+
+
+@api_router.post("/player-registrations/{rid}/division-approve", response_model=PlayerRegistration)
+async def division_approve(
+    rid: str,
+    action: RemarkAction,
+    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+):
+    """M39n · Home Division approves the registration with a mandatory remark.
+    Status flips Submitted → Division_Approved. MPCA queue then picks it up."""
+    doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Registration not found")
+    if doc.get("status") not in ("Submitted", "Returned"):
+        raise HTTPException(409, f"Cannot Division-approve from status '{doc.get('status')}'.")
+    if not _is_home_division(doc, x_user_body_code, x_role_id):
+        raise HTTPException(403, "Only the home Division of this player may approve at Stage 1.")
+    if not (action.remark or "").strip():
+        raise HTTPException(400, "A remark is required at the Division approval stage.")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.player_registrations.update_one({"id": rid}, {"$set": {
+        "status": "Division_Approved",
+        "division_remark": action.remark,
+        "division_reviewed_by": action.actor_name,
+        "division_reviewed_at": now,
+        "updated_at": now,
+    }})
+    await _log_event(rid, "division_approved", actor_name=action.actor_name,
+                     actor_body_id=x_user_body_code, actor_role=x_role_id, note=action.remark)
+    return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+
+
+@api_router.post("/player-registrations/{rid}/mpca-approve", response_model=PlayerRegistration)
+async def mpca_approve(
+    rid: str,
+    action: RemarkAction,
+    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+):
+    """M39n · MPCA final approval. Creates the Player row. Accepts either a
+    Division-approved registration (normal path) or, with a shortcut warning,
+    a plain Submitted registration (MPCA-override path)."""
+    doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Registration not found")
+    if not (x_user_body_code == "MPCA" and (x_role_id in MPCA_ROLES)):
+        raise HTTPException(403, "Only MPCA office bearers may finalise the approval.")
+    if doc.get("status") == "Approved":
+        raise HTTPException(400, "Already approved.")
+    if doc.get("status") not in ("Submitted", "Returned", "Division_Approved"):
+        raise HTTPException(409, f"Cannot MPCA-approve from status '{doc.get('status')}'.")
+    if not (action.remark or "").strip():
+        raise HTTPException(400, "A remark is required at the MPCA approval stage.")
+    shortcut = doc.get("status") != "Division_Approved"
+
+    from models import Player
+    pd = doc["player_data"]
+    body_code = doc["body_code"]
+    count = await db.players.count_documents({"body_id": body_code, "season_year": doc["cycle_code"]})
+    short = body_code.split("-")[-1] if "-" in body_code else body_code[:3]
+    player_id = f"MP/{short}/{doc['cycle_code']}/{count + 1:04d}"
+    gender_map = {"M": "Male", "F": "Female", "Male": "Male", "Female": "Female", "Other": "Other"}
+    player = Player(
+        player_id=player_id, body_id=body_code,
+        full_name=pd["full_name"], date_of_birth=pd["dob"],
+        gender=gender_map.get(pd.get("gender"), "Male"),
+        role=pd.get("role", "Batter"),
+        batting_style=pd.get("batting_style") or "Right_Hand",
+        bowling_style=pd.get("bowling_style") or "None",
+        category=pd.get("category", "Local_MP"),
+        season_year=doc["cycle_code"],
+        division_folder=body_code if body_code.startswith("DIV-") else None,
+        contact_phone=pd.get("mobile"), contact_email=pd.get("email"),
+        aadhaar_last4=(pd.get("aadhaar_no") or "")[-4:] or None,
+        guardian_name=pd.get("guardian_name"), address_line=pd.get("address"),
+        photo_url=pd.get("photo_url"), status="Active",
+    )
+    await db.players.insert_one(player.model_dump())
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.player_registrations.update_one({"id": rid}, {"$set": {
+        "status": "Approved",
+        "mpca_remark": action.remark,
+        "mpca_reviewed_by": action.actor_name,
+        "mpca_reviewed_at": now,
+        "mpca_shortcut_used": shortcut,
+        "linked_player_id": player.id,
+        "reviewed_by": action.actor_name,
+        "reviewed_at": now,
+        "review_note": action.remark,
+        "updated_at": now,
+    }})
+    await _log_event(rid, "mpca_approved" if not shortcut else "mpca_approved_shortcut",
+                     actor_name=action.actor_name, actor_body_id="MPCA",
+                     actor_role=x_role_id, note=action.remark)
+    if doc.get("invite_id"):
+        await db.player_registration_invites.update_one({"id": doc["invite_id"]}, {"$set": {"status": "Approved"}})
+    await _touch_counts(doc["campaign_id"], {"submitted_count": -1, "approved_count": 1})
+    return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+
+
+@api_router.post("/player-registrations/{rid}/return-to-player", response_model=PlayerRegistration)
+async def return_to_player(
+    rid: str,
+    action: RemarkAction,
+    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+):
+    """M39n · Either stage can send the registration back for edits. Player can
+    resubmit in-place; status flips Returned → Submitted on re-save."""
+    doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Registration not found")
+    if doc.get("status") == "Approved":
+        raise HTTPException(400, "Already approved — cannot return.")
+    if not (_is_home_division(doc, x_user_body_code, x_role_id) or (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES)):
+        raise HTTPException(403, "Only the home Division or MPCA may return this registration.")
+    reason = (action.remark or "").strip()
+    if not reason:
+        raise HTTPException(400, "A reason is required when returning.")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.player_registrations.update_one({"id": rid}, {"$set": {
+        "status": "Returned",
+        "return_reason": reason,
+        "updated_at": now,
+    }})
+    await _log_event(rid, "returned", actor_name=action.actor_name,
+                     actor_body_id=x_user_body_code, actor_role=x_role_id, note=reason)
+    return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+
+
+@api_router.post("/player-registrations/{rid}/edit", response_model=PlayerRegistration)
+async def edit_registration(
+    rid: str,
+    action: EditAction,
+    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+):
+    """M39n · Home Division (or MPCA) can amend the player_data before approving.
+    Diff of changed fields is logged. Only allowed while Submitted / Returned /
+    Division_Approved (before MPCA finalises)."""
+    doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Registration not found")
+    if doc.get("status") == "Approved":
+        raise HTTPException(400, "Cannot edit after MPCA approval.")
+    if not (_is_home_division(doc, x_user_body_code, x_role_id) or (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES)):
+        raise HTTPException(403, "Only the home Division or MPCA may edit this registration.")
+    if not action.patch:
+        raise HTTPException(400, "Empty patch.")
+
+    current = doc.get("player_data") or {}
+    diff: Dict[str, Any] = {}
+    updates: Dict[str, Any] = {}
+    for k, v in action.patch.items():
+        # Never allow the caller to change the campaign/body/cycle/status via this route
+        if k in {"campaign_id", "body_code", "cycle_code", "status", "id"}:
+            continue
+        if current.get(k) != v:
+            diff[k] = [current.get(k), v]
+            updates[f"player_data.{k}"] = v
+    if not diff:
+        return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.player_registrations.update_one({"id": rid}, {"$set": updates})
+    await _log_event(rid, "edited", actor_name=action.actor_name,
+                     actor_body_id=x_user_body_code, actor_role=x_role_id,
+                     note=f"{len(diff)} field(s) amended.", diff=diff)
+    return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+
+
+@api_router.post("/player-registrations/{rid}/upload-doc", response_model=PlayerRegistration)
+async def upload_doc_on_behalf(
+    rid: str,
+    action: DocUploadAction,
+    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+):
+    """M39n · Division uploads a doc URL on the player's behalf. Doc URL
+    typically comes from POST /api/uploads. Overwrites the player_data doc slot
+    and appends an audit event."""
+    doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Registration not found")
+    if doc.get("status") == "Approved":
+        raise HTTPException(400, "Cannot upload docs after MPCA approval.")
+    if not (_is_home_division(doc, x_user_body_code, x_role_id) or (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES)):
+        raise HTTPException(403, "Only the home Division or MPCA may upload docs on behalf.")
+    if action.doc_key not in {"photo_url", "aadhaar_url", "address_proof_url", "birth_cert_url"}:
+        raise HTTPException(400, f"Unsupported doc_key: {action.doc_key}")
+    updates = {
+        f"player_data.{action.doc_key}": action.doc_url,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.player_registrations.update_one({"id": rid}, {"$set": updates})
+    await _log_event(rid, "doc_uploaded", actor_name=action.actor_name,
+                     actor_body_id=x_user_body_code, actor_role=x_role_id,
+                     note=f"{action.doc_key} replaced/uploaded on player's behalf.",
+                     diff={action.doc_key: [doc.get("player_data", {}).get(action.doc_key), action.doc_url]})
+    return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+
+
+@api_router.post("/player-registrations/{rid}/resubmit", response_model=PlayerRegistration)
+async def resubmit_after_return(rid: str):
+    """M39n · Player-facing resubmit — flips Returned → Submitted so the
+    Division picks it back up. Meant to be called by the player after they
+    edit their data via the public form (or, temporarily, by MPCA/Div staff
+    on behalf while an authenticated player portal is TBD)."""
+    doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Registration not found")
+    if doc.get("status") != "Returned":
+        raise HTTPException(409, "Only Returned registrations can be resubmitted.")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.player_registrations.update_one({"id": rid}, {"$set": {
+        "status": "Submitted", "updated_at": now,
+    }})
+    await _log_event(rid, "resubmitted", note="Player resubmitted after Division/MPCA return.")
+    return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
 
 
 # ─────────────── Campaign CRUD ───────────────
@@ -421,6 +714,11 @@ async def public_submit(payload: PublicSubmit):
         cycle_code=envelope["cycle_code"],
         status="Submitted",
         player_data=payload.player,
+        audit_events=[PlayerRegistrationAuditEvent(
+            event="submitted",
+            actor_name=payload.player.full_name,
+            note=f"Player submitted via public form. Preferred division: {payload.player.preferred_division_code or 'not specified'}.",
+        )],
     )
     row = reg.model_dump()
     row["email_key"] = email  # normalised dedupe key (never surfaced to Pydantic model)

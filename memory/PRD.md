@@ -1363,6 +1363,20 @@ _Shipped 27 Jul 2026 · verified iter_56 (BE 26/26 pytest, FE 6/6 UI checks)_
 
 ---
 
+## Sprint M39n · Player Registration · Two-Stage Approval
+_Shipped 28 Jul 2026 · full backend curl sweep + UI smoke-verified_
+
+- **Two-stage flow**: player submits → home Division reviews → `Division_Approved` → MPCA finalises → `Approved` (creates Player row).
+- **Home division derived** from `player_data.preferred_division_code` (or the campaign's body_code). RBAC 403 if a different Division tries to approve.
+- **Every stage requires a remark** — both `division_remark` and `mpca_remark` persisted; MPCA remark visible on the record after approval.
+- **MPCA shortcut**: MPCA can approve without Division sign-off (warning modal). `mpca_shortcut_used=true` and a distinct audit event `mpca_approved_shortcut` are logged.
+- **Full audit trail** in `audit_events[]`: `submitted / edited / doc_uploaded / division_approved / mpca_approved / mpca_approved_shortcut / returned / resubmitted / rejected`. Displayed in reverse-chronological order in RegistrationDetail.
+- **Division can amend player data** (any field) — logged diff in audit event.
+- **Division can upload docs on player's behalf** (`photo_url / aadhaar_url / address_proof_url / birth_cert_url`) → new endpoint `POST /player-registrations/{rid}/upload-doc`.
+- **Return path**: `return-to-player` flips status to `Returned` with reason. `/resubmit` flips it back to `Submitted` in-place (same record).
+- **New endpoints**: `/division-approve`, `/mpca-approve`, `/return-to-player`, `/edit`, `/upload-doc`, `/resubmit`.
+- **Frontend**: `PlayerRegistrations.jsx` gets 5 status filter chips (Submitted, Division Approved, Approved, Returned, Rejected). Row actions gated by persona role. Division/MPCA remark banners + return-reason banner + collapsible Audit Trail. Prompt-based inputs for remark/edit/return; native file picker for doc upload.
+
 ## Sprint M39m · Tournament tab · Six polish items
 _Shipped 27 Jul 2026 · iteration_63 all-green_
 

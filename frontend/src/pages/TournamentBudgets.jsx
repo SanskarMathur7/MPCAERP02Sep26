@@ -447,7 +447,10 @@ export default function TournamentBudgets() {
     useEffect(() => { reload(); /* eslint-disable-next-line */ }, [filterStatus]);
 
     const canCreate = persona && ["division-secretary", "secretary", "treasurer", "president"].includes(persona.id);
-    const canApproveBudget = persona && persona.id === "treasurer" && persona.body_code === "MPCA";
+    // M39l · Bug 4 · Any MPCA office bearer (president / secretary / treasurer)
+    // can approve/return/reject tournament budgets. Previously only the
+    // Treasurer could — which stalled workflow whenever they were unavailable.
+    const canApproveBudget = persona && persona.body_code === "MPCA" && ["president", "secretary", "treasurer"].includes(persona.id);
     const canDecideVars = canApproveBudget;
 
     const handleDelete = async (b) => {

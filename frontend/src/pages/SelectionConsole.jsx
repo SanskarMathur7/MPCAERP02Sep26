@@ -173,9 +173,8 @@ const SelectionConsole = () => {
 
     const addToSquad = (p) => {
         if (squadIds.has(p.id)) return;
-        const t = tournament;
-        const maxSize = t?.max_squad_size || 18;
-        if (squadMembers.length >= maxSize) { alert(`Squad already at max ${maxSize}`); return; }
+        // M39k · Removed hard cap. Divisions nominate freely; MPCA trims down
+        // to the playing XI/squad during approval.
         const newMember = {
             player_id: p.id, player_no: p.player_id, full_name: p.full_name,
             role: p.role, is_captain: false, is_vice_captain: false, is_keeper: roleCode(p) === "WK",

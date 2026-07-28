@@ -264,3 +264,42 @@ async def compute_budget(scheme_code: str, req: ComputeRequest):
         "computable": fn is not None,
         "conditions": scheme.get("conditions", []),
     }
+
+
+@api_router.get("/tournaments/{tid}/scheme-for-body/{body_code}")
+async def scheme_for_body(tid: str, body_code: str):
+    """M39l · Bug 3 · Resolve the applicable scheme (host vs visiting) for
+    a specific body on a specific tournament.
+
+    Returns {role, scheme_code, scheme_name, input_variables}.
+    - HOST (body_code == tournament.host_body_id): uses
+      `tournament.host_scheme_code` (fallback: `tournament.scheme_code`).
+    - VISITING (any other body): uses `tournament.visiting_scheme_code`.
+    """
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    is_host = body_code == t.get("host_body_id")
+    role = "host" if is_host else "visiting"
+    scheme_code = (
+        (t.get("host_scheme_code") if is_host else t.get("visiting_scheme_code"))
+        or t.get("scheme_code")
+    )
+    if not scheme_code:
+        return {"role": role, "scheme_code": None, "scheme_name": None,
+                "input_variables": [], "note": (
+                    "No scheme assigned for this role yet. MPCA must set the "
+                    f"tournament's {role}-scheme."
+                )}
+    scheme = await db.reimbursement_schemes.find_one({"scheme_code": scheme_code}, {"_id": 0})
+    if not scheme:
+        raise HTTPException(404, f"Scheme {scheme_code} not found")
+    vars_ = INPUT_SPECS.get(scheme_code, [])
+    return {
+        "role": role,
+        "scheme_code": scheme_code,
+        "scheme_name": scheme["name"],
+        "computable": scheme_code in COMPUTE_FN,
+        "input_variables": [v.model_dump() for v in vars_],
+        "conditions": scheme.get("conditions", []),
+    }

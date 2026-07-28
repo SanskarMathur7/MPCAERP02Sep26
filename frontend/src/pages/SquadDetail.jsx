@@ -286,7 +286,7 @@ const SquadDetail = () => {
                                 {status.replace(/_/g, " ")}
                             </span>
                             <span className="text-[11px] text-mpca-ivory/80 font-mono" data-testid="squad-count-line">
-                                <Users size={11} className="inline mr-1" /> {members.length} / {maxSize}
+                                <Users size={11} className="inline mr-1" /> {members.length} nominated · playing cap {maxSize}
                             </span>
                             {captain && <span className="text-[10px] uppercase tracking-widest text-mpca-gold-light"><Crown size={10} className="inline mr-1" /> {captain.full_name}</span>}
                             {isMine && <span className="text-[9px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-0.5">Your body</span>}
@@ -521,7 +521,7 @@ const SquadDetail = () => {
                                         )}
                                     </div>
                                     <div className="col-span-5 flex justify-end gap-1">
-                                        {canEdit && !busy && members.length < maxSize && (
+                                        {canEdit && !busy && (
                                             <>
                                                 <button onClick={() => handleAdd(p)} className="text-[10px] uppercase tracking-[0.15em] px-2 py-1 border border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory transition-colors" data-testid={`squad-pool-pick-${testKey}`}>+ Pick</button>
                                                 {!captain && (
@@ -542,7 +542,7 @@ const SquadDetail = () => {
                         <div>
                             <div className="overline">Selected Squad</div>
                             <div className="font-serif text-lg text-mpca-green-dark mt-0.5">
-                                {members.length} of {maxSize}
+                                {members.length} nominated · playing cap {maxSize}
                             </div>
                         </div>
                         {status === "Approved" && <Lock size={16} className="text-mpca-green-dark" title="Locked by MPCA" />}

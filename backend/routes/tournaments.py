@@ -29,6 +29,24 @@ async def _next_tournament_no(cycle: str) -> str:
     return f"TRN-{cycle}-{seq:03d}"
 
 
+async def _visible_tids_via_participations(scope) -> List[str]:
+    """M39l · Bug 2 · Return every tournament id where the persona's body (or
+    any of its downstream districts) is listed in `tournament_participations`.
+    Fixes BCCI-hosted tournaments not showing up for visiting Divisions."""
+    if scope.is_state or not scope.body_code:
+        return []
+    body_or: list = [{"body_code": scope.body_code}]
+    if scope.is_division and scope.division_suffix:
+        body_or.append({"body_code": {"$regex": f"^DIST-.+-{scope.division_suffix}$"}})
+    tids: set[str] = set()
+    async for p in db.tournament_participations.find(
+        {"$or": body_or}, {"_id": 0, "tournament_id": 1},
+    ):
+        if p.get("tournament_id"):
+            tids.add(p["tournament_id"])
+    return list(tids)
+
+
 def _tournament_scope_query(scope) -> dict:
     """M13: Divisions/Districts see ONLY:
     - Their own body's tournaments (hosted by their body_code)
@@ -111,6 +129,18 @@ async def list_tournaments(
         query["id"] = {"$in": allowed}
     else:
         scope_q = _tournament_scope_query(req_scope)
+        # M39l · Bug 2 · Also include tournaments where the caller's body is
+        # a participant (host or visitor) in `tournament_participations`.
+        extra_tids = await _visible_tids_via_participations(req_scope)
+        if extra_tids:
+            # Widen the scope_q to allow either the existing match OR any
+            # participation match.
+            if scope_q.get("$or"):
+                scope_q = {"$or": scope_q["$or"] + [{"id": {"$in": extra_tids}}]}
+            elif scope_q:
+                scope_q = {"$or": [scope_q, {"id": {"$in": extra_tids}}]}
+            else:
+                scope_q = {"id": {"$in": extra_tids}}
         if scope_q:
             if "$or" in query:
                 query["$and"] = [{"$or": query.pop("$or")}, scope_q]
@@ -149,6 +179,23 @@ async def get_tournament(tid: str, request: Request):
         allowed = await _official_visible_tids(req_scope)
         if tid not in allowed:
             raise HTTPException(403, "You are not allocated to this tournament.")
+    # M39l · Bug 2 · Divisions/Districts may open the tournament if they are on
+    # the participants list, even when they are neither the host nor on the
+    # acceptance-required list yet.
+    if (req_scope.is_division or req_scope.is_district) and req_scope.body_code:
+        req_from = (doc.get("acceptance") or {}).get("required_from") or []
+        host_ok = doc.get("host_body_id") == req_scope.body_code
+        accept_ok = req_scope.body_code in req_from
+        # Downstream districts also allowed for a division
+        if not host_ok and req_scope.is_division and req_scope.division_suffix:
+            import re as _re
+            pat = _re.compile(f"^DIST-.+-{req_scope.division_suffix}$")
+            if pat.match(doc.get("host_body_id") or "") or any(pat.match(x or "") for x in req_from):
+                host_ok = True
+        if not (host_ok or accept_ok):
+            part_tids = await _visible_tids_via_participations(req_scope)
+            if tid not in part_tids:
+                raise HTTPException(403, "You cannot view this tournament — your body is not a host or participant.")
     return doc
 
 
@@ -447,9 +494,10 @@ async def add_player_to_squad(squad_id: str, payload: SquadAddPlayer):
     # Already in squad?
     if any(m["player_id"] == player["id"] for m in squad.get("members", [])):
         raise HTTPException(400, "Player is already in this squad")
-    # Capacity check
-    if len(squad.get("members", [])) >= t.get("max_squad_size", 18):
-        raise HTTPException(400, f"Squad is full (max {t['max_squad_size']} members)")
+    # M39k · Capacity is now ADVISORY at Division-submit stage. MPCA trims
+    # the roster to the playing XI/squad during their approval pass. The cap
+    # is retained on the squad object as `max_squad_size` for MPCA guidance
+    # only; Division can add as many players as they wish.
     # Eligibility against tournament rules (with M1-C guest quotas)
     ok, warns = _check_player_against_tournament(player, t, squad.get("members", []))
     if not ok:

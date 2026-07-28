@@ -498,6 +498,19 @@ async def tournament_pending_actions(tid: str):
             "body_code": c.get("participant_body_code"),
         })
 
+    # 4b) M39l · Extra-expense requests awaiting MPCA approval
+    async for e in db.extra_expense_requests.find(
+        {"tournament_id": tid, "status": {"$in": ["Submitted", "Info_Requested"]}}, {"_id": 0},
+    ):
+        items.append({
+            "kind": "extra_expense",
+            "label": f"Approve extra expense · {e.get('request_ref') or e['id'][:6]} · ₹{e.get('amount_inr', 0):,.0f}",
+            "waiting_on": "MPCA",
+            "deep_link": f"/tournaments/{tid}/finance",
+            "record_id": e["id"],
+            "body_code": e.get("body_id"),
+        })
+
     # 5) Input variables not set yet (only in Draft, points to MPCA)
     if not t.get("input_variables") and t.get("status") == "Draft":
         items.append({

@@ -145,16 +145,30 @@ const TournamentFinanceDetail = () => {
         try {
             if (!computedBudget || !schemeInputSpec) return;
             const scheme_code = schemeInputSpec.scheme_code;
-            try { await api.patch(`/tournaments/${id}`, { scheme_code }); } catch (_) { /* not fatal */ }
+            // M39l · Bug 3 · Persist role-appropriate scheme on the tournament
+            // so the SAME scheme surfaces automatically for other bodies of the
+            // same role. Host budgets patch host_scheme_code; visiting budgets
+            // patch visiting_scheme_code.
+            const isHost = persona?.body_code === tournament?.host_body_id;
+            const role_key = isHost ? "host_scheme_code" : "visiting_scheme_code";
+            try {
+                await api.patch(`/tournaments/${id}`, {
+                    scheme_code, // legacy alias — keeps back-compat
+                    [role_key]: scheme_code,
+                });
+            } catch (_) { /* not fatal */ }
             const payload = {
                 tournament_id: id,
-                body_id: tournament.host_body_id || "MPCA",
+                // M39l · Bug 3 · Budget belongs to the SUBMITTING body (Division /
+                // District / MPCA). Previously this was hardcoded to the host,
+                // which broke visiting-team budgets.
+                body_id: persona?.body_code || tournament.host_body_id || "MPCA",
                 fiscal_cycle: tournament.fiscal_cycle || "2025-26",
                 total_ceiling_inr: computedBudget.total_ceiling_inr,
                 head_allocations: computedBudget.head_allocations.map((h) => ({
                     head: h.head, limit_inr: h.limit_inr, notes: h.formula,
                 })),
-                notes: `Auto-computed from scheme ${scheme_code} — ${schemeInputSpec.scheme_name}. Inputs: ${JSON.stringify(calcInputs)}`,
+                notes: `Auto-computed from scheme ${scheme_code} — ${schemeInputSpec.scheme_name}. Role: ${isHost ? "Host" : "Visiting"}. Inputs: ${JSON.stringify(calcInputs)}`,
                 created_by: persona?.name,
             };
             await api.post("/tournament-budgets", payload);
@@ -269,7 +283,11 @@ const TournamentFinanceDetail = () => {
         try {
             const payload = {
                 tournament_id: id,
-                body_id: tournament.host_body_id || "MPCA",
+                // M39l · Bug 1 · Tag the request with the SUBMITTING body so
+                // the submitter (Division) can see it in their own scope.
+                // Previously this was hardcoded to `tournament.host_body_id`,
+                // which meant Divisions couldn't see their own requests.
+                body_id: persona?.body_code || tournament.host_body_id || "MPCA",
                 head_code: extraForm.head_code || "OTHER",
                 head_label: extraForm.head_label || extraForm.head_code || "Other",
                 is_new_head: extraForm.is_new_head,
@@ -592,9 +610,33 @@ const TournamentFinanceDetail = () => {
                             <div className="bulletin-card p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="scheme-picker-modal">
                                 {schemePickerStep === "choose" ? (
                                     <>
-                                        <div className="font-serif text-2xl text-mpca-green-dark mb-4">① Choose Reimbursement Scheme</div>
+                                        <div className="font-serif text-2xl text-mpca-green-dark mb-2">① Choose Reimbursement Scheme</div>
+                                        {/* M39l · Bug 3 · Role hint — Host bodies see hosting-subsidy
+                                            schemes (2-D style); Visiting bodies see travel/visiting
+                                            subsidy schemes (2-C style). MPCA sees everything. */}
+                                        {(() => {
+                                            const isHost = persona?.body_code === tournament?.host_body_id;
+                                            const isMPCA = persona?.body_type === "State";
+                                            const roleLabel = isMPCA ? "Any (MPCA view)" : (isHost ? "Host — hosting-subsidy" : "Visiting — travel/visiting-subsidy");
+                                            return (
+                                                <div className="mb-4 text-[10px] uppercase tracking-widest inline-flex items-center gap-2 px-2 py-1 border border-mpca-brass/40 text-mpca-brass" data-testid="scheme-role-hint">
+                                                    Role · {roleLabel}
+                                                </div>
+                                            );
+                                        })()}
                                         <div className="space-y-2">
-                                            {allSchemes.filter((s) => ["Reimbursement", "Camp"].includes(s.scheme_type) || ["2-A","2-B","2-C","2-D","2-E","3-A","3-B","3-C","3-D","9-BCCI"].includes(s.scheme_code)).map((s) => (
+                                            {(() => {
+                                                const isHost = persona?.body_code === tournament?.host_body_id;
+                                                const isMPCA = persona?.body_type === "State";
+                                                const HOSTING = new Set(["2-D", "2-E", "2-A", "2-B"]);
+                                                const VISITING = new Set(["2-C", "3-B", "3-C"]);
+                                                return allSchemes.filter((s) => {
+                                                    if (!(["Reimbursement", "Camp"].includes(s.scheme_type) || ["2-A","2-B","2-C","2-D","2-E","3-A","3-B","3-C","3-D","9-BCCI"].includes(s.scheme_code))) return false;
+                                                    if (isMPCA) return true; // MPCA sees everything
+                                                    if (isHost) return HOSTING.has(s.scheme_code) || (!VISITING.has(s.scheme_code) && s.scheme_type !== "Grant");
+                                                    return VISITING.has(s.scheme_code);
+                                                });
+                                            })().map((s) => (
                                                 <button key={s.scheme_code} onClick={() => chooseScheme(s.scheme_code)} disabled={computing} className="w-full text-left p-3 border border-mpca-brass/30 hover:border-mpca-oxblood hover:bg-mpca-cream/40 transition-colors" data-testid={`scheme-opt-${s.scheme_code}`}>
                                                     <div className="flex justify-between items-start">
                                                         <div>
@@ -885,7 +927,7 @@ const TournamentFinanceDetail = () => {
                                         }`}>{e.status}</span>
                                     </div>
                                     <div className="col-span-2 text-right">
-                                        {e.status === "Submitted" && persona?.id === "secretary" && (
+                                        {e.status === "Submitted" && persona?.body_code === "MPCA" && ["president", "secretary", "treasurer"].includes(persona?.id) && (
                                             <button onClick={() => approveExtra(e.id)} className="text-[10px] text-mpca-brass uppercase tracking-widest" data-testid={`approve-extra-${e.id}`}>MPCA Approve</button>
                                         )}
                                     </div>

@@ -1,0 +1,40 @@
+{
+  "summary": "M39l · Five tournament-tab bug fixes verified. All 5 backend regression tests PASS. Frontend Bug 3 (scheme-role-hint / role-filtered schemes) verified across MPCA, DIV-IND (Host), DIV-GWL (Visiting). Bug 4 frontend verified — MPCA President can now see and open the Approve dialog on Submitted budgets (previously Treasurer-only). Bug 2 UI verified — DIV-GWL can now open a tournament page where they are only a participant. One minor UI observation logged: the ApproveDialog head-override inputs did not render for our test budget (head_allocations returned by API but not shown in dialog).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "TournamentBudgets · ApproveDialog",
+        "issue": "head-override-<code> inputs did not render for a freshly-submitted budget even though the underlying API returned head_allocations=[Accommodation ₹60k, Food ₹40k]. Dialog opened with 'Approved Head Limits ₹0 / ₹0' and no per-head input rows. Approved-total input was editable, so Bug 4's PRIMARY acceptance (any MPCA bearer can approve) is satisfied. Investigate whether the initial `headOverrides` state in ApproveDialog is a stale snapshot from a list-level projection, or whether the budget passed to setApproveTarget missed nested fields.",
+        "selector": "[data-testid^='head-override-']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m39l_five_bugs.py",
+    "/app/test_reports/pytest/m39l_results.xml"
+  ],
+  "action_items": [
+    "Investigate ApproveDialog head-override rendering: budget.head_allocations arrives populated over the wire but headOverrides initial state appears empty at dialog open. Likely fine when the row was previously expanded (which prefetches heads) but broken on direct click.",
+    "Optional polish: `data-testid='save-extra-btn'` inside extra-expense modal doesn't match the review-request name `extra-submit`. Either accept the current id or rename to `extra-submit` for consistency."
+  ],
+  "critical_code_review_comments": [
+    "routes/tournaments.py `_visible_tids_via_participations` + widened `list_tournaments` + role-aware `get_tournament` 403 — clean, well-scoped, correctly extends the $or clause. Good.",
+    "routes/scheme_calc.py `/tournaments/{tid}/scheme-for-body/{body_code}` — falls back to scheme_code when host/visiting fields are None. Solid.",
+    "routes/extra_expense.py list endpoint auto-scopes via `body_scope(scope)` for non-state personas, and passes-through for MPCA. Bug 1 semantics correct.",
+    "routes/tournaments.py add-player: max_squad_size cap comment retained, cap enforcement removed. Bug 5 correct.",
+    "TournamentBudgets.jsx canApproveBudget now includes president|secretary|treasurer — matches Bug 4 spec.",
+    "TournamentFinanceDetail.jsx scheme-role-hint chip renders correctly for HOST / VISITING / ANY (MPCA) with proper filter for scheme_code. Verified live."
+  ],
+  "updated_files": ["/app/backend/tests/test_m39l_five_bugs.py"],
+  "success_rate": {"backend": "100% (5/5 pytest tests pass)", "frontend": "≈90% (Bug 2 UI, Bug 3 UI all three roles, Bug 4 approve-dialog opens; only per-head input rendering deferred)"},
+  "test_credentials": "persona chips at /login (persona-chip-president, persona-chip-secretary, persona-chip-treasurer, persona-chip-division-secretary, persona-chip-division-secretary-gwl). No passwords.",
+  "seed_data_creation": "Backend tests create TEST_M39L_* tournaments/budgets/squads/participations and clean them up on module teardown via direct Mongo access. UI seed (TEST_UI_M39L_4868c1) was manually cleaned after verification.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M39l fixes are green end-to-end. Note: an active global season filter (localStorage 'mpca_season' or window.__mpca_season, currently 2026-27) injects `fiscal_cycle` into GETs. If seeding budgets in 2025-26 for UI verification, override localStorage first: `window.localStorage.setItem('mpca_season','2025-26')`. Bug 3 hint text is CSS-uppercased ('ROLE · HOST — HOSTING-SUBSIDY') so any assertions must be case-insensitive. Bug 4 buttons live inside the expanded row on /tournament-budgets — click the row first, then tb-approve-<id> becomes visible.",
+  "rca of the issue": "Head-override rendering issue in ApproveDialog: Likely the `budget` object handed to `setApproveTarget` from the collapsed row is a light snapshot that omits `head_allocations` until the row is expanded (which pulls the full detail). When the user clicks the tb-approve button after a row expand, the state variable might still hold the summary version. Suggest: on tb-approve click, refetch `fetchTournamentBudget(b.id)` and pass the fully-hydrated doc into ApproveDialog. This is orthogonal to the M39l Bug 4 gate widening and should be handled in a follow-up patch."
+}

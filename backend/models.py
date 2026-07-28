@@ -907,6 +907,13 @@ class TournamentBase(BaseModel):
     ground_name_snapshot: Optional[str] = None
     # T-RIM: MPCA reimbursement scheme code (e.g. "2-D" for Inter-Divisional Hosting)
     scheme_code: Optional[str] = None
+    # M39l · Bug 3 · Separate schemes for host vs visiting participants.
+    # `scheme_code` remains as legacy/default; `host_scheme_code` (falls back
+    # to scheme_code) applies to the host body's budget; `visiting_scheme_code`
+    # applies to every non-host participant's budget so they see input
+    # variables relevant to travel-subsidy (2-C) rather than hosting-subsidy.
+    host_scheme_code: Optional[str] = None
+    visiting_scheme_code: Optional[str] = None
     # Sprint M24 · Setup meta captures the MPCA 7-step process fields
     # (category, age group, grounds, teams/pools, camp player group).
     setup_meta: Dict[str, Any] = Field(default_factory=dict)

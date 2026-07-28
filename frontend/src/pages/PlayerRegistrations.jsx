@@ -20,6 +20,21 @@ const STATUS_TONE = {
 
 const publicUrlFor = (token) => `${window.location.origin}/register/player/${token}`;
 
+// M39q · Register display style — SURNAME first, then given names.
+// Prefer explicit surname/first_name when the split form was used; fall back to
+// splitting full_name on whitespace so legacy records still render.
+const registerName = (pd) => {
+    if (!pd) return "";
+    const sn = (pd.surname || "").trim();
+    const fn = (pd.first_name || "").trim();
+    if (sn || fn) return `${sn.toUpperCase()} ${fn}`.trim();
+    const full = (pd.full_name || "").trim();
+    if (!full) return "";
+    const parts = full.split(/\s+/);
+    if (parts.length < 2) return full;
+    return `${parts[parts.length - 1].toUpperCase()} ${parts.slice(0, -1).join(" ")}`;
+};
+
 /**
  * Sprint M35 · Player Registration Campaigns
  * ──────────────────────────────────────────
@@ -258,7 +273,7 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
                             const active = selected?.id === r.id;
                             return (
                                 <button key={r.id} onClick={() => setSelected(r)} className={`w-full text-left px-4 py-3 ${active ? "bg-mpca-parchment" : "hover:bg-mpca-parchment/50"}`} data-testid={`pr-inbox-row-${r.id}`}>
-                                    <div className="font-serif text-sm text-mpca-green-dark truncate">{r.player_data?.full_name}</div>
+                                    <div className="font-serif text-sm text-mpca-green-dark truncate">{registerName(r.player_data)}</div>
                                     <div className="text-[10px] text-mpca-brass font-mono truncate">{r.body_code} · {r.cycle_code} · {r.player_data?.role}</div>
                                     <div className="mt-1 flex items-center justify-between">
                                         <span className={`text-[9px] uppercase tracking-widest px-1.5 py-0.5 border ${STATUS_TONE[r.status]}`}>{r.status}</span>
@@ -324,7 +339,7 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
             <div className="px-5 py-3 border-b border-mpca-brass/20 flex items-start justify-between gap-3">
                 <div>
                     <div className="overline">{camp?.title || reg.campaign_id}</div>
-                    <div className="font-serif text-2xl text-mpca-green-dark mt-1" data-testid="pr-detail-name">{pd.full_name}</div>
+                    <div className="font-serif text-2xl text-mpca-green-dark mt-1" data-testid="pr-detail-name">{registerName(pd)}</div>
                     <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-mpca-brass font-mono">
                         <span>{reg.body_code}</span><span>·</span><span>{reg.cycle_code}</span>
                         <span>·</span><span>Role: {pd.role?.replace(/_/g, " ")}</span>

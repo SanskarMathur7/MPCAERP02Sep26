@@ -15,7 +15,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const public_api = axios.create({ baseURL: `${BACKEND_URL}/api` });
 
 const emptyPlayer = {
-    full_name: "", father_name: "", dob: "", gender: "M", role: "Batter",
+    full_name: "", first_name: "", surname: "", father_name: "", dob: "", gender: "M", role: "Batter",
     batting_style: "Right_Hand", bowling_style: "None",
     mobile: "", email: "", home_district_code: "", preferred_division_code: "", category: "Local_MP",
     guardian_name: "", address: "", aadhaar_no: "", pan_no: "", gst_no: "",
@@ -34,6 +34,8 @@ const t_dict = {
     title: { en: "Player Registration", hi: "खिलाड़ी पंजीकरण" },
     personal: { en: "Personal Information", hi: "व्यक्तिगत जानकारी" },
     full_name: { en: "Full name", hi: "पूरा नाम" },
+    first_name: { en: "First name", hi: "प्रथम नाम" },
+    surname: { en: "Surname", hi: "उपनाम" },
     father_name: { en: "Father's name", hi: "पिता का नाम" },
     dob: { en: "Date of birth (DD/MM/YYYY)", hi: "जन्म तिथि (DD/MM/YYYY)" },
     gender: { en: "Gender", hi: "लिंग" },
@@ -80,12 +82,20 @@ const PublicPlayerRegistration = () => {
             try {
                 const { data } = await public_api.get(`/public/player-registration/token/${token}`);
                 setEnv(data);
-                setForm((f) => ({
-                    ...f,
-                    full_name: data.prefill?.full_name || "",
-                    email: data.prefill?.email || "",
-                    mobile: data.prefill?.mobile || "",
-                }));
+                setForm((f) => {
+                    const pref = data.prefill?.full_name || "";
+                    const parts = pref.trim().split(/\s+/);
+                    const first = parts.length >= 2 ? parts.slice(0, -1).join(" ") : (parts[0] || "");
+                    const last = parts.length >= 2 ? parts[parts.length - 1] : "";
+                    return {
+                        ...f,
+                        full_name: pref,
+                        first_name: first,
+                        surname: last,
+                        email: data.prefill?.email || "",
+                        mobile: data.prefill?.mobile || "",
+                    };
+                });
             } catch (e) {
                 setErr(e?.response?.data?.detail || "Invalid or expired link.");
             } finally { setLoading(false); }
@@ -207,7 +217,30 @@ const PublicPlayerRegistration = () => {
 
                         <Section title={tr("personal")}>
                             <Grid>
-                                <Field label={tr("full_name")} required><input required value={form.full_name} onChange={(e) => setField("full_name", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-name" /></Field>
+                                <Field label={tr("first_name")} required>
+                                    <input
+                                        required
+                                        value={form.first_name}
+                                        onChange={(e) => {
+                                            const v = e.target.value;
+                                            setForm((f) => ({ ...f, first_name: v, full_name: `${v} ${f.surname || ""}`.trim() }));
+                                        }}
+                                        className="input-heritage !py-1.5 !text-xs"
+                                        data-testid="pr-pub-first-name"
+                                    />
+                                </Field>
+                                <Field label={tr("surname")} required>
+                                    <input
+                                        required
+                                        value={form.surname}
+                                        onChange={(e) => {
+                                            const v = e.target.value;
+                                            setForm((f) => ({ ...f, surname: v, full_name: `${f.first_name || ""} ${v}`.trim() }));
+                                        }}
+                                        className="input-heritage !py-1.5 !text-xs"
+                                        data-testid="pr-pub-surname"
+                                    />
+                                </Field>
                                 <Field label={tr("father_name")} required><input required value={form.father_name} onChange={(e) => setField("father_name", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-father-name" /></Field>
                                 <Field label={tr("dob")} required><input required type="date" value={form.dob} onChange={(e) => setField("dob", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-dob" />
                                     {form.dob && <div className="text-[9px] text-mpca-brass mt-1 font-mono">{form.dob.split("-").reverse().join("/")}</div>}

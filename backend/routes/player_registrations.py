@@ -91,7 +91,9 @@ class PlayerRegistrationInvite(BaseModel):
 
 class PlayerRegistrationData(BaseModel):
     """Payload from the public form."""
-    full_name: str
+    full_name: str = ""                                 # M39q · Auto-composed from first_name + surname (kept for backward-compat with squads / players)
+    first_name: Optional[str] = None                    # M39q · Split name capture
+    surname: Optional[str] = None                       # M39q · Split name capture
     father_name: Optional[str] = None                   # M39o · Batch A
     dob: str                                            # ISO date (form displays DD/MM/YYYY)
     gender: str                                         # M | F | Other
@@ -707,6 +709,24 @@ async def public_submit(payload: PublicSubmit):
     envelope = await resolve_token(payload.token)
     campaign_id = envelope["campaign_id"]
     invite_id = envelope.get("invite_id")
+
+    # M39q · Compose full_name from first_name + surname when the split form
+    # is used, so downstream code (squads, players collection) keeps working.
+    fn = (payload.player.first_name or "").strip()
+    sn = (payload.player.surname or "").strip()
+    if fn or sn:
+        payload.player.full_name = f"{fn} {sn}".strip()
+    elif payload.player.full_name:
+        # Legacy caller / prefill only sent full_name — best-effort split.
+        parts = payload.player.full_name.strip().split()
+        if len(parts) >= 2:
+            payload.player.first_name = " ".join(parts[:-1])
+            payload.player.surname = parts[-1]
+        else:
+            payload.player.first_name = payload.player.full_name.strip()
+            payload.player.surname = ""
+    if not (payload.player.full_name or "").strip():
+        raise HTTPException(400, "First name and surname are required.")
 
     # If invite already submitted → block to prevent duplicates
     if invite_id and envelope.get("already_submitted"):

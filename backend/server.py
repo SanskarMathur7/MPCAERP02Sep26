@@ -46,9 +46,12 @@ async def lifespan(app: FastAPI):
         await seed_reimbursement_schemes()
         # M39c · Bootstrap scheme activation for existing fiscal cycles so live
         # data continues to work. Only runs when no activation doc exists.
+        # M39j · Exclude 2026-27 so the current season starts NOT ACTIVATED —
+        # forcing MPCA to run the sign→upload workflow before Divisions can
+        # transact for the new season.
         from datetime import datetime, timezone
         from core.infra import db as _db
-        for cycle in ("2024-25", "2025-26", "2026-27"):
+        for cycle in ("2024-25", "2025-26"):
             has = await _db.scheme_activation_seasons.find_one(
                 {"fiscal_cycle": cycle}
             )

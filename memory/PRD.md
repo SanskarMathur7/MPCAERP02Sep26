@@ -1363,6 +1363,16 @@ _Shipped 27 Jul 2026 · verified iter_56 (BE 26/26 pytest, FE 6/6 UI checks)_
 
 ---
 
+## Sprint M39m · Tournament tab · Six polish items
+_Shipped 27 Jul 2026 · iteration_63 all-green_
+
+- **Item 1 · Activity Log wired end-to-end** — `get_audit_trail` matches `record_id==tid OR details.tournament_id==tid`; new `log_activity()` helper writes entries on Create, Accept/Reject, Participation flips, Budget submit/approve/return, Extra-expense submit/approve.
+- **Item 2 · Reimbursement Claim signed-PDF gate** — new endpoint `POST /reimbursement-claims/{cid}/signed-pdf`; `/submit` returns HTTP 412 until signed PDF uploaded. Frontend: 3-stage buttons `download-claim-pdf-btn` → `upload-signed-claim-btn` → `submit-claim-btn` (disabled until upload).
+- **Item 3 · Answered** — District tournaments follow the same pipeline; Division approves District budgets/claims and consolidates before submitting to MPCA (no code change).
+- **Item 4 · MPCA-set defaults inherited by Divisions** — new `default_scheme_inputs` on Tournament; MPCA-only "Set Default Input Variables" flow. Divisions inherit pre-fills, can still edit + submit their own tournament_budget.
+- **Item 5 · Sidebar re-org** — Action Center + Discussions promoted to top-level nav (below Dashboard + Organisation).
+- **Item 6 · Page gutter** — App content wrapper now has `px-6 md:px-10 pt-6 pb-16`; content no longer flush against sidebar.
+
 ## Sprint M39a · Sidebar Collapse UX Fix
 _Shipped 27 Jul 2026 · verified via Playwright screenshot (collapsed + expanded)_
 

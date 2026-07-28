@@ -296,7 +296,9 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
     const canReturn = (isHomeDiv || isMPCA) && !["Approved", "Rejected"].includes(reg.status);
     const canEdit = (isHomeDiv || isMPCA) && !["Approved", "Rejected"].includes(reg.status);
     const ai = reg.ai_summary;
+    const aiFull = reg.ai_full_report;                                  // M39p · Batch B/C report card
     const [aiBusy, setAiBusy] = useState(false);
+    const [aiFullBusy, setAiFullBusy] = useState(false);
 
     const runAiReview = async () => {
         setAiBusy(true);
@@ -306,6 +308,15 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
             onAction(reg.id, "_refresh");
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
         finally { setAiBusy(false); }
+    };
+
+    const runAiFullReview = async () => {
+        setAiFullBusy(true);
+        try {
+            await api.post(`/player-registrations/${reg.id}/ai-full-review`);
+            onAction(reg.id, "_refresh");
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setAiFullBusy(false); }
     };
 
     return (
@@ -321,6 +332,7 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                         {pd.preferred_division_code && (<><span>·</span><span>Host Div: {pd.preferred_division_code}</span></>)}
                     </div>
                 </div>
+                <div className="flex flex-col gap-2 shrink-0">
                 <button
                     onClick={runAiReview}
                     disabled={aiBusy}
@@ -330,6 +342,16 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                 >
                     <Sparkles size={11} className={aiBusy ? "animate-pulse" : ""} /> {aiBusy ? "Reviewing…" : (ai ? "Re-run AI" : "AI Review")}
                 </button>
+                <button
+                    onClick={runAiFullReview}
+                    disabled={aiFullBusy}
+                    title="Deep OCR — Aadhaar, PAN, Birth Cert QR, marksheets, cheque, cross-doc name match"
+                    className="text-[10px] uppercase tracking-widest px-3 py-1.5 border border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood/10 flex items-center gap-1 disabled:opacity-40 shrink-0"
+                    data-testid="pr-ai-full-review-btn"
+                >
+                    <Sparkles size={11} className={aiFullBusy ? "animate-pulse" : ""} /> {aiFullBusy ? "Deep scan…" : (aiFull ? "Re-run Deep AI" : "Deep AI")}
+                </button>
+                </div>
             </div>
 
             {/* M38i · AI KYC verdict summary — visible after AI review has run */}
@@ -359,6 +381,49 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                     <div className="text-right text-[9px] text-mpca-gray-dark mt-1">
                         {ai.validated_at && new Date(ai.validated_at).toLocaleString("en-IN")}
                         {ai.validated_by && <> · {ai.validated_by}</>}
+                    </div>
+                </div>
+            )}
+
+            {/* M39p · Deep AI Report Card (Batch B/C) */}
+            {aiFull && (
+                <div className={`mx-5 mt-4 p-3 border-2 ${
+                    aiFull.verdict === "Recommend_Approve" ? "border-mpca-green-dark bg-mpca-green-dark/5" :
+                    aiFull.verdict === "Recommend_Reject" ? "border-mpca-oxblood bg-mpca-oxblood/5" :
+                    "border-mpca-brass bg-mpca-gold-light/10"
+                }`} data-testid="pr-ai-full-card">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <Sparkles size={12} className={aiFull.verdict === "Recommend_Approve" ? "text-mpca-green-dark" : aiFull.verdict === "Recommend_Reject" ? "text-mpca-oxblood" : "text-mpca-brass"} />
+                        <span className={`font-serif text-base ${aiFull.verdict === "Recommend_Approve" ? "text-mpca-green-dark" : aiFull.verdict === "Recommend_Reject" ? "text-mpca-oxblood" : "text-mpca-brass"}`} data-testid="pr-ai-full-verdict">Deep AI · {(aiFull.verdict || "").replace(/_/g, " ")}</span>
+                        <span className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">
+                            confidence {Math.round((aiFull.overall_confidence || 0) * 100)}%
+                            {typeof aiFull.age_computed === "number" && <> · age {aiFull.age_computed}</>}
+                            {aiFull.pan_required && <> · PAN required</>}
+                        </span>
+                    </div>
+                    {(aiFull.critical_issues || []).length > 0 && (
+                        <ul className="mt-2 space-y-0.5" data-testid="pr-ai-full-critical">
+                            {aiFull.critical_issues.map((c, i) => <li key={i} className="text-[11px] text-mpca-oxblood">⚠ {c}</li>)}
+                        </ul>
+                    )}
+                    {(aiFull.warnings || []).length > 0 && (
+                        <ul className="mt-1 space-y-0.5" data-testid="pr-ai-full-warnings">
+                            {aiFull.warnings.map((w, i) => <li key={i} className="text-[11px] text-mpca-brass">· {w}</li>)}
+                        </ul>
+                    )}
+                    {(aiFull.info || []).length > 0 && (
+                        <ul className="mt-1 space-y-0.5">
+                            {aiFull.info.map((n, i) => <li key={i} className="text-[10px] text-mpca-green-dark italic">✓ {n}</li>)}
+                        </ul>
+                    )}
+                    {aiFull.aadhaar_duplicate_of && (
+                        <div className="mt-2 text-[10px] font-mono text-mpca-oxblood">
+                            Aadhaar duplicate of registration {aiFull.aadhaar_duplicate_of.slice(0, 8)}
+                        </div>
+                    )}
+                    <div className="text-right text-[9px] text-mpca-gray-dark mt-1">
+                        {aiFull.validated_at && new Date(aiFull.validated_at).toLocaleString("en-IN")}
+                        {aiFull.model && <> · {aiFull.model}</>}
                     </div>
                 </div>
             )}

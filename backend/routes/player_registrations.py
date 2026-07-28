@@ -92,7 +92,8 @@ class PlayerRegistrationInvite(BaseModel):
 class PlayerRegistrationData(BaseModel):
     """Payload from the public form."""
     full_name: str
-    dob: str                                            # ISO date
+    father_name: Optional[str] = None                   # M39o · Batch A
+    dob: str                                            # ISO date (form displays DD/MM/YYYY)
     gender: str                                         # M | F | Other
     role: str                                           # Batter | Bowler | All_Rounder | Wicket_Keeper
     batting_style: Optional[str] = None
@@ -100,16 +101,31 @@ class PlayerRegistrationData(BaseModel):
     mobile: str
     email: Optional[str] = None
     home_district_code: Optional[str] = None
-    preferred_division_code: Optional[str] = None       # M38h · Player picks their host Division from dropdown
+    preferred_division_code: Optional[str] = None       # M38h · Player picks their Home Division from dropdown
     category: str = "Local_MP"                          # Local_MP | Guest | Foreign
     guardian_name: Optional[str] = None
     address: Optional[str] = None
     aadhaar_no: Optional[str] = None
+    pan_no: Optional[str] = None                        # M39o · Mandatory display for 18+ (validation lands in Batch B)
+    gst_no: Optional[str] = None                        # M39o · Where applicable (coaches, contractors)
+    bank_name: Optional[str] = None                     # M39o · Bank Name field
     consent: bool = False
+    dpdp_consent: bool = False                          # M39o · DPDP Act 2023 explicit acknowledgement
+    no_recent_studies: bool = False                     # M39o · U23 · unlocks affidavit path
     photo_url: Optional[str] = None
     aadhaar_url: Optional[str] = None
-    address_proof_url: Optional[str] = None
+    aadhaar_history_url: Optional[str] = None           # M39o · Aadhaar update history from UIDAI portal
+    pan_url: Optional[str] = None                       # M39o
+    passport_url: Optional[str] = None                  # M39o
+    driving_licence_url: Optional[str] = None           # M39o
+    voter_id_url: Optional[str] = None                  # M39o
+    address_proof_url: Optional[str] = None             # Current Address Proof
     birth_cert_url: Optional[str] = None
+    marksheet_3yr_url: Optional[str] = None             # M39o · Single PDF · last 3 years bundled
+    affidavit_url: Optional[str] = None                 # M39o · Only when no_recent_studies=True
+    cancelled_cheque_url: Optional[str] = None          # M39o · Bank verification proof
+    gst_certificate_url: Optional[str] = None           # M39o · If GST number provided
+    other_docs: List[Dict[str, str]] = Field(default_factory=list)  # M39o · [{label, url}]
     bank_account_no: Optional[str] = None
     bank_ifsc: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -148,6 +164,7 @@ class PlayerRegistration(BaseModel):
     review_note: Optional[str] = None
     return_reason: Optional[str] = None
     ai_summary: Optional[Dict[str, Any]] = None
+    ai_full_report: Optional[Dict[str, Any]] = None      # M39p · Batch B/C report card
     # M39n · Two-stage approval trail
     division_remark: Optional[str] = None
     division_reviewed_by: Optional[str] = None
@@ -458,7 +475,13 @@ async def upload_doc_on_behalf(
         raise HTTPException(400, "Cannot upload docs after MPCA approval.")
     if not (_is_home_division(doc, x_user_body_code, x_role_id) or (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES)):
         raise HTTPException(403, "Only the home Division or MPCA may upload docs on behalf.")
-    if action.doc_key not in {"photo_url", "aadhaar_url", "address_proof_url", "birth_cert_url"}:
+    if action.doc_key not in {
+        "photo_url", "aadhaar_url", "aadhaar_history_url", "pan_url",
+        "passport_url", "driving_licence_url", "voter_id_url",
+        "address_proof_url", "birth_cert_url",
+        "marksheet_3yr_url", "affidavit_url",
+        "cancelled_cheque_url", "gst_certificate_url",
+    }:
         raise HTTPException(400, f"Unsupported doc_key: {action.doc_key}")
     updates = {
         f"player_data.{action.doc_key}": action.doc_url,
@@ -707,6 +730,23 @@ async def public_submit(payload: PublicSubmit):
             "This email has already submitted a registration on this link. If you need to update your details, please contact your Division secretary.",
         )
 
+    # ── M39p · Aadhaar-level duplication guard (blocks across campaigns) ──
+    if payload.player.aadhaar_no:
+        try:
+            from core.player_doc_ai import check_aadhaar_duplicate
+            aad_dup = await check_aadhaar_duplicate(payload.player.aadhaar_no)
+            if aad_dup:
+                raise HTTPException(
+                    409,
+                    "This Aadhaar has already been submitted for player registration. "
+                    "One Aadhaar can register only once. Please contact your Division "
+                    "secretary if you believe this is in error.",
+                )
+        except HTTPException:
+            raise
+        except Exception:  # noqa
+            pass  # never let the dup helper break submission
+
     reg = PlayerRegistration(
         campaign_id=campaign_id,
         invite_id=invite_id,
@@ -728,6 +768,27 @@ async def public_submit(payload: PublicSubmit):
             {"id": invite_id}, {"$set": {"status": "Submitted", "submission_id": reg.id}},
         )
     await _touch_counts(campaign_id, {"submitted_count": 1})
+
+    # M39p · Fire-and-forget: run the full AI report card so the Division
+    # reviewer already has it when they open the inbox.
+    try:
+        import asyncio as _aio
+        from core.player_doc_ai import run_full_registration_ai as _run_full_ai
+        async def _bg():
+            try:
+                fresh = await db.player_registrations.find_one({"id": reg.id}, {"_id": 0})
+                if not fresh:
+                    return
+                report = await _run_full_ai(fresh)
+                await db.player_registrations.update_one(
+                    {"id": reg.id},
+                    {"$set": {"ai_full_report": report, "updated_at": datetime.now(timezone.utc).isoformat()}},
+                )
+            except Exception:  # noqa
+                return
+        _aio.ensure_future(_bg())
+    except Exception:  # noqa
+        pass
     return reg
 
 
@@ -849,6 +910,29 @@ async def ai_review_registration(
     return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
 
 
+
+
+@api_router.post("/player-registrations/{rid}/ai-full-review", response_model=PlayerRegistration)
+async def ai_full_review(
+    rid: str,
+    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+):
+    """M39p · Manually re-run the full AI + rules report card. Available to the
+    home Division or MPCA at any time before final approval."""
+    doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Registration not found")
+    if not (_is_home_division(doc, x_user_body_code, x_role_id) or (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES)):
+        raise HTTPException(403, "Only the home Division or MPCA may run AI review.")
+    from core.player_doc_ai import run_full_registration_ai
+    report = await run_full_registration_ai(doc)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.player_registrations.update_one(
+        {"id": rid},
+        {"$set": {"ai_full_report": report, "updated_at": now}},
+    )
+    return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
 
 
 @api_router.post("/player-registrations/{rid}/approve", response_model=PlayerRegistration)

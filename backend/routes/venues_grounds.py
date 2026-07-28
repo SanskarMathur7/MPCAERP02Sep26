@@ -200,14 +200,14 @@ async def list_grounds(
     if owner_body_codes:
         codes = [c.strip() for c in owner_body_codes.split(",") if c.strip()]
         if codes:
-            # A ground is owned by managed_by_body_id (override) OR its venue's managed_by_body_id.
-            # Resolve via venue lookup once, then filter in-memory (grounds are typically small).
-            venue_ids_for_owners = [v["id"] async for v in db.venues.find(
-                {"managed_by_body_id": {"$in": codes}}, {"_id": 0, "id": 1}
-            )]
+            # M39q · A ground belongs to a body if EITHER (a) owner_body_id ∈ codes
+            # OR (b) managed_by_body_id ∈ codes. Owner is the source of truth (as
+            # shown on the Grounds list — "OWNER · DIV-GWL"), manager is an
+            # optional override for MPCA-owned grounds that are day-to-day run
+            # by a Division. Both cases must surface in the tournament picker.
             q["$or"] = [
+                {"owner_body_id": {"$in": codes}},
                 {"managed_by_body_id": {"$in": codes}},
-                {"venue_id": {"$in": venue_ids_for_owners}, "managed_by_body_id": None},
             ]
     return await db.grounds.find(q, {"_id": 0}).sort("name", 1).to_list(1000)
 

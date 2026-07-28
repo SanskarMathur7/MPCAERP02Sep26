@@ -147,7 +147,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                 ground_no: g.ground_no,
                 ground_name: g.name,
                 venue_name: g.venue_name,
-                owner_body_code: g.managed_by_body_id,
+                owner_body_code: g.owner_body_id || g.managed_by_body_id,
             },
         ]);
         setNewGround({ ground_id: "" });
@@ -435,7 +435,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                             <option value="">Pick a ground (owned by MPCA / host / participants)…</option>
                             {availableGrounds.map((g) => (
                                 <option key={g.id} value={g.id}>
-                                    {g.name} @ {g.venue_name} · {g.managed_by_body_id || "MPCA"}
+                                    {g.name}{g.venue_name ? ` @ ${g.venue_name}` : ""} · {g.owner_body_id || g.managed_by_body_id || "MPCA"}
                                 </option>
                             ))}
                         </select>

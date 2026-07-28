@@ -1,0 +1,30 @@
+{
+  "summary": "M39m sprint verified end-to-end. Backend: 6/6 pytest tests green covering (1) activity log matches record_id OR details.tournament_id, (2) signed-PDF gate returning HTTP 412 with 'signed' in detail then 200 after /signed-pdf upload, (4) default_scheme_inputs PATCH + persistence on tournament. Frontend: Item 5 sidebar re-org verified — nav-action-center and nav-discussions render at top level between nav-organisation and nav-domain-secretarial (Y-positions Org=312, AC=354, Disc=396, Secretarial=460, Operations=807). Item 6 gutter classes `px-6 md:px-10 pt-6 pb-16` on data-testid='app-content' verified across /venues, /events, /schemes, /members. Item 4 MPCA finance page: 'No default inputs saved yet' empty state and 'SET DEFAULT INPUT VARIABLES' button verified via screenshot. Division view: 'No budget set yet' + 'ASSIGN REIMBURSEMENT SCHEME' verified via screenshot. Item 2 claim-submit-block UI structure verified in source (all three data-testids present with disabled binding to !claim?.signed_pdf_url) — live UI check skipped because block requires an approved budget which we did not seed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m39m_sprint.py",
+    "/app/test_reports/pytest/m39m_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "core/shared_services.get_audit_trail widened match is correct — combines record_id OR details.tournament_id and preserves the module filter via $and.",
+    "log_activity helper wraps insert in try/except and swallows failures — safe for production tournament flow.",
+    "routes/tournaments.patch_tournament allowed-fields whitelist now includes default_scheme_inputs, host_scheme_code, visiting_scheme_code — clean and minimal.",
+    "routes/reimbursement_claims: signed-PDF gate returns 412 (Precondition Failed) which is semantically correct; /signed-pdf endpoint properly guarded to Draft/Rejected state.",
+    "AppLayout: Action Center + Discussions now injected between Dashboard/Org and the first NAV_DOMAINS group with correct data-testid derivation. Match Official persona still hidden from these (persona.id !== 'match-official' guard).",
+    "AppLayout main content wrapper `<div className='px-6 md:px-10 pt-6 pb-16' data-testid='app-content'>` — all pages now inherit consistent gutter."
+  ],
+  "updated_files": ["/app/backend/tests/test_m39m_sprint.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "≈95% (Items 5, 6, 4 verified live; Item 2 verified via source only)"},
+  "test_credentials": "persona chips at /login (persona-chip-secretary, persona-chip-division-secretary, persona-chip-division-secretary-gwl). No passwords.",
+  "seed_data_creation": "Created + cleaned up TEST_M39M_* tournaments/claims/audit rows via /api and direct Mongo.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M39m fixes are all green. To live-test the claim-submit-block (item 2 UI), seed a tournament + Approved budget for DIV-IND on scheme 2-D, create a Draft claim, then load /tournaments/{tid}/finance as division-secretary — the three-button block should render with submit-claim-btn disabled until signed PDF is uploaded. Tests use direct Mongo inserts for tournament_participations because there is no public POST for adding a participant (rows are auto-synced via tournament_workspace setup_meta).",
+  "rca of the issue": "n/a — no bugs found."
+}

@@ -270,8 +270,49 @@ async def write_audit_log(
 async def get_audit_trail(*, module: Optional[str] = None, record_id: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
     q: dict = {}
     if module: q["module"] = module
-    if record_id: q["record_id"] = record_id
+    if record_id:
+        # M39m · Tournament activity log · match either the exact record_id OR
+        # any audit entry whose `details.tournament_id` points at this tournament
+        # (covers squad, budget, claim, extra-expense, DA events).
+        q = {"$and": [q, {"$or": [
+            {"record_id": record_id},
+            {"details.tournament_id": record_id},
+        ]}]} if q else {"$or": [
+            {"record_id": record_id},
+            {"details.tournament_id": record_id},
+        ]}
     return await db.audit_log.find(q, {"_id": 0}).sort("timestamp", -1).to_list(limit)
+
+
+async def log_activity(
+    *,
+    module: str,
+    action: str,
+    record_id: str,
+    tournament_id: Optional[str] = None,
+    actor_name: Optional[str] = None,
+    actor_body_id: Optional[str] = None,
+    actor_role: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+) -> None:
+    """M39m · Cheap-and-cheerful audit writer. Non-transactional — failure
+    silently swallowed so app flows never break because logging failed.
+    """
+    try:
+        entry = {
+            "id": str(__import__("uuid").uuid4()),
+            "module": module,
+            "action": action,
+            "record_id": record_id,
+            "actor_name": actor_name,
+            "actor_body_id": actor_body_id,
+            "actor_role": actor_role,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "details": {**(details or {}), **({"tournament_id": tournament_id} if tournament_id else {})},
+        }
+        await db.audit_log.insert_one(entry)
+    except Exception:
+        pass
 
 
 # ═══════════════════ 4 · Playbook Constants ═══════════════════

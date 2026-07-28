@@ -443,6 +443,15 @@ async def patch_tournament_participant(tid: str, body_code: str, patch: Particip
             message=f"{row.get('body_name') or body_code} ({row.get('role')}) has {verb} the invite (by {actor}).",
             severity=("info" if updates["acceptance_status"] == "Accepted" else "warning"),
         )
+        # M39m · Activity log
+        from core.shared_services import log_activity
+        await log_activity(
+            module="participation",
+            action=f"Participant {updates['acceptance_status']}",
+            record_id=row.get("id") or f"{tid}:{body_code}", tournament_id=tid,
+            actor_name=actor, actor_body_id=body_code,
+            details={"body_code": body_code, "role": row.get("role")},
+        )
     totals = await _totals_for_participant(tid, body_code)
     return {**row, **totals}
 

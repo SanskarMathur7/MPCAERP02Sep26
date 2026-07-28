@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Upload, Sparkles, Plus, Trash2, FileText, Send, CheckCircle2, AlertTriangle, MessageSquare, ExternalLink, ClipboardList, RotateCcw, XCircle } from "lucide-react";
-import { api, BACKEND_URL } from "@/lib/api";
+import { api, BACKEND_URL, API_BASE } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentSubTabs from "@/components/TournamentSubTabs";
@@ -112,8 +112,15 @@ const TournamentFinanceDetail = () => {
         try {
             const { data: spec } = await api.get(`/schemes/${scheme_code}/input-spec`);
             setSchemeInputSpec(spec);
+            // M39m · Bug 4 · Inherit MPCA-set default inputs (per tournament)
+            // as the starting values. Divisions still see & edit these fields.
+            const tournamentDefaults = tournament?.default_scheme_inputs || {};
             const defaults = {};
-            (spec.input_variables || []).forEach((v) => { defaults[v.key] = v.default; });
+            (spec.input_variables || []).forEach((v) => {
+                defaults[v.key] = (tournamentDefaults[v.key] !== undefined && tournamentDefaults[v.key] !== null)
+                    ? tournamentDefaults[v.key]
+                    : v.default;
+            });
             setCalcInputs(defaults);
             // Auto-compute with defaults immediately
             const { data: computed } = await api.post(`/schemes/${scheme_code}/compute-budget`, { inputs: defaults });
@@ -145,33 +152,39 @@ const TournamentFinanceDetail = () => {
         try {
             if (!computedBudget || !schemeInputSpec) return;
             const scheme_code = schemeInputSpec.scheme_code;
-            // M39l · Bug 3 · Persist role-appropriate scheme on the tournament
-            // so the SAME scheme surfaces automatically for other bodies of the
-            // same role. Host budgets patch host_scheme_code; visiting budgets
-            // patch visiting_scheme_code.
+            const isMPCA = persona?.body_type === "State";
             const isHost = persona?.body_code === tournament?.host_body_id;
+            // M39l · Bug 3 · Persist role-appropriate scheme on the tournament.
             const role_key = isHost ? "host_scheme_code" : "visiting_scheme_code";
-            try {
-                await api.patch(`/tournaments/${id}`, {
-                    scheme_code, // legacy alias — keeps back-compat
-                    [role_key]: scheme_code,
-                });
-            } catch (_) { /* not fatal */ }
-            const payload = {
-                tournament_id: id,
-                // M39l · Bug 3 · Budget belongs to the SUBMITTING body (Division /
-                // District / MPCA). Previously this was hardcoded to the host,
-                // which broke visiting-team budgets.
-                body_id: persona?.body_code || tournament.host_body_id || "MPCA",
-                fiscal_cycle: tournament.fiscal_cycle || "2025-26",
-                total_ceiling_inr: computedBudget.total_ceiling_inr,
-                head_allocations: computedBudget.head_allocations.map((h) => ({
-                    head: h.head, limit_inr: h.limit_inr, notes: h.formula,
-                })),
-                notes: `Auto-computed from scheme ${scheme_code} — ${schemeInputSpec.scheme_name}. Role: ${isHost ? "Host" : "Visiting"}. Inputs: ${JSON.stringify(calcInputs)}`,
-                created_by: persona?.name,
+            const patchBody = {
+                scheme_code, // legacy alias — keeps back-compat
+                [role_key]: scheme_code,
             };
-            await api.post("/tournament-budgets", payload);
+            // M39m · Bug 4 · If MPCA is the one choosing, ALSO persist the
+            // input values as defaults so Divisions inherit them as pre-fills.
+            if (isMPCA) patchBody.default_scheme_inputs = calcInputs;
+            try { await api.patch(`/tournaments/${id}`, patchBody); } catch (_) { /* not fatal */ }
+
+            if (isMPCA) {
+                // M39m · Bug 4 · MPCA does NOT submit a budget for its own
+                // approval. They only publish defaults + choose the applicable
+                // scheme. Divisions will submit their own budgets.
+                alert(`Defaults saved for scheme ${scheme_code}. Divisions will inherit these input values when they open the Finance tab.`);
+            } else {
+                const payload = {
+                    tournament_id: id,
+                    // M39l · Bug 3 · Budget belongs to the SUBMITTING body.
+                    body_id: persona?.body_code || tournament.host_body_id || "MPCA",
+                    fiscal_cycle: tournament.fiscal_cycle || "2025-26",
+                    total_ceiling_inr: computedBudget.total_ceiling_inr,
+                    head_allocations: computedBudget.head_allocations.map((h) => ({
+                        head: h.head, limit_inr: h.limit_inr, notes: h.formula,
+                    })),
+                    notes: `Auto-computed from scheme ${scheme_code} — ${schemeInputSpec.scheme_name}. Role: ${isHost ? "Host" : "Visiting"}. Inputs: ${JSON.stringify(calcInputs)}`,
+                    created_by: persona?.name,
+                };
+                await api.post("/tournament-budgets", payload);
+            }
             setShowSchemePicker(false);
             setSchemePickerStep("choose");
             setSchemeInputSpec(null);
@@ -378,19 +391,116 @@ const TournamentFinanceDetail = () => {
     };
 
     // ─── Reimbursement claim submission ───
+    // M39m · Bug 2 · Three-stage flow:
+    //   Step A · Ensure a claim shell exists (Draft).
+    //   Step B · Division downloads the summary PDF (in-browser print).
+    //   Step C · Division uploads the signed PDF → backend records signed_pdf_url.
+    //   Step D · Only now does the "Submit to MPCA" button unlock.
+    const ensureClaim = async () => {
+        let target = claim;
+        if (!target) {
+            const { data: created } = await api.post("/reimbursement-claims", {
+                tournament_id: id,
+                body_id: persona?.body_code || tournament.host_body_id || "MPCA",
+                fiscal_cycle: tournament.fiscal_cycle || "2025-26",
+                scheme_code: tournament.scheme_code,
+                notes: "Auto-created from Tournament Finance console",
+                submitted_by: persona?.name,
+            });
+            target = created;
+            await load();
+        }
+        return target;
+    };
+
+    const downloadClaimSummaryPdf = async () => {
+        try {
+            const target = await ensureClaim();
+            // Best-effort — pull the latest summary from the claim record
+            const { data: fresh } = await api.get(`/reimbursement-claims/${target.id}`);
+            const summary = fresh.summary || {};
+            const invoiceRows = (invoices || []).map((inv, i) => `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${inv.invoice_no || "—"}</td>
+                    <td>${inv.head_label || inv.head_code || "—"}</td>
+                    <td>${inv.vendor_name || "—"}</td>
+                    <td style="text-align:right">₹${(inv.amount_inr || 0).toLocaleString("en-IN")}</td>
+                    <td>${inv.invoice_date || ""}</td>
+                </tr>`).join("");
+            const headRows = ((summary.heads) || []).map((h) => `
+                <tr>
+                    <td>${h.head}</td>
+                    <td style="text-align:right">₹${(h.limit_inr || 0).toLocaleString("en-IN")}</td>
+                    <td style="text-align:right">₹${(h.spent_inr || 0).toLocaleString("en-IN")}</td>
+                    <td style="text-align:right">${(h.over_inr || 0) > 0 ? `<span style="color:#8b0000">₹${h.over_inr.toLocaleString("en-IN")}</span>` : "—"}</td>
+                </tr>`).join("");
+            const w = window.open("", "_blank");
+            if (!w) return;
+            w.document.write(`<!doctype html><html><head><title>Reimbursement Claim · ${target.claim_ref}</title>
+                <style>
+                    body { font-family: 'Georgia', serif; padding: 24px; color: #1a1a1a; }
+                    h1 { color: #0f2818; margin: 0 0 4px; font-size: 22px; }
+                    .sub { color: #a67c3a; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px; }
+                    h2 { color: #0f2818; margin: 28px 0 8px; font-size: 14px; border-bottom: 1px solid #a67c3a; padding-bottom: 4px; }
+                    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+                    th, td { border: 1px solid #d4c9b5; padding: 6px; vertical-align: top; text-align: left; }
+                    th { background: #f5efe3; color: #0f2818; text-transform: uppercase; letter-spacing: 1px; font-size: 9px; }
+                    .totals { margin-top: 12px; font-family: 'Georgia'; font-size: 12px; }
+                    .totals span.lbl { color: #666; margin-right: 6px; }
+                    .sig { margin-top: 60px; display: flex; justify-content: space-between; }
+                    .sig div { border-top: 1px solid #1a1a1a; padding-top: 6px; width: 30%; font-size: 10px; text-align: center; }
+                </style></head><body>
+                <h1>Reimbursement Claim · ${target.claim_ref}</h1>
+                <div class="sub">${tournament.name} · ${persona?.body_code || target.body_id} · Fiscal ${target.fiscal_cycle}</div>
+                <h2>Head-wise Summary</h2>
+                <table><thead><tr><th>Head</th><th style="text-align:right">Budget Limit</th><th style="text-align:right">Spent</th><th style="text-align:right">Over</th></tr></thead>
+                <tbody>${headRows || '<tr><td colspan="4" style="text-align:center">No heads recorded</td></tr>'}</tbody></table>
+                <div class="totals">
+                    <span class="lbl">Budget Total:</span> ₹${(summary.budget_total_inr || 0).toLocaleString("en-IN")} &nbsp; · &nbsp;
+                    <span class="lbl">Invoiced:</span> ₹${(summary.invoiced_total_inr || 0).toLocaleString("en-IN")} &nbsp; · &nbsp;
+                    <span class="lbl">Eligible:</span> <b>₹${(summary.eligible_total_inr || 0).toLocaleString("en-IN")}</b>
+                </div>
+                <h2>Invoice Register (${(invoices || []).length})</h2>
+                <table><thead><tr><th>#</th><th>Invoice No.</th><th>Head</th><th>Vendor</th><th style="text-align:right">Amount</th><th>Date</th></tr></thead>
+                <tbody>${invoiceRows || '<tr><td colspan="6" style="text-align:center">No invoices</td></tr>'}</tbody></table>
+                <div class="sig">
+                    <div>Hon. Secretary</div>
+                    <div>Hon. Treasurer</div>
+                    <div>Chairperson</div>
+                </div>
+                <script>window.onload = () => window.print();</script>
+                </body></html>`);
+            w.document.close();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
+    const uploadSignedClaimPdf = async (file) => {
+        if (!file) return;
+        if (file.type !== "application/pdf") { alert("Please upload a PDF."); return; }
+        try {
+            const target = await ensureClaim();
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("related_type", "reimbursement_claim");
+            fd.append("related_id", target.id);
+            fd.append("body_id", persona?.body_code || "MPCA");
+            fd.append("uploaded_by", persona?.name || "");
+            const { data: rec } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+            await api.post(`/reimbursement-claims/${target.id}/signed-pdf`, {
+                signed_pdf_url: rec.url,
+                uploaded_by: persona?.name,
+            });
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
     const submitClaim = async () => {
         try {
-            let target = claim;
-            if (!target) {
-                const { data: created } = await api.post("/reimbursement-claims", {
-                    tournament_id: id,
-                    body_id: tournament.host_body_id || "MPCA",
-                    fiscal_cycle: tournament.fiscal_cycle || "2025-26",
-                    scheme_code: tournament.scheme_code,
-                    notes: "Submitted from Tournament Finance console",
-                    submitted_by: persona?.name,
-                });
-                target = created;
+            const target = await ensureClaim();
+            if (!target.signed_pdf_url) {
+                alert("Please upload the signed claim PDF first.");
+                return;
             }
             await api.post(`/reimbursement-claims/${target.id}/submit`, {
                 actor_name: persona?.name,
@@ -440,9 +550,28 @@ const TournamentFinanceDetail = () => {
                     </div>
                 </div>
                 {canSubmitClaim && budget && (
-                    <button className="btn-heritage-primary" onClick={submitClaim} data-testid="submit-claim-btn">
-                        <Send size={12} /> Submit Reimbursement to MPCA
-                    </button>
+                    <div className="flex flex-col items-end gap-2" data-testid="claim-submit-block">
+                        {/* M39m · Bug 2 · Three-stage signed-PDF flow */}
+                        <div className="flex gap-2 flex-wrap">
+                            <button className="btn-heritage-secondary" onClick={downloadClaimSummaryPdf} data-testid="download-claim-pdf-btn">
+                                <FileText size={12} /> ① Prepare & Download PDF
+                            </button>
+                            <button className="btn-heritage-secondary" onClick={() => document.getElementById("signed-claim-pdf-input")?.click()} data-testid="upload-signed-claim-btn">
+                                <Upload size={12} /> ② {claim?.signed_pdf_url ? "Re-upload Signed" : "Upload Signed PDF"}
+                            </button>
+                            <input id="signed-claim-pdf-input" type="file" accept="application/pdf" className="hidden" onChange={(e) => uploadSignedClaimPdf(e.target.files?.[0])} data-testid="signed-claim-pdf-input" />
+                            <button className="btn-heritage-primary disabled:opacity-40" onClick={submitClaim} disabled={!claim?.signed_pdf_url} data-testid="submit-claim-btn">
+                                <Send size={12} /> ③ Submit to MPCA
+                            </button>
+                        </div>
+                        {claim?.signed_pdf_url ? (
+                            <a href={`${API_BASE.replace(/\/api$/, "")}${claim.signed_pdf_url}`} target="_blank" rel="noreferrer" className="text-[10px] uppercase tracking-widest text-emerald-700 hover:underline inline-flex items-center gap-1" data-testid="view-signed-claim">
+                                ✓ Signed PDF uploaded {claim.signed_pdf_uploaded_at ? `· ${new Date(claim.signed_pdf_uploaded_at).toLocaleDateString("en-IN")}` : ""}
+                            </a>
+                        ) : (
+                            <span className="text-[10px] uppercase tracking-widest text-mpca-oxblood">Signed PDF pending</span>
+                        )}
+                    </div>
                 )}
                 {claim?.status === "Submitted" && (
                     <span className="inline-block px-3 py-1.5 text-[10px] uppercase tracking-widest bg-mpca-brass/20 border border-mpca-brass text-mpca-brass" data-testid="claim-submitted-badge">
@@ -476,12 +605,16 @@ const TournamentFinanceDetail = () => {
                     {!budget ? (
                         <div className="bulletin-card p-8 text-center">
                             <ClipboardList className="mx-auto text-mpca-brass mb-3" size={32} />
-                            <div className="font-serif text-xl text-mpca-green-dark mb-3">No budget set yet</div>
+                            <div className="font-serif text-xl text-mpca-green-dark mb-3">
+                                {persona?.body_type === "State" ? "No default inputs saved yet" : "No budget set yet"}
+                            </div>
                             <p className="text-sm text-mpca-gray-dark mb-4 max-w-xl mx-auto">
-                                Assign an MPCA reimbursement scheme (e.g., Scheme 2-D for Inter-Divisional Hosting) to auto-generate the pre-defined budget with all applicable heads and rates.
+                                {persona?.body_type === "State"
+                                    ? "Pick the applicable scheme (e.g. 2-D for Inter-Divisional Hosting), set typical input values (squad size, days, match count, per-player travel etc.), and save. Every Division that opens this tournament will inherit these values as pre-filled defaults."
+                                    : "Assign an MPCA reimbursement scheme (e.g., Scheme 2-D for Inter-Divisional Hosting) to auto-generate the pre-defined budget with all applicable heads and rates."}
                             </p>
                             <button className="btn-heritage-primary" onClick={() => setShowSchemePicker(true)} data-testid="pick-scheme-btn">
-                                <Plus size={12} /> Assign Reimbursement Scheme
+                                <Plus size={12} /> {persona?.body_type === "State" ? "Set Default Input Variables" : "Assign Reimbursement Scheme"}
                             </button>
                         </div>
                     ) : (
@@ -699,7 +832,9 @@ const TournamentFinanceDetail = () => {
                                         )}
                                         <div className="mt-4 flex justify-end gap-2">
                                             <button className="btn-heritage-secondary" onClick={() => { setShowSchemePicker(false); setSchemePickerStep("choose"); }}>Cancel</button>
-                                            <button className="btn-heritage-primary" onClick={assignScheme} disabled={!computedBudget || computing} data-testid="assign-scheme-btn">Assign Scheme &amp; Create Budget</button>
+                                            <button className="btn-heritage-primary" onClick={assignScheme} disabled={!computedBudget || computing} data-testid="assign-scheme-btn">
+                                                {persona?.body_type === "State" ? "Save Defaults for Divisions" : "Assign Scheme & Create Budget"}
+                                            </button>
                                         </div>
                                     </>
                                 )}

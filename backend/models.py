@@ -914,6 +914,10 @@ class TournamentBase(BaseModel):
     # variables relevant to travel-subsidy (2-C) rather than hosting-subsidy.
     host_scheme_code: Optional[str] = None
     visiting_scheme_code: Optional[str] = None
+    # M39m · MPCA-set default scheme input variables (e.g. squad size, days,
+    # match count) that Divisions inherit as pre-filled defaults when they
+    # open the scheme calculator. Divisions may still edit before submitting.
+    default_scheme_inputs: Dict[str, Any] = Field(default_factory=dict)
     # Sprint M24 · Setup meta captures the MPCA 7-step process fields
     # (category, age group, grounds, teams/pools, camp player group).
     setup_meta: Dict[str, Any] = Field(default_factory=dict)
@@ -2096,6 +2100,11 @@ class TournamentReimbursementClaim(TournamentReimbursementClaimBase):
 
     submitted_by: Optional[str] = None
     submitted_at: Optional[str] = None
+    # M39m · Signed-PDF workflow before final submission — Division prints the
+    # claim summary PDF, physically signs it, uploads back, then submits.
+    signed_pdf_url: Optional[str] = None
+    signed_pdf_uploaded_at: Optional[str] = None
+    signed_pdf_uploaded_by: Optional[str] = None
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[str] = None
     rejection_reason: Optional[str] = None

@@ -232,6 +232,15 @@ async def submit_tournament_budget(bid: str, action: TournamentBudgetAction):
     await db.tournament_budgets.update_one({"id": bid}, {"$set": update})
     updated = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
     await _notify_for_tb(updated, "Submitted", action.actor_name)
+    # M39m · Activity log
+    from core.shared_services import log_activity
+    await log_activity(
+        module="tournament_budget", action="Submitted for approval",
+        record_id=bid, tournament_id=updated.get("tournament_id"),
+        actor_name=action.actor_name, actor_body_id=action.actor_body_id,
+        actor_role=action.actor_post,
+        details={"total_ceiling_inr": updated.get("total_ceiling_inr")},
+    )
     return updated
 
 
@@ -269,6 +278,13 @@ async def approve_tournament_budget(bid: str, action: TournamentBudgetAction):
     await db.tournament_budgets.update_one({"id": bid}, {"$set": update})
     updated = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
     await _notify_for_tb(updated, "Approved", action.actor_name)
+    from core.shared_services import log_activity
+    await log_activity(
+        module="tournament_budget", action="Approved",
+        record_id=bid, tournament_id=updated.get("tournament_id"),
+        actor_name=action.actor_name, actor_body_id=action.actor_body_id,
+        details={"approved_total_inr": approved_total},
+    )
     return updated
 
 
@@ -290,6 +306,13 @@ async def return_tournament_budget(bid: str, action: TournamentBudgetAction):
     await db.tournament_budgets.update_one({"id": bid}, {"$set": update})
     updated = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
     await _notify_for_tb(updated, "Returned", action.actor_name)
+    from core.shared_services import log_activity
+    await log_activity(
+        module="tournament_budget", action="Returned",
+        record_id=bid, tournament_id=updated.get("tournament_id"),
+        actor_name=action.actor_name, actor_body_id=action.actor_body_id,
+        details={"reason_code": action.return_reason_code, "reason": action.return_reason_detail},
+    )
     return updated
 
 

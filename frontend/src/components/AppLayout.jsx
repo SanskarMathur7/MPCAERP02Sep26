@@ -32,6 +32,10 @@ import {
 
 const DASHBOARD_LINK = { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
 const ORG_LINK = { to: "/org", label: "Organisation", icon: Landmark };
+// M39m · Top-level links surfaced directly beneath Dashboard + Org so users can
+// reach their pending actions and cross-body discussions from any screen.
+const ACTION_CENTER_LINK = { to: "/action-center", label: "Action Center", icon: AlertTriangle };
+const DISCUSSIONS_LINK = { to: "/discussions", label: "Discussions", icon: FileText };
 
 // ═══════════════════════════════════════════════════════════════════
 // User-requested MVP nav — active tabs.
@@ -66,8 +70,6 @@ const NAV_DOMAINS = [
             { to: "/player-registrations", label: "Season Onboarding", icon: Users },
             { to: "/match-officials", label: "Match Officials", icon: ShieldCheck },
             { to: "/da-review", label: "DA Review Inbox", icon: FileCheck },
-            { to: "/action-center", label: "Action Center", icon: AlertTriangle },
-            { to: "/discussions", label: "Discussions", icon: FileText },
         ],
     },
     {
@@ -311,6 +313,26 @@ const AppLayout = ({ children }) => {
                                 </>}
                             </NavLink>
                         </li>
+                        {/* M39m · Action Center + Discussions promoted to top-level */}
+                        {[ACTION_CENTER_LINK, DISCUSSIONS_LINK].map((link) => (
+                            <li key={link.to}>
+                                <NavLink
+                                    to={link.to}
+                                    data-testid={`nav-${link.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
+                                    className={({ isActive }) =>
+                                        `group flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} py-2.5 text-sm transition-all duration-300 border-l-2 ${
+                                            isActive
+                                                ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
+                                                : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
+                                        }`
+                                    }
+                                    title={collapsed ? link.label : undefined}
+                                >
+                                    <link.icon size={16} strokeWidth={1.5} />
+                                    {!collapsed && <span className="tracking-wide ml-3">{link.label}</span>}
+                                </NavLink>
+                            </li>
+                        ))}
                     </ul>
                     )}
 
@@ -412,7 +434,11 @@ const AppLayout = ({ children }) => {
                 <div className="sticky top-0 z-30 bg-mpca-cream/95 backdrop-blur-sm border-b border-mpca-brass/20 px-6 py-2 flex items-center justify-end gap-3" data-testid="app-topbar">
                     <SeasonSwitcher />
                 </div>
-                {children}
+                {/* M39m · Consistent page gutter — every page inherits a comfortable
+                    left/right margin so content is never flush against the sidebar. */}
+                <div className="px-6 md:px-10 pt-6 pb-16" data-testid="app-content">
+                    {children}
+                </div>
             </main>
             <AIAssistantPanel />
         </div>

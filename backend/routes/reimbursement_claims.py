@@ -227,6 +227,15 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
         raise HTTPException(404, "Claim not found")
     if doc["status"] not in ("Draft", "Rejected"):
         raise HTTPException(409, f"Cannot submit from status '{doc['status']}'")
+    # M39m · Signed-PDF gate — Division must download the summary PDF, sign it,
+    # and upload it before final submission to MPCA. Prevents unsigned claims.
+    if not doc.get("signed_pdf_url"):
+        raise HTTPException(
+            412,
+            "Please download the claim summary PDF, get it signed by the Hon. "
+            "Secretary and Treasurer, and upload the signed copy before "
+            "submitting to MPCA.",
+        )
 
     # Compute summary at submit time
     summary = await _compute_summary(doc["tournament_id"], doc["body_id"])
@@ -272,6 +281,28 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
         related_type="reimbursement_claim", related_id=cid,
         severity="info", kind="info",
     )
+    return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.post("/reimbursement-claims/{cid}/signed-pdf", response_model=TournamentReimbursementClaim)
+async def upload_signed_pdf(cid: str, payload: dict):
+    """M39m · Division uploads the physically-signed claim summary PDF. This
+    unlocks the Submit-to-MPCA action. payload = {signed_pdf_url, uploaded_by}"""
+    doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if doc["status"] not in ("Draft", "Rejected"):
+        raise HTTPException(409, "Can only attach a signed PDF while the claim is in Draft or Rejected state.")
+    url = (payload or {}).get("signed_pdf_url")
+    if not url:
+        raise HTTPException(400, "signed_pdf_url is required")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.tournament_reimbursement_claims.update_one({"id": cid}, {"$set": {
+        "signed_pdf_url": url,
+        "signed_pdf_uploaded_at": now,
+        "signed_pdf_uploaded_by": (payload or {}).get("uploaded_by"),
+        "updated_at": now,
+    }})
     return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
 
 

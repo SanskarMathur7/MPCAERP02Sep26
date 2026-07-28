@@ -145,6 +145,14 @@ async def submit_extra_expense_request(rid: str, action: ExtraExpenseAction):
         related_type="extra_expense_request", related_id=rid,
         severity="warning", kind="info",
     )
+    # M39m · Activity log
+    from core.shared_services import log_activity
+    await log_activity(
+        module="extra_expense", action="Submitted",
+        record_id=rid, tournament_id=doc.get("tournament_id"),
+        actor_name=action.actor_name, actor_body_id=doc.get("body_id"),
+        details={"amount_inr": doc["amount_inr"], "head": doc["head_label"], "ref": doc.get("request_ref")},
+    )
     return await db.extra_expense_requests.find_one({"id": rid}, {"_id": 0})
 
 
@@ -217,7 +225,7 @@ async def approve_extra_expense_request(rid: str, action: ExtraExpenseAction):
     await write_audit_log(
         module="extra_expense", record_id=rid, action="approve",
         actor={"name": action.actor_name, "role": action.actor_post, "body_id": action.actor_body_id or "MPCA"},
-        details={"head": doc["head_label"], "requested_inr": doc["amount_inr"], "approved_inr": approved, "new_ceiling_inr": new_ceiling},
+        details={"tournament_id": doc["tournament_id"], "head": doc["head_label"], "requested_inr": doc["amount_inr"], "approved_inr": approved, "new_ceiling_inr": new_ceiling},
     )
 
     # Notify Division

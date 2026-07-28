@@ -205,7 +205,12 @@ async def patch_tournament(tid: str, patch: dict):
     doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Tournament not found")
-    allowed = {"scheme_code", "notes", "trophy_name", "status", "start_date", "end_date", "venue_id", "ground_id", "venue_name_snapshot", "ground_name_snapshot", "input_variables", "setup_meta", "calendar_fixed", "closure_letter_url", "closure_letter_generated_at"}
+    allowed = {"scheme_code", "host_scheme_code", "visiting_scheme_code",
+               "default_scheme_inputs", "notes", "trophy_name", "status",
+               "start_date", "end_date", "venue_id", "ground_id",
+               "venue_name_snapshot", "ground_name_snapshot",
+               "input_variables", "setup_meta", "calendar_fixed",
+               "closure_letter_url", "closure_letter_generated_at"}
     updates = {k: v for k, v in (patch or {}).items() if k in allowed}
     if updates:
         await db.tournaments.update_one({"id": tid}, {"$set": updates})
@@ -271,6 +276,15 @@ async def create_tournament(payload: TournamentCreate):
         **data,
     )
     await db.tournaments.insert_one(t.model_dump())
+    # M39m · Activity log
+    from core.shared_services import log_activity
+    await log_activity(
+        module="tournament", action="Created",
+        record_id=t.id, tournament_id=t.id,
+        actor_body_id=data.get("created_by_body_code"),
+        details={"tournament_no": t.tournament_no, "name": t.name,
+                 "host_body_id": t.host_body_id, "fiscal_cycle": t.fiscal_cycle},
+    )
     return t
 
 
@@ -364,6 +378,15 @@ async def act_on_tournament_acceptance(
             new_status = doc.get("status", "Draft")
 
     await db.tournaments.update_one({"id": tid}, {"$set": {"acceptance": acc, "status": new_status}})
+    # M39m · Activity log — Division/District accept/reject
+    from core.shared_services import log_activity
+    await log_activity(
+        module="tournament",
+        action="Accepted" if payload.action == "accept" else "Rejected",
+        record_id=tid, tournament_id=tid,
+        actor_name=x_user_name, actor_body_id=x_body_code, actor_role=x_role_id,
+        details={"note": payload.note, "acceptance_status": acc["status"], "new_status": new_status},
+    )
     return await db.tournaments.find_one({"id": tid}, {"_id": 0})
 
 

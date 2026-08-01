@@ -22,7 +22,7 @@ from routes import (  # noqa: F401
     assets, hr_payroll, dms, compliance, audit_pack, selection_console, match_officials,
     reimbursement_schemes, reimbursement_claims, camps, squad_ai, grant_claims, scheme_calc,
     tournament_workspace, rbac, tournament_participations, body_documents, player_registrations,
-    discussions, events,
+    discussions, events, finance_console,
 )
 from seed import seed_data
 

@@ -476,7 +476,7 @@ async def tournament_pending_actions(tid: str):
                 "body_code": body,
             })
 
-    # 3) Budgets awaiting approval
+    # 3) Budgets awaiting approval (legacy flow — Division-submitted first)
     async for b in db.tournament_budgets.find({"tournament_id": tid, "status": "Submitted"}, {"_id": 0}):
         items.append({
             "kind": "budget_approval",
@@ -485,6 +485,54 @@ async def tournament_pending_actions(tid: str):
             "deep_link": f"/tournament-budgets/{b['id']}",
             "record_id": b["id"],
             "body_code": b.get("participant_body_code"),
+        })
+
+    # 3b) M39r · MPCA-owned budget flow — new console
+    async for b in db.tournament_budgets.find(
+        {"tournament_id": tid, "status": "Draft"}, {"_id": 0}
+    ):
+        # A Draft budget with `prepared_by_name` set is MPCA-side awaiting send
+        if b.get("prepared_by_name") or b.get("input_variables_snapshot"):
+            items.append({
+                "kind": "budget_send",
+                "label": f"Send budget to {b.get('body_id')} · ₹{b.get('total_ceiling_inr', 0):,.0f}",
+                "waiting_on": "MPCA",
+                "deep_link": f"/tournaments/{tid}/finance",
+                "record_id": b["id"],
+                "body_code": b.get("body_id"),
+            })
+    async for b in db.tournament_budgets.find(
+        {"tournament_id": tid, "status": "Sent_To_Division"}, {"_id": 0}
+    ):
+        items.append({
+            "kind": "budget_acceptance",
+            "label": f"Accept budget from MPCA · ₹{b.get('total_ceiling_inr', 0):,.0f}",
+            "waiting_on": b.get("body_id"),
+            "deep_link": f"/tournament-budgets/{b['id']}",
+            "record_id": b["id"],
+            "body_code": b.get("body_id"),
+        })
+    async for b in db.tournament_budgets.find(
+        {"tournament_id": tid, "status": "Accepted_By_Division"}, {"_id": 0}
+    ):
+        items.append({
+            "kind": "budget_sanction",
+            "label": f"Sanction budget · {b.get('body_id')} · ₹{b.get('total_ceiling_inr', 0):,.0f}",
+            "waiting_on": "MPCA",
+            "deep_link": f"/tournament-budgets/{b['id']}",
+            "record_id": b["id"],
+            "body_code": b.get("body_id"),
+        })
+    async for b in db.tournament_budgets.find(
+        {"tournament_id": tid, "status": "Revision_Requested"}, {"_id": 0}
+    ):
+        items.append({
+            "kind": "budget_revise",
+            "label": f"Revise budget · {b.get('body_id')} requested changes",
+            "waiting_on": "MPCA",
+            "deep_link": f"/tournaments/{tid}/finance",
+            "record_id": b["id"],
+            "body_code": b.get("body_id"),
         })
 
     # 4) Reimbursement claims awaiting review
@@ -605,11 +653,26 @@ async def my_pending_inbox(
     is_mpca = scope.body_code == "MPCA" or scope.is_state
     my_body = scope.body_code
 
-    async for t in db.tournaments.find(t_query, {"_id": 0}):
+    # M39r · Also collect tournament ids where this body is a participant
+    # (Host or Visitor) — finance actions (accept budget etc.) live on those.
+    participant_tids: set = set()
+    if not is_mpca and my_body:
+        async for p in db.tournament_participations.find(
+            {"body_code": my_body, "removed_at": None},
+            {"_id": 0, "tournament_id": 1},
+        ):
+            participant_tids.add(p["tournament_id"])
+
+    seen_tids: set = set()
+
+    async def _process(t: dict):
+        if t["id"] in seen_tids:
+            return
+        seen_tids.add(t["id"])
         try:
             data = await tournament_pending_actions(t["id"])
         except HTTPException:
-            continue
+            return
         for item in data.get("items", []):
             waiting = item.get("waiting_on")
             matches = False
@@ -625,9 +688,22 @@ async def my_pending_inbox(
                     "tournament_no": t.get("tournament_no"),
                 })
                 if len(inbox) >= limit:
-                    break
+                    return
+
+    async for t in db.tournaments.find(t_query, {"_id": 0}):
+        await _process(t)
         if len(inbox) >= limit:
             break
+
+    # M39r · Merge in tournaments this body participates in but doesn't host
+    if participant_tids and len(inbox) < limit:
+        async for t in db.tournaments.find(
+            {"id": {"$in": list(participant_tids)}, "status": {"$nin": ["Completed", "Cancelled"]}},
+            {"_id": 0},
+        ):
+            await _process(t)
+            if len(inbox) >= limit:
+                break
 
     return {"items": inbox[:limit], "count": len(inbox), "scope": ("mpca" if is_mpca else my_body or "user")}
 

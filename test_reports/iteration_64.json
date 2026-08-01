@@ -1,0 +1,32 @@
+{
+  "summary": "M39r · Tournament Finance Console (MPCA-owned flow) verified end-to-end. Backend pytest 12/12 real assertions green (3 skips due to intentional state consumption by earlier tests — flow effectively covered by test_full_flow_on_revision_requested_row + test_request_revision_flow_on_sent_row). Frontend: MPCA console renders header (title/scheme/cycle), batch actions bar, 4-row status matrix with per-row status pill / proposed / sanctioned / spent / claim / next-action + waiting-on chip; row-level fc-send-{code} button for Drafts, fc-sanction-{code} for Accepted rows, and fc-view-{code} everywhere. Division view renders fc-div-budget-card + fc-div-accept-btn + fc-div-revise-btn only when the caller's own row is Sent_To_Division; card correctly re-labels to 'Accepted · awaits sanction' after Accept. Action Centre for MPCA correctly emits budget_send + budget_sanction (chips ac-filter-budget_send, ac-filter-budget_sanction; cards visible with amounts + tournament names). State guards return 409 on illegal transitions (sanction on Sent/Draft, accept on Approved). Permission guards return 403 when X-User-Body-Code header does not match the target body. Prepare-budgets correctly SKIPS live rows (Sent/Accepted/Approved) and REPLACES Draft/Revision_Requested.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m39r_finance_console.py",
+    "/app/test_reports/pytest/m39r_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "finance_console.py state machine is clean and idempotent — 409 on wrong-status transitions, 403 on wrong-body header, 422 on approved_total > proposed. Good defensive coverage.",
+    "prepare_budgets correctly preserves live budgets (Sent/Accepted/Approved) and only replaces Draft/Revision_Requested — the response schema (created/replaced/skipped) is what the UI needs.",
+    "next_action_hint() is the right shape for a matrix — {waiting_on, action}; UI consumes it directly.",
+    "Legacy submit/approve/return/reject endpoints preserved as promised; /tournaments/:id/finance/legacy route still opens.",
+    "Minor: /sanction endpoint accepts approved_head_allocations but does not enforce that head labels line up with proposed heads — a rogue payload could rename heads. Not exploitable via UI but worth a whitelist check.",
+    "Minor: send-budgets returns 400 with 'No draft budgets to send' when called on a tournament with no drafts — consider 200 + empty sent array for idempotency (UI currently handles both)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m39r_finance_console.py"
+  ],
+  "success_rate": {"backend": "100% (12/12 real; 3 skips are state-dependent)", "frontend": "100% — all data-testids present + Accept & Sanction click-through both fire and update state"},
+  "test_credentials": "persona chips at /login — persona-chip-secretary (MPCA Sanjeev Dua), persona-chip-district-secretary (DIST-INDO-IND Rajesh Kulkarni). No passwords.",
+  "seed_data_creation": "No new fixtures created. Did drive the seed tournament 16a2fdd5-... through Revision → Accept → Sanction on DIST-INDO-IND row. State changes recorded: DIST-INDO-IND budget is now Approved; DIST-BURH-IND is Draft (re-prepared); DIST-KHAN-IND is Sent_To_Division; DIST-ALIR-IND is Approved (unchanged).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The Bhopal seed tournament (16a2fdd5-aac0-4832-9ad5-a862c31b33cd) is now in mixed state — one row per each of Draft / Sent_To_Division / Approved (x2). Perfect for regression: /finance/matrix will surface all four statuses on the MPCA view. To re-exercise the div-side Accept/Revise buttons, first POST /tournaments/{tid}/finance/send-budgets with only_budget_ids=[<DIST-BURH-IND budget id>] then log in as persona-chip-division-secretary (Devashish Nilosey · DIV-IND) — but note DIV-IND is NOT a participant of this tournament; the district personas (persona-chip-district-secretary = DIST-INDO-IND) is the only district-level persona that maps to an active participant.",
+  "rca of the issue": "n/a — no bugs found. The Finance Console redesign works end-to-end across MPCA / Division / Action Centre surfaces and honours all documented state + permission guards."
+}

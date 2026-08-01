@@ -1233,6 +1233,10 @@ BudgetHead = Literal[
 
 TournamentBudgetStatus = Literal[
     "Draft", "Submitted", "Approved", "Returned", "Rejected", "Cancelled",
+    # M39r · MPCA-owned budget flow (new console)
+    "Sent_To_Division",       # MPCA has sent the prepared budget; awaiting Division acceptance
+    "Accepted_By_Division",   # Division accepted; awaiting MPCA final sanction
+    "Revision_Requested",     # Division asked for changes; back with MPCA
 ]
 
 VariableItemStatus = Literal["Pending", "Approved", "Rejected"]
@@ -1290,6 +1294,17 @@ class TournamentBudget(TournamentBudgetBase):
     submitted_by_body: Optional[str] = None
     submitted_by_name: Optional[str] = None
     submitted_at: Optional[str] = None
+    # M39r · MPCA-owned flow — audit stamps for the new console
+    prepared_by_name: Optional[str] = None         # MPCA officer who prepared the budget
+    sent_at: Optional[str] = None                  # when MPCA pushed it to the Division
+    division_accepted_by: Optional[str] = None
+    division_accepted_at: Optional[str] = None
+    revision_requested_by: Optional[str] = None
+    revision_requested_at: Optional[str] = None
+    revision_reason: Optional[str] = None
+    sanctioned_by: Optional[str] = None
+    sanctioned_at: Optional[str] = None
+    role_flavour: Optional[Literal["Host", "Visitor"]] = None  # snapshot for the console
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

@@ -60,6 +60,7 @@ const DMS = lazy(() => import("@/pages/DMS"));
 const Compliance = lazy(() => import("@/pages/Compliance"));
 const TournamentFinance = lazy(() => import("@/pages/TournamentFinance"));
 const TournamentFinanceDetail = lazy(() => import("@/pages/TournamentFinanceDetail"));
+const TournamentFinanceConsole = lazy(() => import("@/pages/TournamentFinanceConsole"));
 const ReimbursementClaimsList = lazy(() =>
     import("@/pages/ReimbursementClaims").then((m) => ({ default: m.ReimbursementClaimsList })));
 const ReimbursementClaimDetail = lazy(() =>
@@ -191,7 +192,8 @@ function App() {
 
                             {/* Protected — Sprint T-RIM: Tournament Reimbursement Matrix */}
                             <Route path="/tournament-finance" element={<Protected><TournamentFinance /></Protected>} />
-                            <Route path="/tournaments/:id/finance" element={<Protected><TournamentFinanceDetail /></Protected>} />
+                            <Route path="/tournaments/:id/finance" element={<Protected><TournamentFinanceConsole /></Protected>} />
+                            <Route path="/tournaments/:id/finance/legacy" element={<Protected><TournamentFinanceDetail /></Protected>} />
                             <Route path="/reimbursement-claims" element={<Protected><ReimbursementClaimsList /></Protected>} />
                             <Route path="/reimbursement-claims/:id" element={<Protected><ReimbursementClaimDetail /></Protected>} />
                             <Route path="/my-da-forms" element={<Protected><MyDAForms /></Protected>} />

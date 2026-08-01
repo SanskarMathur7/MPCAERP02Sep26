@@ -9,23 +9,33 @@ const KIND_LABEL = {
     squad_review: "Squad Review",
     squad_pick: "Squad Draft",
     budget_approval: "Budget Approval",
+    budget_send: "Send Budget",                       // M39r
+    budget_acceptance: "Accept Budget",                // M39r
+    budget_sanction: "Sanction Budget",                // M39r
+    budget_revise: "Revise Budget",                    // M39r
     claim_review: "Reimbursement Claim",
     tournament_approval: "Tournament Approval",
     tournament_submit: "Submit for Approval",
     input_vars: "Input Variables",
     closure_letter: "Closure Letter",
     da_fill: "DA Form · Pending fill",
+    extra_expense: "Extra Expense",
 };
 const KIND_TONE = {
     squad_review: "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40",
     squad_pick: "bg-mpca-gold-light/20 text-mpca-brass border-mpca-brass/40",
     budget_approval: "bg-mpca-gold-light/20 text-mpca-brass border-mpca-brass/40",
+    budget_send: "bg-mpca-brass/10 text-mpca-brass border-mpca-brass/40",
+    budget_acceptance: "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40",
+    budget_sanction: "bg-mpca-green-dark/10 text-mpca-green-dark border-mpca-green-dark/40",
+    budget_revise: "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40",
     claim_review: "bg-mpca-navy/10 text-mpca-navy border-mpca-navy/40",
     tournament_approval: "bg-mpca-green-dark/10 text-mpca-green-dark border-mpca-green-dark/40",
     tournament_submit: "bg-mpca-brass/10 text-mpca-brass border-mpca-brass/40",
     input_vars: "bg-mpca-brass/10 text-mpca-brass border-mpca-brass/40",
     closure_letter: "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40",
     da_fill: "bg-mpca-brass/10 text-mpca-brass border-mpca-brass/40",
+    extra_expense: "bg-mpca-gold-light/20 text-mpca-brass border-mpca-brass/40",
 };
 
 /** M39 · Persona-scoped Action Center */
@@ -70,7 +80,7 @@ const ActionCenter = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6" data-testid="ac-stats">
                 <Stat label="Total" value={items.length} tone="oxblood" />
                 <Stat label="Squad Approvals" value={(counts.squad_review || 0) + (counts.squad_pick || 0)} tone="brass" />
-                <Stat label="Financial" value={(counts.budget_approval || 0) + (counts.claim_review || 0)} tone="green" />
+                <Stat label="Financial" value={(counts.budget_approval || 0) + (counts.claim_review || 0) + (counts.budget_send || 0) + (counts.budget_acceptance || 0) + (counts.budget_sanction || 0) + (counts.budget_revise || 0) + (counts.extra_expense || 0)} tone="green" />
                 <Stat label="Tournament" value={(counts.tournament_approval || 0) + (counts.tournament_submit || 0) + (counts.input_vars || 0)} tone="brass" />
             </div>
 

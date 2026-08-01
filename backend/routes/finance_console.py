@@ -454,17 +454,27 @@ async def sanction(bid: str, payload: SanctionPayload):
 # ─────────────────────── Status matrix (per-tournament) ───────────────────────
 
 @api_router.get("/tournaments/{tid}/finance/matrix")
-async def finance_matrix(tid: str):
+async def finance_matrix(
+    tid: str,
+    x_body_code: Optional[str] = Header(None, alias="X-Body-Code"),
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+):
     """One-row-per-body matrix for the MPCA console. Renders:
        body · role · budget_status · totals · division response · MPCA action ·
-       spending totals · claim status."""
+       spending totals · claim status.
+
+       M39r+ · Privacy scoping — Divisions/Districts see ONLY their own row.
+       Only MPCA (State) sees the full multi-body pipeline."""
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
 
-    parts = await db.tournament_participations.find({
-        "tournament_id": tid, "removed_at": None,
-    }, {"_id": 0}).to_list(500)
+    # ── Scope guard ───────────────────────────────────────────────
+    is_state = (x_body_type or "").lower() == "state" or (x_body_code or "").upper() == "MPCA"
+    parts_query: Dict[str, Any] = {"tournament_id": tid, "removed_at": None}
+    if not is_state and x_body_code:
+        parts_query["body_code"] = x_body_code
+    parts = await db.tournament_participations.find(parts_query, {"_id": 0}).to_list(500)
 
     rows: List[Dict[str, Any]] = []
     for p in parts:
@@ -544,10 +554,12 @@ async def finance_matrix(tid: str):
         "tournament_name": t.get("name"),
         "scheme_code": t.get("scheme_code"),
         "fiscal_cycle": t.get("fiscal_cycle") or "2025-26",
-        "input_variables": t.get("input_variables") or {},
+        "input_variables": t.get("input_variables") or {} if is_state else {},
         "input_vars_set": bool(t.get("input_variables")),
         "rows": rows,
         "row_count": len(rows),
+        "viewer_scope": "state" if is_state else "body",
+        "viewer_body_code": x_body_code if not is_state else None,
     }
 
 

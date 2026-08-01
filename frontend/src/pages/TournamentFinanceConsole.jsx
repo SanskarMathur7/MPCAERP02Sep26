@@ -264,7 +264,8 @@ const TournamentFinanceConsole = () => {
                 />
             )}
 
-            {/* Status matrix */}
+            {/* Status matrix — MPCA-only. Divisions/Districts see only their own budget via the DivisionBudgetCard above. */}
+            {isMPCA && (
             <div className="bulletin-card overflow-hidden" data-testid="fc-matrix">
                 <div className="px-5 py-3 border-b border-mpca-brass/20 flex items-center justify-between">
                     <div>
@@ -307,13 +308,14 @@ const TournamentFinanceConsole = () => {
                             ))}
                             {rows.length === 0 && (
                                 <tr><td colSpan={9} className="px-3 py-8 text-center text-mpca-gray-dark">
-                                    No participating bodies yet. Add participants (Host + Visitors) via the tournament's Participants Matrix.
+                                    No participating bodies yet. Add participants (Host + Visitors) via the tournament&apos;s Participants Matrix.
                                 </td></tr>
                             )}
                         </tbody>
                     </table>
                 </div>
             </div>
+            )}
 
             {/* Legacy link — for records already in old submit/approve flow */}
             <div className="mt-6 text-center">
@@ -491,7 +493,7 @@ const MatrixRow = ({ r, isMPCA, myBody, onSend, onSanction, onAccept, onRevise, 
                 <StatusPill status={r.budget_status} />
                 {r.revision_reason && (
                     <div className="text-[9px] text-mpca-oxblood mt-1 italic truncate max-w-[180px]" title={r.revision_reason}>
-                        "{r.revision_reason.slice(0, 60)}{r.revision_reason.length > 60 ? '…' : ''}"
+                        &ldquo;{r.revision_reason.slice(0, 60)}{r.revision_reason.length > 60 ? '…' : ''}&rdquo;
                     </div>
                 )}
             </td>

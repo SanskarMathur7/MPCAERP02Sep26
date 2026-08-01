@@ -4,10 +4,17 @@ import {
     Send, Check, RotateCcw, Sparkles, AlertTriangle, Users, Building2,
     ArrowRight, CheckCircle2, Circle, Loader2, ShieldCheck, PackageOpen,
     Calculator, Wallet, ClipboardCheck, ChevronRight, MessagesSquare,
+    Receipt, Activity, HandCoins, ScrollText, ClipboardEdit, LayoutGrid,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
+import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
+import TournamentInvoicesPanel from "@/components/TournamentInvoicesPanel";
+import MatchOfficialDAPanel from "@/components/MatchOfficialDAPanel";
+import {
+    TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
+} from "@/components/TournamentWorkspacePanels";
 
 /** M39r · Tournament Finance Console
  * ────────────────────────────────────
@@ -53,6 +60,7 @@ const TournamentFinanceConsole = () => {
     const [poolIvDrafts, setPoolIvDrafts] = useState({});        // M39s · per-pool IV overrides
     const [activePoolTab, setActivePoolTab] = useState(null);    // M39s · currently editing pool
     const [preview, setPreview] = useState(null);
+    const [activeTab, setActiveTab] = useState("pipeline");   // M39u · tabbed sections
 
     const isMPCA = persona?.body_type === "State";
     const myBody = persona?.body_code;
@@ -295,8 +303,38 @@ const TournamentFinanceConsole = () => {
                 />
             )}
 
-            {/* Status matrix — MPCA-only. Divisions/Districts see only their own budget via the DivisionBudgetCard above. */}
-            {isMPCA && (
+            {/* M39u · Section tabs (visible only when budgets exist) */}
+            {anyBudgetsExist && (
+                <div className="mb-4 flex items-center gap-1 border-b border-mpca-brass/30 overflow-x-auto" data-testid="fc-tabs">
+                    {[
+                        { id: "pipeline",  label: "Pipeline",         icon: LayoutGrid, show: true },
+                        { id: "budgets",   label: "Budgets & Extras", icon: Wallet,     show: true },
+                        { id: "invoices",  label: "Invoices",         icon: Receipt,    show: true },
+                        { id: "da",        label: "DA / TA Forms",    icon: ClipboardEdit, show: true },
+                        { id: "actuals",   label: "Actuals vs Budget",icon: Activity,   show: true },
+                        { id: "receipts",  label: "MPCA Receipts",    icon: HandCoins,  show: isMPCA },
+                        { id: "closure",   label: "Closure Letter",   icon: ScrollText, show: isMPCA },
+                    ].filter((t) => t.show).map((t) => {
+                        const Icon = t.icon;
+                        const active = activeTab === t.id;
+                        return (
+                            <button key={t.id} onClick={() => setActiveTab(t.id)}
+                                className={`px-4 py-2.5 text-[11px] uppercase tracking-widest font-semibold flex items-center gap-2 border-b-2 shrink-0 transition-colors ${
+                                    active
+                                        ? "border-mpca-oxblood text-mpca-oxblood"
+                                        : "border-transparent text-mpca-gray-dark hover:text-mpca-green-dark"
+                                }`}
+                                data-testid={`fc-tab-${t.id}`}>
+                                <Icon size={12} />
+                                {t.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Tab: Pipeline (status matrix) — MPCA-only */}
+            {activeTab === "pipeline" && isMPCA && (
             <div className="bulletin-card overflow-hidden" data-testid="fc-matrix">
                 <div className="px-5 py-3 border-b border-mpca-brass/20 flex items-center justify-between">
                     <div>
@@ -371,6 +409,38 @@ const TournamentFinanceConsole = () => {
                     </table>
                 </div>
             </div>
+            )}
+
+            {/* M39u · Reusable panels for each tab */}
+            {activeTab === "budgets" && (
+                <div className="bulletin-card p-4" data-testid="fc-tab-budgets-panel">
+                    <TournamentBudgetsPanel tournament={tournament} persona={persona} onChange={load} />
+                </div>
+            )}
+            {activeTab === "invoices" && (
+                <div className="bulletin-card p-4" data-testid="fc-tab-invoices-panel">
+                    <TournamentInvoicesPanel tournament={tournament} persona={persona} />
+                </div>
+            )}
+            {activeTab === "da" && (
+                <div className="bulletin-card p-4" data-testid="fc-tab-da-panel">
+                    <MatchOfficialDAPanel tournamentId={id} onChange={load} />
+                </div>
+            )}
+            {activeTab === "actuals" && (
+                <div className="bulletin-card p-4" data-testid="fc-tab-actuals-panel">
+                    <FinancialSummaryPanel tournament={tournament} />
+                </div>
+            )}
+            {activeTab === "receipts" && isMPCA && (
+                <div className="bulletin-card p-4" data-testid="fc-tab-receipts-panel">
+                    <TournamentReceiptsPanel tournament={tournament} canEdit={true} />
+                </div>
+            )}
+            {activeTab === "closure" && isMPCA && (
+                <div className="bulletin-card p-4" data-testid="fc-tab-closure-panel">
+                    <ClosureLetterPanel tournament={tournament} persona={persona} canGenerate={true} />
+                </div>
             )}
 
             {/* Legacy link — for records already in old submit/approve flow */}

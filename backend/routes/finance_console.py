@@ -92,7 +92,8 @@ async def _push_notification(*, recipient_body_id: str, recipient_role_id: str,
 
 class PreparePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    input_variables: Optional[Dict[str, Any]] = None   # if provided, saved to tournament first
+    input_variables: Optional[Dict[str, Any]] = None       # global fallback IVs
+    pool_input_variables: Optional[Dict[str, Dict[str, Any]]] = None  # M39s · per-pool IVs
     prepared_by_name: Optional[str] = None
 
 
@@ -133,43 +134,37 @@ class SanctionPayload(BaseModel):
 
 @api_router.post("/tournaments/{tid}/finance/prepare-budgets")
 async def prepare_budgets(tid: str, payload: PreparePayload):
-    """MPCA one-shot: build the Host budget + one Visitor budget per accepted
-    participant. Anything already Draft (or Revision_Requested) for a body is
-    replaced; Sent/Accepted/Approved budgets are preserved."""
+    """MPCA one-shot budget prep. Pool-aware (M39s):
+       - If the tournament has multiple pools, one Host budget per pool + one
+         Visitor budget per (pool, body) — each priced with that pool's IVs
+         (or the global IVs as fallback).
+       - Single-pool tournaments behave exactly as before.
+       - Anything already Draft or Revision_Requested is replaced; live
+         (Sent/Accepted/Approved) budgets are preserved."""
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
 
-    # Save master IVs if the caller sent them
+    # Save master + per-pool IVs if the caller sent them
+    update_doc: Dict[str, Any] = {}
     if payload.input_variables:
-        await db.tournaments.update_one(
-            {"id": tid}, {"$set": {"input_variables": payload.input_variables}},
-        )
+        update_doc["input_variables"] = payload.input_variables
         t["input_variables"] = payload.input_variables
+    if payload.pool_input_variables is not None:
+        update_doc["pool_input_variables"] = payload.pool_input_variables
+        t["pool_input_variables"] = payload.pool_input_variables
+    if update_doc:
+        await db.tournaments.update_one({"id": tid}, {"$set": update_doc})
 
-    input_vars = t.get("input_variables") or {}
-    if not input_vars:
-        raise HTTPException(400, "Set the tournament's input variables before preparing budgets.")
+    global_ivs = t.get("input_variables") or {}
+    pool_ivs = t.get("pool_input_variables") or {}
+    if not global_ivs and not pool_ivs:
+        raise HTTPException(400, "Set input variables before preparing budgets.")
 
     scheme_code = t.get("scheme_code")
     if not scheme_code:
         raise HTTPException(400, "Pick a reimbursement scheme on the tournament before preparing budgets.")
     cycle = t.get("fiscal_cycle") or "2025-26"
-
-    # Compute the full allocation once
-    from routes.scheme_calc import compute_budget, ComputeRequest
-    preview = await compute_budget(scheme_code, ComputeRequest(inputs=input_vars))
-    full_heads = preview.get("head_allocations") or []
-    if not full_heads:
-        raise HTTPException(422, "Scheme returned no heads for these input variables. Check inputs.")
-
-    visitor_heads = [h for h in full_heads if _is_visitor_head(h["head"])]
-    if not visitor_heads:
-        visitor_heads = [{
-            "head": "Team Travel Subsidy",
-            "limit_inr": round(preview.get("total_ceiling_inr", 0) * 0.20, 2),
-            "formula": "20% of total ceiling (fallback)",
-        }]
 
     # Fetch participants (accepted or pending, not removed)
     participants = await db.tournament_participations.find({
@@ -180,84 +175,120 @@ async def prepare_budgets(tid: str, payload: PreparePayload):
     if not participants:
         raise HTTPException(400, "Add participants (Host + Visitors) before preparing budgets.")
 
+    # Group participants by pool_id (None = "single-pool tournament")
+    pools_map: Dict[Optional[str], List[Dict[str, Any]]] = {}
+    for p in participants:
+        pools_map.setdefault(p.get("pool_id"), []).append(p)
+
+    from routes.scheme_calc import compute_budget, ComputeRequest
+
     created: List[Dict[str, Any]] = []
     replaced: List[Dict[str, Any]] = []
     skipped: List[Dict[str, Any]] = []
 
-    for p in participants:
-        body_code = p.get("body_code")
-        role = p.get("role", "Visitor")
-
-        # If a live (post-Draft) budget exists, DON'T replace — preserve the flow
-        live = await db.tournament_budgets.find_one({
-            "tournament_id": tid,
-            "body_id": body_code,
-            "fiscal_cycle": cycle,
-            "status": {"$in": [
-                "Submitted", "Approved", "Sent_To_Division",
-                "Accepted_By_Division",
-            ]},
-        }, {"_id": 0})
-        if live:
-            skipped.append({
-                "body_code": body_code, "role": role,
-                "budget_no": live.get("budget_no"),
-                "reason": f"already {live.get('status')}",
-            })
+    for pool_id, pool_members in pools_map.items():
+        pool_name = (pool_members[0].get("pool_name") if pool_members else None) or "Main"
+        # Pool-specific IVs, falling back to global IVs
+        ivs_for_pool = (pool_ivs.get(pool_id) if pool_id else None) or global_ivs
+        if not ivs_for_pool:
+            skipped.append({"pool_id": pool_id, "pool_name": pool_name,
+                            "reason": "No IVs for this pool."})
             continue
 
-        # Kill any pre-existing Draft / Revision_Requested for this body so we
-        # can rebuild cleanly from the fresh IVs
-        old_draft = await db.tournament_budgets.find_one({
-            "tournament_id": tid,
-            "body_id": body_code,
-            "fiscal_cycle": cycle,
-            "status": {"$in": ["Draft", "Revision_Requested", "Returned"]},
-        }, {"_id": 0})
-        if old_draft:
-            await db.tournament_budgets.delete_one({"id": old_draft["id"]})
-            replaced.append({"body_code": body_code, "budget_no": old_draft.get("budget_no")})
+        preview = await compute_budget(scheme_code, ComputeRequest(inputs=ivs_for_pool))
+        full_heads = preview.get("head_allocations") or []
+        if not full_heads:
+            skipped.append({"pool_id": pool_id, "pool_name": pool_name,
+                            "reason": "Scheme returned no heads for these IVs."})
+            continue
+        visitor_heads = [h for h in full_heads if _is_visitor_head(h["head"])]
+        if not visitor_heads:
+            visitor_heads = [{
+                "head": "Team Travel Subsidy",
+                "limit_inr": round(preview.get("total_ceiling_inr", 0) * 0.20, 2),
+                "formula": "20% of total ceiling (fallback)",
+            }]
 
-        heads_for_this = full_heads if role == "Host" else visitor_heads
-        head_allocs = [BudgetHeadAllocation(
-            head=h["head"], limit_inr=float(h["limit_inr"]),
-            notes=h.get("formula"),
-        ) for h in heads_for_this]
-        total = round(sum(h.limit_inr for h in head_allocs), 2)
+        for p in pool_members:
+            body_code = p.get("body_code")
+            role = p.get("role", "Visitor")
 
-        body = await db.bodies.find_one({"code": body_code}, {"_id": 0})
-        tb = TournamentBudget(
-            budget_no=await _next_budget_no(cycle),
-            tournament_id=tid,
-            tournament_name=t.get("name"),
-            body_id=body_code,
-            body_name=(body or {}).get("name", body_code),
-            fiscal_cycle=cycle,
-            head_allocations=[h.model_dump() for h in head_allocs],
-            total_ceiling_inr=total,
-            status="Draft",                                   # MPCA is still preparing
-            notes=(f"MPCA prepared · {role} allocation · {scheme_code} · "
-                   f"{len(head_allocs)} heads · ₹{total:,.0f}"),
-            participant_body_code=body_code,
-            input_variables_snapshot=input_vars,
-            prepared_by_name=payload.prepared_by_name,
-            role_flavour="Host" if role == "Host" else "Visitor",
-        )
-        await db.tournament_budgets.insert_one(tb.model_dump())
-        # Link to participant row for cross-nav
-        try:
-            from routes.tournament_participations import link_budget_to_participant
-            await link_budget_to_participant(tid, body_code, tb.id)
-        except Exception:  # noqa
-            pass
-        created.append({
-            "budget_id": tb.id, "budget_no": tb.budget_no,
-            "body_code": body_code, "role": role,
-            "total_inr": total, "heads_count": len(head_allocs),
-        })
+            # If a live (post-Draft) budget exists for this body in THIS pool, skip
+            live = await db.tournament_budgets.find_one({
+                "tournament_id": tid,
+                "body_id": body_code,
+                "pool_id": pool_id,
+                "fiscal_cycle": cycle,
+                "status": {"$in": [
+                    "Submitted", "Approved", "Sent_To_Division",
+                    "Accepted_By_Division",
+                ]},
+            }, {"_id": 0})
+            if live:
+                skipped.append({
+                    "body_code": body_code, "pool_name": pool_name, "role": role,
+                    "budget_no": live.get("budget_no"),
+                    "reason": f"already {live.get('status')}",
+                })
+                continue
+
+            # Kill any pre-existing Draft / Revision_Requested for this body+pool
+            old_draft = await db.tournament_budgets.find_one({
+                "tournament_id": tid,
+                "body_id": body_code,
+                "pool_id": pool_id,
+                "fiscal_cycle": cycle,
+                "status": {"$in": ["Draft", "Revision_Requested", "Returned"]},
+            }, {"_id": 0})
+            if old_draft:
+                await db.tournament_budgets.delete_one({"id": old_draft["id"]})
+                replaced.append({"body_code": body_code, "pool_name": pool_name,
+                                 "budget_no": old_draft.get("budget_no")})
+
+            heads_for_this = full_heads if role == "Host" else visitor_heads
+            head_allocs = [BudgetHeadAllocation(
+                head=h["head"], limit_inr=float(h["limit_inr"]),
+                notes=h.get("formula"),
+            ) for h in heads_for_this]
+            total = round(sum(h.limit_inr for h in head_allocs), 2)
+
+            body = await db.bodies.find_one({"code": body_code}, {"_id": 0})
+            pool_suffix = f" · {pool_name}" if pool_id else ""
+            tb = TournamentBudget(
+                budget_no=await _next_budget_no(cycle),
+                tournament_id=tid,
+                tournament_name=t.get("name"),
+                body_id=body_code,
+                body_name=(body or {}).get("name", body_code),
+                fiscal_cycle=cycle,
+                head_allocations=[h.model_dump() for h in head_allocs],
+                total_ceiling_inr=total,
+                status="Draft",
+                notes=(f"MPCA prepared{pool_suffix} · {role} allocation · "
+                       f"{scheme_code} · {len(head_allocs)} heads · ₹{total:,.0f}"),
+                participant_body_code=body_code,
+                input_variables_snapshot=ivs_for_pool,
+                prepared_by_name=payload.prepared_by_name,
+                role_flavour="Host" if role == "Host" else "Visitor",
+                pool_id=pool_id,
+                pool_name=pool_name if pool_id else None,
+            )
+            await db.tournament_budgets.insert_one(tb.model_dump())
+            try:
+                from routes.tournament_participations import link_budget_to_participant
+                await link_budget_to_participant(tid, body_code, tb.id)
+            except Exception:  # noqa
+                pass
+            created.append({
+                "budget_id": tb.id, "budget_no": tb.budget_no,
+                "body_code": body_code, "role": role,
+                "pool_id": pool_id, "pool_name": pool_name,
+                "total_inr": total, "heads_count": len(head_allocs),
+            })
 
     return {
         "tournament_id": tid, "scheme_code": scheme_code,
+        "pool_count": len(pools_map), "multi_pool": len([k for k in pools_map if k]) > 1,
         "created": created, "replaced": replaced, "skipped": skipped,
         "created_count": len(created), "replaced_count": len(replaced),
         "skipped_count": len(skipped),
@@ -482,11 +513,18 @@ async def finance_matrix(
         role = p.get("role", "Visitor")
         body = await db.bodies.find_one({"code": body_code}, {"_id": 0})
 
-        # Latest budget for this (tournament, body) — prefer live over dead
+        # Prefer a budget matching this participation's pool
+        pool_id = p.get("pool_id")
         budget = await db.tournament_budgets.find_one(
-            {"tournament_id": tid, "body_id": body_code},
+            {"tournament_id": tid, "body_id": body_code, "pool_id": pool_id},
             {"_id": 0}, sort=[("created_at", -1)],
         )
+        if not budget:
+            # Fallback for single-pool tournaments or legacy budgets without pool_id
+            budget = await db.tournament_budgets.find_one(
+                {"tournament_id": tid, "body_id": body_code},
+                {"_id": 0}, sort=[("created_at", -1)],
+            )
 
         # Spending: sum invoices + extras + DA (approved/submitted)
         inv_agg = await db.tournament_invoices.aggregate([
@@ -526,7 +564,9 @@ async def finance_matrix(
             "body_code": body_code,
             "body_name": (body or {}).get("name", body_code),
             "role": role,
-            "iv_set": bool(t.get("input_variables")),
+            "pool_id": p.get("pool_id"),                    # M39s
+            "pool_name": p.get("pool_name"),                # M39s
+            "iv_set": bool(t.get("input_variables") or (t.get("pool_input_variables") or {}).get(p.get("pool_id"))),
             "budget_id": (budget or {}).get("id"),
             "budget_no": (budget or {}).get("budget_no"),
             "budget_status": (budget or {}).get("status"),
@@ -549,13 +589,37 @@ async def finance_matrix(
             "next_action_for": _next_action_hint((budget or {}), (claim or {}), role),
         })
 
+    # M39s · Build a pools summary so the UI can group + iterate
+    pools_summary: List[Dict[str, Any]] = []
+    seen_pools: set = set()
+    for r in rows:
+        pid = r.get("pool_id")
+        if pid in seen_pools:
+            continue
+        seen_pools.add(pid)
+        pool_rows = [x for x in rows if x.get("pool_id") == pid]
+        host_row = next((x for x in pool_rows if x.get("role") == "Host"), None)
+        pools_summary.append({
+            "pool_id": pid,
+            "pool_name": (host_row or pool_rows[0]).get("pool_name") if pool_rows else "Main",
+            "host_body_code": (host_row or {}).get("body_code"),
+            "host_body_name": (host_row or {}).get("body_name"),
+            "member_count": len(pool_rows),
+            "budget_total_inr": sum(x.get("budget_total_inr", 0) for x in pool_rows),
+            "approved_total_inr": sum(x.get("approved_total_inr", 0) or 0 for x in pool_rows),
+        })
+    multi_pool = len([p for p in pools_summary if p["pool_id"]]) > 1
+
     return {
         "tournament_id": tid,
         "tournament_name": t.get("name"),
         "scheme_code": t.get("scheme_code"),
         "fiscal_cycle": t.get("fiscal_cycle") or "2025-26",
-        "input_variables": t.get("input_variables") or {} if is_state else {},
-        "input_vars_set": bool(t.get("input_variables")),
+        "input_variables": (t.get("input_variables") or {}) if is_state else {},
+        "pool_input_variables": (t.get("pool_input_variables") or {}) if is_state else {},
+        "input_vars_set": bool(t.get("input_variables") or t.get("pool_input_variables")),
+        "pools": pools_summary,
+        "multi_pool": multi_pool,
         "rows": rows,
         "row_count": len(rows),
         "viewer_scope": "state" if is_state else "body",

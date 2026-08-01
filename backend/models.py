@@ -923,6 +923,9 @@ class TournamentBase(BaseModel):
     setup_meta: Dict[str, Any] = Field(default_factory=dict)
     # Sprint M19 · Utility-form input variables (days_per_match, teams, squad_size, etc.)
     input_variables: Dict[str, Any] = Field(default_factory=dict)
+    # M39s · Per-pool IV overrides for multi-pool tournaments. Keyed by pool_id.
+    # Falls back to `input_variables` when a pool has no override entry.
+    pool_input_variables: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     # Sprint M19 · Explicit user-action flags (progress bar derives from these)
     calendar_fixed: bool = False                 # set true by "Lock Calendar" action
     closure_letter_generated_at: Optional[str] = None
@@ -1305,6 +1308,10 @@ class TournamentBudget(TournamentBudgetBase):
     sanctioned_by: Optional[str] = None
     sanctioned_at: Optional[str] = None
     role_flavour: Optional[Literal["Host", "Visitor"]] = None  # snapshot for the console
+    # M39s · Multi-pool support — one host budget per pool + one visitor budget
+    # per (pool, body). For single-pool tournaments these are None.
+    pool_id: Optional[str] = None
+    pool_name: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

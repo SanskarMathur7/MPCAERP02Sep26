@@ -50,6 +50,8 @@ const TournamentFinanceConsole = () => {
     const [tournament, setTournament] = useState(null);
     const [schemeSpec, setSchemeSpec] = useState(null);
     const [ivDraft, setIvDraft] = useState({});
+    const [poolIvDrafts, setPoolIvDrafts] = useState({});        // M39s · per-pool IV overrides
+    const [activePoolTab, setActivePoolTab] = useState(null);    // M39s · currently editing pool
     const [preview, setPreview] = useState(null);
 
     const isMPCA = persona?.body_type === "State";
@@ -64,6 +66,11 @@ const TournamentFinanceConsole = () => {
             setTournament(tRes.data);
             setMatrix(mRes.data);
             setIvDraft(mRes.data?.input_variables || {});
+            setPoolIvDrafts(mRes.data?.pool_input_variables || {});
+            // Default active pool = the first pool (if multi-pool)
+            const pools = mRes.data?.pools || [];
+            const firstPoolId = pools.find((p) => p.pool_id)?.pool_id;
+            setActivePoolTab(firstPoolId || null);
             // Load scheme input spec if scheme code present
             if (tRes.data?.scheme_code) {
                 try {
@@ -79,21 +86,26 @@ const TournamentFinanceConsole = () => {
     useEffect(() => { load(); }, [load]);
 
     // Live compute preview whenever IV draft changes (MPCA-only prep step)
+    // In multi-pool tournaments, preview reflects the currently-selected pool tab.
     useEffect(() => {
-        if (!isMPCA || !tournament?.scheme_code || !ivDraft || Object.keys(ivDraft).length === 0) return;
+        if (!isMPCA || !tournament?.scheme_code) return;
+        const ivsToUse = activePoolTab ? (poolIvDrafts[activePoolTab] || ivDraft) : ivDraft;
+        if (!ivsToUse || Object.keys(ivsToUse).length === 0) return;
         const t = setTimeout(async () => {
             try {
-                const { data } = await api.post(`/schemes/${tournament.scheme_code}/compute-budget`, { inputs: ivDraft });
+                const { data } = await api.post(`/schemes/${tournament.scheme_code}/compute-budget`, { inputs: ivsToUse });
                 setPreview(data);
             } catch { setPreview(null); }
         }, 400);
         return () => clearTimeout(t);
-    }, [ivDraft, tournament?.scheme_code, isMPCA]);
+    }, [ivDraft, poolIvDrafts, activePoolTab, tournament?.scheme_code, isMPCA]);
 
     if (loading) return <CricketLoader label="Loading finance console…" />;
     if (!matrix) return <div className="p-8 text-mpca-oxblood">Tournament not found.</div>;
 
     const rows = matrix.rows || [];
+    const pools = matrix.pools || [];
+    const isMultiPool = matrix.multi_pool;
     const hostRow = rows.find((r) => r.role === "Host");
     const visitorRows = rows.filter((r) => r.role !== "Host");
     const anyBudgetsExist = rows.some((r) => r.budget_id);
@@ -102,16 +114,29 @@ const TournamentFinanceConsole = () => {
     const anyRevision = rows.some((r) => r.budget_status === "Revision_Requested");
     const myRow = !isMPCA ? rows.find((r) => r.body_code === myBody) : null;
 
+    // M39s · Rows grouped by pool for the matrix + prepare UI
+    const rowsByPool = pools.map((p) => ({
+        pool: p,
+        rows: rows.filter((r) => r.pool_id === p.pool_id),
+    }));
+
     const prepareBudgets = async () => {
-        if (!Object.keys(ivDraft).length) { alert("Enter input variables first."); return; }
         setBusy(true);
         try {
-            const { data } = await api.post(`/tournaments/${id}/finance/prepare-budgets`, {
-                input_variables: ivDraft,
-                prepared_by_name: persona?.name || persona?.id,
-            });
+            const body = { prepared_by_name: persona?.name || persona?.id };
+            if (isMultiPool) {
+                // Send per-pool IVs
+                if (!Object.keys(poolIvDrafts).length) { alert("Enter input variables for each pool first."); setBusy(false); return; }
+                body.pool_input_variables = poolIvDrafts;
+                // Also send the global IV as a fallback (uses whatever the last-active pool has)
+                if (Object.keys(ivDraft).length) body.input_variables = ivDraft;
+            } else {
+                if (!Object.keys(ivDraft).length) { alert("Enter input variables first."); setBusy(false); return; }
+                body.input_variables = ivDraft;
+            }
+            const { data } = await api.post(`/tournaments/${id}/finance/prepare-budgets`, body);
             await load();
-            alert(`Prepared ${data.created_count} budget(s). ${data.replaced_count} replaced, ${data.skipped_count} skipped (already in flight).`);
+            alert(`Prepared ${data.created_count} budget(s) across ${data.pool_count || 1} pool(s). ${data.replaced_count} replaced, ${data.skipped_count} skipped.`);
         } catch (e) {
             alert(e?.response?.data?.detail || e.message);
         } finally { setBusy(false); }
@@ -217,6 +242,12 @@ const TournamentFinanceConsole = () => {
                     schemeSpec={schemeSpec}
                     ivDraft={ivDraft}
                     setIvDraft={setIvDraft}
+                    poolIvDrafts={poolIvDrafts}
+                    setPoolIvDrafts={setPoolIvDrafts}
+                    activePoolTab={activePoolTab}
+                    setActivePoolTab={setActivePoolTab}
+                    pools={pools}
+                    isMultiPool={isMultiPool}
                     preview={preview}
                     hostCount={rows.filter((r) => r.role === "Host").length}
                     visitorCount={rows.filter((r) => r.role !== "Host").length}
@@ -292,20 +323,45 @@ const TournamentFinanceConsole = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {hostRow && <MatrixRow r={hostRow} isMPCA={isMPCA} myBody={myBody}
-                                onSend={() => sendOne(hostRow.budget_id)}
-                                onSanction={() => sanctionOne(hostRow.budget_id)}
-                                onAccept={() => divisionAccept(hostRow.budget_id)}
-                                onRevise={() => divisionRequestRevision(hostRow.budget_id)}
-                                busy={busy} />}
-                            {visitorRows.map((r) => (
-                                <MatrixRow key={r.body_code} r={r} isMPCA={isMPCA} myBody={myBody}
-                                    onSend={() => sendOne(r.budget_id)}
-                                    onSanction={() => sanctionOne(r.budget_id)}
-                                    onAccept={() => divisionAccept(r.budget_id)}
-                                    onRevise={() => divisionRequestRevision(r.budget_id)}
-                                    busy={busy} />
-                            ))}
+                            {isMultiPool ? (
+                                // Grouped rendering: one pool subsection at a time
+                                rowsByPool.map(({ pool, rows: poolRows }) => {
+                                    const pHost = poolRows.find((r) => r.role === "Host");
+                                    const pVisitors = poolRows.filter((r) => r.role !== "Host");
+                                    return (
+                                        <PoolGroup
+                                            key={pool.pool_id || "main"}
+                                            pool={pool}
+                                            hostRow={pHost}
+                                            visitorRows={pVisitors}
+                                            isMPCA={isMPCA}
+                                            myBody={myBody}
+                                            onSend={(bid) => sendOne(bid)}
+                                            onSanction={(bid) => sanctionOne(bid)}
+                                            onAccept={(bid) => divisionAccept(bid)}
+                                            onRevise={(bid) => divisionRequestRevision(bid)}
+                                            busy={busy}
+                                        />
+                                    );
+                                })
+                            ) : (
+                                <>
+                                    {hostRow && <MatrixRow r={hostRow} isMPCA={isMPCA} myBody={myBody}
+                                        onSend={() => sendOne(hostRow.budget_id)}
+                                        onSanction={() => sanctionOne(hostRow.budget_id)}
+                                        onAccept={() => divisionAccept(hostRow.budget_id)}
+                                        onRevise={() => divisionRequestRevision(hostRow.budget_id)}
+                                        busy={busy} />}
+                                    {visitorRows.map((r) => (
+                                        <MatrixRow key={r.body_code} r={r} isMPCA={isMPCA} myBody={myBody}
+                                            onSend={() => sendOne(r.budget_id)}
+                                            onSanction={() => sanctionOne(r.budget_id)}
+                                            onAccept={() => divisionAccept(r.budget_id)}
+                                            onRevise={() => divisionRequestRevision(r.budget_id)}
+                                            busy={busy} />
+                                    ))}
+                                </>
+                            )}
                             {rows.length === 0 && (
                                 <tr><td colSpan={9} className="px-3 py-8 text-center text-mpca-gray-dark">
                                     No participating bodies yet. Add participants (Host + Visitors) via the tournament&apos;s Participants Matrix.
@@ -329,7 +385,7 @@ const TournamentFinanceConsole = () => {
 
 // ─────────────────── Prepare Panel (MPCA) ───────────────────
 
-const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, preview, hostCount, visitorCount, onPrepare, busy }) => {
+const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, poolIvDrafts, setPoolIvDrafts, activePoolTab, setActivePoolTab, pools, isMultiPool, preview, hostCount, visitorCount, onPrepare, busy }) => {
     const inputVars = schemeSpec?.input_variables || [];
 
     // Split preview heads into host-flavour vs visitor-flavour (mirrors backend)
@@ -343,7 +399,15 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, preview, ho
     const visitorHeads = heads.filter((h) => isVisitorHead(h.head));
     const hostTotal = hostHeads.reduce((s, h) => s + (h.limit_inr || 0), 0);
     const visitorTotal = visitorHeads.reduce((s, h) => s + (h.limit_inr || 0), 0);
-    const canPrepare = tournament?.scheme_code && heads.length > 0 && hostCount > 0;
+
+    // Per-pool completeness — every real pool must have at least one IV set
+    const activePoolIvs = isMultiPool
+        ? (poolIvDrafts[activePoolTab] || {})
+        : ivDraft;
+    const allPoolsFilled = isMultiPool
+        ? pools.filter((p) => p.pool_id).every((p) => Object.keys(poolIvDrafts[p.pool_id] || {}).length > 0)
+        : Object.keys(ivDraft).length > 0;
+    const canPrepare = tournament?.scheme_code && heads.length > 0 && hostCount > 0 && allPoolsFilled;
 
     if (!tournament?.scheme_code) {
         return (
@@ -362,35 +426,92 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, preview, ho
         );
     }
 
+    const setActivePoolIv = (name, value) => {
+        if (isMultiPool) {
+            setPoolIvDrafts((d) => ({
+                ...d,
+                [activePoolTab]: { ...(d[activePoolTab] || {}), [name]: value },
+            }));
+        } else {
+            setIvDraft((d) => ({ ...d, [name]: value }));
+        }
+    };
+
+    const currentPool = isMultiPool ? pools.find((p) => p.pool_id === activePoolTab) : null;
+
     return (
         <div className="bulletin-card p-6 mb-6" data-testid="fc-prepare-panel">
             <div className="flex items-center gap-2 mb-1">
                 <Calculator size={16} className="text-mpca-brass" />
                 <div className="overline">Step 1 · Prepare Budgets</div>
+                {isMultiPool && (
+                    <span className="ml-2 text-[10px] font-semibold uppercase tracking-widest bg-mpca-navy/10 text-mpca-navy px-2 py-0.5 border border-mpca-navy/30"
+                          data-testid="fc-multi-pool-badge">
+                        Multi-pool · {pools.filter((p) => p.pool_id).length} pools
+                    </span>
+                )}
             </div>
             <h2 className="font-serif text-2xl text-mpca-green-dark">MPCA prepares the budget for this tournament</h2>
             <p className="text-sm text-mpca-gray-dark mt-1">
-                Set the input variables below. The Host budget (full scheme allocation) and Visitor budgets (travel + DA + stay) will be computed <b>separately, no split</b>. Review the two panels, then click Prepare — Drafts get created, ready to send to each Division.
+                {isMultiPool
+                    ? "This tournament has multiple pools with different hosts. Set separate input variables for each pool below (tabs). Each pool's Host budget (full scheme allocation) and Visitor budgets (travel + DA + stay) are computed separately."
+                    : <>Set the input variables below. The Host budget (full scheme allocation) and Visitor budgets (travel + DA + stay) will be computed <b>separately, no split</b>. Review the two panels, then click Prepare — Drafts get created, ready to send to each Division.</>
+                }
             </p>
 
-            {/* IV editor */}
+            {/* Pool tab strip (only for multi-pool) */}
+            {isMultiPool && (
+                <div className="mt-4 flex items-center gap-2 flex-wrap border-b border-mpca-brass/30 pb-2" data-testid="fc-pool-tabs">
+                    {pools.filter((p) => p.pool_id).map((p) => {
+                        const filled = Object.keys(poolIvDrafts[p.pool_id] || {}).length > 0;
+                        const active = p.pool_id === activePoolTab;
+                        return (
+                            <button
+                                key={p.pool_id}
+                                onClick={() => setActivePoolTab(p.pool_id)}
+                                className={`px-3 py-1.5 text-[11px] uppercase tracking-widest font-semibold border-2 ${
+                                    active
+                                        ? "bg-mpca-green-dark text-mpca-parchment border-mpca-green-dark"
+                                        : filled
+                                        ? "bg-mpca-parchment text-mpca-green-dark border-mpca-green-dark/40"
+                                        : "bg-mpca-parchment text-mpca-brass border-mpca-brass/40"
+                                }`}
+                                data-testid={`fc-pool-tab-${p.pool_id}`}
+                            >
+                                {p.pool_name}
+                                <span className="ml-2 text-[9px] opacity-70">
+                                    ({p.member_count} bodies · Host {p.host_body_name || "TBD"})
+                                </span>
+                                {filled && <Check size={10} className="inline ml-1" />}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* IV editor for active pool (or global) */}
             <div className="mt-5">
-                <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-2">Input Variables</div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-2">
+                    Input Variables
+                    {isMultiPool && currentPool && (
+                        <span className="ml-2 text-mpca-navy">· {currentPool.pool_name}</span>
+                    )}
+                </div>
                 {inputVars.length === 0 ? (
                     <div className="text-[11px] text-mpca-gray-dark">This scheme uses defaults — no editable IVs. Click Prepare to proceed.</div>
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {inputVars.map((v) => (
-                            <label key={v.name} className="block">
+                            <label key={v.key || v.name} className="block">
                                 <div className="text-[10px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-1">
-                                    {v.label || v.name}{v.unit && <span className="text-mpca-gray-dark ml-1">({v.unit})</span>}
+                                    {v.label || v.key || v.name}{v.unit && <span className="text-mpca-gray-dark ml-1">({v.unit})</span>}
                                 </div>
                                 <input
                                     type="number"
-                                    value={ivDraft[v.name] ?? v.default ?? 0}
-                                    onChange={(e) => setIvDraft((d) => ({ ...d, [v.name]: parseFloat(e.target.value) || 0 }))}
+                                    value={activePoolIvs[v.key || v.name] ?? v.default ?? 0}
+                                    onChange={(e) => setActivePoolIv(v.key || v.name, parseFloat(e.target.value) || 0)}
                                     className="input-heritage !py-1.5 !text-xs"
-                                    data-testid={`fc-iv-${v.name}`}
+                                    data-testid={`fc-iv-${v.key || v.name}`}
                                 />
                             </label>
                         ))}
@@ -401,16 +522,20 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, preview, ho
             {/* Two-panel preview: Host vs Visitors */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <BudgetPreviewPanel
-                    title="Host Budget"
-                    subtitle={`${hostCount} host body`}
+                    title={isMultiPool && currentPool ? `Host Budget · ${currentPool.pool_name}` : "Host Budget"}
+                    subtitle={isMultiPool && currentPool
+                        ? `Host: ${currentPool.host_body_name || currentPool.host_body_code || "TBD"}`
+                        : `${hostCount} host body`}
                     icon={Building2}
                     heads={hostHeads}
                     total={hostTotal}
                     tone="green"
                 />
                 <BudgetPreviewPanel
-                    title="Visitor Budget (per body)"
-                    subtitle={`× ${visitorCount} visiting bodies`}
+                    title={isMultiPool && currentPool ? `Visitor Budget · ${currentPool.pool_name}` : "Visitor Budget (per body)"}
+                    subtitle={isMultiPool && currentPool
+                        ? `× ${Math.max(0, currentPool.member_count - 1)} visitors in this pool`
+                        : `× ${visitorCount} visiting bodies`}
                     icon={Users}
                     heads={visitorHeads}
                     total={visitorTotal}
@@ -420,7 +545,10 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, preview, ho
 
             <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
                 <div className="text-[11px] text-mpca-gray-dark">
-                    Total outlay if all budgets sanctioned: <b className="text-mpca-oxblood">{fmt(hostTotal + visitorTotal * visitorCount)}</b>
+                    {isMultiPool
+                        ? `Fill IVs on every pool tab. ${pools.filter((p) => p.pool_id && Object.keys(poolIvDrafts[p.pool_id] || {}).length > 0).length} / ${pools.filter((p) => p.pool_id).length} pools filled.`
+                        : <>Total outlay if all budgets sanctioned: <b className="text-mpca-oxblood">{fmt(hostTotal + visitorTotal * visitorCount)}</b></>
+                    }
                 </div>
                 <button
                     onClick={onPrepare}
@@ -429,7 +557,7 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, preview, ho
                     data-testid="fc-prepare-btn"
                 >
                     {busy ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
-                    Prepare Budgets
+                    Prepare {isMultiPool ? "All Pools" : "Budgets"}
                     <ArrowRight size={14} />
                 </button>
             </div>
@@ -465,6 +593,47 @@ const BudgetPreviewPanel = ({ title, subtitle, icon: Icon, heads, total, tone })
                 <span className="font-mono text-mpca-oxblood">{fmt(total)}</span>
             </div>
         </div>
+    );
+};
+
+// ─────────────────── Pool Group (multi-pool matrix) ───────────────────
+
+const PoolGroup = ({ pool, hostRow, visitorRows, isMPCA, myBody, onSend, onSanction, onAccept, onRevise, busy }) => {
+    const memberCount = (hostRow ? 1 : 0) + visitorRows.length;
+    return (
+        <>
+            <tr className="bg-mpca-navy/5 border-y-2 border-mpca-navy/30" data-testid={`fc-pool-group-${pool.pool_id || "main"}`}>
+                <td colSpan={9} className="px-3 py-2">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <span className="font-serif text-mpca-navy font-semibold text-base">{pool.pool_name || "Main"}</span>
+                        <span className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">
+                            Host: {pool.host_body_name || pool.host_body_code || "TBD"}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">
+                            · {memberCount} {memberCount === 1 ? "body" : "bodies"}
+                        </span>
+                        <span className="ml-auto text-[10px] uppercase tracking-widest text-mpca-oxblood font-mono">
+                            Pool total: {fmt(pool.budget_total_inr)}
+                            {pool.approved_total_inr > 0 && <> · Sanctioned {fmt(pool.approved_total_inr)}</>}
+                        </span>
+                    </div>
+                </td>
+            </tr>
+            {hostRow && <MatrixRow r={hostRow} isMPCA={isMPCA} myBody={myBody}
+                onSend={() => onSend(hostRow.budget_id)}
+                onSanction={() => onSanction(hostRow.budget_id)}
+                onAccept={() => onAccept(hostRow.budget_id)}
+                onRevise={() => onRevise(hostRow.budget_id)}
+                busy={busy} />}
+            {visitorRows.map((r) => (
+                <MatrixRow key={r.body_code + (r.pool_id || "")} r={r} isMPCA={isMPCA} myBody={myBody}
+                    onSend={() => onSend(r.budget_id)}
+                    onSanction={() => onSanction(r.budget_id)}
+                    onAccept={() => onAccept(r.budget_id)}
+                    onRevise={() => onRevise(r.budget_id)}
+                    busy={busy} />
+            ))}
+        </>
     );
 };
 

@@ -26,6 +26,7 @@ import { Wallet, ArrowRight, Sliders, Receipt, ScrollText, Activity, HandCoins, 
 import MatchOfficialDAPanel from "@/components/MatchOfficialDAPanel";
 import TournamentActivityLog from "@/components/TournamentActivityLog";
 import DiscussionThread from "@/components/DiscussionThread";
+import TournamentFinanceCard from "@/components/TournamentFinanceCard";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
@@ -214,7 +215,6 @@ const TournamentDetail = () => {
                         <>
                             <SetupBox testId="box-participants" icon={UsersRound} label="Participants Matrix" note={(() => { const pools = (t.setup_meta?.division_pools || []).concat(t.setup_meta?.district_pools || []); const totalCodes = pools.flatMap(p => p.division_codes || p.district_codes || []).length; return pools.length ? `${totalCodes} bodies · ${pools.length} pool(s)` : "Set pools first"; })()} onClick={() => setOpenBox(openBox === "participants" ? null : "participants")} active={openBox === "participants"} />
                             <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} />
-                            <SetupBox testId="box-input-vars" icon={Sliders} label="Input Variables" note={Object.keys(t.input_variables || {}).length ? `Filled · ${Object.keys(t.input_variables).length} vars set` : "Not filled · MPCA action pending"} onClick={() => setOpenBox(openBox === "input-vars" ? null : "input-vars")} active={openBox === "input-vars"} />
                             <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
                             <SetupBox testId="box-squad" icon={Users} label="Squad Selection" note={persona?.body_type === "Division" || persona?.body_type === "District" ? `My body · ${persona?.body_code}` : (squads.length ? `${squads.length} squad(s)` : "Not started")} onClick={() => {
                                 // M34 · Unified squad screen — everyone lands on SquadDetail now.
@@ -228,11 +228,8 @@ const TournamentDetail = () => {
                                 if (existing) navigate(`/squads/${existing.id}`);
                                 else navigate(`/tournaments/${id}/squads/new?body=${targetBody}`);
                             }} />
-                            <SetupBox testId="box-budget" icon={Wallet} label="Budget & Extras" note="Draft budgets · per body" onClick={() => setOpenBox(openBox === "budget" ? null : "budget")} active={openBox === "budget"} />
-                            <SetupBox testId="box-invoices" icon={Receipt} label="Invoices + DA Forms" note="Uploaded, extracted, approved" onClick={() => setOpenBox(openBox === "invoices" ? null : "invoices")} active={openBox === "invoices"} />
-                            <SetupBox testId="box-summary" icon={Activity} label="Financial Summary" note="Auto-rollup" onClick={() => setOpenBox(openBox === "summary" ? null : "summary")} active={openBox === "summary"} />
-                            <SetupBox testId="box-receipts" icon={HandCoins} label="MPCA Receipts" note="Payments received" onClick={() => setOpenBox(openBox === "receipts" ? null : "receipts")} active={openBox === "receipts"} />
-                            <SetupBox testId="box-closure" icon={ScrollText} label="Closure Letter" note={t.closure_letter_generated_at ? "Issued" : "Not issued"} onClick={() => setOpenBox(openBox === "closure" ? null : "closure")} active={openBox === "closure"} />
+                            {/* M39t · Consolidated Finance action card — replaces the 6 individual finance boxes */}
+                            <TournamentFinanceCard tournament={t} persona={persona} />
                             <SetupBox testId="box-activity" icon={History} label="Activity Log" note="Chronological trail of all actions" onClick={() => setOpenBox(openBox === "activity" ? null : "activity")} active={openBox === "activity"} />
                             <SetupBox testId="box-discussion" icon={MessageSquare} label="Discussion" note="MPCA · Division chat for this tournament" onClick={() => setOpenBox(openBox === "discussion" ? null : "discussion")} active={openBox === "discussion"} />
                         </>

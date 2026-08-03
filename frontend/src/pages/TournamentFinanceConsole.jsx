@@ -61,6 +61,13 @@ const TournamentFinanceConsole = () => {
     const [activePoolTab, setActivePoolTab] = useState(null);    // M39s · currently editing pool
     const [preview, setPreview] = useState(null);
     const [activeTab, setActiveTab] = useState("pipeline");   // M39u · tabbed sections
+    // M39y · Divisions land straight on Budgets & Extras since Pipeline is MPCA-only.
+    useEffect(() => {
+        if (persona?.body_type && persona.body_type !== "State" && activeTab === "pipeline") {
+            setActiveTab("budgets");
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [persona?.body_type]);
     const [perBodyOverrides, setPerBodyOverrides] = useState({});   // M39w · MPCA per-body head overrides
     const [showOverrides, setShowOverrides] = useState(false);
 
@@ -313,7 +320,7 @@ const TournamentFinanceConsole = () => {
             {anyBudgetsExist && (
                 <div className="mb-4 flex items-center gap-1 border-b border-mpca-brass/30 overflow-x-auto" data-testid="fc-tabs">
                     {[
-                        { id: "pipeline",  label: "Pipeline",         icon: LayoutGrid, show: true },
+                        { id: "pipeline",  label: "Pipeline",         icon: LayoutGrid, show: isMPCA },
                         { id: "budgets",   label: "Budgets & Extras", icon: Wallet,     show: true },
                         { id: "invoices",  label: "Invoices",         icon: Receipt,    show: true },
                         { id: "da",        label: "DA / TA Forms",    icon: ClipboardEdit, show: true },

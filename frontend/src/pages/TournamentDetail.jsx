@@ -316,7 +316,7 @@ const TournamentDetail = () => {
                     )}
                 </div>
                 {openBox === "basics" && (
-                    <div className="mt-4"><TournamentBasicsPanel tournament={t} canEdit={canEdit || persona?.body_type === "Division"} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div className="mt-4"><TournamentBasicsPanel tournament={t} canEdit={canEdit || persona?.body_code === t.host_body_id} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "participants" && (
                     <div className="mt-4"><ParticipantsMatrix tournament={t} persona={persona} canManage={canEdit} onChange={() => { refreshProgress(); load(); }} /></div>
@@ -328,7 +328,7 @@ const TournamentDetail = () => {
                     <div className="mt-4"><InputVariablesPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "calendar" && (
-                    <div className="mt-4"><MatchCalendarPanel tournament={t} canEdit={canEdit || persona?.body_type === "Division"} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div className="mt-4"><MatchCalendarPanel tournament={t} canEdit={canEdit || persona?.body_code === t.host_body_id} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "budget" && (
                     <div className="mt-4"><TournamentBudgetsPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>

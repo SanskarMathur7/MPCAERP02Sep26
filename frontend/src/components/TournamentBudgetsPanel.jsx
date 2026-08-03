@@ -84,11 +84,6 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange }) => {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    {!isMPCA && myBody && !budgets.some((b) => ["Draft", "Submitted", "Approved", "Returned"].includes(b.status)) && (
-                        <button onClick={generateForMe} disabled={submitting === "generate"} className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="tb-generate-mine-btn">
-                            {submitting === "generate" ? <Loader2 size={11} className="animate-spin" /> : <PlusCircle size={11} />} Generate My Budget
-                        </button>
-                    )}
                     <Link to={`/tournaments/${tournament.id}/finance`} className="text-[10px] uppercase tracking-widest text-mpca-brass hover:text-mpca-oxblood inline-flex items-center gap-1" data-testid="tb-open-full-btn">
                         Full Finance Screen <ArrowRight size={10} />
                     </Link>
@@ -100,14 +95,15 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange }) => {
             ) : budgets.length === 0 ? (
                 <div className="py-8 text-center border border-dashed border-mpca-brass/30 text-[11px] text-mpca-gray-dark italic" data-testid="tb-empty">
                     {isMPCA
-                        ? "No budgets yet. Set the tournament Input Variables and click Auto-Split, or wait for participating bodies to generate theirs."
-                        : "You don't have a budget for this tournament yet. Click 'Generate My Budget' to create one from your input variables."}
+                        ? "No budgets yet. Set the tournament Input Variables and click Prepare on the Finance Console."
+                        : "MPCA has not sent you a budget yet. You'll be notified in the Action Centre once your budget is ready to accept."}
                 </div>
             ) : (
                 <div className="divide-y divide-mpca-brass/15" data-testid="tb-list">
                     {budgets.map((b) => {
                         const isMine = b.body_id === myBody;
-                        const canSubmit = (isMine || isMPCA) && ["Draft", "Returned"].includes(b.status);
+                        // M39y · Divisions no longer submit budgets — that's MPCA's job. Only allow Submit if MPCA is viewing a legacy Draft.
+                        const canSubmit = isMPCA && ["Draft", "Returned"].includes(b.status);
                         return (
                             <div key={b.id} className="grid grid-cols-12 items-center gap-3 py-3 text-xs" data-testid={`tb-row-${b.id}`}>
                                 <div className="col-span-3 min-w-0">

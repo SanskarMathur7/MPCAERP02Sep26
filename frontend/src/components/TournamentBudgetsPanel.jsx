@@ -5,12 +5,18 @@ import { api } from "@/lib/api";
 
 const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 
+// M39v · Higher-contrast pills. Every pill uses a dark text colour on a
+// tinted background so it's legible on the mpca-parchment sheet.
 const STATUS_TONE = {
-    Draft: "bg-mpca-brass/15 text-mpca-brass border-mpca-brass/40",
-    Submitted: "bg-mpca-navy/15 text-mpca-navy border-mpca-navy/40",
-    Approved: "bg-mpca-green-dark/15 text-mpca-green-dark border-mpca-green-dark/40",
-    Rejected: "bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/40",
-    Returned: "bg-mpca-brass/15 text-mpca-brass border-mpca-brass/40",
+    Draft:                "bg-mpca-brass/25 text-mpca-green-dark border-mpca-brass",
+    Submitted:            "bg-mpca-navy/20 text-mpca-navy border-mpca-navy/60",
+    Approved:             "bg-mpca-green-dark/20 text-mpca-green-dark border-mpca-green-dark/60",
+    Rejected:             "bg-mpca-oxblood/20 text-mpca-oxblood border-mpca-oxblood/60",
+    Returned:             "bg-mpca-brass/25 text-mpca-green-dark border-mpca-brass",
+    // M39r · new console states
+    Sent_To_Division:     "bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/60",
+    Accepted_By_Division: "bg-mpca-navy/20 text-mpca-navy border-mpca-navy/60",
+    Revision_Requested:   "bg-mpca-oxblood/20 text-mpca-oxblood border-mpca-oxblood",
 };
 
 /**
@@ -105,30 +111,30 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange }) => {
                         return (
                             <div key={b.id} className="grid grid-cols-12 items-center gap-3 py-3 text-xs" data-testid={`tb-row-${b.id}`}>
                                 <div className="col-span-3 min-w-0">
-                                    <div className="font-serif text-mpca-green-dark truncate">{b.body_name || b.body_id}</div>
-                                    <div className="text-[9px] font-mono text-mpca-brass truncate">{b.budget_no}</div>
+                                    <div className="font-serif text-sm text-mpca-green-dark truncate">{b.body_name || b.body_id}</div>
+                                    <div className="text-[10px] font-mono text-mpca-charcoal/70 truncate">{b.budget_no}</div>
                                 </div>
                                 <div className="col-span-2">
-                                    <span className={`text-[9px] uppercase tracking-widest px-1.5 py-0.5 border ${STATUS_TONE[b.status] || "bg-mpca-brass/10 text-mpca-brass border-mpca-brass/40"}`}>
-                                        {b.status}
+                                    <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 border-2 ${STATUS_TONE[b.status] || "bg-mpca-brass/25 text-mpca-green-dark border-mpca-brass"}`}>
+                                        {(b.status || "").replace(/_/g, " ")}
                                     </span>
                                 </div>
                                 <div className="col-span-3 text-right font-mono">
-                                    <div className="text-mpca-oxblood">{fmt(b.total_ceiling_inr)}</div>
-                                    <div className="text-[9px] text-mpca-gray-dark">{(b.head_allocations || []).length} heads</div>
+                                    <div className="text-sm font-semibold text-mpca-oxblood">{fmt(b.total_ceiling_inr)}</div>
+                                    <div className="text-[10px] text-mpca-gray-dark">{(b.head_allocations || []).length} heads</div>
                                 </div>
-                                <div className="col-span-4 flex justify-end gap-1">
+                                <div className="col-span-4 flex justify-end gap-1.5">
                                     {canSubmit && (
-                                        <button onClick={() => submitToMpca(b)} disabled={submitting === b.id} className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 disabled:opacity-40" data-testid={`tb-submit-${b.id}`}>
+                                        <button onClick={() => submitToMpca(b)} disabled={submitting === b.id} className="text-[10px] font-semibold uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2.5 py-1.5 disabled:opacity-40 hover:bg-mpca-oxblood/90" data-testid={`tb-submit-${b.id}`}>
                                             {submitting === b.id ? <Loader2 size={10} className="animate-spin inline" /> : <Send size={10} className="inline mr-0.5" />} Submit
                                         </button>
                                     )}
                                     {isMPCA && b.status === "Submitted" && (
-                                        <Link to={`/tournaments/${tournament.id}/finance`} className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory px-2 py-1 inline-flex items-center gap-0.5" data-testid={`tb-review-${b.id}`}>
+                                        <Link to={`/tournaments/${tournament.id}/finance`} className="text-[10px] font-semibold uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory px-2.5 py-1.5 inline-flex items-center gap-0.5 hover:bg-mpca-green-dark/90" data-testid={`tb-review-${b.id}`}>
                                             Review <ArrowRight size={10} />
                                         </Link>
                                     )}
-                                    <Link to={`/tournaments/${tournament.id}/finance`} className="text-[10px] uppercase tracking-widest text-mpca-brass hover:text-mpca-oxblood px-2 py-1 border border-mpca-brass/40" data-testid={`tb-open-${b.id}`}>
+                                    <Link to={`/tournaments/${tournament.id}/finance`} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors" data-testid={`tb-open-${b.id}`}>
                                         Open
                                     </Link>
                                 </div>

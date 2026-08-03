@@ -16,7 +16,8 @@
         --mpca-green-light: #163558;
         --mpca-oxblood: #ff6a13;        /* Saffron */
         --mpca-burgundy-dark: #7a1f2c;  /* Maroon */
-        --mpca-brass: #e9b949;          /* Marigold */
+        --mpca-brass: #b8860b;          /* Dark goldenrod — legible on cream, still gold on dark */
+        --mpca-brass-light: #e9b949;    /* Original marigold, kept for accents/backgrounds */
         --mpca-gold: #d4a017;
         --mpca-gold-light: #f6d97a;
         --mpca-ivory: #fbf7ed;          /* Warm cream */

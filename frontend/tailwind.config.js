@@ -23,7 +23,8 @@ module.exports = {
                 "mpca-green-light": "#163558",    // Navy-3
                 "mpca-oxblood": "#ff6a13",        // Indian Saffron (high-pop accent)
                 "mpca-burgundy-dark": "#7a1f2c",  // Maroon
-                "mpca-brass": "#e9b949",          // Marigold (primary metallic)
+                "mpca-brass": "#b8860b",          // Dark goldenrod (legible on cream)
+                "mpca-brass-light": "#e9b949",   // Original marigold — for backgrounds/accents on dark
                 "mpca-gold": "#d4a017",           // Marigold-Deep
                 "mpca-gold-light": "#f6d97a",     // Marigold-Light
                 "mpca-ivory": "#fbf7ed",          // Warm Cream

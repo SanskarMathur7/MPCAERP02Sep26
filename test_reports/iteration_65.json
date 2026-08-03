@@ -1,0 +1,25 @@
+{
+  "summary": "M39z · Verified auto-sanction on Division Accept + new Finance Console tabs (Extras, Invoices, DA/TA, Actuals, Claims, Receipts, Closure). Backend pytest 11/11 GREEN. Frontend UI verified across MPCA + Division personas — 9 tabs for MPCA, 6 tabs for Division, DivisionBudgetCard renders all three states (Sent_To_Division shows 'Accept & Sanction' + Request Revision + italic hint 'MPCA authored this budget — accepting sanctions it immediately and unlocks spending.'; Approved shows 'Sanctioned · you may now upload invoices, DA/TA & claims'; Revision_Requested legacy transitional message). Extras tab opens new-eer-dialog on button click. Claims tab renders claims-panel with claims-empty + claims-open-legacy-btn 'Start Claim'. Privacy scoping honoured — Division caller cannot see other body's budget_total_inr in matrix.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_m39z_auto_sanction.py",
+    "/app/test_reports/pytest/m39z_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "division_accept endpoint (finance_console.py:372-438) correctly copies proposed → approved fields, sets both division_accepted_* and sanctioned_* stamps in one write, and appends a single approval_chain step (stage=Approved, decision=Sanctioned). Idempotent by 409 on non-Sent_To_Division status.",
+    "Scope guard at line 390-391 correctly allows MPCA header as override — verified programmatically. Body_id defaults to doc's body_id when payload omits actor_body_id.",
+    "Legacy /sanction endpoint retained (line 481) — returns 409 on Sent_To_Division and Approved (verified). Still callable for stuck Accepted_By_Division docs.",
+    "DivisionBudgetCard hint text is a nice UX cue — makes the ‘why is my Accept also a Sanction?’ signal explicit. Good.",
+    "ClaimsPanel — 'Start Claim' routes to legacy Finance view for signing; consider surfacing an inline draft form eventually so Divisions don’t bounce between two console layouts.",
+    "TournamentFinanceConsole.jsx has grown to 1095 lines with 4+ subcomponents in-file (ClaimsPanel, DivisionBudgetCard, MatrixRow, ExtraExpenseTab). Consider splitting into /pages/finance/*.jsx modules per component for maintainability (>700 line rule)."
+  ],
+  "updated_files": ["/app/backend/tests/test_m39z_auto_sanction.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (9 tabs MPCA, 6 tabs Division, all data-testids present + interactive)"},
+  "test_credentials": "persona-chip-secretary (MPCA), persona-chip-division-secretary (DIV-IND), persona-chip-division-secretary-gwl (DIV-GWL). Tested by injecting localStorage 'mpca_persona' JSON directly — also works for synthetic bodies (used DIV-NMD).",
+  "seed_data_creation": "Consumed several Sent_To_Division rows in tournament 1c60fc28 while testing: DIV-GWL and DIV-SHD auto-sanctioned to Approved; DIV-IND, DIV-CHM, DIV-BPL, DIV-RWA transitioned to Revision_Requested. DIV-NMD/DIV-SAG/DIV-UJN still Sent_To_Division at end of run. To re-exercise Accept & Sanction UI, main agent can re-prepare or re-send those DIV budgets.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Madhavrao Scindia Trophy (1c60fc28-c2ec-43a0-ab79-165e93e80e9f) currently has DIV-JBP, DIV-GWL, DIV-SHD as Approved; DIV-BPL, DIV-RWA, DIV-CHM, DIV-IND as Revision_Requested; DIV-NMD, DIV-SAG, DIV-UJN as Sent_To_Division. To simulate a synthetic Division persona for a body without a seeded persona chip, inject localStorage 'mpca_persona' JSON with matching body_code — this is what our test used for DIV-NMD."
+}

@@ -9,15 +9,18 @@ cleaner MPCA-owned flow that matters more for a state cricket association:
      DA + stay + contingency). Both are private Drafts on MPCA's console.
   3. MPCA hits Send — every Draft budget flips to Sent_To_Division. Divisions
      see an Action Centre card ("Budget received · needs your acceptance").
-  4. Division taps Accept → status Accepted_By_Division.
+  4. Division taps Accept → status Approved (M39z: auto-sanction; MPCA
+     already authored the ceiling so a second MPCA click adds friction only).
      Or taps Request Revision (with a reason) → status Revision_Requested,
      back to MPCA for edits and re-send.
-  5. MPCA taps Sanction on an Accepted_By_Division budget → status Approved
-     (this is the terminal state; invoices/DA/claim spending unlocks).
+  5. Terminal state Approved unlocks invoice / DA / claim spending.
 
 State machine:
-    Draft ─send─▶ Sent_To_Division ─div-accept─▶ Accepted_By_Division ─mpca-sanction─▶ Approved
+    Draft ─send─▶ Sent_To_Division ─div-accept─▶ Approved  (M39z: auto-sanction)
                                   └─request-revision─▶ Revision_Requested ─(re-send)─▶ Sent_To_Division
+
+Legacy note: the old `/sanction` endpoint remains for pre-M39z docs stuck
+in the transitional `Accepted_By_Division` state — new acceptances skip it.
 
 The old submit/approve/return/reject endpoints are preserved for backward
 compatibility (existing tournaments in flight keep working); this console
@@ -369,7 +372,13 @@ async def send_budgets(tid: str, payload: SendPayload):
 @api_router.post("/tournament-budgets/{bid}/division-accept", response_model=TournamentBudget)
 async def division_accept(bid: str, payload: DivisionAcceptPayload,
                           x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code")):
-    """Division taps Accept on the MPCA-sent budget."""
+    """Division taps Accept on the MPCA-sent budget.
+
+    M39z · Since MPCA authored the budget in the first place, a separate
+    MPCA sanction step adds friction with no signal. Division acceptance
+    now transitions **directly to Approved** (terminal): the proposed
+    total & head allocations are copied into the approved fields, and
+    spending unlocks immediately."""
     doc = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Budget not found")
@@ -382,26 +391,46 @@ async def division_accept(bid: str, payload: DivisionAcceptPayload,
         raise HTTPException(403, f"Only {body_id} can accept this budget.")
 
     now = datetime.now(timezone.utc).isoformat()
+    proposed_total = float(doc.get("total_ceiling_inr") or 0)
+    proposed_heads = list(doc.get("head_allocations") or [])
+
     step = ApprovalStep(
-        stage="Accepted_By_Division",
+        stage="Approved",
         actor_post=payload.actor_post or "Division_Secretary",
         actor_name=payload.actor_name,
         actor_body_id=payload.actor_body_id or body_id,
-        decision="Recommended",
-        notes=payload.notes,
+        decision="Sanctioned",
+        notes=(payload.notes or
+               f"Accepted by {body_id} · auto-sanctioned ₹{proposed_total:,.0f}."),
     )
-    upd = _append_chain(doc, step, "Accepted_By_Division")
+    upd = _append_chain(doc, step, "Approved")
     upd["division_accepted_by"] = payload.actor_name
     upd["division_accepted_at"] = now
+    # Auto-sanction: copy proposed → approved
+    upd["approved_total_inr"] = proposed_total
+    upd["approved_head_allocations"] = proposed_heads
+    upd["sanctioned_by"] = payload.actor_name
+    upd["sanctioned_at"] = now
     await db.tournament_budgets.update_one({"id": bid}, {"$set": upd})
 
-    # Notify MPCA — waiting for final sanction
+    # Notify Division — budget is now sanctioned & spending unlocked
+    await _push_notification(
+        recipient_body_id=body_id,
+        recipient_role_id="secretary",
+        title=f"Budget SANCTIONED · {doc.get('tournament_name')}",
+        message=(f"₹{proposed_total:,.0f} sanctioned on your acceptance. "
+                 f"You may now upload invoices and DA/TA claims."),
+        link=f"/tournament-budgets/{bid}",
+        related_type="tournament_budget", related_id=bid,
+        severity="info", kind="info",
+    )
+    # Also inform MPCA for record-keeping
     await _push_notification(
         recipient_body_id="MPCA",
         recipient_role_id="secretary",
-        title=f"Budget accepted by {body_id}",
+        title=f"Budget accepted & sanctioned · {body_id}",
         message=(f"{doc.get('body_name') or body_id} accepted the budget for "
-                 f"'{doc.get('tournament_name')}'. Awaiting your final sanction."),
+                 f"'{doc.get('tournament_name')}' — auto-sanctioned ₹{proposed_total:,.0f}."),
         link=f"/tournament-budgets/{bid}",
         related_type="tournament_budget", related_id=bid,
         severity="info", kind="info",

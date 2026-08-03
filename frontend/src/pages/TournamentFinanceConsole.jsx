@@ -5,6 +5,7 @@ import {
     ArrowRight, CheckCircle2, Circle, Loader2, ShieldCheck, PackageOpen,
     Calculator, Wallet, ClipboardCheck, ChevronRight, MessagesSquare,
     Receipt, Activity, HandCoins, ScrollText, ClipboardEdit, LayoutGrid,
+    Gavel, FileSignature,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -15,6 +16,7 @@ import MatchOfficialDAPanel from "@/components/MatchOfficialDAPanel";
 import {
     TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
 } from "@/components/TournamentWorkspacePanels";
+import { ExtraExpenseTab } from "@/pages/TournamentOps";
 
 /** M39r · Tournament Finance Console
  * ────────────────────────────────────
@@ -29,6 +31,7 @@ const STATUS_META = {
     "None":                  { label: "Not prepared",       tone: "bg-mpca-gray-light text-mpca-gray-dark border-mpca-gray/30" },
     "Draft":                 { label: "Draft · not sent",   tone: "bg-mpca-brass/15 text-mpca-brass border-mpca-brass/40" },
     "Sent_To_Division":      { label: "Awaiting Division",  tone: "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40" },
+    // M39z · legacy transitional state — new acceptances go straight to Approved.
     "Accepted_By_Division":  { label: "Accepted · awaits sanction", tone: "bg-mpca-navy/10 text-mpca-navy border-mpca-navy/40" },
     "Revision_Requested":    { label: "Revision requested", tone: "bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/50" },
     "Approved":              { label: "Sanctioned",         tone: "bg-mpca-green-dark/10 text-mpca-green-dark border-mpca-green-dark/40" },
@@ -199,7 +202,12 @@ const TournamentFinanceConsole = () => {
     };
 
     const divisionAccept = async (budget_id) => {
-        if (!window.confirm("Accept this budget from MPCA?")) return;
+        if (!window.confirm(
+            "Accept this budget?\n\n"
+            + "Since MPCA prepared this budget for you, accepting will sanction "
+            + "it immediately — invoices and DA/TA claims will unlock right away.\n\n"
+            + "If any figure looks wrong, tap Request Revision instead."
+        )) return;
         setBusy(true);
         try {
             await api.post(`/tournament-budgets/${budget_id}/division-accept`, {
@@ -293,8 +301,8 @@ const TournamentFinanceConsole = () => {
                         </div>
                     )}
                     {anyAccepted && (
-                        <div className="text-[11px] text-mpca-green-dark flex items-center gap-1">
-                            <ShieldCheck size={12} /> {rows.filter((r) => r.budget_status === "Accepted_By_Division").length} awaiting your sanction.
+                        <div className="text-[11px] text-mpca-navy flex items-center gap-1">
+                            <ShieldCheck size={12} /> {rows.filter((r) => r.budget_status === "Accepted_By_Division").length} legacy budget(s) still awaiting manual sanction — new acceptances auto-sanction.
                         </div>
                     )}
                     <button onClick={() => { setIvDraft(matrix.input_variables || {}); prepareBudgets(); }}
@@ -320,13 +328,15 @@ const TournamentFinanceConsole = () => {
             {anyBudgetsExist && (
                 <div className="mb-4 flex items-center gap-1 border-b border-mpca-brass/30 overflow-x-auto" data-testid="fc-tabs">
                     {[
-                        { id: "pipeline",  label: "Pipeline",         icon: LayoutGrid, show: isMPCA },
-                        { id: "budgets",   label: "Budgets & Extras", icon: Wallet,     show: true },
-                        { id: "invoices",  label: "Invoices",         icon: Receipt,    show: true },
+                        { id: "pipeline",  label: "Pipeline",         icon: LayoutGrid,    show: isMPCA },
+                        { id: "budgets",   label: "Budgets",          icon: Wallet,        show: true },
+                        { id: "extras",    label: "Extras",           icon: Gavel,         show: true },
+                        { id: "invoices",  label: "Invoices",         icon: Receipt,       show: true },
                         { id: "da",        label: "DA / TA Forms",    icon: ClipboardEdit, show: true },
-                        { id: "actuals",   label: "Actuals vs Budget",icon: Activity,   show: true },
-                        { id: "receipts",  label: "MPCA Receipts",    icon: HandCoins,  show: isMPCA },
-                        { id: "closure",   label: "Closure Letter",   icon: ScrollText, show: isMPCA },
+                        { id: "actuals",   label: "Actuals vs Budget",icon: Activity,      show: true },
+                        { id: "claims",    label: "Reimbursement Claim", icon: FileSignature, show: true },
+                        { id: "receipts",  label: "MPCA Receipts",    icon: HandCoins,     show: isMPCA },
+                        { id: "closure",   label: "Closure Letter",   icon: ScrollText,    show: isMPCA },
                     ].filter((t) => t.show).map((t) => {
                         const Icon = t.icon;
                         const active = activeTab === t.id;
@@ -430,6 +440,11 @@ const TournamentFinanceConsole = () => {
                     <TournamentBudgetsPanel tournament={tournament} persona={persona} onChange={load} />
                 </div>
             )}
+            {activeTab === "extras" && (
+                <div className="bulletin-card p-4" data-testid="fc-tab-extras-panel">
+                    <ExtraExpenseTab tournament={tournament} persona={persona} onChanged={load} />
+                </div>
+            )}
             {activeTab === "invoices" && (
                 <div className="bulletin-card p-4" data-testid="fc-tab-invoices-panel">
                     <TournamentInvoicesPanel tournament={tournament} persona={persona} />
@@ -443,6 +458,11 @@ const TournamentFinanceConsole = () => {
             {activeTab === "actuals" && (
                 <div className="bulletin-card p-4" data-testid="fc-tab-actuals-panel">
                     <FinancialSummaryPanel tournament={tournament} />
+                </div>
+            )}
+            {activeTab === "claims" && (
+                <div className="bulletin-card p-4" data-testid="fc-tab-claims-panel">
+                    <ClaimsPanel tournament={tournament} persona={persona} />
                 </div>
             )}
             {activeTab === "receipts" && isMPCA && (
@@ -884,7 +904,7 @@ const MatrixRow = ({ r, isMPCA, myBody, onSend, onSanction, onAccept, onRevise, 
                     <>
                         <button onClick={onAccept} disabled={busy} className="text-[10px] uppercase tracking-widest px-2 py-1 bg-mpca-green-dark/10 text-mpca-green-dark border border-mpca-green-dark/40 hover:bg-mpca-green-dark/20 mr-1"
                             data-testid={`fc-accept-${r.body_code}`}>
-                            <Check size={10} className="inline mr-1" />Accept
+                            <Check size={10} className="inline mr-1" />Accept &amp; Sanction
                         </button>
                         <button onClick={onRevise} disabled={busy} className="text-[10px] uppercase tracking-widest px-2 py-1 bg-mpca-oxblood/10 text-mpca-oxblood border border-mpca-oxblood/40 hover:bg-mpca-oxblood/20"
                             data-testid={`fc-revise-${r.body_code}`}>
@@ -920,7 +940,7 @@ const DivisionBudgetCard = ({ row, onAccept, onRequestRevision, busy }) => {
         );
     }
     const canAct = row.budget_status === "Sent_To_Division";
-    const isAwaitingSanction = row.budget_status === "Accepted_By_Division";
+    const isAwaitingSanction = row.budget_status === "Accepted_By_Division";   // legacy transitional
     const isRevisionRequested = row.budget_status === "Revision_Requested";
     const isSanctioned = row.budget_status === "Approved";
 
@@ -940,20 +960,27 @@ const DivisionBudgetCard = ({ row, onAccept, onRequestRevision, busy }) => {
                         <>
                             <button onClick={onAccept} disabled={busy}
                                 className="btn-heritage flex items-center gap-2" data-testid="fc-div-accept-btn">
-                                <Check size={14} /> Accept Budget
+                                <Check size={14} /> Accept &amp; Sanction
                             </button>
                             <button onClick={onRequestRevision} disabled={busy}
                                 className="btn-heritage-secondary flex items-center gap-2 !border-mpca-oxblood !text-mpca-oxblood"
                                 data-testid="fc-div-revise-btn">
                                 <RotateCcw size={14} /> Request Revision
                             </button>
+                            <div className="text-[10px] text-mpca-gray-dark max-w-[220px] text-right leading-tight italic">
+                                MPCA authored this budget — accepting sanctions it immediately and unlocks spending.
+                            </div>
                         </>
                     )}
-                    {isAwaitingSanction && <div className="text-[11px] text-mpca-navy">Awaiting MPCA sanction…</div>}
+                    {isAwaitingSanction && (
+                        <div className="text-[11px] text-mpca-navy max-w-[220px] text-right italic">
+                            Legacy state · this budget was accepted under the old flow and is awaiting MPCA&apos;s manual sanction.
+                        </div>
+                    )}
                     {isRevisionRequested && <div className="text-[11px] text-mpca-oxblood">MPCA notified · awaiting revision</div>}
                     {isSanctioned && (
                         <div className="text-[11px] text-mpca-green-dark flex items-center gap-1">
-                            <CheckCircle2 size={12} /> Sanctioned · you may now upload invoices
+                            <CheckCircle2 size={12} /> Sanctioned · you may now upload invoices, DA/TA & claims
                         </div>
                     )}
                 </div>
@@ -963,3 +990,105 @@ const DivisionBudgetCard = ({ row, onAccept, onRequestRevision, busy }) => {
 };
 
 export default TournamentFinanceConsole;
+
+// ─────────────────── Reimbursement Claims Panel ───────────────────
+// M39z · Divisions submit claims to MPCA; MPCA reviews / approves.
+// The full workflow (draft summary PDF, sign, upload, submit) lives in the
+// legacy Finance detail — we surface status + a one-click open here.
+const ClaimsPanel = ({ tournament, persona }) => {
+    const [claims, setClaims] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
+    const isMPCA = persona?.body_type === "State";
+    const myBody = persona?.body_code;
+
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            try {
+                const params = { tournament_id: tournament.id };
+                if (!isMPCA && myBody) params.body_id = myBody;
+                const { data } = await api.get("/reimbursement-claims", { params });
+                if (alive) setClaims(data || []);
+            } catch { if (alive) setClaims([]); }
+            finally { if (alive) setLoading(false); }
+        })();
+        return () => { alive = false; };
+    }, [tournament.id, isMPCA, myBody]);
+
+    if (loading) return (
+        <div className="py-8 text-center text-[11px] text-mpca-gray-dark" data-testid="claims-loading">
+            <Loader2 className="animate-spin inline mr-1" size={12} /> Loading claims…
+        </div>
+    );
+
+    return (
+        <div className="space-y-4" data-testid="claims-panel">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                    <div className="overline">Reimbursement Claim</div>
+                    <div className="font-serif text-lg text-mpca-green-dark mt-1">
+                        {isMPCA ? `${claims.length} claim(s) across bodies` : `Your body (${myBody})`}
+                    </div>
+                    <p className="text-[11px] text-mpca-gray-dark mt-1 max-w-2xl">
+                        Once the tournament wraps up and all invoices / DA are uploaded, submit a Reimbursement
+                        Claim to MPCA. The claim consolidates the head-wise summary, invoice register &amp;
+                        extras — MPCA reviews and releases the reimbursement.
+                    </p>
+                </div>
+                {!isMPCA && (
+                    <button
+                        onClick={() => navigate(`/tournaments/${tournament.id}/finance/legacy`)}
+                        className="btn-heritage-secondary text-xs flex items-center gap-1.5"
+                        data-testid="claims-open-legacy-btn"
+                    >
+                        <FileSignature size={12} />
+                        {claims.length === 0 ? "Start Claim" : "Continue Claim"}
+                    </button>
+                )}
+            </div>
+
+            {claims.length === 0 ? (
+                <div className="py-10 text-center border border-dashed border-mpca-brass/30 text-[11px] text-mpca-gray-dark italic" data-testid="claims-empty">
+                    {isMPCA
+                        ? "No divisions have submitted a claim yet."
+                        : "No claim raised yet. Open the legacy Finance detail to draft, sign, and submit your claim."}
+                </div>
+            ) : (
+                <div className="divide-y divide-mpca-brass/15">
+                    {claims.map((c) => (
+                        <div key={c.id} className="grid grid-cols-12 items-center gap-3 py-3 text-xs" data-testid={`claims-row-${c.id}`}>
+                            <div className="col-span-4 min-w-0">
+                                <div className="font-mono text-[10px] text-mpca-brass truncate">{c.claim_ref}</div>
+                                <div className="font-serif text-sm text-mpca-green-dark truncate mt-0.5">
+                                    {c.body_name || c.body_id}
+                                </div>
+                            </div>
+                            <div className="col-span-3">
+                                <StatusPill status={c.status === "Approved" ? "Approved" : c.status === "Rejected" ? "Rejected" : "Submitted"} />
+                                <div className="text-[9px] text-mpca-gray-dark mt-1">
+                                    {(c.status || "").replace(/_/g, " ")}
+                                </div>
+                            </div>
+                            <div className="col-span-3 text-right font-mono">
+                                <div className="text-sm text-mpca-oxblood">{fmt(c.summary?.eligible_total_inr || 0)}</div>
+                                {c.approved_amount_inr > 0 && (
+                                    <div className="text-[10px] text-mpca-green-dark">Approved {fmt(c.approved_amount_inr)}</div>
+                                )}
+                            </div>
+                            <div className="col-span-2 text-right">
+                                <button
+                                    onClick={() => navigate(`/reimbursement-claims/${c.id}`)}
+                                    className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors"
+                                    data-testid={`claims-open-${c.id}`}
+                                >
+                                    Open
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};

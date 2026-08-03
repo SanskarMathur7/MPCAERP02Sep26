@@ -982,3 +982,4 @@ const TournamentOps = ({ tournament, persona, onChanged }) => {
 };
 
 export default TournamentOps;
+export { ExtraExpenseTab };

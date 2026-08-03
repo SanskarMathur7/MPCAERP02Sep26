@@ -94,6 +94,10 @@ class PreparePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     input_variables: Optional[Dict[str, Any]] = None       # global fallback IVs
     pool_input_variables: Optional[Dict[str, Dict[str, Any]]] = None  # M39s · per-pool IVs
+    # M39w · MPCA may override individual head amounts per body before sending.
+    # Keyed by body_code → dict of head_name → new_limit_inr. Anything omitted
+    # keeps the scheme-computed value.
+    per_body_head_overrides: Optional[Dict[str, Dict[str, float]]] = None
     prepared_by_name: Optional[str] = None
 
 
@@ -250,6 +254,18 @@ async def prepare_budgets(tid: str, payload: PreparePayload):
                 head=h["head"], limit_inr=float(h["limit_inr"]),
                 notes=h.get("formula"),
             ) for h in heads_for_this]
+
+            # M39w · Apply MPCA per-body head overrides on top of scheme values.
+            body_overrides = ((payload.per_body_head_overrides or {}).get(body_code) or {})
+            if body_overrides:
+                for h in head_allocs:
+                    if h.head in body_overrides:
+                        try:
+                            new_amt = float(body_overrides[h.head])
+                            h.notes = (h.notes or "") + f" · MPCA override ₹{new_amt:,.0f}"
+                            h.limit_inr = new_amt
+                        except (TypeError, ValueError):
+                            pass
             total = round(sum(h.limit_inr for h in head_allocs), 2)
 
             body = await db.bodies.find_one({"code": body_code}, {"_id": 0})

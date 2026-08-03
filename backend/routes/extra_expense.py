@@ -169,18 +169,29 @@ async def approve_extra_expense_request(rid: str, action: ExtraExpenseAction):
     if approved <= 0:
         raise HTTPException(422, "Approved amount must be positive")
 
-    # Locate the tournament budget and update head allocation
+    # M39w · Locate the *per-body* budget for this Division on this tournament
+    # (post-M39r flow), falling back to the legacy singular auto_budget_id for
+    # tournaments still on the old flow.
     t = await db.tournaments.find_one({"id": doc["tournament_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
-    budget_id = t.get("auto_budget_id")
-    if not budget_id:
-        raise HTTPException(409, "No tournament budget to update — approve the plan first.")
-    tb = await db.tournament_budgets.find_one({"id": budget_id}, {"_id": 0})
+    tb = await db.tournament_budgets.find_one(
+        {"tournament_id": doc["tournament_id"], "body_id": doc["body_id"],
+         "status": {"$in": ["Approved", "Accepted_By_Division", "Sent_To_Division"]}},
+        {"_id": 0}, sort=[("created_at", -1)],
+    )
+    if not tb and t.get("auto_budget_id"):
+        tb = await db.tournament_budgets.find_one({"id": t["auto_budget_id"]}, {"_id": 0})
     if not tb:
-        raise HTTPException(404, "Tournament budget not found")
+        raise HTTPException(
+            409,
+            f"No approved / accepted budget for {doc['body_id']} on this tournament — "
+            "MPCA must sanction the base budget before approving extras.",
+        )
+    budget_id = tb["id"]
 
-    head_label = doc["head_label"]
+    # Extras get a distinct head label so they show up separately from base heads.
+    head_label = f"Extra · {doc['head_label']}"
     existing_heads = list(tb.get("approved_head_allocations") or tb.get("head_allocations") or [])
     hit = False
     for h in existing_heads:
@@ -190,7 +201,8 @@ async def approve_extra_expense_request(rid: str, action: ExtraExpenseAction):
             break
     if not hit:
         # New head altogether
-        existing_heads.append({"head": head_label, "limit_inr": approved, "notes": f"Added via {doc['request_ref']}"})
+        existing_heads.append({"head": head_label, "limit_inr": approved,
+                               "notes": f"Extra sanctioned via {doc['request_ref']}"})
 
     new_ceiling = round(float(tb.get("approved_total_inr") or tb.get("total_ceiling_inr") or 0) + approved, 2)
     await db.tournament_budgets.update_one(

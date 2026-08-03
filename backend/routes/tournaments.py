@@ -217,6 +217,24 @@ async def patch_tournament(tid: str, patch: dict):
     return await db.tournaments.find_one({"id": tid}, {"_id": 0})
 
 
+# M39w · Tournament type + scope → default reimbursement scheme.
+# When MPCA users create a new tournament, we pre-fill scheme_code so the
+# finance console picks up the right catalogue immediately.
+def _auto_scheme_for(tournament_type, scope, type_code):
+    tc = (type_code or "").lower()
+    sc = (scope or "")
+    tt = (tournament_type or "")
+    if tt == "BCCI" or tc.startswith("bcci"):
+        return "2-D"
+    if sc == "Inter_District" or tc == "inter_district":
+        return "2-A"
+    if sc == "Inter_Divisional" or tc == "inter_div":
+        return "2-B"
+    if tt == "MPCA_Championship" or sc == "Championship":
+        return "2-C"
+    return None
+
+
 @api_router.post("/tournaments", response_model=Tournament)
 async def create_tournament(payload: TournamentCreate):
     # M39c · Block new tournaments until MPCA has activated the schemes for
@@ -237,6 +255,14 @@ async def create_tournament(payload: TournamentCreate):
 
     # M8 · Snapshot venue + ground names for quick display; validate linkage.
     data = payload.model_dump()
+
+    # M39w · Auto-map scheme_code from tournament type + scope when caller
+    # didn't set one — fixes the "Inter-Divisional tournament picked
+    # Inter-District scheme" bug.
+    if not data.get("scheme_code"):
+        data["scheme_code"] = _auto_scheme_for(
+            data.get("tournament_type"), data.get("scope"), data.get("tournament_type_code"),
+        )
     if payload.venue_id:
         v = await db.venues.find_one({"id": payload.venue_id}, {"_id": 0})
         if not v:

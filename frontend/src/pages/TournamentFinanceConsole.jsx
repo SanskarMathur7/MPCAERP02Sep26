@@ -61,6 +61,8 @@ const TournamentFinanceConsole = () => {
     const [activePoolTab, setActivePoolTab] = useState(null);    // M39s · currently editing pool
     const [preview, setPreview] = useState(null);
     const [activeTab, setActiveTab] = useState("pipeline");   // M39u · tabbed sections
+    const [perBodyOverrides, setPerBodyOverrides] = useState({});   // M39w · MPCA per-body head overrides
+    const [showOverrides, setShowOverrides] = useState(false);
 
     const isMPCA = persona?.body_type === "State";
     const myBody = persona?.body_code;
@@ -133,15 +135,14 @@ const TournamentFinanceConsole = () => {
         try {
             const body = { prepared_by_name: persona?.name || persona?.id };
             if (isMultiPool) {
-                // Send per-pool IVs
                 if (!Object.keys(poolIvDrafts).length) { alert("Enter input variables for each pool first."); setBusy(false); return; }
                 body.pool_input_variables = poolIvDrafts;
-                // Also send the global IV as a fallback (uses whatever the last-active pool has)
                 if (Object.keys(ivDraft).length) body.input_variables = ivDraft;
             } else {
                 if (!Object.keys(ivDraft).length) { alert("Enter input variables first."); setBusy(false); return; }
                 body.input_variables = ivDraft;
             }
+            if (Object.keys(perBodyOverrides).length) body.per_body_head_overrides = perBodyOverrides;
             const { data } = await api.post(`/tournaments/${id}/finance/prepare-budgets`, body);
             await load();
             alert(`Prepared ${data.created_count} budget(s) across ${data.pool_count || 1} pool(s). ${data.replaced_count} replaced, ${data.skipped_count} skipped.`);
@@ -259,6 +260,11 @@ const TournamentFinanceConsole = () => {
                     preview={preview}
                     hostCount={rows.filter((r) => r.role === "Host").length}
                     visitorCount={rows.filter((r) => r.role !== "Host").length}
+                    rows={rows}
+                    perBodyOverrides={perBodyOverrides}
+                    setPerBodyOverrides={setPerBodyOverrides}
+                    showOverrides={showOverrides}
+                    setShowOverrides={setShowOverrides}
                     onPrepare={prepareBudgets}
                     busy={busy}
                 />
@@ -455,7 +461,7 @@ const TournamentFinanceConsole = () => {
 
 // ─────────────────── Prepare Panel (MPCA) ───────────────────
 
-const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, poolIvDrafts, setPoolIvDrafts, activePoolTab, setActivePoolTab, pools, isMultiPool, preview, hostCount, visitorCount, onPrepare, busy }) => {
+const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, poolIvDrafts, setPoolIvDrafts, activePoolTab, setActivePoolTab, pools, isMultiPool, preview, hostCount, visitorCount, rows, perBodyOverrides, setPerBodyOverrides, showOverrides, setShowOverrides, onPrepare, busy }) => {
     const inputVars = schemeSpec?.input_variables || [];
 
     // Split preview heads into host-flavour vs visitor-flavour (mirrors backend)
@@ -620,17 +626,106 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, poolIvDraft
                         : <>Total outlay if all budgets sanctioned: <b className="text-mpca-oxblood">{fmt(hostTotal + visitorTotal * visitorCount)}</b></>
                     }
                 </div>
-                <button
-                    onClick={onPrepare}
-                    disabled={!canPrepare || busy}
-                    className="btn-heritage flex items-center gap-2 disabled:opacity-40"
-                    data-testid="fc-prepare-btn"
-                >
-                    {busy ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
-                    Prepare {isMultiPool ? "All Pools" : "Budgets"}
-                    <ArrowRight size={14} />
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setShowOverrides(!showOverrides)}
+                        disabled={heads.length === 0}
+                        className="text-[10px] uppercase tracking-widest px-3 py-1.5 border-2 border-mpca-navy text-mpca-navy hover:bg-mpca-navy/10 flex items-center gap-1.5 disabled:opacity-40"
+                        data-testid="fc-toggle-overrides-btn"
+                    >
+                        <ClipboardCheck size={12} />
+                        {showOverrides ? "Hide" : "Edit"} heads per body
+                        {Object.keys(perBodyOverrides).length > 0 && <span className="ml-1 px-1.5 bg-mpca-navy text-mpca-parchment text-[9px] font-mono">{Object.keys(perBodyOverrides).length}</span>}
+                    </button>
+                    <button
+                        onClick={onPrepare}
+                        disabled={!canPrepare || busy}
+                        className="btn-heritage flex items-center gap-2 disabled:opacity-40"
+                        data-testid="fc-prepare-btn"
+                    >
+                        {busy ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
+                        Prepare {isMultiPool ? "All Pools" : "Budgets"}
+                        <ArrowRight size={14} />
+                    </button>
+                </div>
             </div>
+
+            {/* M39w · Per-body head editor — MPCA overrides scheme values */}
+            {showOverrides && heads.length > 0 && (
+                <div className="mt-4 border-2 border-mpca-navy/40 bg-mpca-navy/5 p-4" data-testid="fc-overrides-panel">
+                    <div className="flex items-center gap-2 mb-3">
+                        <ClipboardCheck className="text-mpca-navy" size={14} />
+                        <div className="font-serif text-mpca-navy font-semibold">Edit head amounts per body</div>
+                        <span className="text-[10px] text-mpca-gray-dark">Scheme-computed values shown as placeholder — override any cell to change that body&apos;s allocation.</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                            <thead>
+                                <tr className="bg-mpca-parchment border-b-2 border-mpca-navy/40 text-[10px] uppercase tracking-widest text-mpca-gray-dark">
+                                    <th className="text-left px-2 py-1.5 sticky left-0 bg-mpca-parchment">Body</th>
+                                    {heads.map((h) => (
+                                        <th key={h.head} className="text-right px-2 py-1.5 min-w-[110px]">
+                                            {h.head.length > 20 ? h.head.slice(0, 18) + "…" : h.head}
+                                        </th>
+                                    ))}
+                                    <th className="text-right px-2 py-1.5 border-l border-mpca-navy/30">Total ₹</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((r) => {
+                                    const roleHeads = r.role === "Host" ? heads : heads.filter((h) => {
+                                        const l = ` ${h.head.toLowerCase()} `;
+                                        return ["travel", "da", "ta", "food", "stay", "hotel", "lodging", "boarding", "meal", "conveyance", "transport", "contingency"].some((k) => l.includes(k));
+                                    });
+                                    const bodyOv = perBodyOverrides[r.body_code] || {};
+                                    const rowTotal = heads.reduce((s, h) => {
+                                        if (!roleHeads.some((rh) => rh.head === h.head)) return s;
+                                        return s + (bodyOv[h.head] ?? h.limit_inr);
+                                    }, 0);
+                                    return (
+                                        <tr key={r.body_code} className="border-b border-mpca-navy/15 hover:bg-mpca-parchment/50">
+                                            <td className="px-2 py-1.5 font-serif text-mpca-green-dark sticky left-0 bg-inherit">
+                                                {r.body_name || r.body_code}
+                                                <span className="ml-2 text-[9px] uppercase text-mpca-brass">{r.role}</span>
+                                            </td>
+                                            {heads.map((h) => {
+                                                const applicable = roleHeads.some((rh) => rh.head === h.head);
+                                                if (!applicable) return <td key={h.head} className="px-2 py-1 text-right text-[10px] text-mpca-gray-dark/50">—</td>;
+                                                return (
+                                                    <td key={h.head} className="px-2 py-1 text-right">
+                                                        <input
+                                                            type="number"
+                                                            placeholder={String(Math.round(h.limit_inr))}
+                                                            value={bodyOv[h.head] ?? ""}
+                                                            onChange={(e) => {
+                                                                const v = e.target.value;
+                                                                setPerBodyOverrides((d) => {
+                                                                    const next = { ...d };
+                                                                    const bodyMap = { ...(next[r.body_code] || {}) };
+                                                                    if (v === "" || v === null) delete bodyMap[h.head];
+                                                                    else bodyMap[h.head] = parseFloat(v) || 0;
+                                                                    if (Object.keys(bodyMap).length) next[r.body_code] = bodyMap;
+                                                                    else delete next[r.body_code];
+                                                                    return next;
+                                                                });
+                                                            }}
+                                                            className="w-full text-right font-mono text-[11px] px-1 py-0.5 border border-mpca-brass/30 bg-mpca-parchment focus:outline-none focus:border-mpca-navy"
+                                                            data-testid={`fc-override-${r.body_code}-${h.head.slice(0, 12)}`}
+                                                        />
+                                                    </td>
+                                                );
+                                            })}
+                                            <td className="px-2 py-1 text-right font-mono text-mpca-oxblood font-semibold border-l border-mpca-navy/30">
+                                                {fmt(rowTotal)}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

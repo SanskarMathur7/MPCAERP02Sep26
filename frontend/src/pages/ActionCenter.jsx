@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 const KIND_LABEL = {
     squad_review: "Squad Review",
     squad_pick: "Squad Draft",
+    tournament_acceptance: "Tournament Acceptance",   // M39x
     budget_approval: "Budget Approval",
     budget_send: "Send Budget",                       // M39r
     budget_acceptance: "Accept Budget",                // M39r
@@ -24,6 +25,7 @@ const KIND_LABEL = {
 const KIND_TONE = {
     squad_review: "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40",
     squad_pick: "bg-mpca-gold-light/20 text-mpca-brass border-mpca-brass/40",
+    tournament_acceptance: "bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/50",
     budget_approval: "bg-mpca-gold-light/20 text-mpca-brass border-mpca-brass/40",
     budget_send: "bg-mpca-brass/10 text-mpca-brass border-mpca-brass/40",
     budget_acceptance: "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40",

@@ -476,6 +476,20 @@ async def tournament_pending_actions(tid: str):
                 "body_code": body,
             })
 
+    # M39x · Tournament acceptance — every participant with Pending status
+    async for p in db.tournament_participations.find(
+        {"tournament_id": tid, "acceptance_status": "Pending", "removed_at": None},
+        {"_id": 0},
+    ):
+        items.append({
+            "kind": "tournament_acceptance",
+            "label": f"Accept tournament allocation · {p.get('pool_name') or 'Main'} · as {p.get('role','Visitor')}",
+            "waiting_on": p.get("body_code"),
+            "deep_link": f"/tournaments/{tid}",
+            "record_id": p.get("id"),
+            "body_code": p.get("body_code"),
+        })
+
     # 3) Budgets awaiting approval (legacy flow — Division-submitted first)
     async for b in db.tournament_budgets.find({"tournament_id": tid, "status": "Submitted"}, {"_id": 0}):
         items.append({

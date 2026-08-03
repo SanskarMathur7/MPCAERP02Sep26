@@ -58,6 +58,43 @@ const TournamentDetail = () => {
     const [bodies, setBodies] = useState([]);
     const [openBox, setOpenBox] = useState(null); // "calendar"|"receipts"|"summary"|"closure"
     const [progressKey, setProgressKey] = useState(0);
+    const [myParticipation, setMyParticipation] = useState(null);   // M39x
+
+    // M39x · Fetch this body's participation row (if any) so we can show the
+    // "Accept Tournament" banner when their acceptance_status is Pending.
+    useEffect(() => {
+        (async () => {
+            if (!persona?.body_code || persona?.body_type === "State") { setMyParticipation(null); return; }
+            try {
+                const { data } = await api.get(`/tournaments/${id}/participants/${persona.body_code}`);
+                setMyParticipation(data || null);
+            } catch { setMyParticipation(null); }
+        })();
+    }, [id, persona?.body_code, persona?.body_type, progressKey]);
+
+    const acceptTournament = async () => {
+        try {
+            await api.patch(`/tournaments/${id}/participants/${persona.body_code}`, {
+                acceptance_status: "Accepted",
+                acceptance_by_name: persona.name,
+            });
+            setProgressKey((k) => k + 1);
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
+    const declineTournament = async () => {
+        const note = window.prompt("Reason for declining (optional):");
+        try {
+            await api.patch(`/tournaments/${id}/participants/${persona.body_code}`, {
+                acceptance_status: "Declined",
+                acceptance_by_name: persona.name,
+                acceptance_note: note || null,
+            });
+            setProgressKey((k) => k + 1);
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
     const refreshProgress = () => setProgressKey((k) => k + 1);
 
     const load = async () => {
@@ -205,6 +242,49 @@ const TournamentDetail = () => {
                     </div>
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="setup-boxes">
+                            {/* M39x · Prominent Accept Tournament banner for Divisions/Districts with Pending acceptance */}
+                            {myParticipation && myParticipation.acceptance_status === "Pending" && (
+                                <div className="col-span-2 md:col-span-4 bulletin-card p-5 border-l-4 border-mpca-oxblood bg-mpca-oxblood/5"
+                                     data-testid="tournament-accept-banner">
+                                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                                        <div className="flex items-start gap-3">
+                                            <AlertTriangle className="text-mpca-oxblood shrink-0" size={22} />
+                                            <div>
+                                                <div className="overline flex items-center gap-2 mb-1">
+                                                    <BadgeCheck size={12} /> Action required · {persona?.body_code}
+                                                </div>
+                                                <div className="font-serif text-xl text-mpca-oxblood">
+                                                    Accept your tournament allocation
+                                                </div>
+                                                <p className="text-xs text-mpca-charcoal mt-1 max-w-2xl">
+                                                    MPCA has assigned <b>{persona?.body_name || persona?.body_code}</b> as {myParticipation.role === "Host" ? "the Host" : "a Visitor"} in pool <b>{myParticipation.pool_name || "Main"}</b> for this tournament. Confirm your participation to unlock squad selection & budget acceptance.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 shrink-0">
+                                            <button onClick={acceptTournament}
+                                                className="px-4 py-2 text-[11px] font-semibold uppercase tracking-widest bg-mpca-oxblood text-mpca-parchment hover:bg-mpca-oxblood/90 flex items-center gap-2"
+                                                data-testid="tournament-accept-btn">
+                                                <BadgeCheck size={12} /> Accept Tournament
+                                            </button>
+                                            <button onClick={declineTournament}
+                                                className="px-4 py-2 text-[11px] font-semibold uppercase tracking-widest border-2 border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood/10"
+                                                data-testid="tournament-decline-btn">
+                                                Decline
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {myParticipation && myParticipation.acceptance_status === "Accepted" && (
+                                <div className="col-span-2 md:col-span-4 bulletin-card p-3 border-l-4 border-mpca-green-dark bg-mpca-green-dark/5 flex items-center gap-3"
+                                     data-testid="tournament-accepted-strip">
+                                    <ShieldCheck className="text-mpca-green-dark" size={16} />
+                                    <div className="text-xs text-mpca-green-dark">
+                                        <b>Accepted</b> as {myParticipation.role} in pool <b>{myParticipation.pool_name || "Main"}</b> on {new Date(myParticipation.acceptance_at).toLocaleDateString("en-IN")}
+                                    </div>
+                                </div>
+                            )}
                     <SetupBox testId="box-basics" icon={ListChecks} label="Tournament Basics" note={t.setup_meta?.category ? `${t.setup_meta.category} · ${t.setup_meta.age_group}` : "Category, teams, grounds"} onClick={() => setOpenBox(openBox === "basics" ? null : "basics")} active={openBox === "basics"} />
                     {persona?.id === "match-official" ? (
                         <>

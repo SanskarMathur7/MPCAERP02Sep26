@@ -718,7 +718,9 @@ const ExtraExpenseTab = ({ tournament, persona, onChanged }) => {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
 
-    const canRequest = persona && (persona.body_type === "Division" || persona.body_type === "District" || persona.body_type === "State");
+    // M39z.a · Only Divisions & Districts can raise/submit Extra Expense requests.
+    // MPCA is the approver — never the requester — so hide the create/submit UI from State personas.
+    const canRequest = persona && (persona.body_type === "Division" || persona.body_type === "District");
     const canApprove = persona && persona.body_type === "State";
 
     const load = async () => {

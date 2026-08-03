@@ -62,7 +62,7 @@ async def get_extra_expense_request(rid: str):
 
 
 @api_router.post("/extra-expense-requests", response_model=ExtraExpenseRequest)
-async def create_extra_expense_request(payload: ExtraExpenseCreate):
+async def create_extra_expense_request(payload: ExtraExpenseCreate, request: Request):
     t = await db.tournaments.find_one({"id": payload.tournament_id}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
@@ -70,6 +70,15 @@ async def create_extra_expense_request(payload: ExtraExpenseCreate):
         raise HTTPException(422, "Amount must be positive")
     if not payload.justification or len(payload.justification.strip()) < 10:
         raise HTTPException(422, "Justification (min 10 chars) is required")
+    # M39z.a · MPCA is the approver, not the requester. Only Division/District
+    # personas can raise Extra Expense requests. State personas are blocked.
+    scope = get_scope(request)
+    if scope.body_type == "State":
+        raise HTTPException(
+            403,
+            "MPCA cannot raise Extra Expense requests — only Divisions and Districts can. "
+            "MPCA reviews and sanctions (Approve / Approve-with-variation / Reject) the submissions.",
+        )
     cycle = t.get("fiscal_cycle") or "2025-26"
     req = ExtraExpenseRequest(
         request_ref=await _next_eer_ref(cycle),

@@ -992,101 +992,268 @@ const DivisionBudgetCard = ({ row, onAccept, onRequestRevision, busy }) => {
 export default TournamentFinanceConsole;
 
 // ─────────────────── Reimbursement Claims Panel ───────────────────
-// M39z · Divisions submit claims to MPCA; MPCA reviews / approves.
-// The full workflow (draft summary PDF, sign, upload, submit) lives in the
-// legacy Finance detail — we surface status + a one-click open here.
+// M39z.c · Inline claim workflow — Divisions can create, view the head-wise
+// summary, upload the signed PDF, and submit to MPCA without leaving the
+// Finance Console. MPCA sees a scoped list of every claim + Open action.
 const ClaimsPanel = ({ tournament, persona }) => {
     const [claims, setClaims] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
+    const [previewSummary, setPreviewSummary] = useState(null);   // spent-by-head preview when no claim yet
     const navigate = useNavigate();
     const isMPCA = persona?.body_type === "State";
     const myBody = persona?.body_code;
 
-    useEffect(() => {
-        let alive = true;
-        (async () => {
-            try {
-                const params = { tournament_id: tournament.id };
-                if (!isMPCA && myBody) params.body_id = myBody;
-                const { data } = await api.get("/reimbursement-claims", { params });
-                if (alive) setClaims(data || []);
-            } catch { if (alive) setClaims([]); }
-            finally { if (alive) setLoading(false); }
-        })();
-        return () => { alive = false; };
+    const load = useCallback(async () => {
+        try {
+            const params = { tournament_id: tournament.id };
+            if (!isMPCA && myBody) params.body_id = myBody;
+            const { data } = await api.get("/reimbursement-claims", { params });
+            setClaims(data || []);
+            // Preview: pull the live tally so Divisions can see the eligible amount before drafting.
+            if (!isMPCA && myBody && (!data || data.length === 0)) {
+                try {
+                    const { data: s } = await api.get(`/tournaments/${tournament.id}/spent-by-head`, { params: { body_id: myBody } });
+                    setPreviewSummary(s);
+                } catch { /* ignore */ }
+            }
+        } catch { setClaims([]); }
+        finally { setLoading(false); }
     }, [tournament.id, isMPCA, myBody]);
 
+    useEffect(() => { setLoading(true); load(); }, [load]);
+
+    const startDraft = async () => {
+        if (!myBody) return;
+        setBusy(true);
+        try {
+            await api.post("/reimbursement-claims", {
+                tournament_id: tournament.id,
+                body_id: myBody,
+                fiscal_cycle: tournament.fiscal_cycle,
+                scheme_code: tournament.scheme_code,
+                claimed_by: persona?.name,
+                notes: `Auto-drafted from Finance Console by ${persona?.name || myBody}`,
+            });
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
+    const uploadSigned = async (claim, file) => {
+        if (!file) return;
+        setBusy(true);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("body_id", myBody || "");
+            fd.append("uploaded_by", persona?.name || myBody || "");
+            fd.append("related_type", "reimbursement_claim");
+            fd.append("related_id", claim.id);
+            const { data: up } = await api.post("/uploads", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            await api.post(`/reimbursement-claims/${claim.id}/signed-pdf`, {
+                signed_pdf_url: up.url,
+                uploaded_by: persona?.name || myBody,
+            });
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
+    const submitClaim = async (claim) => {
+        if (!window.confirm(`Submit ${claim.claim_ref} to MPCA for reimbursement?\n\nMake sure the signed PDF is uploaded — MPCA cannot process an unsigned claim.`)) return;
+        setBusy(true);
+        try {
+            await api.post(`/reimbursement-claims/${claim.id}/submit`, {
+                actor_name: persona?.name, actor_role: persona?.post, actor_body_id: myBody,
+                notes: "Submitted via Finance Console",
+            });
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
     if (loading) return (
-        <div className="py-8 text-center text-[11px] text-mpca-gray-dark" data-testid="claims-loading">
+        <div className="py-8 text-center text-[11px] text-mpca-charcoal/80" data-testid="claims-loading">
             <Loader2 className="animate-spin inline mr-1" size={12} /> Loading claims…
         </div>
     );
 
     return (
-        <div className="space-y-4" data-testid="claims-panel">
+        <div className="space-y-5" data-testid="claims-panel">
             <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
-                    <div className="overline">Reimbursement Claim</div>
-                    <div className="font-serif text-lg text-mpca-green-dark mt-1">
+                    <div className="overline text-[10px] font-semibold text-mpca-oxblood">Reimbursement Claim</div>
+                    <div className="font-serif text-lg text-mpca-green-dark mt-1 font-semibold">
                         {isMPCA ? `${claims.length} claim(s) across bodies` : `Your body (${myBody})`}
                     </div>
-                    <p className="text-[11px] text-mpca-gray-dark mt-1 max-w-2xl">
-                        Once the tournament wraps up and all invoices / DA are uploaded, submit a Reimbursement
-                        Claim to MPCA. The claim consolidates the head-wise summary, invoice register &amp;
-                        extras — MPCA reviews and releases the reimbursement.
+                    <p className="text-[11px] text-mpca-charcoal/80 mt-1 max-w-2xl">
+                        Once the tournament wraps up and every invoice / DA is uploaded, raise a Reimbursement
+                        Claim. The system auto-computes a head-wise summary (Sanctioned vs Spent vs Eligible),
+                        you download the summary PDF, get it signed by the Secretary + Treasurer, upload it back
+                        and submit to MPCA — all in this panel.
                     </p>
                 </div>
-                {!isMPCA && (
+                {!isMPCA && claims.length === 0 && (
                     <button
-                        onClick={() => navigate(`/tournaments/${tournament.id}/finance/legacy`)}
-                        className="btn-heritage-secondary text-xs flex items-center gap-1.5"
-                        data-testid="claims-open-legacy-btn"
+                        onClick={startDraft}
+                        disabled={busy}
+                        className="text-[10px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-oxblood hover:bg-mpca-oxblood/90 px-3 py-2 inline-flex items-center gap-1.5 disabled:opacity-50"
+                        data-testid="claims-start-draft-btn"
                     >
-                        <FileSignature size={12} />
-                        {claims.length === 0 ? "Start Claim" : "Continue Claim"}
+                        {busy ? <Loader2 size={11} className="animate-spin" /> : <FileSignature size={11} />}
+                        Start Claim Draft
                     </button>
                 )}
             </div>
 
+            {/* Preview head-wise tally BEFORE a claim exists — helps the Division decide when to raise it */}
+            {!isMPCA && claims.length === 0 && previewSummary && (
+                <div className="border-2 border-mpca-brass/40 bg-mpca-parchment/40 p-4" data-testid="claims-preview">
+                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                        <div className="overline text-[9px] font-semibold text-mpca-oxblood">Live tally · before you draft</div>
+                        <div className="text-[11px] text-mpca-charcoal/80">
+                            Invoiced <strong className="text-mpca-navy font-mono">{fmt(previewSummary.invoiced_total_inr)}</strong>
+                            <span className="mx-2 text-mpca-brass">·</span>
+                            Eligible <strong className="text-mpca-green-dark font-mono">{fmt(previewSummary.eligible_total_inr)}</strong>
+                            {previewSummary.over_budget_inr > 0 && (
+                                <span className="ml-2 text-mpca-oxblood text-[10px]">
+                                    (₹{Math.round(previewSummary.over_budget_inr).toLocaleString("en-IN")} over budget)
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {claims.length === 0 ? (
-                <div className="py-10 text-center border border-dashed border-mpca-brass/30 text-[11px] text-mpca-gray-dark italic" data-testid="claims-empty">
+                <div className="py-10 text-center border border-dashed border-mpca-brass/40 text-[11px] text-mpca-charcoal/80 italic" data-testid="claims-empty">
                     {isMPCA
-                        ? "No divisions have submitted a claim yet."
-                        : "No claim raised yet. Open the legacy Finance detail to draft, sign, and submit your claim."}
+                        ? "No divisions have submitted a claim yet for this tournament."
+                        : (previewSummary?.invoiced_total_inr || 0) > 0
+                            ? <>Ready to raise your claim. Click <strong className="text-mpca-oxblood">Start Claim Draft</strong> above to auto-compute the summary.</>
+                            : "Once you've uploaded invoices / DA forms, come back here to raise your Reimbursement Claim."}
                 </div>
             ) : (
-                <div className="divide-y divide-mpca-brass/15">
+                <div className="divide-y divide-mpca-brass/25">
                     {claims.map((c) => (
-                        <div key={c.id} className="grid grid-cols-12 items-center gap-3 py-3 text-xs" data-testid={`claims-row-${c.id}`}>
-                            <div className="col-span-4 min-w-0">
-                                <div className="font-mono text-[10px] text-mpca-brass truncate">{c.claim_ref}</div>
-                                <div className="font-serif text-sm text-mpca-green-dark truncate mt-0.5">
-                                    {c.body_name || c.body_id}
-                                </div>
-                            </div>
-                            <div className="col-span-3">
-                                <StatusPill status={c.status === "Approved" ? "Approved" : c.status === "Rejected" ? "Rejected" : "Submitted"} />
-                                <div className="text-[9px] text-mpca-gray-dark mt-1">
-                                    {(c.status || "").replace(/_/g, " ")}
-                                </div>
-                            </div>
-                            <div className="col-span-3 text-right font-mono">
-                                <div className="text-sm text-mpca-oxblood">{fmt(c.summary?.eligible_total_inr || 0)}</div>
-                                {c.approved_amount_inr > 0 && (
-                                    <div className="text-[10px] text-mpca-green-dark">Approved {fmt(c.approved_amount_inr)}</div>
-                                )}
-                            </div>
-                            <div className="col-span-2 text-right">
-                                <button
-                                    onClick={() => navigate(`/reimbursement-claims/${c.id}`)}
-                                    className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors"
-                                    data-testid={`claims-open-${c.id}`}
-                                >
-                                    Open
-                                </button>
-                            </div>
-                        </div>
+                        <ClaimRow
+                            key={c.id}
+                            claim={c}
+                            isMPCA={isMPCA}
+                            busy={busy}
+                            onUploadSigned={(f) => uploadSigned(c, f)}
+                            onSubmit={() => submitClaim(c)}
+                            onOpen={() => navigate(`/reimbursement-claims/${c.id}`)}
+                        />
                     ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// One-row renderer with inline sign-upload + submit actions (used by ClaimsPanel).
+const ClaimRow = ({ claim, isMPCA, busy, onUploadSigned, onSubmit, onOpen }) => {
+    const c = claim;
+    const isDraft = c.status === "Draft" || c.status === "Rejected";
+    const hasSigned = !!c.signed_pdf_url;
+    return (
+        <div className="py-3" data-testid={`claims-row-${c.id}`}>
+            <div className="grid grid-cols-12 items-center gap-3 text-xs">
+                <div className="col-span-3 min-w-0">
+                    <div className="font-mono text-[10px] text-mpca-charcoal/70 truncate">{c.claim_ref}</div>
+                    <div className="font-serif text-sm text-mpca-green-dark truncate mt-0.5 font-semibold">
+                        {c.body_name || c.body_id}
+                    </div>
+                </div>
+                <div className="col-span-3">
+                    <StatusPill status={c.status === "Approved" ? "Approved" : c.status === "Rejected" ? "Rejected" : c.status === "Under_Review" ? "Submitted" : c.status === "Submitted" ? "Submitted" : "Draft"} />
+                    <div className="text-[10px] text-mpca-charcoal/80 mt-1">
+                        {(c.status || "").replace(/_/g, " ")}
+                    </div>
+                </div>
+                <div className="col-span-3 text-right font-mono">
+                    <div className="text-sm text-mpca-oxblood font-semibold">{fmt(c.summary?.eligible_total_inr || c.summary?.invoiced_total_inr || 0)}</div>
+                    {c.approved_amount_inr > 0 && (
+                        <div className="text-[10px] text-mpca-green-dark font-semibold">Approved {fmt(c.approved_amount_inr)}</div>
+                    )}
+                </div>
+                <div className="col-span-3 text-right flex justify-end gap-1.5 flex-wrap">
+                    <button onClick={onOpen}
+                        className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors"
+                        data-testid={`claims-open-${c.id}`}>
+                        Open detail
+                    </button>
+                </div>
+            </div>
+
+            {/* Inline draft-workflow strip — only when the claim is in Draft/Rejected and viewer is the owning body */}
+            {!isMPCA && isDraft && (
+                <div className="mt-3 border-2 border-mpca-brass/30 bg-mpca-parchment/40 p-3 flex items-center gap-3 flex-wrap" data-testid={`claim-draft-strip-${c.id}`}>
+                    <div className="text-[11px] text-mpca-charcoal/85 flex-1 min-w-[200px]">
+                        {hasSigned
+                            ? <>Signed PDF uploaded on {new Date(c.signed_pdf_uploaded_at || Date.now()).toLocaleDateString("en-IN")} — ready to submit.</>
+                            : <>Download the summary PDF from <em>Open detail</em>, get it signed by the Secretary + Treasurer, then upload below.</>}
+                    </div>
+                    {hasSigned && c.signed_pdf_url && (
+                        <a href={c.signed_pdf_url} target="_blank" rel="noreferrer"
+                            className="text-[10px] font-semibold uppercase tracking-widest text-mpca-green-dark hover:underline">
+                            View signed PDF
+                        </a>
+                    )}
+                    <label className="text-[10px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-green-dark hover:bg-mpca-green-dark/90 px-2.5 py-1.5 cursor-pointer">
+                        {hasSigned ? "Replace signed PDF" : "Upload signed PDF"}
+                        <input
+                            type="file" accept="application/pdf" className="hidden"
+                            disabled={busy}
+                            onChange={(e) => onUploadSigned(e.target.files?.[0])}
+                            data-testid={`claims-upload-signed-${c.id}`}
+                        />
+                    </label>
+                    <button
+                        onClick={onSubmit}
+                        disabled={busy || !hasSigned}
+                        className="text-[10px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-oxblood hover:bg-mpca-oxblood/90 px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                        title={hasSigned ? "Submit to MPCA" : "Upload signed PDF first"}
+                        data-testid={`claims-submit-${c.id}`}
+                    >
+                        {busy ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                        Submit to MPCA
+                    </button>
+                </div>
+            )}
+
+            {/* Head-wise summary (Sanctioned/Spent/Eligible) — always visible when it's been computed */}
+            {(c.summary?.heads || []).length > 0 && (
+                <div className="mt-3 border border-mpca-brass/30 bg-mpca-ivory" data-testid={`claim-heads-${c.id}`}>
+                    <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-mpca-brass/10 border-b border-mpca-brass/25">
+                        <div className="col-span-5 overline text-[9px] font-semibold text-mpca-green-dark">Head</div>
+                        <div className="col-span-2 text-right overline text-[9px] font-semibold text-mpca-green-dark">Sanctioned</div>
+                        <div className="col-span-2 text-right overline text-[9px] font-semibold text-mpca-green-dark">Spent</div>
+                        <div className="col-span-2 text-right overline text-[9px] font-semibold text-mpca-green-dark">Eligible</div>
+                        <div className="col-span-1 text-right overline text-[9px] font-semibold text-mpca-green-dark">Over</div>
+                    </div>
+                    {(c.summary.heads || []).map((h) => {
+                        const isExtra = (h.head || "").startsWith("Extra ");
+                        return (
+                            <div key={h.head} className={`grid grid-cols-12 gap-2 px-3 py-1 text-[11px] border-b border-mpca-brass/15 last:border-b-0 ${isExtra ? "bg-mpca-oxblood/8" : ""}`}>
+                                <div className={`col-span-5 ${isExtra ? "text-mpca-oxblood font-bold" : "text-mpca-charcoal"}`}>
+                                    {h.head}
+                                    {isExtra && <span className="ml-2 text-[8px] font-semibold uppercase tracking-wider text-mpca-parchment bg-mpca-oxblood px-1 py-0.5">Extra</span>}
+                                    {h.unmatched && <span className="ml-2 text-[8px] font-semibold uppercase tracking-wider text-mpca-brass border border-mpca-brass/50 px-1 py-0.5">Unmatched</span>}
+                                </div>
+                                <div className="col-span-2 text-right font-mono">{fmt(h.limit_inr)}</div>
+                                <div className="col-span-2 text-right font-mono text-mpca-navy">{fmt(h.spent_inr)}</div>
+                                <div className="col-span-2 text-right font-mono text-mpca-green-dark font-semibold">{fmt(h.eligible_inr)}</div>
+                                <div className={`col-span-1 text-right font-mono ${h.over_inr > 0 ? "text-mpca-oxblood font-bold" : "text-mpca-charcoal/40"}`}>
+                                    {h.over_inr > 0 ? fmt(h.over_inr) : "—"}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </div>

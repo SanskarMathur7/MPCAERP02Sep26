@@ -137,6 +137,92 @@ async def _compute_summary(tournament_id: str, body_id: str) -> dict:
 
 # ═══════════════════ Read ═══════════════════
 
+@api_router.get("/tournaments/{tid}/spent-by-head")
+async def spent_by_head(tid: str, body_id: str, request: Request):
+    """M39z.c · Live per-head spend tally for a Division on a tournament.
+
+    Runs the same aggregation shape as `_compute_summary` but is
+    (a) lightweight, (b) claim-independent, (c) counts every invoice that
+    isn't Rejected (so Divisions see budget consumption LIVE as they upload
+    Draft bills — not only after MPCA approves them).
+
+    Scope guard: Divisions/Districts can only pull their own body's numbers;
+    MPCA (State) can pull any body's numbers for audit.
+    """
+    scope = get_scope(request)
+    if not scope.is_state and scope.body_code and scope.body_code != body_id:
+        raise HTTPException(403, "You can only view your own body's spend.")
+
+    tb = await db.tournament_budgets.find_one(
+        {"tournament_id": tid, "body_id": body_id,
+         "status": {"$in": ["Approved", "Accepted_By_Division", "Sent_To_Division"]}},
+        {"_id": 0}, sort=[("created_at", -1)],
+    )
+    if not tb:
+        tb = await db.tournament_budgets.find_one(
+            {"tournament_id": tid, "body_id": body_id},
+            {"_id": 0}, sort=[("created_at", -1)],
+        )
+    heads_ref = (tb or {}).get("approved_head_allocations") or (tb or {}).get("head_allocations") or []
+    head_index = {h.get("head"): float(h.get("limit_inr") or 0) for h in heads_ref}
+
+    invoices = await db.tournament_invoices.find({
+        "tournament_id": tid, "body_id": body_id,
+        "status": {"$in": ["Draft", "Submitted", "Approved"]},  # M39z.c · live tally
+    }, {"_id": 0}).to_list(500)
+
+    spent_by_head_map: dict = {}
+    invoiced_total = 0.0
+    for inv in invoices:
+        invoiced_total += float(inv.get("total_inr") or inv.get("amount_inr") or 0)
+        allocs = inv.get("allocations") or []
+        if allocs:
+            for a in allocs:
+                lbl = a.get("head_label") or a.get("head_code") or "Unallocated"
+                spent_by_head_map[lbl] = spent_by_head_map.get(lbl, 0.0) + float(a.get("amount_inr") or 0)
+        else:
+            lbl = inv.get("budget_head_code") or "Unallocated"
+            spent_by_head_map[lbl] = spent_by_head_map.get(lbl, 0.0) + float(inv.get("total_inr") or inv.get("amount_inr") or 0)
+
+    rows = []
+    grand_over = 0.0
+    grand_eligible = 0.0
+    for h in heads_ref:
+        label = h.get("head")
+        limit = float(h.get("limit_inr") or 0)
+        spent = spent_by_head_map.get(label, 0.0)
+        over = max(0.0, spent - limit)
+        eligible = min(spent, limit) if limit > 0 else spent
+        grand_over += over
+        grand_eligible += eligible
+        rows.append({
+            "head": label,
+            "limit_inr": round(limit, 2),
+            "spent_inr": round(spent, 2),
+            "over_inr": round(over, 2),
+            "eligible_inr": round(eligible, 2),
+            "utilisation_pct": round(spent * 100.0 / limit, 1) if limit > 0 else 0.0,
+        })
+    for label, spent in spent_by_head_map.items():
+        if label not in head_index:
+            grand_eligible += spent
+            rows.append({
+                "head": label, "limit_inr": 0.0, "spent_inr": round(spent, 2),
+                "over_inr": 0.0, "eligible_inr": round(spent, 2),
+                "utilisation_pct": 0.0, "unmatched": True,
+            })
+
+    budget_total = float((tb or {}).get("approved_total_inr") or (tb or {}).get("total_ceiling_inr") or 0)
+    return {
+        "tournament_id": tid, "body_id": body_id,
+        "budget_total_inr": round(budget_total, 2),
+        "invoiced_total_inr": round(invoiced_total, 2),
+        "eligible_total_inr": round(grand_eligible, 2),
+        "over_budget_inr": round(grand_over, 2),
+        "heads": rows,
+    }
+
+
 @api_router.get("/reimbursement-claims", response_model=List[TournamentReimbursementClaim])
 async def list_claims(
     request: Request,

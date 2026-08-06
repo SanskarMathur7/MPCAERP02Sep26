@@ -30,9 +30,17 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     const isCamp = CAMP_TYPES.includes(tournament.tournament_type_code);
     // Phase C · derive body-mode from tournament scope
     const isDistrictScope = tournament.scope === "Inter_District";
+    // M39z.i · Club / School tournaments — the entrants are free-text teams
+    // (no body records exist for individual clubs/schools). Show the extra-
+    // teams panel as the PRIMARY entrant list and hide the confusing
+    // District-pools step.
+    const isClubish = ["inter_club", "inter_school"].includes(tournament.tournament_type_code);
     const poolKey = isDistrictScope ? "district_pools" : "division_pools";
     const bodyLabel = isDistrictScope ? "District" : "Division";
     const bodyLabelPlural = isDistrictScope ? "Districts" : "Divisions";
+    const teamLabelSingular = isClubish
+        ? (tournament.tournament_type_code === "inter_school" ? "School team" : "Club")
+        : "Team";
 
     const [meta, setMeta] = useState({
         category: "Senior",
@@ -246,7 +254,10 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                 </div>
             ) : (
                 <>
-                {/* Step 4a · Division/District Pools & Host */}
+                {/* M39z.i · Skip Step 4 (District/Division pools) entirely for
+                    Club / School tournaments — the entrants are free-text
+                    teams (there are no body records for clubs). */}
+                {!isClubish && (
                 <div className="border-t border-mpca-brass/20 pt-4" data-testid="basics-division-pools">
                     <div className="flex items-center justify-between mb-2">
                         <div className="overline text-[9px] flex items-center gap-2"><UsersIcon size={11} /> Step 4 · {bodyLabel} Pools & Host</div>
@@ -357,21 +368,35 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                         </div>
                     )}
                 </div>
+                )}
 
-                {/* Step 4b · Extra teams (clubs / schools / districts) */}
-                <div className="border-t border-mpca-brass/20 pt-4" data-testid="basics-teams">
-                    <div className="overline text-[9px] mb-2 flex items-center gap-2"><UsersIcon size={11} /> Step 4b · Extra Teams (Clubs / Schools / Districts)</div>
+                {/* Step 4b · Extra teams (clubs / schools / districts).
+                    M39z.i · On Club / School tournaments this becomes the
+                    PRIMARY entrant list (relabelled + required-styling).      */}
+                <div className={`${isClubish ? "" : "border-t border-mpca-brass/20"} pt-4`} data-testid="basics-teams">
+                    <div className="overline text-[9px] mb-2 flex items-center gap-2">
+                        <UsersIcon size={11} />
+                        {isClubish
+                            ? `Step 4 · ${teamLabelSingular}s entering the tournament`
+                            : "Step 4b · Extra Teams (Clubs / Schools / Districts)"}
+                    </div>
                     <div className="text-[10px] text-mpca-gray-dark italic mb-2">
-                        Optional — use when the tournament involves non-division entrants (e.g. A-grade clubs, school teams, districts). Add each team by name.
+                        {isClubish
+                            ? `Add every ${teamLabelSingular.toLowerCase()} playing this tournament as a free-text entry — no body record needed. Assign each to a pool if you're using group-stage format.`
+                            : "Optional — use when the tournament involves non-division entrants (e.g. A-grade clubs, school teams, districts). Add each team by name."}
                     </div>
                     <div className="border border-mpca-brass/20 overflow-hidden mb-2">
                         <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-mpca-green-dark text-mpca-gold-light text-[9px] uppercase tracking-widest">
-                            <div className="col-span-8">Team name</div>
+                            <div className="col-span-8">{teamLabelSingular} name</div>
                             <div className="col-span-3">Pool</div>
                             <div className="col-span-1"></div>
                         </div>
                         {(meta.teams || []).length === 0 ? (
-                            <div className="px-3 py-3 text-[11px] text-mpca-gray-dark italic">No extra teams added.</div>
+                            <div className="px-3 py-3 text-[11px] text-mpca-gray-dark italic">
+                                {isClubish
+                                    ? `No ${teamLabelSingular.toLowerCase()}s added yet. Type each ${teamLabelSingular.toLowerCase()}'s name in the row below and hit +.`
+                                    : "No extra teams added."}
+                            </div>
                         ) : (meta.teams || []).map((t) => (
                             <div key={t.id} className="grid grid-cols-12 gap-2 px-3 py-1.5 border-b border-mpca-brass/10 text-xs items-center" data-testid={`basics-team-row-${t.id}`}>
                                 <div className="col-span-8 font-serif text-mpca-green-dark">{t.name}</div>
@@ -384,7 +409,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                     </div>
                     {canEdit && (
                         <div className="grid grid-cols-12 gap-2 items-end" data-testid="basics-team-add-form">
-                            <input placeholder="Team name" className={`${inputCls} col-span-8`} value={newTeam.name} onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })} data-testid="basics-team-name" />
+                            <input placeholder={`${teamLabelSingular} name (e.g. ${isClubish ? "Indore Cricket Club" : "Green Valley XI"})`} className={`${inputCls} col-span-8`} value={newTeam.name} onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })} data-testid="basics-team-name" />
                             <select className={`${inputCls} col-span-3`} value={newTeam.pool} onChange={(e) => setNewTeam({ ...newTeam, pool: e.target.value })} data-testid="basics-team-pool">
                                 {POOL_LABELS.map((p) => <option key={p}>{p}</option>)}
                             </select>
@@ -392,7 +417,9 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                         </div>
                     )}
                     {teamPools.length > 0 && (
-                        <div className="text-[10px] font-mono text-mpca-brass mt-2">{(meta.teams || []).length} extra team(s) · {teamPools.length} pool(s)</div>
+                        <div className="text-[10px] font-mono text-mpca-brass mt-2">
+                            {(meta.teams || []).length} {teamLabelSingular.toLowerCase()}{(meta.teams || []).length === 1 ? "" : "s"} · {teamPools.length} pool(s)
+                        </div>
                     )}
                 </div>
                 </>

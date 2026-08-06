@@ -1,0 +1,29 @@
+{
+  "summary": "Verified TASK 1 (TournamentFinanceDetail.jsx delete + legacy redirect) and TASK 2 (Club Team Manager reshaping of TournamentBasicsPanel for inter_club / inter_school) end-to-end. Filesystem: legacy page file gone, no imports remain. Legacy URL /tournaments/{id}/finance/legacy correctly redirects to /tournaments/{id}/finance (Finance Console). Basics panel behaves correctly on all 4 tournament type flavours tested: inter_club, inter_school, inter_district_league, inter_divisional. canEdit gate verified for non-host, non-organiser Division. Add/remove/summary flow works with all data-testids preserved. Backend not code-changed by this task — no pytest run.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TournamentBasicsPanel · inter_school placeholder", "issues": ["The 'basics-team-name' input placeholder on inter_school reads 'School team name (e.g. Indore Cricket Club)'. Because the ternary in line 412 only branches on isClubish (not on inter_club vs inter_school), the school placeholder still cites a cricket-club example. Minor copy oddity — suggest branching the example too: `tournament.tournament_type_code === 'inter_school' ? 'Green Valley School XI' : 'Indore Cricket Club'`."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL: fix inter_school placeholder example (currently 'Indore Cricket Club', should be a school team name).",
+    "OPTIONAL: seed-tournament cleanup — DELETE /api/tournaments/{id} returns 405 (no endpoint). 4 TEST tournaments left over from this run: b874d3f1, 0d259528, 4960515a, 6881463e. Consider adding a delete endpoint or manual DB cleanup."
+  ],
+  "critical_code_review_comments": [
+    "TournamentBasicsPanel.jsx line 412: the placeholder example is hard-coded 'Indore Cricket Club' for both inter_club and inter_school. Copy branch is isClubish-level only; should further branch on inter_school for a school-appropriate example.",
+    "Line 205 helper copy still says 'division pools with a host, extra teams, and grounds' irrespective of isClubish. For club/school tournaments where district-pools block is hidden, the header hint text still promises 'division pools' — cosmetic but misleading. Consider conditional copy.",
+    "Line 197 (validate) is a no-op when isClubish=true because dpools is empty — that's fine, but there is no equivalent validation on the free-text team list (e.g. duplicate club names, empty names beyond trim). Low-priority hardening."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (no backend changes)", "frontend": "100% on all 8 acceptance items"},
+  "test_credentials": "localStorage mpca_persona: MPCA {id:'secretary', body_type:'State', body_code:'MPCA'}; DIV-IND {id:'division-secretary', body_type:'Division', body_code:'DIV-IND'}; DIV-BPL {id:'division-secretary', body_type:'Division', body_code:'DIV-BPL'}.",
+  "seed_data_creation": "Created 4 TEST tournaments via POST /api/tournaments (X-Body-Code: MPCA): inter_club b874d3f1-98af-41b0-bb1d-d49739e0584d; inter_school 0d259528-d286-4b47-a787-3ce91576c9bc; inter_district_league 4960515a-4a62-4d4b-8d4c-7050391ce3af; inter_divisional 6881463e-38a4-4b22-b3c2-03f779f3a38e. NOTE: /api/tournaments does not expose DELETE (405) — seeds remain in DB.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "isClubish derives strictly from tournament_type_code in ['inter_club','inter_school']. For any new sub-type belonging to the club-ish family (e.g. inter_college, inter_academy) update the constant in TournamentBasicsPanel.jsx line 37. All existing data-testids for teams block (basics-teams, basics-team-add-form, basics-team-name, basics-team-pool, basics-team-add-btn, basics-team-row-{id}, basics-team-del-{id}) preserved and confirmed working. Also basics-division-pools is now absent (count=0) for club/school tournaments — do NOT assert it exists on those types.",
+  "rca of the issue": "N/A — no bugs blocking. Only a copy nit on the inter_school placeholder (see design_issues)."
+}

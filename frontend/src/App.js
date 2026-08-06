@@ -59,7 +59,8 @@ const Payroll = lazy(() => import("@/pages/Payroll"));
 const DMS = lazy(() => import("@/pages/DMS"));
 const Compliance = lazy(() => import("@/pages/Compliance"));
 const TournamentFinance = lazy(() => import("@/pages/TournamentFinance"));
-const TournamentFinanceDetail = lazy(() => import("@/pages/TournamentFinanceDetail"));
+// M39z.h · TournamentFinanceDetail retired (legacy Finance page). Route now
+// redirected via LegacyFinanceRedirect below. Lazy import removed to trim bundle.
 const TournamentFinanceConsole = lazy(() => import("@/pages/TournamentFinanceConsole"));
 const ReimbursementClaimsList = lazy(() =>
     import("@/pages/ReimbursementClaims").then((m) => ({ default: m.ReimbursementClaimsList })));

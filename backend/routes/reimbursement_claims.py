@@ -7,6 +7,7 @@ comments, approves (with optional lowered amount) or rejects.
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import HTTPException, Request
+from pydantic import BaseModel, ConfigDict
 
 from core.infra import db, api_router
 from core.shared_services import next_seq  # H6 · atomic sequence
@@ -230,6 +231,9 @@ async def list_claims(
     body_id: Optional[str] = None,
     status: Optional[TournamentReimbursementStatus] = None,
     fiscal_cycle: Optional[str] = None,
+    route_to_body_id: Optional[str] = None,    # M39z.d · filter by review destination
+    is_master: Optional[bool] = None,          # M39z.d · true = only Division master claims
+    exclude_consolidated: Optional[bool] = None,  # M39z.d · hide child District claims that are already rolled into a master
     skip: int = 0,
     limit: int = 500,
 ):
@@ -241,6 +245,13 @@ async def list_claims(
         q.update(body_scope(get_scope(request)))
     if status: q["status"] = status
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
+    if route_to_body_id: q["route_to_body_id"] = route_to_body_id
+    if is_master is True:
+        q["is_master"] = True
+    elif is_master is False:
+        q["is_master"] = {"$ne": True}
+    if exclude_consolidated:
+        q["parent_claim_id"] = None
     docs = await db.tournament_reimbursement_claims.find(q, {"_id": 0}).sort("created_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
     return docs
 
@@ -320,8 +331,32 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
             412,
             "Please download the claim summary PDF, get it signed by the Hon. "
             "Secretary and Treasurer, and upload the signed copy before "
-            "submitting to MPCA.",
+            "submitting.",
         )
+
+    # M39z.d · District Consolidator · route determination.
+    # District bodies submit UPWARD to their parent Division (not MPCA).
+    # Divisions submit UPWARD to MPCA. Route metadata is stamped on the claim
+    # so downstream approve/reject checks who has authority.
+    body = await db.bodies.find_one({"code": doc["body_id"]}, {"_id": 0})
+    body_type = (body or {}).get("body_type") or "Division"
+    if body_type == "District":
+        parent_div = (body or {}).get("parent_code")
+        if not parent_div:
+            raise HTTPException(
+                422,
+                f"District '{doc['body_id']}' has no parent Division configured — "
+                "cannot route the claim upward. Ask MPCA to set the parent Division.",
+            )
+        route_to = parent_div
+        review_stage = "Division"
+        notify_recipient_role = "division-secretary"
+        notify_recipient_body = parent_div
+    else:
+        route_to = "MPCA"
+        review_stage = "MPCA"
+        notify_recipient_role = "secretary"
+        notify_recipient_body = "MPCA"
 
     # Compute summary at submit time
     summary = await _compute_summary(doc["tournament_id"], doc["body_id"])
@@ -343,11 +378,14 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
     step = ApprovalStep(
         stage="Submitted", actor_post=action.actor_role,
         actor_name=action.actor_name, actor_body_id=action.actor_body_id,
-        decision="Submitted", notes=action.notes,
+        decision="Submitted",
+        notes=f"Routed to {route_to} for review. {action.notes or ''}".strip(),
     )
     chain = (doc.get("approval_chain") or []) + [step.model_dump()]
     await db.tournament_reimbursement_claims.update_one({"id": cid}, {"$set": {
         "status": "Submitted",
+        "route_to_body_id": route_to,
+        "review_stage": review_stage,
         "summary": summary,
         "invoice_ids": [i["id"] for i in invoices],
         "extra_expense_ids": [e["id"] for e in extras],
@@ -358,11 +396,12 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
         "updated_at": now,
     }})
 
-    # Notify MPCA Secretary
+    # Notify the reviewing body (Division for District claims, MPCA for Division claims)
     await _create_notification(
-        recipient_role_id="secretary", recipient_body_id="MPCA",
+        recipient_role_id=notify_recipient_role, recipient_body_id=notify_recipient_body,
         title=f"Reimbursement claim submitted · {doc.get('tournament_name')}",
-        message=f"{doc['claim_ref']} · {doc.get('body_name')} · Eligible ₹{summary['eligible_total_inr']:,.0f}",
+        message=(f"{doc['claim_ref']} · {doc.get('body_name')} · "
+                 f"Eligible ₹{summary['eligible_total_inr']:,.0f}"),
         link=f"/reimbursement-claims/{cid}",
         related_type="reimbursement_claim", related_id=cid,
         severity="info", kind="info",
@@ -415,12 +454,25 @@ async def start_review(cid: str, action: TournamentReimbursementAction):
 
 
 @api_router.post("/reimbursement-claims/{cid}/approve", response_model=TournamentReimbursementClaim)
-async def approve_claim(cid: str, action: TournamentReimbursementAction):
+async def approve_claim(cid: str, action: TournamentReimbursementAction, request: Request):
     doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
     if doc["status"] not in ("Submitted", "Under_Review"):
         raise HTTPException(409, f"Cannot approve from status '{doc['status']}'")
+
+    # M39z.d · Route-authority guard. Only the routed body may approve:
+    #   · District claim (route_to_body_id = parent Division) → only that
+    #     Division (or MPCA as fallback) may approve.
+    #   · Division claim (route_to_body_id = "MPCA") → only MPCA.
+    route_to = doc.get("route_to_body_id") or "MPCA"
+    scope = get_scope(request)
+    if scope.body_code and scope.body_code != route_to and not scope.is_state:
+        raise HTTPException(
+            403,
+            f"This claim is routed to {route_to} for review. "
+            f"You are scoped to {scope.body_code} and cannot approve it.",
+        )
 
     eligible = float((doc.get("summary") or {}).get("eligible_total_inr") or 0)
     approved = float(action.approved_amount_inr) if action.approved_amount_inr is not None else eligible
@@ -446,9 +498,10 @@ async def approve_claim(cid: str, action: TournamentReimbursementAction):
         "updated_at": now,
     }})
 
-    # Notify Division
+    # Notify the submitting body (Division for District claim, Division for its own)
     await _create_notification(
-        recipient_role_id="division-secretary", recipient_body_id=doc["body_id"],
+        recipient_role_id="division-secretary" if (doc.get("review_stage") == "MPCA") else "district-secretary",
+        recipient_body_id=doc["body_id"],
         title=f"Reimbursement APPROVED · {doc['claim_ref']}",
         message=f"₹{approved:,.0f} approved by {action.actor_name} for {doc.get('tournament_name')}",
         link=f"/reimbursement-claims/{cid}",
@@ -459,7 +512,7 @@ async def approve_claim(cid: str, action: TournamentReimbursementAction):
 
 
 @api_router.post("/reimbursement-claims/{cid}/reject", response_model=TournamentReimbursementClaim)
-async def reject_claim(cid: str, action: TournamentReimbursementAction):
+async def reject_claim(cid: str, action: TournamentReimbursementAction, request: Request):
     doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
@@ -467,6 +520,16 @@ async def reject_claim(cid: str, action: TournamentReimbursementAction):
         raise HTTPException(409, f"Cannot reject from status '{doc['status']}'")
     if not action.notes:
         raise HTTPException(400, "Rejection reason required in notes")
+
+    # M39z.d · Same route-authority guard as approve
+    route_to = doc.get("route_to_body_id") or "MPCA"
+    scope = get_scope(request)
+    if scope.body_code and scope.body_code != route_to and not scope.is_state:
+        raise HTTPException(
+            403,
+            f"This claim is routed to {route_to} for review. "
+            f"You are scoped to {scope.body_code} and cannot reject it.",
+        )
 
     now = datetime.now(timezone.utc).isoformat()
     step = ApprovalStep(
@@ -484,7 +547,8 @@ async def reject_claim(cid: str, action: TournamentReimbursementAction):
         "updated_at": now,
     }})
     await _create_notification(
-        recipient_role_id="division-secretary", recipient_body_id=doc["body_id"],
+        recipient_role_id="division-secretary" if (doc.get("review_stage") == "MPCA") else "district-secretary",
+        recipient_body_id=doc["body_id"],
         title=f"Reimbursement REJECTED · {doc['claim_ref']}",
         message=action.notes,
         link=f"/reimbursement-claims/{cid}",
@@ -492,6 +556,188 @@ async def reject_claim(cid: str, action: TournamentReimbursementAction):
         severity="warning", kind="info",
     )
     return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+
+
+# ═══════════════════ Consolidator (M39z.d) ═══════════════════
+
+class ConsolidatePayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    tournament_id: str
+    division_body_id: str
+    fiscal_cycle: str = "2025-26"
+    actor_name: str
+    actor_role: Optional[str] = None
+
+
+@api_router.get("/reimbursement-claims/consolidator/preview")
+async def preview_consolidator(tournament_id: str, division_body_id: str, fiscal_cycle: str = "2025-26"):
+    """M39z.d · Preview what a Division consolidation will roll up.
+
+    Returns every Approved District claim (parent_code == division_body_id)
+    that has not yet been consolidated + the Division's own claim (if any).
+    The Division uses this to decide when to finalise the master.
+    """
+    districts = await db.bodies.find({
+        "body_type": "District", "parent_code": division_body_id,
+    }, {"_id": 0}).to_list(200)
+    dist_codes = [d["code"] for d in districts]
+    child_docs = await db.tournament_reimbursement_claims.find({
+        "tournament_id": tournament_id,
+        "fiscal_cycle": fiscal_cycle,
+        "body_id": {"$in": dist_codes},
+        "route_to_body_id": division_body_id,
+        "status": "Approved",
+        "parent_claim_id": None,
+    }, {"_id": 0}).to_list(500)
+
+    own = await db.tournament_reimbursement_claims.find_one({
+        "tournament_id": tournament_id,
+        "body_id": division_body_id,
+        "fiscal_cycle": fiscal_cycle,
+    }, {"_id": 0}, sort=[("created_at", -1)])
+
+    return {
+        "tournament_id": tournament_id,
+        "division_body_id": division_body_id,
+        "approved_child_count": len(child_docs),
+        "child_claims": [{
+            "id": c["id"], "claim_ref": c["claim_ref"], "body_id": c["body_id"],
+            "body_name": c.get("body_name"),
+            "approved_amount_inr": c.get("approved_amount_inr") or 0,
+            "eligible_total_inr": (c.get("summary") or {}).get("eligible_total_inr") or 0,
+        } for c in child_docs],
+        "roll_up_total_inr": sum(float(c.get("approved_amount_inr") or 0) for c in child_docs),
+        "own_claim_id": (own or {}).get("id"),
+        "own_claim_ref": (own or {}).get("claim_ref"),
+        "own_claim_status": (own or {}).get("status"),
+    }
+
+
+@api_router.post("/reimbursement-claims/consolidate", response_model=TournamentReimbursementClaim)
+async def consolidate_district_claims(payload: ConsolidatePayload, request: Request):
+    """M39z.d · Division rolls up every Approved District claim under it into a
+    single "master" Division claim. The master aggregates head-wise summaries,
+    total approved amount and links every child. Master claim starts in Draft —
+    Division still needs to upload signed PDF and submit to MPCA using the
+    standard `/submit` endpoint (which auto-routes to MPCA for Divisions)."""
+    scope = get_scope(request)
+    if scope.body_code and scope.body_code != payload.division_body_id and not scope.is_state:
+        raise HTTPException(403, "Only the owning Division (or MPCA) may consolidate District claims.")
+
+    t = await db.tournaments.find_one({"id": payload.tournament_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    div = await db.bodies.find_one({"code": payload.division_body_id}, {"_id": 0})
+    if not div or div.get("body_type") != "Division":
+        raise HTTPException(422, f"'{payload.division_body_id}' is not a Division body.")
+
+    districts = await db.bodies.find({
+        "body_type": "District", "parent_code": payload.division_body_id,
+    }, {"_id": 0}).to_list(200)
+    dist_codes = [d["code"] for d in districts]
+
+    child_docs = await db.tournament_reimbursement_claims.find({
+        "tournament_id": payload.tournament_id,
+        "fiscal_cycle": payload.fiscal_cycle,
+        "body_id": {"$in": dist_codes},
+        "route_to_body_id": payload.division_body_id,
+        "status": "Approved",
+        "parent_claim_id": None,
+    }, {"_id": 0}).to_list(500)
+    if not child_docs:
+        raise HTTPException(
+            409,
+            "No Approved District claims are ready to consolidate. "
+            "Approve at least one District claim first.",
+        )
+
+    # Find or create the Division's own master (idempotent per tournament+cycle)
+    master = await db.tournament_reimbursement_claims.find_one({
+        "tournament_id": payload.tournament_id,
+        "body_id": payload.division_body_id,
+        "fiscal_cycle": payload.fiscal_cycle,
+        "status": {"$in": ["Draft", "Rejected"]},
+    }, {"_id": 0})
+    if not master:
+        claim_ref = await _next_claim_ref(payload.fiscal_cycle)
+        master_obj = TournamentReimbursementClaim(
+            claim_ref=claim_ref,
+            tournament_id=payload.tournament_id,
+            tournament_name=t.get("name"),
+            body_id=payload.division_body_id,
+            body_name=div.get("name"),
+            fiscal_cycle=payload.fiscal_cycle,
+            scheme_code=t.get("scheme_code"),
+            is_master=True,
+            notes=(f"Consolidated by {payload.actor_name} from "
+                   f"{len(child_docs)} Approved District claim(s)."),
+        )
+        master = master_obj.model_dump()
+        await db.tournament_reimbursement_claims.insert_one(master)
+
+    # Aggregate head-wise summaries across own + every child
+    own_summary = await _compute_summary(payload.tournament_id, payload.division_body_id)
+    heads_map: dict = {}
+
+    def _fold(rows, source):
+        for r in (rows or []):
+            k = r.get("head") or "Unallocated"
+            row = heads_map.setdefault(k, {
+                "head": k, "limit_inr": 0.0, "spent_inr": 0.0,
+                "over_inr": 0.0, "eligible_inr": 0.0, "sources": [],
+            })
+            row["limit_inr"] = max(row["limit_inr"], float(r.get("limit_inr") or 0))
+            row["spent_inr"] += float(r.get("spent_inr") or 0)
+            row["over_inr"] += float(r.get("over_inr") or 0)
+            row["eligible_inr"] += float(r.get("eligible_inr") or 0)
+            if source not in row["sources"]:
+                row["sources"].append(source)
+
+    _fold(own_summary.get("heads") or [], payload.division_body_id)
+    for c in child_docs:
+        _fold((c.get("summary") or {}).get("heads") or [], c["body_id"])
+
+    child_approved_total = sum(float(c.get("approved_amount_inr") or 0) for c in child_docs)
+    own_eligible = float(own_summary.get("eligible_total_inr") or 0)
+    consolidated_summary = {
+        "budget_total_inr": float(own_summary.get("budget_total_inr") or 0),
+        "invoiced_total_inr": float(own_summary.get("invoiced_total_inr") or 0)
+            + sum(float((c.get("summary") or {}).get("invoiced_total_inr") or 0) for c in child_docs),
+        "eligible_total_inr": own_eligible
+            + sum(float((c.get("summary") or {}).get("eligible_total_inr") or 0) for c in child_docs),
+        "over_budget_inr": float(own_summary.get("over_budget_inr") or 0)
+            + sum(float((c.get("summary") or {}).get("over_budget_inr") or 0) for c in child_docs),
+        "invoice_count": (own_summary.get("invoice_count") or 0)
+            + sum((c.get("summary") or {}).get("invoice_count") or 0 for c in child_docs),
+        "heads": list(heads_map.values()),
+        "child_approved_total_inr": child_approved_total,
+        "own_eligible_inr": own_eligible,
+    }
+
+    child_ids = [c["id"] for c in child_docs]
+    now = datetime.now(timezone.utc).isoformat()
+    step = ApprovalStep(
+        stage="Consolidated",
+        actor_post=payload.actor_role or "Division_Secretary",
+        actor_name=payload.actor_name,
+        actor_body_id=payload.division_body_id,
+        decision="Recommended",
+        notes=f"Consolidated {len(child_ids)} District claim(s) totalling ₹{child_approved_total:,.0f}.",
+    )
+    chain = (master.get("approval_chain") or []) + [step.model_dump()]
+    await db.tournament_reimbursement_claims.update_one({"id": master["id"]}, {"$set": {
+        "is_master": True,
+        "child_claim_ids": list(set((master.get("child_claim_ids") or []) + child_ids)),
+        "summary": consolidated_summary,
+        "approval_chain": chain,
+        "updated_at": now,
+    }})
+    await db.tournament_reimbursement_claims.update_many(
+        {"id": {"$in": child_ids}},
+        {"$set": {"parent_claim_id": master["id"], "updated_at": now}},
+    )
+    return await db.tournament_reimbursement_claims.find_one({"id": master["id"]}, {"_id": 0})
+
 
 
 @api_router.post("/reimbursement-claims/{cid}/comment", response_model=TournamentReimbursementClaim)

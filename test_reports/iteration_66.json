@@ -1,0 +1,28 @@
+{
+  "summary": "M39z.d District Consolidator · Backend + Frontend verified. Wrote 14 pytest cases in test_m39zd_district_consolidator.py — 12 PASS, 2 SKIPPED (skipped because the persistent seed tournament bb71efd9 already had this District's claim past-Draft from main-agent smoke-test; fresh-claim MPCA-override test also skipped by design once 409-idempotency existed). All critical route/authority/consolidation invariants verified: District submit auto-routes to parent Division (route_to_body_id=DIV-IND, review_stage=Division, chain notes 'Routed to DIV-IND'); wrong Division (DIV-BPL) blocked with 403 on both approve AND reject; correct Division (DIV-IND) approves; consolidate creates is_master=true claim with child_claim_ids populated, sets parent_claim_id on children, is idempotent (second call with no new approved children returns 409 with clear message), returns 422 for non-Division target, returns 403 for wrong Division; MPCA (X-Body-Type: State) override works; preview endpoint returns approved-not-consolidated children + roll_up_total_inr + own_claim_id; list_claims filters (route_to_body_id, is_master, exclude_consolidated) all correctly scoped. Tournament GET now allows District via parent Division participation verified. Frontend verified via Playwright + screenshots: District persona → no fc-tab-pipeline (correct), claims-panel loads with contextual copy 'goes to your Division for review, then rolls up to MPCA as part of the Division master' (exact match), District's already-consolidated claim shows MASTER/ROLLED UP/SANCTIONED pills. Division persona → claims-panel loads, master row shows 'MASTER' pill + '+ 1 District claim inside' hint + 'Submit to MPCA' button + Upload signed PDF action. MPCA persona → claims-panel with MASTER pills visible. district-review-panel and claims-consolidate-btn correctly hidden because the only child under DIV-IND is already Approved AND consolidated (parent_claim_id set) — empty-state behavior matches spec. No regressions observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_m39zd_district_consolidator.py",
+    "/app/test_reports/pytest/m39zd_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "reimbursement_claims.py submit_claim (line ~337-360) — clean routing logic: District → parent_code (422 if missing), else → MPCA. Notification recipient_role also switches (district-secretary vs division-secretary) which is correct.",
+    "approve_claim + reject_claim guard (line ~464-475, 524-533) — DRY-ish but nearly duplicated 12-line block; consider extracting `_ensure_route_authority(doc, scope)` helper.",
+    "consolidate endpoint idempotency uses status ∈ {Draft, Rejected} lookup to reuse master (line ~655-660). Safe.",
+    "consolidate creates master with `notes` mentioning child_docs count but master is upserted — on second successful consolidate the notes will still say original count. Minor cosmetic issue — heads/summary is recomputed correctly.",
+    "list_claims 'exclude_consolidated' filter uses `parent_claim_id: None` which correctly matches missing/null but may not match empty-string values if any legacy docs have that shape. Acceptable given the model default is None.",
+    "TournamentFinanceConsole.jsx now 1420 lines — still growing past 700-line rule. Consider splitting ClaimsPanel, DivisionBudgetCard, MatrixRow into /pages/finance/*.jsx.",
+    "ClaimsPanel `submitTargetLabel` derivation happens per-row; label logic (line ~1382) — good UX detail.",
+    "No end-to-end integration test in pytest that exercises the FULL D→submit→Div approve→consolidate→master submit→MPCA approve chain in one run against a fresh tournament. Consider adding when a disposable-tournament fixture exists."
+  ],
+  "updated_files": ["/app/backend/tests/test_m39zd_district_consolidator.py"],
+  "success_rate": {"backend": "100% (12/12 passed, 2 skipped by design)", "frontend": "100% — all required data-testids and contextual copy render correctly across District / Division / MPCA personas"},
+  "test_credentials": "localStorage 'mpca_persona' JSON injection — District: {body_type:'District', body_code:'DIST-INDO-IND', parent_body_code:'DIV-IND'}. Division: {body_type:'Division', body_code:'DIV-IND'}. MPCA: {body_type:'State', body_code:'MPCA'}. Tournament: bb71efd9-58be-436d-b04a-0aca48aa4f43.",
+  "seed_data_creation": "Created & consumed one District Draft claim for DIST-INDO-IND on tournament bb71efd9 (fiscal 2026-27), submitted→approved→consolidated into DIV-IND master TRC-2026-27-0004. Master remains in Draft awaiting signed PDF + submit-to-MPCA. To re-exercise Incoming District Claims panel or Consolidate button in future runs, either (a) use a different District under DIV-IND (e.g. DIST-BARW-IND, DIST-BURH-IND) OR (b) create a fresh tournament. Existing DIST-INDO-IND claim is now Approved+parent_claim_id-set, so preview_consolidator will return 0 approved children for DIV-IND on this tournament.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M39z.d fully green. Master claim TRC-2026-27-0004 (DIV-IND) currently Draft; not yet submitted to MPCA. If further Consolidator UI runs are needed, seed a fresh Draft District claim under a different Indore-Division district (e.g. DIST-BARW-IND) — the panel will then appear. All new endpoints correctly enforce route authority + scope guards.",
+  "rca_of_the_issue": "N/A — no bugs found."
+}

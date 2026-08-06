@@ -2106,6 +2106,16 @@ class TournamentReimbursementClaim(TournamentReimbursementClaimBase):
     body_name: Optional[str] = None
     status: TournamentReimbursementStatus = "Draft"
 
+    # M39z.d · District Consolidator ─────────────────────────────
+    # District claims are submitted to their parent Division (not MPCA).
+    # The Division then aggregates every Approved District claim + their own
+    # into a single "master" claim that is submitted upward to MPCA.
+    route_to_body_id: Optional[str] = None        # where a Submit lands: parent Division code (Districts) or "MPCA" (Divisions)
+    review_stage: Optional[str] = None            # "Division" | "MPCA" — what body reviews this claim
+    parent_claim_id: Optional[str] = None         # District claim → the Division master claim once consolidated
+    child_claim_ids: List[str] = []               # Division master → the District claims rolled into it
+    is_master: bool = False                       # true only for the Division-level consolidated claim
+
     # Auto-generated summary sheet (computed at submit)
     summary: dict = Field(default_factory=dict)
     # Structure:

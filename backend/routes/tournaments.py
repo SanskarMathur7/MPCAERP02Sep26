@@ -182,6 +182,9 @@ async def get_tournament(tid: str, request: Request):
     # M39l · Bug 2 · Divisions/Districts may open the tournament if they are on
     # the participants list, even when they are neither the host nor on the
     # acceptance-required list yet.
+    # M39z.d · Districts also inherit visibility from their parent Division —
+    # they contribute expenses to the Division's team so they need read-access
+    # to raise/track claims.
     if (req_scope.is_division or req_scope.is_district) and req_scope.body_code:
         req_from = (doc.get("acceptance") or {}).get("required_from") or []
         host_ok = doc.get("host_body_id") == req_scope.body_code
@@ -192,6 +195,20 @@ async def get_tournament(tid: str, request: Request):
             pat = _re.compile(f"^DIST-.+-{req_scope.division_suffix}$")
             if pat.match(doc.get("host_body_id") or "") or any(pat.match(x or "") for x in req_from):
                 host_ok = True
+        # M39z.d · District inherits view from parent Division participation
+        if not host_ok and req_scope.is_district:
+            me = await db.bodies.find_one({"code": req_scope.body_code}, {"_id": 0})
+            parent = (me or {}).get("parent_code")
+            if parent:
+                parent_host = doc.get("host_body_id") == parent
+                parent_accept = parent in req_from
+                if not (parent_host or parent_accept):
+                    part = await db.tournament_participations.find_one({
+                        "tournament_id": tid, "body_code": parent, "removed_at": None,
+                    })
+                    if part: host_ok = True
+                else:
+                    host_ok = True
         if not (host_ok or accept_ok):
             part_tids = await _visible_tids_via_participations(req_scope)
             if tid not in part_tids:

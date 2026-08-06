@@ -75,6 +75,7 @@ const TournamentFinanceConsole = () => {
     const [showOverrides, setShowOverrides] = useState(false);
 
     const isMPCA = persona?.body_type === "State";
+    const isDistrict = persona?.body_type === "District";
     const myBody = persona?.body_code;
 
     const load = useCallback(async () => {
@@ -324,8 +325,10 @@ const TournamentFinanceConsole = () => {
                 />
             )}
 
-            {/* M39u · Section tabs (visible only when budgets exist) */}
-            {anyBudgetsExist && (
+            {/* M39u · Section tabs (visible when budgets exist, OR for
+                Districts who never get their own budget row — they still
+                need Claims/Invoices/Extras tabs to submit upward). */}
+            {(anyBudgetsExist || isDistrict) && (
                 <div className="mb-4 flex items-center gap-1 border-b border-mpca-brass/30 overflow-x-auto" data-testid="fc-tabs">
                     {[
                         { id: "pipeline",  label: "Pipeline",         icon: LayoutGrid,    show: isMPCA },
@@ -995,13 +998,20 @@ export default TournamentFinanceConsole;
 // M39z.c · Inline claim workflow — Divisions can create, view the head-wise
 // summary, upload the signed PDF, and submit to MPCA without leaving the
 // Finance Console. MPCA sees a scoped list of every claim + Open action.
+// M39z.d · Districts route their claims to their parent Division; the
+// Division reviews (approve/reject/approve-with-variation) then Consolidates
+// every Approved District claim into a single master before submitting up.
 const ClaimsPanel = ({ tournament, persona }) => {
     const [claims, setClaims] = useState([]);
+    const [incomingChildren, setIncomingChildren] = useState([]);   // District claims routed to my Division
+    const [consolidatorPreview, setConsolidatorPreview] = useState(null);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
-    const [previewSummary, setPreviewSummary] = useState(null);   // spent-by-head preview when no claim yet
+    const [previewSummary, setPreviewSummary] = useState(null);
     const navigate = useNavigate();
     const isMPCA = persona?.body_type === "State";
+    const isDivision = persona?.body_type === "Division";
+    const isDistrict = persona?.body_type === "District";
     const myBody = persona?.body_code;
 
     const load = useCallback(async () => {
@@ -1010,16 +1020,32 @@ const ClaimsPanel = ({ tournament, persona }) => {
             if (!isMPCA && myBody) params.body_id = myBody;
             const { data } = await api.get("/reimbursement-claims", { params });
             setClaims(data || []);
-            // Preview: pull the live tally so Divisions can see the eligible amount before drafting.
+
             if (!isMPCA && myBody && (!data || data.length === 0)) {
                 try {
                     const { data: s } = await api.get(`/tournaments/${tournament.id}/spent-by-head`, { params: { body_id: myBody } });
                     setPreviewSummary(s);
                 } catch { /* ignore */ }
             }
+
+            // M39z.d · Divisions load incoming District claims + consolidator preview
+            if (isDivision && myBody) {
+                try {
+                    const { data: kids } = await api.get("/reimbursement-claims", {
+                        params: { tournament_id: tournament.id, route_to_body_id: myBody },
+                    });
+                    setIncomingChildren(kids || []);
+                } catch { setIncomingChildren([]); }
+                try {
+                    const { data: cp } = await api.get("/reimbursement-claims/consolidator/preview", {
+                        params: { tournament_id: tournament.id, division_body_id: myBody, fiscal_cycle: tournament.fiscal_cycle || "2025-26" },
+                    });
+                    setConsolidatorPreview(cp);
+                } catch { setConsolidatorPreview(null); }
+            }
         } catch { setClaims([]); }
         finally { setLoading(false); }
-    }, [tournament.id, isMPCA, myBody]);
+    }, [tournament.id, tournament.fiscal_cycle, isMPCA, isDivision, myBody]);
 
     useEffect(() => { setLoading(true); load(); }, [load]);
 
@@ -1063,12 +1089,61 @@ const ClaimsPanel = ({ tournament, persona }) => {
     };
 
     const submitClaim = async (claim) => {
-        if (!window.confirm(`Submit ${claim.claim_ref} to MPCA for reimbursement?\n\nMake sure the signed PDF is uploaded — MPCA cannot process an unsigned claim.`)) return;
+        const target = claim.is_master ? "MPCA" : (isDistrict ? `your parent Division (${persona?.parent_body_code || "Division"})` : "MPCA");
+        if (!window.confirm(`Submit ${claim.claim_ref} to ${target}?\n\nMake sure the signed PDF is uploaded — the reviewer cannot process an unsigned claim.`)) return;
         setBusy(true);
         try {
             await api.post(`/reimbursement-claims/${claim.id}/submit`, {
                 actor_name: persona?.name, actor_role: persona?.post, actor_body_id: myBody,
                 notes: "Submitted via Finance Console",
+            });
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
+    // M39z.d · Division reviews a District claim (approve/approve-with-variation/reject)
+    const reviewChild = async (child, action) => {
+        let approved_amount_inr = null;
+        let notes = null;
+        if (action === "approve") {
+            const proposed = window.prompt(
+                `Approve ${child.claim_ref} from ${child.body_name}?\n\nEligible ₹${Math.round(child.summary?.eligible_total_inr || 0).toLocaleString("en-IN")}.\nEnter approved amount (blank = full eligible):`,
+                Math.round(child.summary?.eligible_total_inr || 0)
+            );
+            if (proposed === null) return;
+            approved_amount_inr = proposed.trim() === "" ? undefined : parseFloat(proposed);
+        } else {
+            notes = window.prompt("Reason for rejection?");
+            if (!notes) return;
+        }
+        setBusy(true);
+        try {
+            const url = `/reimbursement-claims/${child.id}/${action}`;
+            await api.post(url, {
+                actor_name: persona?.name || myBody, actor_role: persona?.post || "Division_Secretary", actor_body_id: myBody,
+                approved_amount_inr, notes,
+            });
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
+    const consolidate = async () => {
+        if (!consolidatorPreview || (consolidatorPreview.approved_child_count || 0) === 0) return;
+        if (!window.confirm(
+            `Consolidate ${consolidatorPreview.approved_child_count} Approved District claim(s) totalling `
+            + `₹${Math.round(consolidatorPreview.roll_up_total_inr || 0).toLocaleString("en-IN")} into your Division master claim?\n\n`
+            + `After consolidation you'll need to upload the signed master PDF and submit to MPCA.`
+        )) return;
+        setBusy(true);
+        try {
+            await api.post("/reimbursement-claims/consolidate", {
+                tournament_id: tournament.id,
+                division_body_id: myBody,
+                fiscal_cycle: tournament.fiscal_cycle || "2025-26",
+                actor_name: persona?.name || myBody,
+                actor_role: persona?.post,
             });
             await load();
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
@@ -1081,6 +1156,10 @@ const ClaimsPanel = ({ tournament, persona }) => {
         </div>
     );
 
+    // District claims for review (Submitted, routed to this Division, not yet decided)
+    const pendingDistrictReviews = incomingChildren.filter((c) => c.status === "Submitted" && !c.parent_claim_id);
+    const approvedNotConsolidated = incomingChildren.filter((c) => c.status === "Approved" && !c.parent_claim_id);
+
     return (
         <div className="space-y-5" data-testid="claims-panel">
             <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -1090,10 +1169,11 @@ const ClaimsPanel = ({ tournament, persona }) => {
                         {isMPCA ? `${claims.length} claim(s) across bodies` : `Your body (${myBody})`}
                     </div>
                     <p className="text-[11px] text-mpca-charcoal/80 mt-1 max-w-2xl">
-                        Once the tournament wraps up and every invoice / DA is uploaded, raise a Reimbursement
-                        Claim. The system auto-computes a head-wise summary (Sanctioned vs Spent vs Eligible),
-                        you download the summary PDF, get it signed by the Secretary + Treasurer, upload it back
-                        and submit to MPCA — all in this panel.
+                        {isDistrict
+                            ? "Once your invoices / DA are uploaded, raise a Reimbursement Claim — it goes to your Division for review, then rolls up to MPCA as part of the Division master."
+                            : isDivision
+                                ? "Review each District's claim (approve / approve-with-variation / reject). Once decided, tap Consolidate to roll every Approved District claim + your own spend into a single master claim, then submit that upward to MPCA."
+                                : "Divisions submit consolidated master claims here; each master rolls up their own spend + every Approved District claim under them."}
                     </p>
                 </div>
                 {!isMPCA && claims.length === 0 && (
@@ -1125,6 +1205,70 @@ const ClaimsPanel = ({ tournament, persona }) => {
                             )}
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* M39z.d · Division-only: Incoming District Claims for review */}
+            {isDivision && (pendingDistrictReviews.length > 0 || approvedNotConsolidated.length > 0) && (
+                <div className="border-2 border-mpca-oxblood/50 bg-mpca-oxblood/5 p-4" data-testid="district-review-panel">
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                        <div>
+                            <div className="overline text-[10px] font-semibold text-mpca-oxblood">Incoming District Claims</div>
+                            <div className="font-serif text-mpca-green-dark font-semibold mt-0.5">
+                                {pendingDistrictReviews.length} awaiting review
+                                {approvedNotConsolidated.length > 0 && ` · ${approvedNotConsolidated.length} approved · ready to consolidate`}
+                            </div>
+                        </div>
+                        {approvedNotConsolidated.length > 0 && (
+                            <button
+                                onClick={consolidate}
+                                disabled={busy}
+                                className="text-[10px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-oxblood hover:bg-mpca-oxblood/90 px-3 py-2 inline-flex items-center gap-1.5 disabled:opacity-50"
+                                data-testid="claims-consolidate-btn"
+                            >
+                                {busy ? <Loader2 size={11} className="animate-spin" /> : <PackageOpen size={11} />}
+                                Consolidate {approvedNotConsolidated.length} · ₹{Math.round(consolidatorPreview?.roll_up_total_inr || 0).toLocaleString("en-IN")}
+                            </button>
+                        )}
+                    </div>
+
+                    {pendingDistrictReviews.length > 0 && (
+                        <div className="divide-y divide-mpca-oxblood/20 border border-mpca-oxblood/25 bg-mpca-ivory mb-3">
+                            {pendingDistrictReviews.map((c) => (
+                                <div key={c.id} className="grid grid-cols-12 items-center gap-2 px-3 py-2 text-xs" data-testid={`district-claim-${c.id}`}>
+                                    <div className="col-span-4 min-w-0">
+                                        <div className="font-mono text-[10px] text-mpca-charcoal/70 truncate">{c.claim_ref}</div>
+                                        <div className="font-serif text-sm text-mpca-green-dark truncate font-semibold">{c.body_name || c.body_id}</div>
+                                    </div>
+                                    <div className="col-span-3 text-right font-mono">
+                                        <div className="text-sm text-mpca-oxblood font-semibold">{fmt(c.summary?.eligible_total_inr || 0)}</div>
+                                        <div className="text-[10px] text-mpca-charcoal/70">Eligible</div>
+                                    </div>
+                                    <div className="col-span-5 flex justify-end gap-1.5">
+                                        <button onClick={() => reviewChild(c, "approve")} disabled={busy}
+                                            className="text-[10px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-green-dark hover:bg-mpca-green-dark/90 px-2.5 py-1.5"
+                                            data-testid={`district-approve-${c.id}`}>
+                                            Approve
+                                        </button>
+                                        <button onClick={() => reviewChild(c, "reject")} disabled={busy}
+                                            className="text-[10px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-oxblood hover:bg-mpca-oxblood/90 px-2.5 py-1.5"
+                                            data-testid={`district-reject-${c.id}`}>
+                                            Reject
+                                        </button>
+                                        <button onClick={() => navigate(`/reimbursement-claims/${c.id}`)}
+                                            className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors">
+                                            Open
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {approvedNotConsolidated.length > 0 && (
+                        <div className="text-[10px] text-mpca-charcoal/75 mt-2">
+                            Approved &amp; awaiting rollup: {approvedNotConsolidated.map((c) => `${c.body_name || c.body_id} (₹${Math.round(c.approved_amount_inr || 0).toLocaleString("en-IN")})`).join(", ")}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -1160,19 +1304,33 @@ const ClaimRow = ({ claim, isMPCA, busy, onUploadSigned, onSubmit, onOpen }) => 
     const c = claim;
     const isDraft = c.status === "Draft" || c.status === "Rejected";
     const hasSigned = !!c.signed_pdf_url;
+    // M39z.d · Route label — District claim submits to parent Division,
+    // Division master submits to MPCA. Default to "MPCA" for legacy claims.
+    const isDistrictClaim = (c.body_id || "").startsWith("DIST-");
+    const submitTargetLabel = isDistrictClaim ? "Division" : "MPCA";
     return (
         <div className="py-3" data-testid={`claims-row-${c.id}`}>
             <div className="grid grid-cols-12 items-center gap-3 text-xs">
                 <div className="col-span-3 min-w-0">
-                    <div className="font-mono text-[10px] text-mpca-charcoal/70 truncate">{c.claim_ref}</div>
+                    <div className="font-mono text-[10px] text-mpca-charcoal/70 truncate">
+                        {c.claim_ref}
+                        {c.is_master && <span className="ml-2 text-[9px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-oxblood px-1.5 py-0.5">Master</span>}
+                        {c.parent_claim_id && <span className="ml-2 text-[9px] font-semibold uppercase tracking-widest text-mpca-brass border border-mpca-brass/50 px-1 py-0.5">Rolled up</span>}
+                    </div>
                     <div className="font-serif text-sm text-mpca-green-dark truncate mt-0.5 font-semibold">
                         {c.body_name || c.body_id}
                     </div>
+                    {c.is_master && (c.child_claim_ids || []).length > 0 && (
+                        <div className="text-[10px] text-mpca-charcoal/70 mt-0.5">
+                            + {c.child_claim_ids.length} District claim{c.child_claim_ids.length === 1 ? "" : "s"} inside
+                        </div>
+                    )}
                 </div>
                 <div className="col-span-3">
                     <StatusPill status={c.status === "Approved" ? "Approved" : c.status === "Rejected" ? "Rejected" : c.status === "Under_Review" ? "Submitted" : c.status === "Submitted" ? "Submitted" : "Draft"} />
                     <div className="text-[10px] text-mpca-charcoal/80 mt-1">
                         {(c.status || "").replace(/_/g, " ")}
+                        {c.route_to_body_id && c.status === "Submitted" && ` · reviewer ${c.route_to_body_id}`}
                     </div>
                 </div>
                 <div className="col-span-3 text-right font-mono">
@@ -1195,7 +1353,7 @@ const ClaimRow = ({ claim, isMPCA, busy, onUploadSigned, onSubmit, onOpen }) => 
                 <div className="mt-3 border-2 border-mpca-brass/30 bg-mpca-parchment/40 p-3 flex items-center gap-3 flex-wrap" data-testid={`claim-draft-strip-${c.id}`}>
                     <div className="text-[11px] text-mpca-charcoal/85 flex-1 min-w-[200px]">
                         {hasSigned
-                            ? <>Signed PDF uploaded on {new Date(c.signed_pdf_uploaded_at || Date.now()).toLocaleDateString("en-IN")} — ready to submit.</>
+                            ? <>Signed PDF uploaded on {new Date(c.signed_pdf_uploaded_at || Date.now()).toLocaleDateString("en-IN")} — ready to submit to <strong className="text-mpca-oxblood">{submitTargetLabel}</strong>.</>
                             : <>Download the summary PDF from <em>Open detail</em>, get it signed by the Secretary + Treasurer, then upload below.</>}
                     </div>
                     {hasSigned && c.signed_pdf_url && (
@@ -1217,11 +1375,11 @@ const ClaimRow = ({ claim, isMPCA, busy, onUploadSigned, onSubmit, onOpen }) => 
                         onClick={onSubmit}
                         disabled={busy || !hasSigned}
                         className="text-[10px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-oxblood hover:bg-mpca-oxblood/90 px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                        title={hasSigned ? "Submit to MPCA" : "Upload signed PDF first"}
+                        title={hasSigned ? `Submit to ${submitTargetLabel}` : "Upload signed PDF first"}
                         data-testid={`claims-submit-${c.id}`}
                     >
                         {busy ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
-                        Submit to MPCA
+                        Submit to {submitTargetLabel}
                     </button>
                 </div>
             )}

@@ -409,7 +409,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                     </div>
                     {canEdit && (
                         <div className="grid grid-cols-12 gap-2 items-end" data-testid="basics-team-add-form">
-                            <input placeholder={`${teamLabelSingular} name (e.g. ${isClubish ? "Indore Cricket Club" : "Green Valley XI"})`} className={`${inputCls} col-span-8`} value={newTeam.name} onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })} data-testid="basics-team-name" />
+                            <input placeholder={`${teamLabelSingular} name (e.g. ${tournament.tournament_type_code === "inter_school" ? "Green Valley School XI" : (isClubish ? "Indore Cricket Club" : "Green Valley XI")})`} className={`${inputCls} col-span-8`} value={newTeam.name} onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })} data-testid="basics-team-name" />
                             <select className={`${inputCls} col-span-3`} value={newTeam.pool} onChange={(e) => setNewTeam({ ...newTeam, pool: e.target.value })} data-testid="basics-team-pool">
                                 {POOL_LABELS.map((p) => <option key={p}>{p}</option>)}
                             </select>

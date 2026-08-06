@@ -69,7 +69,12 @@ export const TOURNAMENT_TYPE_CATALOG = [
         flow: "MPCA → Division",
         scheme_ref: "Scheme pp.11-13",
     },
-    // ─────────── DIVISION-CREATED (8 types) ───────────
+    // ─────────── DIVISION-CREATED (7 types) ───────────
+    // NOTE: `inter_div_travel` (Travel Subsidy) moved OUT of this group and
+    // into the MPCA-created section below — Divisions never create it; MPCA
+    // creates it in parallel with each Inter-Divisional tournament so the
+    // Division participants can claim their III-tier AC rail fare against
+    // the parallel tournament instead of the main Inter-Div fixture.
     {
         code: "inter_div_travel",
         scheme_code: "2-C",
@@ -77,11 +82,11 @@ export const TOURNAMENT_TYPE_CATALOG = [
         family: "MPCA_InterDivisional",
         default_format: "Multi_Day",
         default_scope: "Inter_Divisional",
-        one_liner: "Claimed by a Division travelling out of its own area to play an MPCA inter-divisional match. Entitlement is III-tier AC rail fare for 18 persons.",
+        one_liner: "Created by MPCA in parallel with an Inter-Divisional tournament so visiting Divisions can claim III-tier AC rail fare for 18 persons. Entitlement is triggered when the Division travels out of its own area to play the parent MPCA Inter-Divisional match.",
         input_hint: "III-tier AC rail fare, feeder legs from District HQ, Tatkal premium.",
-        eligible_hosts: ["Division"],
-        created_by: ["Division", "District"],
-        section: "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS",
+        eligible_hosts: ["MPCA"],
+        created_by: ["State"],                       // MPCA only (parallel to inter_div)
+        section: "MPCA ALLOTS TO DIVISION",
         flow: "MPCA → Division",
         scheme_ref: "Scheme p.10",
     },

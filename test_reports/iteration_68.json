@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend-only verification of tournament catalog RBAC fix for `inter_div_travel` (Inter-Divisional Participation - Travel Subsidy). Opened Step 1 of the Create Tournament modal for Division, MPCA (State), and District personas and confirmed the corrected section/count rendering. Also verified getTypeByCode('inter_div_travel') still returns the entry (metadata still resolves for existing tournaments).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/.screenshots/modal_division.png",
+    "/app/.screenshots/modal_mpca.png",
+    "/app/.screenshots/modal_district.png"
+  ],
+  "action_items": [
+    "MINOR (non-blocking): The block comment in /app/frontend/src/lib/tournamentCatalog.js around lines 22-25 still reads 'Division/District personas create: everything else (8 types)'. Update to '7 types' to match the new reality (the code and header count are already dynamic and correct, this is just a doc comment)."
+  ],
+  "critical_code_review_comments": [
+    "Catalog logic is clean and driven off `created_by` + `body_type` — filter is data-driven, so no code changes are needed if additional types are re-classified.",
+    "Modal header count uses `creatableTypes.length` dynamically — no hardcoded numbers, good.",
+    "getTypeByCode still resolves 'inter_div_travel' independent of persona, so any historical tournaments in DB with this code still render name/scheme_ref — regression-safe."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "seed_data_creation": "None — only localStorage.mpca_persona was set via the demo-persona login (Devashish Nilosey, Sanjeev Dua, Rajesh Kulkarni).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bug fix verified end-to-end via Step 1 modal for 3 personas. Division persona (DIV-IND) sees exactly 7 cards under 'A DIVISION ALLOTS TO ITS DISTRICTS...' section — Pre-Tournament Camp, Reciprocal, Inter-District, Inter-School, Inter-Club, Periodical Coaching Camp, Vacation Camp — and NO Travel Subsidy card. Header text reads '7 tournament categories'. MPCA persona sees 4 cards: BCCI Domestic (Staging), BCCI Away Participation, MPCA Inter-Divisional Tournament, AND newly-moved Inter-Divisional Participation (Travel Subsidy) — the last two grouped under 'MPCA ALLOTS TO DIVISION'. Header reads '4 tournament categories'. District persona: /tournaments page has no 'Add Tournament' button (page-level RBAC blocks district secretaries from opening the modal at all — pre-existing behaviour, unrelated to this fix); however getCreatableTournamentTypes({body_type:'District'}) filters on created_by array which contains 'District' for the same 7 items as Division and does NOT contain 'District' for inter_div_travel (created_by:['State']), so District output is provably identical to Division. Only doc-comment nit: catalog file's top block comment still says '8 types' — see action_items.",
+  "test_credentials": "Demo personas via login screen: 'Devashish Nilosey' (Division), 'Sanjeev Dua' (State/MPCA), 'Rajesh Kulkarni' (District). No password required for demo personas.",
+  "rca of the issue": "Original bug: inter_div_travel catalog entry had created_by=['Division','District'] and section='A DIVISION ALLOTS TO...' so getCreatableTournamentTypes filtered it in for Division/District personas. Fix (main agent): updated the entry to created_by=['State'], section='MPCA ALLOTS TO DIVISION', eligible_hosts=['MPCA'], and refreshed the one_liner to reflect MPCA parallel-creation. Since the modal header count is dynamic and section grouping is data-driven, no component change was required. Verified: Division now sees 7 (was 8), MPCA now sees 4 (was 3), Travel Subsidy card correctly appears alongside MPCA Inter-Divisional in the MPCA persona's 'MPCA ALLOTS TO DIVISION' section."
+}

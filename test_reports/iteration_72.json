@@ -1,0 +1,24 @@
+{
+  "summary": "Verified bug fix: TournamentBasicsPanel now resolves parent Division when host_body_id is a DIST-* code, so Inter-District tournaments correctly populate district checkboxes on 'Add Pool'. Tested with two tournaments (DIST-ALIR-IND hosted 'Gwalior Division Inter-District Championship' and DIV-IND hosted 'Bhopal Division Inter-District Championship') plus an Inter_Divisional regression tournament.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TournamentBasicsPanel · Grounds dropdown", "issues": ["React hydration warning: <span> inside <option> at line 488 (visual-edit instrumentation wraps ground name option text). Non-blocking, but produces a console error on every Basics render. Consider excluding <option> children from the visual-edit span wrapper."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "TournamentBasicsPanel.jsx line 76: when host_body_id is missing on an Inter_District tournament, bodies is cleared to []. UI already surfaces the Note ('this Inter-District tournament has no host Division set') at line 302, so behaviour is fine — flagging as intentional.",
+    "The extra /api/bodies/{host} lookup runs on every host_body_id change; consider memoising the parent-Division resolution or using a single backend endpoint that returns sibling districts by host body id to avoid double round-trip."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bug fix for Inter-District pool step district population confirmed working via Playwright. DIST-* hosts now correctly resolve to parent Division and list all 8 sibling districts. DIV-* hosts continue to work directly. Inter_Divisional regression path shows 10 MPCA Divisions unchanged. Existing pool headers correctly render district names (bodyByCode lookup works after the fetch resolves).",
+  "rca_of_the_issue": "Original bug: /api/bodies query used raw host_body_id as parent_code. When host_body_id was DIST-ALIR-IND, the query 'body_type=District&parent_code=DIST-ALIR-IND' returned empty (Districts have no District children). Fix in useEffect at lines 64-95: if host starts with 'DIST-', fetch /api/bodies/{host} first, use its parent_code (a DIV-* code) as the query parent. Verified end-to-end in UI."
+}

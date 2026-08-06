@@ -62,12 +62,36 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     const [newGround, setNewGround] = useState({ ground_id: "" });
 
     useEffect(() => {
-        const params = isDistrictScope
-            ? { body_type: "District", parent_code: tournament.host_body_id || undefined }
-            : { body_type: "Division" };
-        api.get("/bodies", { params })
-            .then((r) => setBodies(r.data || []))
-            .catch(() => setBodies([]));
+        // M39z.ii · Inter-District pool step must list every District under
+        // the tournament's parent Division. `host_body_id` may itself be a
+        // Division (organiser) OR a specific hosting District (venue owner),
+        // so we resolve the parent Division first before fetching siblings.
+        if (!isDistrictScope) {
+            api.get("/bodies", { params: { body_type: "Division" } })
+                .then((r) => setBodies(r.data || []))
+                .catch(() => setBodies([]));
+            return;
+        }
+        const host = tournament.host_body_id;
+        if (!host) { setBodies([]); return; }
+        const fetchDistricts = async () => {
+            let divisionCode = host;
+            if (String(host).startsWith("DIST-")) {
+                try {
+                    const hostBody = await api.get(`/bodies/${host}`);
+                    divisionCode = hostBody.data?.parent_code || host;
+                } catch { /* fall back to host as-is */ }
+            }
+            try {
+                const r = await api.get("/bodies", {
+                    params: { body_type: "District", parent_code: divisionCode },
+                });
+                setBodies(r.data || []);
+            } catch {
+                setBodies([]);
+            }
+        };
+        fetchDistricts();
     }, [isDistrictScope, tournament.host_body_id]);
 
     // M29 · Fetch grounds owned by MPCA + tournament host + participants.

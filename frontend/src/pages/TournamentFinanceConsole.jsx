@@ -57,14 +57,24 @@ const TournamentFinanceConsole = () => {
     const [perBodyOverrides, setPerBodyOverrides] = useState({});   // M39w · MPCA per-body head overrides
     const [showOverrides, setShowOverrides] = useState(false);
 
-    // M39z.g · `isMPCA` grants organiser-level rights (Prepare / Send /
-    // Sanction, Pipeline tab, revision-review strip). On Division-hosted
-    // tournaments (Inter-District, Clubs) the hosting Division IS the
-    // organiser, so treat them like MPCA everywhere in this console.
+    // M39z.g / M39z.h · `isMPCA` grants organiser-level rights (Prepare / Send
+    // / Sanction, Pipeline tab, revision-review strip). Applied to:
+    //   · State (MPCA) — always
+    //   · Host body of the tournament (Division on their Inter-District,
+    //     District on their intra-district, etc.)
+    //   · Parent Division when a child District is the host (Division supervises
+    //     District-hosted tournaments under it)
     const isState = persona?.body_type === "State";
     const isDistrict = persona?.body_type === "District";
     const myBody = persona?.body_code;
-    const isMPCA = isState || (myBody && tournament?.host_body_id && myBody === tournament.host_body_id);
+    const hostBody = tournament?.host_body_id;
+    const isHostBody = myBody && hostBody && myBody === hostBody;
+    const isParentDivOfHostDist =
+        persona?.body_type === "Division"
+        && myBody?.startsWith("DIV-")
+        && (hostBody || "").startsWith("DIST-")
+        && (hostBody || "").endsWith(`-${myBody.slice(-3)}`);
+    const isMPCA = isState || isHostBody || isParentDivOfHostDist;
 
     const [accessDenied, setAccessDenied] = useState(null);
 
@@ -485,12 +495,8 @@ const TournamentFinanceConsole = () => {
                 </div>
             )}
 
-            {/* Legacy link — for records already in old submit/approve flow */}
-            <div className="mt-6 text-center">
-                <Link to={`/tournaments/${id}/finance/legacy`} className="text-[11px] text-mpca-brass hover:text-mpca-oxblood underline" data-testid="fc-legacy-link">
-                    Open legacy Finance view (invoices, extras, claim submission)
-                </Link>
-            </div>
+            {/* M39z.h · Legacy Finance view removed — the console now has
+                every tab (Invoices, Extras, DA/TA, Actuals, Claims) inline. */}
         </div>
     );
 };

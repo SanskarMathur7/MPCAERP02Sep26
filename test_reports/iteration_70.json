@@ -1,0 +1,32 @@
+{
+  "summary": "Verified BUG 1 (legacy Finance route retirement) and BUG 2 (Division supervising District-hosted tournaments) fixes. Backend 7/7 pytest green on parent-Division scope guard. Frontend: legacy redirect worked for MPCA + DIV-IND personas, no legacy TournamentFinanceDetail content renders, fc-legacy-link removed, TournamentBudgetsPanel & TournamentInvoicesPanel links point to /finance (not /finance/legacy). DIV-IND correctly acts as organiser on a DIST-ALIR-IND–hosted tournament (Prepare panel, 'DIV-IND (organiser)' chip); DIV-BPL correctly denied on same tournament. NOTE: had to patch the redirect route itself — main-agent's `<Navigate to='../finance' replace />` resolved to `/finance` (nonexistent) because the route is flat under root, sending users to `/` via wildcard. Replaced with a small LegacyFinanceRedirect component using `useParams` to produce an absolute path.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m39z_h_parent_div_organiser.py",
+    "/app/test_reports/pytest/iter70_parent_div.xml"
+  ],
+  "action_items": [
+    "None blocking. The redirect fix I applied is minimal (~4 lines in App.js) — main agent should code-review the LegacyFinanceRedirect component and useParams import addition."
+  ],
+  "critical_code_review_comments": [
+    "App.js L196 (main-agent's original fix): `<Navigate to='../finance' replace />` at a top-level route is a footgun in React Router v6 — the `..` is resolved relative to the matched route which is flat under `/`, so it navigates to `/finance` (nonexistent) instead of `/tournaments/{id}/finance`. Fixed by extracting a `LegacyFinanceRedirect` component that reads `useParams()` and returns an absolute `<Navigate to={`/tournaments/${id}/finance`} replace />`.",
+    "finance_console.py L557-561: `is_parent_div_of_host_dist` doesn't verify body_code has len>=7 (needs at least `DIV-XXX`). If someone passes X-Body-Code='DIV-' the slice(-3) becomes 'IV-' → matches DIST-*-IV- if any exist. Low risk in practice.",
+    "The convention `myBody.slice(-3)` for Division suffix is duplicated in 4 places (TournamentDetail, TournamentFinanceConsole, TournamentFinanceCard, finance_console.py). Consider extracting a shared helper `isParentDivisionOfDistrict(divCode, districtCode)` in `/app/frontend/src/lib/tournamentAccess.js` (or bodies helper) and one Python helper — reduces drift risk."
+  ],
+  "updated_files": [
+    "/app/frontend/src/App.js — replaced flawed `<Navigate to='../finance'>` with `LegacyFinanceRedirect` component + added `useParams` import",
+    "/app/backend/tests/test_m39z_h_parent_div_organiser.py — new pytest module (7 cases)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% on in-scope flows (legacy redirect · organiser rights · regression · leak-prevention)"},
+  "test_credentials": "localStorage.mpca_persona swap between MPCA / DIV-IND / DIV-BPL; season 2026-27",
+  "seed_data_creation": "None. Used existing tournaments: da0adb0f (DIST-ALIR-IND host), 16a2fdd5 (DIV-IND host), bb71efd9 (MPCA host).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The parent-Division-of-District-host predicate lives in 4 files (3 FE, 1 BE). If any future finance/edit surface is added, mirror the same rule. Regression backend test: /app/backend/tests/test_m39z_h_parent_div_organiser.py. Convention: DIV-<3letter suffix>, DIST-<slug>-<3letter> — the DIV suffix must equal the last 3 chars of the district code.",
+  "rca of the issue": "BUG 1 main-agent fix: `<Navigate to='../finance' replace />` — React Router v6 resolves `..` relative to the ROUTE, not the URL. Since this route is defined at the top level (no nested parent), `..` collapses to `/`, giving `/finance` which is unmatched → wildcard route sends to `/` (Landing). Fixed by introducing a `LegacyFinanceRedirect` React component that reads `useParams()` and issues an absolute `<Navigate to={`/tournaments/${id}/finance`} replace />`. Reproduction: visit `/tournaments/<any-id>/finance/legacy` when logged in as MPCA → lands at `/` (Landing page). After fix: lands at `/tournaments/<id>/finance` (Finance Console)."
+}

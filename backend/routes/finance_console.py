@@ -546,13 +546,24 @@ async def finance_matrix(
         raise HTTPException(404, "Tournament not found")
 
     # ── Scope guard ───────────────────────────────────────────────
-    # M39z.g · Host Division on their own tournament has MPCA-equivalent view
-    # rights (they act as MPCA for Inter-District / Clubs / etc. they host).
+    # M39z.g / M39z.h · Grant State-equivalent view rights to:
+    #   · MPCA (State)
+    #   · The host body itself (Division or District running the tournament)
+    #   · The parent Division of a District host (Divisions supervise their
+    #     Districts' tournaments)
     host_body_id = t.get("host_body_id") or "MPCA"
+    body_code = (x_body_code or "")
+    is_host = bool(body_code) and body_code == host_body_id
+    is_parent_div_of_host_dist = (
+        body_code.startswith("DIV-")
+        and host_body_id.startswith("DIST-")
+        and host_body_id.endswith(f"-{body_code[-3:]}")
+    )
     is_state = (
         (x_body_type or "").lower() == "state"
-        or (x_body_code or "").upper() == "MPCA"
-        or (x_body_code and x_body_code == host_body_id)
+        or body_code.upper() == "MPCA"
+        or is_host
+        or is_parent_div_of_host_dist
     )
     parts_query: Dict[str, Any] = {"tournament_id": tid, "removed_at": None}
     if not is_state and x_body_code:

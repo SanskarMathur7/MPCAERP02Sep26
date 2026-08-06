@@ -1,6 +1,6 @@
 import "@/App.css";
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { SeasonProvider } from "@/context/SeasonContext";
 import AppLayout from "@/components/AppLayout";
@@ -87,6 +87,11 @@ const PageLoader = () => (
         Loading…
     </div>
 );
+
+const LegacyFinanceRedirect = () => {
+    const { id } = useParams();
+    return <Navigate to={`/tournaments/${id}/finance`} replace />;
+};
 
 const ProtectedShell = ({ children }) => {
     const { isAuthed } = useAuth();
@@ -193,7 +198,7 @@ function App() {
                             {/* Protected — Sprint T-RIM: Tournament Reimbursement Matrix */}
                             <Route path="/tournament-finance" element={<Protected><TournamentFinance /></Protected>} />
                             <Route path="/tournaments/:id/finance" element={<Protected><TournamentFinanceConsole /></Protected>} />
-                            <Route path="/tournaments/:id/finance/legacy" element={<Protected><TournamentFinanceDetail /></Protected>} />
+                            <Route path="/tournaments/:id/finance/legacy" element={<LegacyFinanceRedirect />} />
                             <Route path="/reimbursement-claims" element={<Protected><ReimbursementClaimsList /></Protected>} />
                             <Route path="/reimbursement-claims/:id" element={<Protected><ReimbursementClaimDetail /></Protected>} />
                             <Route path="/my-da-forms" element={<Protected><MyDAForms /></Protected>} />

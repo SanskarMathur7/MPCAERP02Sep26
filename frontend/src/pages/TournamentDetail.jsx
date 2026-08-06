@@ -182,12 +182,25 @@ const TournamentDetail = () => {
     );
     if (!t) return <div className="p-16 text-center">Not found.</div>;
 
-    // M39z.g · Host Division on their own tournament acts as MPCA-equivalent.
-    // For Inter-District, Clubs, School etc. the Division is the organiser and
-    // should get the same edit/manage rights as MPCA has on Inter-Divisional.
+    // M39z.g / M39z.h · Organiser rights for the tournament:
+    //   · State (MPCA) — always
+    //   · Host body itself (Division or District)
+    //   · Parent Division of the host, when the host is a District (so
+    //     Divisions can manage Inter-District tournaments run under them,
+    //     even when a child District was chosen as the host body)
     const isState = persona && persona.body_type === "State";
-    const isHostBody = persona && persona.body_code && persona.body_code === t.host_body_id;
-    const canEdit = isState || isHostBody;
+    const myBody = persona?.body_code;
+    const isHostBody = myBody && myBody === t.host_body_id;
+    const hostIsDistrict = (t.host_body_id || "").startsWith("DIST-");
+    // Body code convention: DIV-<3letter>  and  DIST-<name>-<3letter>. So the
+    // Division suffix is the last three chars of DIV-code; a District under
+    // that Division ends with -<suffix>.
+    const isParentDivOfHostDist =
+        persona?.body_type === "Division"
+        && myBody?.startsWith("DIV-")
+        && hostIsDistrict
+        && (t.host_body_id || "").endsWith(`-${myBody.slice(-3)}`);
+    const canEdit = isState || isHostBody || isParentDivOfHostDist;
     const canEditSquad = (t.status === "Upcoming" || t.status === "Squad_Selection");
     const divisions = bodies.filter((b) => b.body_type === "Division");
     const districts = bodies.filter((b) => b.body_type === "District");

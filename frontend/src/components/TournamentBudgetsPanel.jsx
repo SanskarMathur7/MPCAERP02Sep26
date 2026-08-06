@@ -109,7 +109,7 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange }) => {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <Link to={`/tournaments/${tournament.id}/finance/legacy`} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors inline-flex items-center gap-1" data-testid="tb-open-full-btn">
+                    <Link to={`/tournaments/${tournament.id}/finance`} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors inline-flex items-center gap-1" data-testid="tb-open-full-btn">
                         Full Finance Screen <ArrowRight size={10} />
                     </Link>
                 </div>
@@ -161,7 +161,7 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange }) => {
                                         <button onClick={() => toggle(b.id)} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-green-dark hover:text-mpca-oxblood inline-flex items-center gap-1" data-testid={`tb-toggle-${b.id}`}>
                                             {isOpen ? "Hide" : "View"} heads <ChevronRight size={10} className={`transition-transform ${isOpen ? "rotate-90" : ""}`} />
                                         </button>
-                                        <Link to={`/tournaments/${tournament.id}/finance/legacy`} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors" data-testid={`tb-open-${b.id}`}>
+                                        <Link to={`/tournaments/${tournament.id}/finance`} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors" data-testid={`tb-open-${b.id}`}>
                                             Full detail
                                         </Link>
                                     </div>

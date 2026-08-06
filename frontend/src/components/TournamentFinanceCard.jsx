@@ -25,7 +25,13 @@ const deriveAction = (matrix, persona, tournament) => {
     const isState = persona?.body_type === "State";
     const myBody = persona?.body_code;
     const hostBody = tournament?.host_body_id || "MPCA";
-    const isOrganiser = isState || (myBody && myBody === hostBody);
+    // M39z.h · Host body OR parent Division of a District-host counts as organiser
+    const isParentDivOfHostDist =
+        persona?.body_type === "Division"
+        && myBody?.startsWith("DIV-")
+        && hostBody.startsWith("DIST-")
+        && hostBody.endsWith(`-${myBody.slice(-3)}`);
+    const isOrganiser = isState || (myBody && myBody === hostBody) || isParentDivOfHostDist;
     const organiserLabel = hostBody === "MPCA" ? "MPCA" : hostBody;
     const rows = matrix?.rows || [];
 
@@ -185,7 +191,14 @@ const TournamentFinanceCard = ({ tournament, persona }) => {
 
     const rows = matrix?.rows || [];
     const isState = persona?.body_type === "State";
-    const isOrganiser = isState || (persona?.body_code && persona.body_code === (tournament?.host_body_id || "MPCA"));
+    const myBody = persona?.body_code;
+    const hostBody = tournament?.host_body_id || "MPCA";
+    const isParentDivOfHostDist =
+        persona?.body_type === "Division"
+        && myBody?.startsWith("DIV-")
+        && hostBody.startsWith("DIST-")
+        && hostBody.endsWith(`-${myBody.slice(-3)}`);
+    const isOrganiser = isState || (myBody && myBody === hostBody) || isParentDivOfHostDist;
     const action = deriveAction(matrix, persona, tournament);
     const tone = TONE_STYLES[action.tone] || TONE_STYLES.brass;
     const Icon = action.icon;

@@ -97,10 +97,21 @@ const TournamentDetail = () => {
     };
     const refreshProgress = () => setProgressKey((k) => k + 1);
 
+    const [accessDenied, setAccessDenied] = useState(null);
+
     const load = async () => {
-        const [tx, sq] = await Promise.all([fetchTournament(id), fetchSquads(id)]);
-        setT(tx);
-        setSquads(sq);
+        try {
+            const [tx, sq] = await Promise.all([fetchTournament(id), fetchSquads(id)]);
+            setT(tx);
+            setSquads(sq);
+        } catch (e) {
+            if (e?.response?.status === 403) {
+                // M39z.g · graceful access-denied card (matches Finance Console pattern)
+                setAccessDenied(e.response.data?.detail || "You do not have access to this tournament.");
+            } else {
+                throw e;
+            }
+        }
     };
     useEffect(() => {
         (async () => {
@@ -159,6 +170,16 @@ const TournamentDetail = () => {
     };
 
     if (loading) return <div className="p-16" data-testid="trn-detail-loading"><CricketLoader size="lg" label="Loading tournament…" /></div>;
+    if (accessDenied) return (
+        <div className="max-w-2xl mx-auto p-8 mt-12 bulletin-card border-l-4 border-mpca-oxblood" data-testid="trn-detail-access-denied">
+            <div className="overline text-[10px] font-semibold text-mpca-oxblood">Access denied</div>
+            <div className="font-serif text-2xl text-mpca-green-dark mt-2">You cannot view this tournament</div>
+            <p className="text-sm text-mpca-charcoal mt-3 leading-relaxed">{accessDenied}</p>
+            <p className="text-[11px] text-mpca-charcoal/70 mt-4 italic">
+                If this looks wrong, ask MPCA to check your body&apos;s participation or parent-Division mapping.
+            </p>
+        </div>
+    );
     if (!t) return <div className="p-16 text-center">Not found.</div>;
 
     // M39z.g · Host Division on their own tournament acts as MPCA-equivalent.

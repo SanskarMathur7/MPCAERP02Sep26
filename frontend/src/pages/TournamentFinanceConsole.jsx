@@ -78,6 +78,8 @@ const TournamentFinanceConsole = () => {
     const isDistrict = persona?.body_type === "District";
     const myBody = persona?.body_code;
 
+    const [accessDenied, setAccessDenied] = useState(null);
+
     const load = useCallback(async () => {
         try {
             const [tRes, mRes] = await Promise.all([
@@ -88,16 +90,19 @@ const TournamentFinanceConsole = () => {
             setMatrix(mRes.data);
             setIvDraft(mRes.data?.input_variables || {});
             setPoolIvDrafts(mRes.data?.pool_input_variables || {});
-            // Default active pool = the first pool (if multi-pool)
             const pools = mRes.data?.pools || [];
             const firstPoolId = pools.find((p) => p.pool_id)?.pool_id;
             setActivePoolTab(firstPoolId || null);
-            // Load scheme input spec if scheme code present
             if (tRes.data?.scheme_code) {
                 try {
                     const { data: spec } = await api.get(`/schemes/${tRes.data.scheme_code}/input-spec`);
                     setSchemeSpec(spec);
                 } catch { /* scheme without a backend spec is OK */ }
+            }
+        } catch (e) {
+            // M39z.e · graceful access-denied card instead of blank/dev-overlay
+            if (e?.response?.status === 403) {
+                setAccessDenied(e.response.data?.detail || "You do not have access to this tournament.");
             }
         } finally {
             setLoading(false);
@@ -122,6 +127,16 @@ const TournamentFinanceConsole = () => {
     }, [ivDraft, poolIvDrafts, activePoolTab, tournament?.scheme_code, isMPCA]);
 
     if (loading) return <CricketLoader label="Loading finance console…" />;
+    if (accessDenied) return (
+        <div className="max-w-2xl mx-auto p-8 mt-12 bulletin-card border-l-4 border-mpca-oxblood" data-testid="fc-access-denied">
+            <div className="overline text-[10px] font-semibold text-mpca-oxblood">Access denied</div>
+            <div className="font-serif text-2xl text-mpca-green-dark mt-2">You cannot view this tournament</div>
+            <p className="text-sm text-mpca-charcoal mt-3 leading-relaxed">{accessDenied}</p>
+            <p className="text-[11px] text-mpca-charcoal/70 mt-4 italic">
+                If this looks wrong, ask MPCA to check your parent Division mapping in the bodies register.
+            </p>
+        </div>
+    );
     if (!matrix) return <div className="p-8 text-mpca-oxblood">Tournament not found.</div>;
 
     const rows = matrix.rows || [];

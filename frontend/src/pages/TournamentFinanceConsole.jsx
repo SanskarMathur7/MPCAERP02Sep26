@@ -57,9 +57,14 @@ const TournamentFinanceConsole = () => {
     const [perBodyOverrides, setPerBodyOverrides] = useState({});   // M39w · MPCA per-body head overrides
     const [showOverrides, setShowOverrides] = useState(false);
 
-    const isMPCA = persona?.body_type === "State";
+    // M39z.g · `isMPCA` grants organiser-level rights (Prepare / Send /
+    // Sanction, Pipeline tab, revision-review strip). On Division-hosted
+    // tournaments (Inter-District, Clubs) the hosting Division IS the
+    // organiser, so treat them like MPCA everywhere in this console.
+    const isState = persona?.body_type === "State";
     const isDistrict = persona?.body_type === "District";
     const myBody = persona?.body_code;
+    const isMPCA = isState || (myBody && tournament?.host_body_id && myBody === tournament.host_body_id);
 
     const [accessDenied, setAccessDenied] = useState(null);
 
@@ -253,7 +258,7 @@ const TournamentFinanceConsole = () => {
                 </div>
                 <div className="text-[10px] uppercase tracking-widest">
                     <span className="px-2 py-1 bg-mpca-green-dark/10 text-mpca-green-dark border border-mpca-green-dark/30">
-                        You are viewing as · {isMPCA ? "MPCA (State)" : (myBody || persona?.body_type)}
+                        You are viewing as · {isState ? "MPCA (State)" : (isMPCA ? `${myBody} (organiser)` : (myBody || persona?.body_type))}
                     </span>
                 </div>
             </div>

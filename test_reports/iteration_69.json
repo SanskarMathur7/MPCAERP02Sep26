@@ -1,0 +1,36 @@
+{
+  "summary": "Verified M39z.g fix: host Division (persona.body_code == tournament.host_body_id) now acts as organiser with MPCA-equivalent rights on Division-owned tournaments (Inter-District etc.). Backend matrix scope widened correctly; frontend Finance card, persona chip, Pipeline tab, Basics edit affordances all respond to `isOrganiser` semantic. Backend 7/7 pytest and 3/4 frontend flows green; the 4th (DIV-BPL non-host on DIV-IND tournament) short-circuits earlier at GET /tournaments/{id} with a 403 (pre-existing tournament access-control, not part of this ticket) — this is *stricter* than the ticket-required behaviour so the regression concern (no organiser rights leak) is trivially satisfied.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "TournamentDetail (any persona)",
+        "issues": [
+          "When a persona (e.g. DIV-BPL) opens a tournament they don't have access to, backend returns 403 on GET /tournaments/{id} and the CRA dev-overlay full-screen error is shown (Uncaught runtime errors panel), instead of a graceful 'Access denied' card like the Finance Console has (fc-access-denied). Consider catching the 403 in TournamentDetail.load() and rendering a friendly card. Not caused by this ticket."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m39z_g_organiser_rights.py",
+    "/app/test_reports/pytest/iter69_organiser.xml"
+  ],
+  "action_items": [
+    "Optional (not blocking): add graceful 403 handling in TournamentDetail.jsx `load()` similar to TournamentFinanceConsole.jsx accessDenied pattern so non-participating personas see a friendly card instead of the dev error overlay. Existing behaviour is unrelated to this ticket."
+  ],
+  "critical_code_review_comments": [
+    "finance_console.py L555: is_state now includes `x_body_code == host_body_id` — good, but does NOT also grant IV visibility for districts/parents. Fine for current scope.",
+    "TournamentFinanceCard L188: `isOrganiser` computed at render time correctly mirrors deriveAction's own computation. No drift.",
+    "TournamentDetail L169: `canEdit = isState || isHostBody` — correctly propagates to Basics/Calendar/Squads sub-panels via prop.",
+    "Verify: no other frontend surfaces still hardcode `persona.body_type==='State'` where they should now also allow host body. Quick grep may be useful (Notifications, Extras, Closure Letter panels)."
+  ],
+  "updated_files": ["/app/backend/tests/test_m39z_g_organiser_rights.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% on in-scope flows (3/3 primary + MPCA regression)"},
+  "test_credentials": "localStorage.mpca_persona swapped between MPCA / DIV-IND / DIV-BPL / DIST-INDO-IND",
+  "seed_data_creation": "None. Used existing tournaments 16a2fdd5 (host=DIV-IND) and bb71efd9 (host=MPCA).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "M39z.g adds `isOrganiser = isState || (body_code == host_body_id)`. Any future finance/edit surface added on a Division-hosted tournament should use this same predicate. Backend regression test lives at /app/backend/tests/test_m39z_g_organiser_rights.py."
+}

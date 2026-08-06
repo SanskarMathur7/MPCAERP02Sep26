@@ -161,7 +161,12 @@ const TournamentDetail = () => {
     if (loading) return <div className="p-16" data-testid="trn-detail-loading"><CricketLoader size="lg" label="Loading tournament…" /></div>;
     if (!t) return <div className="p-16 text-center">Not found.</div>;
 
-    const canEdit = persona && persona.body_type === "State";
+    // M39z.g · Host Division on their own tournament acts as MPCA-equivalent.
+    // For Inter-District, Clubs, School etc. the Division is the organiser and
+    // should get the same edit/manage rights as MPCA has on Inter-Divisional.
+    const isState = persona && persona.body_type === "State";
+    const isHostBody = persona && persona.body_code && persona.body_code === t.host_body_id;
+    const canEdit = isState || isHostBody;
     const canEditSquad = (t.status === "Upcoming" || t.status === "Squad_Selection");
     const divisions = bodies.filter((b) => b.body_type === "Division");
     const districts = bodies.filter((b) => b.body_type === "District");

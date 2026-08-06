@@ -327,8 +327,11 @@ const TournamentFinanceConsole = () => {
 
             {/* M39u · Section tabs (visible when budgets exist, OR for
                 Districts who never get their own budget row — they still
-                need Claims/Invoices/Extras tabs to submit upward). */}
-            {(anyBudgetsExist || isDistrict) && (
+                need Claims/Invoices/Extras tabs to submit upward).
+                M39z.e · Also show for Division personas viewing a tournament
+                they HOST — they act as MPCA there so they need every tab
+                even before budgets exist. */}
+            {(anyBudgetsExist || isDistrict || (persona?.body_type === "Division" && tournament?.host_body_id === persona?.body_code)) && (
                 <div className="mb-4 flex items-center gap-1 border-b border-mpca-brass/30 overflow-x-auto" data-testid="fc-tabs">
                     {[
                         { id: "pipeline",  label: "Pipeline",         icon: LayoutGrid,    show: isMPCA },
@@ -1013,6 +1016,14 @@ const ClaimsPanel = ({ tournament, persona }) => {
     const isDivision = persona?.body_type === "Division";
     const isDistrict = persona?.body_type === "District";
     const myBody = persona?.body_code;
+    // M39z.e · Tournament ownership drives the whole flow.
+    //   host === "MPCA"    → MPCA-owned (Inter-Division), Divisions submit here.
+    //   host starts DIV-*  → Division-owned (Inter-District / Clubs). Districts
+    //                        under that Division submit; hosting Division
+    //                        reviews then can consolidate and push upward.
+    const host = tournament?.host_body_id || "MPCA";
+    const isDivHosted = host && host.startsWith("DIV-");
+    const iAmHostDivision = isDivision && host === myBody;
 
     const load = useCallback(async () => {
         try {
@@ -1029,7 +1040,9 @@ const ClaimsPanel = ({ tournament, persona }) => {
             }
 
             // M39z.d · Divisions load incoming District claims + consolidator preview
-            if (isDivision && myBody) {
+            // — only meaningful when this Division actually HOSTS the tournament
+            // (Districts don't participate on tournaments they don't host).
+            if (isDivision && myBody && iAmHostDivision) {
                 try {
                     const { data: kids } = await api.get("/reimbursement-claims", {
                         params: { tournament_id: tournament.id, route_to_body_id: myBody },
@@ -1045,7 +1058,7 @@ const ClaimsPanel = ({ tournament, persona }) => {
             }
         } catch { setClaims([]); }
         finally { setLoading(false); }
-    }, [tournament.id, tournament.fiscal_cycle, isMPCA, isDivision, myBody]);
+    }, [tournament.id, tournament.fiscal_cycle, isMPCA, isDivision, iAmHostDivision, myBody]);
 
     useEffect(() => { setLoading(true); load(); }, [load]);
 
@@ -1170,10 +1183,12 @@ const ClaimsPanel = ({ tournament, persona }) => {
                     </div>
                     <p className="text-[11px] text-mpca-charcoal/80 mt-1 max-w-2xl">
                         {isDistrict
-                            ? "Once your invoices / DA are uploaded, raise a Reimbursement Claim — it goes to your Division for review, then rolls up to MPCA as part of the Division master."
-                            : isDivision
-                                ? "Review each District's claim (approve / approve-with-variation / reject). Once decided, tap Consolidate to roll every Approved District claim + your own spend into a single master claim, then submit that upward to MPCA."
-                                : "Divisions submit consolidated master claims here; each master rolls up their own spend + every Approved District claim under them."}
+                            ? "Once your invoices / DA are uploaded, raise a Reimbursement Claim — it goes to your parent Division (this tournament's host) for review, then rolls up to MPCA as part of the Division master."
+                            : isDivision && iAmHostDivision
+                                ? "You are hosting this tournament. Review each District's claim (approve / approve-with-variation / reject), then tap Consolidate to roll every Approved District claim + your own admin spend into a single master claim, then submit that upward to MPCA to reclaim."
+                                : isDivision
+                                    ? "Raise your Reimbursement Claim for this MPCA-hosted tournament — it goes to MPCA for review. Districts do not participate here."
+                                    : "Divisions submit consolidated master claims here; each master rolls up their own spend + every Approved District claim under them."}
                     </p>
                 </div>
                 {!isMPCA && claims.length === 0 && (

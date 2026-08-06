@@ -239,10 +239,19 @@ async def list_claims(
 ):
     q: dict = {}
     if tournament_id: q["tournament_id"] = tournament_id
-    if body_id: q["body_id"] = body_id
+    scope = get_scope(request)
+    if body_id:
+        q["body_id"] = body_id
+    elif route_to_body_id and scope.body_code and route_to_body_id == scope.body_code:
+        # M39z.e · Reviewer-scope. When the caller asks for claims routed TO
+        # themselves, they're acting as reviewer (e.g. Division reviewing
+        # District claims). Return claims where body_id belongs to any body
+        # AND route_to_body_id == caller.
+        # (route_to_body_id filter applied below covers the routing side.)
+        pass
     else:
         # M13: MPCA sees all claims (they need to review), lower bodies see their own only
-        q.update(body_scope(get_scope(request)))
+        q.update(body_scope(scope))
     if status: q["status"] = status
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
     if route_to_body_id: q["route_to_body_id"] = route_to_body_id
@@ -334,25 +343,47 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
             "submitting.",
         )
 
-    # M39z.d · District Consolidator · route determination.
-    # District bodies submit UPWARD to their parent Division (not MPCA).
-    # Divisions submit UPWARD to MPCA. Route metadata is stamped on the claim
-    # so downstream approve/reject checks who has authority.
+    # M39z.d · Route determination is driven by tournament ownership, not by
+    # persona parent-links.
+    #   · MPCA-owned tournament (host="MPCA", e.g. Inter-Division):
+    #        - only Divisions can claim; they route upward to MPCA.
+    #        - Districts CANNOT claim (they don't participate at all).
+    #   · Division-owned tournament (host="DIV-XXX", e.g. Inter-District, Clubs):
+    #        - Districts under that Division claim → route to host Division.
+    #        - Host Division claims their own admin spend (or their consolidated
+    #          master) → route upward to MPCA.
+    #        - Districts under a *different* Division cannot claim here.
+    t = await db.tournaments.find_one({"id": doc["tournament_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    host = t.get("host_body_id") or "MPCA"
+
     body = await db.bodies.find_one({"code": doc["body_id"]}, {"_id": 0})
     body_type = (body or {}).get("body_type") or "Division"
+
     if body_type == "District":
-        parent_div = (body or {}).get("parent_code")
-        if not parent_div:
+        if not host.startswith("DIV-"):
             raise HTTPException(
                 422,
-                f"District '{doc['body_id']}' has no parent Division configured — "
-                "cannot route the claim upward. Ask MPCA to set the parent Division.",
+                "Districts do not participate in MPCA-owned tournaments. This "
+                "tournament is hosted by MPCA — the claim can only be raised "
+                "by a Division here.",
             )
-        route_to = parent_div
+        parent_div = (body or {}).get("parent_code")
+        if parent_div != host:
+            raise HTTPException(
+                422,
+                f"Districts can only claim on tournaments hosted by their "
+                f"parent Division. This tournament is hosted by '{host}' but "
+                f"your parent Division is '{parent_div}'.",
+            )
+        route_to = host                       # host Division is the reviewer
         review_stage = "Division"
         notify_recipient_role = "division-secretary"
-        notify_recipient_body = parent_div
+        notify_recipient_body = host
     else:
+        # Division claim — always routes upward to MPCA whether it's their own
+        # (on MPCA-owned) or their consolidated master (on Division-owned).
         route_to = "MPCA"
         review_stage = "MPCA"
         notify_recipient_role = "secretary"
@@ -627,6 +658,16 @@ async def consolidate_district_claims(payload: ConsolidatePayload, request: Requ
     t = await db.tournaments.find_one({"id": payload.tournament_id}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
+    # M39z.e · Consolidation is only meaningful when the Division actually
+    # hosts (owns) the tournament — that's when Districts participate under
+    # them. On MPCA-owned tournaments Districts don't submit at all, so a
+    # Division has no children to consolidate.
+    if (t.get("host_body_id") or "MPCA") != payload.division_body_id:
+        raise HTTPException(
+            422,
+            f"You can only consolidate on tournaments your Division hosts. "
+            f"This tournament is hosted by '{t.get('host_body_id')}', not '{payload.division_body_id}'.",
+        )
     div = await db.bodies.find_one({"code": payload.division_body_id}, {"_id": 0})
     if not div or div.get("body_type") != "Division":
         raise HTTPException(422, f"'{payload.division_body_id}' is not a Division body.")

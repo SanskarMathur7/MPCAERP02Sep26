@@ -55,6 +55,32 @@ const SCOPE_OPTIONS = [
     { value: "Invitational", label: "Invitational" },
 ];
 
+// MPCA-102 · Category & Age-group taxonomy used across every tournament form.
+// Gender is a top-level filter; `age_group` maps 1-1 to `age_cap_years` on
+// the Tournament model (Open → null, U-11 → 11, … U-25 → 25).
+const GENDER_OPTIONS = [
+    { value: "Male", label: "Male" },
+    { value: "Female", label: "Female" },
+];
+const AGE_GROUP_OPTIONS = [
+    { value: "Open", cap: null },
+    { value: "U-11", cap: 11 },
+    { value: "U-12", cap: 12 },
+    { value: "U-13", cap: 13 },
+    { value: "U-14", cap: 14 },
+    { value: "U-15", cap: 15 },
+    { value: "U-16", cap: 16 },
+    { value: "U-17", cap: 17 },
+    { value: "U-18", cap: 18 },
+    { value: "U-19", cap: 19 },
+    { value: "U-20", cap: 20 },
+    { value: "U-21", cap: 21 },
+    { value: "U-22", cap: 22 },
+    { value: "U-23", cap: 23 },
+    { value: "U-24", cap: 24 },
+    { value: "U-25", cap: 25 },
+];
+
 const emptyForm = {
     name: "",
     short_name: "",
@@ -69,9 +95,15 @@ const emptyForm = {
     end_date: "",
     venue_id: "",
     ground_id: "",
+    // MPCA-102 · Gender + Age Group. is_womens mirrors gender==='Female'
+    // (kept for backwards compatibility with M2-A code paths that read it).
+    gender: "Male",
+    age_group: "Open",
     is_womens: false,
     age_cap_years: "",
     age_floor_years: "",
+    // MPCA-108 · Medical clearance requirement (per-tournament, editable later).
+    medical_required: false,
     max_squad_size: 18,
     trophy_name: "",
     notes: "",
@@ -210,6 +242,10 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
         setBusy(true);
         setErr(null);
         try {
+            // MPCA-102 · Derive age_cap_years from age_group + backwards-compat
+            // is_womens from gender.
+            const ageOpt = AGE_GROUP_OPTIONS.find((o) => o.value === form.age_group);
+            const derivedCap = ageOpt ? ageOpt.cap : null;
             const payload = {
                 ...form,
                 name: form.name === "__other__" ? "" : form.name,
@@ -221,8 +257,10 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                 ground_id: form.ground_id || null,
                 scheme_code: form.scheme_code || null,
                 tournament_type_code: form.tournament_type_code || null,
-                age_cap_years: form.age_cap_years ? Number(form.age_cap_years) : null,
+                age_cap_years: derivedCap !== null ? derivedCap : (form.age_cap_years ? Number(form.age_cap_years) : null),
                 age_floor_years: form.age_floor_years ? Number(form.age_floor_years) : null,
+                is_womens: form.gender === "Female",
+                medical_required: !!form.medical_required,
                 max_squad_size: Number(form.max_squad_size) || 18,
                 notes: form.notes || null,
             };
@@ -419,6 +457,59 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                             </select>
                         </label>
                     </div>
+
+                    {/* MPCA-102 · Gender + Age Group. MPCA-105 · Max Squad
+                        editable. MPCA-108 · Medical clearance flag. */}
+                    <div className="grid md:grid-cols-3 gap-4">
+                        <label className="block">
+                            <div className="overline text-[9px] mb-1">Category *</div>
+                            <select
+                                className="input-heritage"
+                                value={form.gender}
+                                onChange={(e) => setForm({ ...form, gender: e.target.value })}
+                                data-testid="trn-gender-select"
+                            >
+                                {GENDER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                        </label>
+                        <label className="block">
+                            <div className="overline text-[9px] mb-1">Age Group *</div>
+                            <select
+                                className="input-heritage font-mono"
+                                value={form.age_group}
+                                onChange={(e) => setForm({ ...form, age_group: e.target.value })}
+                                data-testid="trn-age-group-select"
+                            >
+                                {AGE_GROUP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.value}</option>)}
+                            </select>
+                        </label>
+                        <label className="block">
+                            <div className="overline text-[9px] mb-1">Max Squad Size *</div>
+                            <input
+                                type="number"
+                                min={11}
+                                max={30}
+                                className="input-heritage font-mono"
+                                value={form.max_squad_size}
+                                onChange={(e) => setForm({ ...form, max_squad_size: e.target.value })}
+                                data-testid="trn-max-squad-input"
+                            />
+                            <div className="text-[10px] text-mpca-gray-dark mt-1 italic">Editable later from Tournament Basics.</div>
+                        </label>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer" data-testid="trn-medical-wrap">
+                        <input
+                            type="checkbox"
+                            checked={!!form.medical_required}
+                            onChange={(e) => setForm({ ...form, medical_required: e.target.checked })}
+                            data-testid="trn-medical-check"
+                        />
+                        <span className="text-[11px] text-mpca-charcoal">
+                            <span className="font-semibold text-mpca-oxblood">Medical clearance required</span>
+                            <span className="text-mpca-gray-dark"> — players without a medical stamp will be flagged in Squad Selection.</span>
+                        </span>
+                    </label>
 
                     <label className="block">
                         <div className="overline text-[9px] mb-1 flex items-center gap-2">

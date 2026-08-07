@@ -60,6 +60,14 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     const [bodies, setBodies] = useState([]);   // divisions OR districts depending on scope
     const [newTeam, setNewTeam] = useState({ name: "", pool: "A" });
     const [newGround, setNewGround] = useState({ ground_id: "" });
+    // MPCA-105 / MPCA-108 · Direct tournament field edits (max_squad_size,
+    // medical_required) — separate from setup_meta because they live on the
+    // Tournament model itself.
+    const [tournamentPatch, setTournamentPatch] = useState({});
+    const setTournamentField = (k, v) => {
+        setTournamentPatch((p) => ({ ...p, [k]: v }));
+        setDirty(true);
+    };
 
     useEffect(() => {
         // M39z.ii · Inter-District pool step must list every District under
@@ -210,6 +218,11 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
         setSaving(true);
         try {
             await api.patch(`/tournaments/${tournament.id}/setup-meta`, { setup_meta: meta });
+            // MPCA-105 + MPCA-108 · Persist Tournament-level fields separately.
+            if (Object.keys(tournamentPatch).length > 0) {
+                await api.patch(`/tournaments/${tournament.id}`, tournamentPatch);
+            }
+            setTournamentPatch({});
             setDirty(false);
             onChange?.();
         } catch (e) { setSaveError(e?.response?.data?.detail || e.message); }
@@ -258,6 +271,38 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                         <option>U-15</option>
                         <option>U-14</option>
                     </select>
+                </label>
+            </div>
+
+            {/* MPCA-105 + MPCA-108 · Editable Max Squad + Medical Required */}
+            <div className="grid md:grid-cols-2 gap-3 pt-2" data-testid="basics-config-row">
+                <label className="block">
+                    <div className="overline text-[9px] mb-1">Max Squad Size</div>
+                    <input
+                        type="number"
+                        min={11}
+                        max={30}
+                        className={`${inputCls} font-mono`}
+                        value={tournamentPatch.max_squad_size ?? tournament.max_squad_size ?? 18}
+                        onChange={(e) => setTournamentField("max_squad_size", Number(e.target.value) || 18)}
+                        disabled={!canEdit}
+                        data-testid="basics-max-squad"
+                    />
+                    <div className="text-[10px] text-mpca-gray-dark mt-1 italic">Caps the final squad selection (probables list stays open).</div>
+                </label>
+                <label className="flex items-start gap-2 pt-4" data-testid="basics-medical-wrap">
+                    <input
+                        type="checkbox"
+                        checked={!!(tournamentPatch.medical_required ?? tournament.medical_required)}
+                        onChange={(e) => setTournamentField("medical_required", e.target.checked)}
+                        disabled={!canEdit}
+                        className="mt-1"
+                        data-testid="basics-medical-check"
+                    />
+                    <span className="text-[11px] text-mpca-charcoal">
+                        <span className="font-semibold text-mpca-oxblood">Medical clearance required</span>
+                        <span className="text-mpca-gray-dark"> — Selection Console will flag any player without a MED stamp.</span>
+                    </span>
                 </label>
             </div>
 

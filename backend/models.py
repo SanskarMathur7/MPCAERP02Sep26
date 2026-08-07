@@ -801,6 +801,11 @@ class Player(PlayerBase):
     submission_locked: bool = False               # no edits after submission unless reopened
     # M12 · Selection Console — rich stats bundle (yo-yo, form, index components, career splits)
     selection_meta: Optional[dict] = None
+    # MPCA-108 · Medical clearance from MPCA. Selection Console blinks a MED
+    # badge on players whose `medical_cleared_at` is empty when the tournament
+    # has `medical_required=True`.
+    medical_cleared_at: Optional[str] = None
+    medical_cleared_by: Optional[str] = None
 
 
 class PlayerCreate(PlayerBase):
@@ -895,6 +900,11 @@ class TournamentBase(BaseModel):
     age_floor_years: Optional[int] = None        # e.g. 14 for U-14
     allows_guests: bool = False                  # Guest-category players permitted?
     is_womens: bool = False                      # M2-A: JS Anand, Women's Cup etc.
+    # MPCA-108 · Some tournaments (esp. BCCI-facing, MPCA age-group camps)
+    # require players to clear a medical check before squad selection. When
+    # true, the Selection Console flags players without a `medical_cleared`
+    # stamp on their profile.
+    medical_required: bool = False
     max_squad_size: int = 18                     # selection rule
     # M2-A: Championship 3-team format (Winner + Rest of MP A + B)
     is_three_team_format: bool = False

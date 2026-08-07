@@ -32,12 +32,19 @@ class BudgetInputVar(BaseModel):
 INPUT_SPECS: dict = {
     "2-A": [
         BudgetInputVar(key="match_days", label="Total match-days", default=6, unit="days"),
+        # MPCA-110 · Non-match days (practice / rest / travel days) — feeds a
+        # separate ground rent + logistics allowance so budgets don't lump
+        # match spend and off-day spend together.
+        BudgetInputVar(key="non_match_days", label="Non-match days (practice / rest)", default=0, unit="days"),
         BudgetInputVar(key="umpires_per_day", label="Umpires per match-day", default=2, unit="officials"),
         BudgetInputVar(key="scorers_per_day", label="Scorers per match-day", default=1, unit="officials"),
         BudgetInputVar(key="matches", label="Total matches (for MOM)", default=12, unit="matches"),
     ],
     "2-B": [
         BudgetInputVar(key="match_days", label="Total match-days", default=8, unit="days"),
+        # MPCA-110 · Non-match days for Inter-Divisional hosting (rest days,
+        # travel days, practice days).
+        BudgetInputVar(key="non_match_days", label="Non-match days (practice / rest)", default=0, unit="days"),
         BudgetInputVar(key="outstation_teams", label="Number of outstation teams", type="select", default="1", options=["0", "1", "2+"]),
         BudgetInputVar(key="outstation_pax", label="Outstation pax (auto: 16/32 based on above)", default=16, hint="Max 16 if one team outstation, 32 if both", unit="pax"),
         BudgetInputVar(key="food_pax", label="Food pax (all pax, max 40)", default=32, unit="pax"),
@@ -85,21 +92,33 @@ INPUT_SPECS: dict = {
 
 def _compute_2A(inp: dict, heads_ref: dict) -> List[dict]:
     days = float(inp.get("match_days", 6))
+    # MPCA-110 · Non-match day allowance (practice / rest / travel days)
+    non_match_days = float(inp.get("non_match_days", 0))
     umpires = float(inp.get("umpires_per_day", 2))
     scorers = float(inp.get("scorers_per_day", 1))
     matches = float(inp.get("matches", 12))
     per_day = float(heads_ref.get("PER_DAY_GRANT", 5000))
     ump_rate = float(heads_ref.get("UMPIRE_FEES", 700))
     sc_rate = float(heads_ref.get("SCORER_FEES", 500))
-    return [
+    rows = [
         {"head": "Per-day grant (balls/ground/trophies)", "limit_inr": per_day * days, "formula": f"₹{per_day:,.0f} × {days:g} days"},
         {"head": "Umpire fees", "limit_inr": ump_rate * umpires * days, "formula": f"₹{ump_rate:,.0f} × {umpires:g} × {days:g}"},
         {"head": "Scorer fees", "limit_inr": sc_rate * scorers * days, "formula": f"₹{sc_rate:,.0f} × {scorers:g} × {days:g}"},
     ]
+    if non_match_days > 0:
+        # Half rate for non-match days — ground stays reserved but no umpiring.
+        rows.append({
+            "head": "Non-match day allowance (practice / rest)",
+            "limit_inr": (per_day * 0.5) * non_match_days,
+            "formula": f"₹{per_day * 0.5:,.0f} × {non_match_days:g} non-match days",
+        })
+    return rows
 
 
 def _compute_2B(inp: dict, heads: dict) -> List[dict]:
     days = float(inp.get("match_days", 8))
+    # MPCA-110 · Non-match day allowance for Inter-Divisional hosting
+    non_match_days = float(inp.get("non_match_days", 0))
     outstation_teams = str(inp.get("outstation_teams", "1"))
     outstation_pax = float(inp.get("outstation_pax", 16 if outstation_teams == "1" else 32))
     food_pax = float(inp.get("food_pax", 32))
@@ -133,6 +152,14 @@ def _compute_2B(inp: dict, heads: dict) -> List[dict]:
     ]
     if districts >= 5:
         rows.append({"head": "Team prize — Runner-up", "limit_inr": prize2, "formula": f"Lump ₹{prize2:,.0f} (Div has {districts} Districts ≥ 5)"})
+    # MPCA-110 · Non-match day allowance — practice-day food + accom + local
+    # conveyance for the outstation contingent (~½ match-day rate).
+    if non_match_days > 0:
+        rows.append({
+            "head": "Non-match day allowance (practice / rest)",
+            "limit_inr": (accom_rate * outstation_pax + food_rate * food_pax) * 0.5 * non_match_days,
+            "formula": f"(₹{accom_rate:,.0f}×{outstation_pax:g} + ₹{food_rate:,.0f}×{food_pax:g}) × 0.5 × {non_match_days:g} non-match days",
+        })
     return rows
 
 

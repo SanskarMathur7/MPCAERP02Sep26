@@ -407,7 +407,19 @@ const SelectionConsole = () => {
                                 <div key={p.id} className="grid grid-cols-12 gap-2 items-center px-3 py-2 border-b border-mpca-brass/10 hover:bg-mpca-parchment/40" data-testid={`pool-row-${p.id}`}>
                                     <div className="col-span-4 min-w-0">
                                         <button onClick={() => setDossierId(p.id)} className="text-left w-full" data-testid={`open-dossier-${p.id}`}>
-                                            <div className="font-serif text-sm text-mpca-green-dark truncate">{p.full_name}</div>
+                                            <div className="font-serif text-sm text-mpca-green-dark truncate flex items-center gap-1.5">
+                                                {p.full_name}
+                                                {/* MPCA-108 · Medical clearance badge — blinks oxblood
+                                                    if the tournament requires medical AND this player
+                                                    has no clearance stamp; green ✓ if cleared. */}
+                                                {tournament?.medical_required && (
+                                                    p.medical_cleared_at ? (
+                                                        <span className="text-[8px] font-mono uppercase tracking-widest px-1 py-0.5 bg-mpca-green-dark/20 text-mpca-green-dark border border-mpca-green-dark/50" title={`Medical cleared ${p.medical_cleared_at}`} data-testid={`med-ok-${p.id}`}>MED ✓</span>
+                                                    ) : (
+                                                        <span className="text-[8px] font-mono uppercase tracking-widest px-1 py-0.5 bg-mpca-oxblood text-mpca-ivory animate-pulse" title="Medical clearance pending" data-testid={`med-missing-${p.id}`}>MED ✗</span>
+                                                    )
+                                                )}
+                                            </div>
                                             <div className="text-[10px] text-mpca-gray-dark truncate">{divName(p)} · {p.selection_meta?.role_desc || p.role} · {ageOf(p)}y</div>
                                         </button>
                                     </div>

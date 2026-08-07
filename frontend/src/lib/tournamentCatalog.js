@@ -75,6 +75,11 @@ export const TOURNAMENT_TYPE_CATALOG = [
     // creates it in parallel with each Inter-Divisional tournament so the
     // Division participants can claim their III-tier AC rail fare against
     // the parallel tournament instead of the main Inter-Div fixture.
+    // MPCA-123 · "Visiting Grant" (Travel Subsidy) is no longer a standalone
+    // creatable type — it is auto-attached to Inter-Divisional and
+    // Inter-District tournaments via `visiting_scheme_code = "2-C"` (M39l).
+    // Kept in the catalog for legacy lookups but with `created_by: []` so it
+    // never appears in the New Tournament picker.
     {
         code: "inter_div_travel",
         scheme_code: "2-C",
@@ -82,10 +87,10 @@ export const TOURNAMENT_TYPE_CATALOG = [
         family: "MPCA_InterDivisional",
         default_format: "Multi_Day",
         default_scope: "Inter_Divisional",
-        one_liner: "Created by MPCA in parallel with an Inter-Divisional tournament so visiting Divisions can claim III-tier AC rail fare for 18 persons. Entitlement is triggered when the Division travels out of its own area to play the parent MPCA Inter-Divisional match.",
+        one_liner: "Auto-attached to Inter-Divisional / Inter-District tournaments — visiting Divisions/Districts claim III-tier AC rail fare against the parent tournament via scheme 2-C.",
         input_hint: "III-tier AC rail fare, feeder legs from District HQ, Tatkal premium.",
         eligible_hosts: ["MPCA"],
-        created_by: ["State"],                       // MPCA only (parallel to inter_div)
+        created_by: [],                              // MPCA-123 · no longer standalone-creatable
         section: "MPCA ALLOTS TO DIVISION",
         flow: "MPCA → Division",
         scheme_ref: "Scheme p.10",

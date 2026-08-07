@@ -1,0 +1,30 @@
+{
+  "summary": "Phase 2 MPCA tickets (5 items) end-to-end tested. Backend: 8/8 pytest cases PASSED (test_mpca_phase2.py). Frontend: all target data-testids present and functional. MPCA-102 · Create modal Step 2 shows Category (Male/Female), Age Group (Open/U-11..U-25), Max Squad Size fields — creating tournament with Female/U-19 yields is_womens=true, age_cap_years=19 on GET; Open yields age_cap_years=null. MPCA-105 · basics-max-squad editable; PATCH persists across reload (verified 25→30 on TEST_MPCA102 tournament; header shows 'max 30/squad'). MPCA-108 · basics-medical-check + trn-medical-check present; when medical_required=true, Selection Console pool rendered 263 blinking oxblood 'MED ✗' badges (data-testid=med-missing-{pid}), 0 med-ok badges (no players have medical_cleared_at yet). MPCA-110 · GET /api/schemes/2-A/input-spec and 2-B/input-spec both include 'non_match_days'; compute-budget for 2-A with match_days=6 non_match_days=2 returns exactly one head 'Non-match day allowance (practice / rest)' with limit_inr=5000.0 (=5000×0.5×2); with non_match_days=0 the head is absent; 2-B with non_match_days=2 also includes the head with non-zero limit. MPCA-123 · trn-type-card-inter_div_travel is ABSENT from Step-1 picker for MPCA persona; other MPCA-created cards (inter_div, etc.) still present. NOTE: Spec route names differ from implementation — /api/scheme-calculator/{code}/inputs|compute in spec vs actual /api/schemes/{scheme_code}/input-spec + /api/schemes/{scheme_code}/compute-budget (payload key 'inputs' not 'input_variables'). Implementation is correct and consistent with M15 route file.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TournamentCreateModal / Basics — <option><span> hydration warning", "issues": ["Persistent visual-edit instrumentation wraps <option> children with <span data-ve-dynamic>, floods console with 'This will cause a hydration error'. Non-blocking, flagged in iterations 72 & 73 — same issue persists in Phase 2."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_mpca_phase2.py", "/app/test_reports/pytest/mpca_phase2.xml"],
+  "action_items": [
+    "Spec-vs-impl mismatch on scheme calculator endpoint: reviewer request mentions '/api/scheme-calculator/{code}/inputs' + '/compute' with payload '{input_variables:{...}}' but backend uses '/api/schemes/{scheme_code}/input-spec' + '/api/schemes/{scheme_code}/compute-budget' with payload '{inputs:{...}}'. Existing implementation IS correct and consistent — no action needed unless spec doc must be updated for future readers.",
+    "Hydration warning around <option><span> wrapping continues to spam console (flagged in iters 72 & 73). Non-blocking but should be addressed by excluding <option> children from visual-edit instrumentation."
+  ],
+  "critical_code_review_comments": [
+    "patch_tournament allowed-fields set correctly extended with max_squad_size, medical_required, is_womens, age_cap_years, age_floor_years (routes/tournaments.py:240-248).",
+    "_compute_2A and _compute_2B correctly gate the non_match_days row on '> 0' — no zero-limit rows leak into budgets.",
+    "SelectionConsole line 415-421: MED badge gated on tournament.medical_required — badges do NOT render when false; verified visually.",
+    "tournamentCatalog.js line 93: inter_div_travel has created_by=[] — correctly hidden from picker while remaining in catalog for legacy lookups (2-C visiting scheme continues to work)."
+  ],
+  "updated_files": ["/app/backend/tests/test_mpca_phase2.py"],
+  "success_rate": {"backend": "100% (8/8 pass)", "frontend": "100% (all 5 tickets verified)"},
+  "test_credentials": "persona-chip-secretary (MPCA Hon. Secretary). No password.",
+  "seed_data_creation": "Created 2 TEST_ tournaments (Draft status, cycle 2025-26): 688457e9-824d-4eeb-b512-d977ca26f751 (TEST_MPCA102 Inter-Divisional, is_womens=true, age_cap_years=19, medical_required=true, max_squad_size=30) and 9574921a-55d9-4444-8152-fb19c1eb649a (TEST_MPCA102 Open Age, age_cap_years=null). Safe to delete — both TEST_-prefixed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 2 fully verified. Two TEST_ tournaments remain in DB (see seed_data_creation). Backend scheme calculator lives under /api/schemes/{code}/{input-spec|compute-budget} (payload key 'inputs'). Selection Console pool row is the med-badge host (line 407 pool-row-{pid}). Basics panel opens via clicking the 'Tournament Basics' setup box on the workspace overview, then Save button is data-testid='basics-save-btn'.",
+  "rca_of_the_issue": "N/A — all 5 Phase 2 tickets verified working."
+}

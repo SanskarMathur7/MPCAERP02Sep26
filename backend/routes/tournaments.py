@@ -242,7 +242,10 @@ async def patch_tournament(tid: str, patch: dict):
                "start_date", "end_date", "venue_id", "ground_id",
                "venue_name_snapshot", "ground_name_snapshot",
                "input_variables", "setup_meta", "calendar_fixed",
-               "closure_letter_url", "closure_letter_generated_at"}
+               "closure_letter_url", "closure_letter_generated_at",
+               # MPCA-102 / MPCA-105 / MPCA-108
+               "max_squad_size", "medical_required", "is_womens",
+               "age_cap_years", "age_floor_years"}
     updates = {k: v for k, v in (patch or {}).items() if k in allowed}
     if updates:
         await db.tournaments.update_one({"id": tid}, {"$set": updates})

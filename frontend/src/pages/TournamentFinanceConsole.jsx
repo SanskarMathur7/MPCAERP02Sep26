@@ -58,7 +58,10 @@ const TournamentFinanceConsole = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
     // M39y · Divisions land straight on Budgets & Extras since Pipeline is MPCA-only.
+    // MPCA-133-nit · but only if the URL didn't already deep-link to a specific tab.
     useEffect(() => {
+        const urlTab = searchParams.get("tab");
+        if (urlTab) return;   // URL already picked a tab — respect it
         if (persona?.body_type && persona.body_type !== "State" && activeTab === "pipeline") {
             setActiveTab("budgets");
         }

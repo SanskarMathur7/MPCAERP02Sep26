@@ -109,17 +109,16 @@ const SquadNominationForm = () => {
                 </tbody>
             </table>
 
-            {/* Match Officials */}
-            <h3 className="font-serif text-lg border-b border-black mb-2">Team Officials &amp; Match Officials</h3>
+            {/* MPCA-106 · Only Team Manager / Head Coach / Trainer / Physio.
+                Umpires, scorer and match referee are assigned centrally by
+                MPCA (Match Officials module) — not printed on the Division
+                nomination form. */}
+            <h3 className="font-serif text-lg border-b border-black mb-2">Team Officials</h3>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[11px] mb-6">
                 <OffLine label="Team Manager" value={off.manager} />
                 <OffLine label="Head Coach" value={off.coach} />
                 <OffLine label="Trainer" value={off.trainer} />
                 <OffLine label="Physio" value={off.physio} />
-                <OffLine label="Umpire #1" value={off.umpire_1} />
-                <OffLine label="Umpire #2" value={off.umpire_2} />
-                <OffLine label="Scorer" value={off.scorer} />
-                <OffLine label="Match Referee" value={off.referee} />
             </div>
 
             {/* Declaration */}

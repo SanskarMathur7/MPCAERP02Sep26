@@ -201,7 +201,14 @@ const SelectionConsole = () => {
     const captain = squadMembers.find((m) => m.is_captain);
     const vc = squadMembers.find((m) => m.is_vice_captain);
     const submissionStatus = selection?.submission_status || "Draft";
-    const canEdit = ["Draft", "Rejected"].includes(submissionStatus);
+    // MPCA-125 · MPCA (State) may only CREATE a squad for BCCI tournaments.
+    // For Inter-Divisional / Inter-District etc., MPCA reviews the squad the
+    // Division submits and can Alter + Send back — but cannot start a fresh
+    // squad or add players from an empty pool.
+    const isMPCA = persona?.body_type === "State";
+    const isBCCI = tournament?.tournament_type === "BCCI" || (tournament?.tournament_type_code || "").startsWith("bcci");
+    const mpcaCanCreateSquad = isMPCA && isBCCI;
+    const canEdit = ["Draft", "Rejected"].includes(submissionStatus) && (!isMPCA || mpcaCanCreateSquad);
 
     const warnings = [];
     balance.forEach((b) => { if (b.have < b.min) warnings.push(`Shortfall · ${b.label}: need ${b.min}, have ${b.have}`); });
@@ -237,11 +244,30 @@ const SelectionConsole = () => {
     };
 
     const exportCSV = () => {
-        const rows = [["player_no", "full_name", "role", "is_captain", "is_vice_captain", "is_keeper"]];
-        squadMembers.forEach((m) => rows.push([m.player_no, m.full_name, m.role, m.is_captain, m.is_vice_captain, m.is_keeper]));
-        const csv = rows.map((r) => r.join(",")).join("\n");
-        const blob = new Blob([csv], { type: "text/csv" });
-        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${tournament?.tournament_no || "squad"}.csv`; a.click();
+        // MPCA-127 · Robust CSV escaping (was: naive .join(",") broke on names
+        // containing commas / quotes). Quote every field, escape embedded ".
+        const esc = (v) => {
+            if (v === null || v === undefined) return "";
+            const s = String(v);
+            return `"${s.replace(/"/g, '""')}"`;
+        };
+        const rows = [["Player No.", "Full Name", "Role", "Captain", "Vice-Captain", "Keeper"]];
+        squadMembers.forEach((m) => rows.push([
+            m.player_no, m.full_name, m.role,
+            m.is_captain ? "Yes" : "",
+            m.is_vice_captain ? "Yes" : "",
+            m.is_keeper ? "Yes" : "",
+        ]));
+        const csv = rows.map((r) => r.map(esc).join(",")).join("\r\n");
+        // UTF-8 BOM so Excel opens Hindi / accented names correctly.
+        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${tournament?.tournament_no || "squad"}-${(persona?.body_code || "squad").toLowerCase()}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     };
 
     const draftMinutes = () => {
@@ -311,6 +337,12 @@ const SelectionConsole = () => {
                 <div className="flex gap-2 flex-wrap">
                     <button className="btn-heritage-ghost" onClick={draftMinutes} data-testid="draft-minutes-btn"><FileText size={12} /> Draft Minutes</button>
                     <button className="btn-heritage-ghost" onClick={exportCSV} data-testid="export-csv-btn"><Download size={12} /> Export CSV</button>
+                    {/* MPCA-127 · Print Nomination — opens the printable PDF form. */}
+                    {selection?.id && (
+                        <a href={`/squads/${selection.id}/nomination-form`} target="_blank" rel="noreferrer" className="btn-heritage-ghost" data-testid="print-nomination-btn">
+                            <FileText size={12} /> Print Nomination
+                        </a>
+                    )}
                     {canEdit && persona?.body_type !== "State" && (
                         <button className="btn-heritage-primary" onClick={doSubmit} disabled={busyAction === "submit"} data-testid="submit-mpca-btn">
                             <Send size={12} /> {busyAction === "submit" ? "Submitting…" : "Submit to MPCA"}
@@ -327,6 +359,16 @@ const SelectionConsole = () => {
                     )}
                 </div>
             </div>
+
+            {/* MPCA-125 · MPCA on non-BCCI tournaments — read/alter mode banner */}
+            {isMPCA && !isBCCI && (
+                <div className="mb-4 border-l-4 border-mpca-brass bg-mpca-brass/10 text-mpca-charcoal px-4 py-3 text-[11px]" data-testid="mpca-alter-mode-banner">
+                    <div className="font-semibold text-mpca-oxblood uppercase tracking-widest mb-1">MPCA Review Mode · Alter &amp; Return</div>
+                    <div>
+                        For <b>{tournament?.tournament_type?.replace(/_/g, " ") || "this tournament"}</b>, MPCA cannot create the squad from scratch — Divisions submit their squad and MPCA reviews it. You can <b>alter the roster and return</b> to the Division via <b>Reject with note</b>, or <b>Approve</b> if the squad is acceptable. Fresh-squad creation is reserved for BCCI tournaments only.
+                    </div>
+                </div>
+            )}
 
             <div className="grid lg:grid-cols-[280px_1fr_360px] gap-4">
                 {/* ─── LEFT RAIL: Filters + Weights ─── */}
@@ -381,10 +423,17 @@ const SelectionConsole = () => {
                 <div className="bulletin-card overflow-hidden">
                     <div className="p-3 border-b border-mpca-brass/20 flex flex-wrap items-center gap-2">
                         <div className="inline-flex border border-mpca-brass/40">
-                            {["pool", "shortlist", "squad"].map((tk) => (
+                            {/* MPCA-103 · Two-step process — Probable Players (was
+                                "Shortlist") then Final Squad. Pool tab remains as
+                                the searchable universe of players. */}
+                            {[
+                                ["pool", "Pool"],
+                                ["shortlist", "Probable Players"],
+                                ["squad", "Final Squad"],
+                            ].map(([tk, label]) => (
                                 <button key={tk} onClick={() => setTab(tk)}
                                     className={`px-3 py-1.5 text-[11px] uppercase tracking-widest ${tab === tk ? "bg-mpca-green-dark text-mpca-ivory" : "text-mpca-green-dark hover:bg-mpca-parchment"} ${tk !== "pool" ? "border-l border-mpca-brass/40" : ""}`}
-                                    data-testid={`sel-tab-${tk}`}>{tk} {tk === "shortlist" ? `(${shortlist.length})` : tk === "squad" ? `(${squadMembers.length})` : `(${pool.length})`}</button>
+                                    data-testid={`sel-tab-${tk}`}>{label} {tk === "shortlist" ? `(${shortlist.length})` : tk === "squad" ? `(${squadMembers.length})` : `(${pool.length})`}</button>
                             ))}
                         </div>
                         <div className="flex-1 min-w-[200px] relative">
@@ -497,8 +546,11 @@ const SelectionConsole = () => {
 
                     <div className="bulletin-card p-3" data-testid="match-officials-block">
                         <div className="flex items-center justify-between mb-2">
-                            <div className="overline">Match Officials</div>
+                            <div className="overline">Team Officials</div>
                             <Link to="/match-officials" className="text-[10px] text-mpca-brass hover:underline">Manage directory →</Link>
+                        </div>
+                        <div className="text-[10px] text-mpca-gray-dark italic mb-2">
+                            MPCA-106 · Only Team Manager, Head Coach, Trainer and Physio are picked here. Umpires, scorers and match referees are assigned centrally by MPCA (Match Officials module).
                         </div>
                         {officialsPool.length === 0 && (
                             <div className="text-[10px] text-mpca-oxblood italic mb-2">
@@ -506,14 +558,10 @@ const SelectionConsole = () => {
                             </div>
                         )}
                         {[
-                            ["manager", "Manager", ["Manager"]],
-                            ["coach", "Coach", ["Coach"]],
+                            ["manager", "Team Manager", ["Manager"]],
+                            ["coach", "Head Coach", ["Coach"]],
                             ["trainer", "Trainer", ["Trainer"]],
                             ["physio", "Physio", ["Physio"]],
-                            ["umpire_1", "Umpire 1", ["Umpire"]],
-                            ["umpire_2", "Umpire 2", ["Umpire"]],
-                            ["scorer", "Scorer", ["Scorer"]],
-                            ["referee", "Referee", ["Referee"]],
                         ].map(([k, l, allowed]) => {
                             const opts = officialsPool.filter((o) => allowed.includes(o.role));
                             const cur = selection?.match_officials?.[k] || "";

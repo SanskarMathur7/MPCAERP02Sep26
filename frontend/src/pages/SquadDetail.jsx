@@ -340,11 +340,9 @@ const SquadDetail = () => {
                                 </button>
                             </>
                         )}
-                        {isMPCA && canFinalize && members.length >= 11 && captain && (
-                            <button onClick={() => handleReview("finalize")} disabled={busy} className="text-[11px] uppercase tracking-widest bg-mpca-gold-light text-mpca-green-dark px-4 py-2 flex items-center gap-1 disabled:opacity-40 hover:bg-mpca-gold transition-colors" data-testid="squad-finalize-btn">
-                                <Lock size={12} /> Finalize XV
-                            </button>
-                        )}
+                        {/* MPCA-130 · "Finalize XV" button removed — Approve
+                            already locks the squad; the double CTA was
+                            confusing MPCA reviewers. */}
                         {canReopen && (
                             <button onClick={handleReopen} disabled={busy} className="text-[11px] uppercase tracking-widest bg-mpca-ivory/10 text-mpca-ivory px-3 py-2 flex items-center gap-1 border border-mpca-ivory/30 disabled:opacity-40 hover:bg-mpca-ivory/20 transition-colors" data-testid="squad-reopen-btn">
                                 <RotateCcw size={12} /> Reopen

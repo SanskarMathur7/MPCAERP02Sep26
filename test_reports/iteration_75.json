@@ -1,0 +1,27 @@
+{
+  "summary": "Phase 3 MPCA tickets (5) end-to-end verified via Playwright + curl + code review. All 5 tickets PASS. MPCA-103 · sel-tab-{pool|shortlist|squad} render 'POOL', 'PROBABLE PLAYERS', 'FINAL SQUAD' (was pool/shortlist/squad). MPCA-125 · On non-BCCI TEST_MPCA102 Inter-Divisional (688457e9), MPCA persona sees data-testid=mpca-alter-mode-banner, all 5 sampled squad-{pid} add buttons are disabled, submit-mpca-btn absent. BCCI Ranji Trophy (bcci_staging) — banner absent (mpcaCanCreateSquad path works); add buttons happened to be disabled but only because that squad is already Awaiting_MPCA_Approval (submissionStatus gates canEdit regardless of persona) — code path `canEdit = [Draft,Rejected].includes(status) && (!isMPCA || mpcaCanCreateSquad)` is correct by inspection. Division persona on non-BCCI: banner absent — regression OK. MPCA-106 · Selection Console match-officials-block renders exactly 4 dropdowns (manager/coach/trainer/physio); official-umpire_1/umpire_2/scorer/referee are ABSENT. Squad Nomination Form (SG-01) shows only the 4 labels; Umpire/Scorer/Referee lines absent (verified in body text + screenshot). MPCA-127 · export-csv-btn and print-nomination-btn both present in Selection Console; nomination-print-btn present on /squads/{sid}/nomination-form. CSV export logic (SelectionConsole.jsx L246-271) correctly quotes every field, escapes embedded double-quotes with '', prefixes UTF-8 BOM (\\uFEFF), and uses text/csv;charset=utf-8 MIME — Excel-safe. MPCA-130 · On SquadDetail (Ranji Awaiting_MPCA_Approval, MPCA persona), squad-finalize-btn is ABSENT; squad-approve-btn and squad-reject-btn still render.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_mpca_phase2.py (previous)"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SelectionConsole.jsx L246-271 · exportCSV uses proper CSV RFC 4180 escaping (quote-wrap all fields, double-quote embeds), \\uFEFF BOM, and \\r\\n line terminators — Excel-compatible. Good.",
+    "SelectionConsole.jsx L208-211 · isMPCA/isBCCI/mpcaCanCreateSquad/canEdit computation is clean and correct. Fresh-squad creation stays reserved for BCCI as spec requires.",
+    "SelectionConsole.jsx L363-371 · mpca-alter-mode-banner rendered only for isMPCA && !isBCCI. Copy is clear (Approve or Reject-with-note; no fresh squad).",
+    "SelectionConsole.jsx L560-582 · Team Officials list reduced to 4 slots. Info line calls out MPCA-106. Clean.",
+    "SquadNominationForm.jsx L116-122 · Team Officials block trimmed to the 4 support-staff lines. Header comment references MPCA-106.",
+    "SquadDetail.jsx L343-345 · Finalize XV button removed with an inline comment explaining MPCA-130 rationale. Approve/Reject block above (L333-342) still present for canReview. Note: SquadDetail's SquadOfficialsSection (below Approve/Reject) still contains all 8 official slots (incl. umpire/scorer/referee) — this is CORRECT and out of scope for MPCA-106 which only targets Selection Console + Squad Nomination Form; SquadDetail's Match Officials section serves a different DA-login workflow (M34)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-focused tickets)", "frontend": "100% (5/5 tickets verified)"},
+  "test_credentials": "persona-chip-secretary (MPCA Hon. Secretary), persona-chip-division-secretary (DIV-IND). Chip-based login → then click 'Sign in to the Registrar'.",
+  "seed_data_creation": "No new seed data. Used pre-existing tournaments: Ranji Trophy Elite (a8e9189a, BCCI, tournament_type_code=bcci_staging) and TEST_MPCA102 Inter-Divisional (688457e9, inter_div). Ranji has DIV-IND squad 1d7ed0a0 in Awaiting_MPCA_Approval status — good for MPCA-130 regression.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 3 (5 tickets) fully verified in iteration 75. Non-BCCI: TEST_MPCA102 Inter-Divisional (id 688457e9-824d-4eeb-b512-d977ca26f751, acceptance=Not_Required so Selection Console is unlocked). BCCI: Ranji Trophy Elite (id a8e9189a-e732-485d-89d2-229ddc9f52c5, tournament_type_code starts 'bcci'). Squad in Awaiting_MPCA_Approval: 1d7ed0a0-ccdc-4566-9ccc-ff26e2638c31 (DIV-IND, 18 members). Note: to properly regression-test 'MPCA CAN add players on BCCI in a fresh squad', find/create a BCCI selection with submission_status='Draft' — the seeded Ranji selection is already submitted so canEdit is (correctly) gated by status.",
+  "rca_of_the_issue": "N/A — all 5 Phase 3 tickets working as specified."
+}

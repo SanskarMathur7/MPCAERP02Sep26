@@ -1,0 +1,29 @@
+{
+  "summary": "MPCA-132 Phase 9 Tournament Calendar match-day paint testing. Found a CRITICAL field-name mismatch bug: TournamentCalendarView.jsx was reading fixture.scheduled_date/scheduled_time, but /api/matches actually returns match_date/start_time. Result: NO tournament was ever painted as scheduled — every tournament fell back to the 'unscheduled' dashed style, defeating the entire purpose of MPCA-132. Fixed the field names (with backward-compatible fallback) and added a small sort so scheduled entries appear before unscheduled ones inside a cell (so they aren't hidden behind slice(0,3) truncation). After the fix, all MPCA-132 acceptance criteria pass: (a) tournament fb79 (JS Anand Trophy) is painted ONLY on its actual fixture dates (Aug 8, Aug 15) and NOT on gap days (Aug 9-14, 16) nor its own start_date/end_date span (Sept 1-30). (b) Multi-match count works — seeded 2 extra fixtures on Aug 8 → cell rendered 'JS Anand Trophy (×3)' with tooltip 'DIV-RWA v DIV-GWL @ 10:00, TEST-A v TEST-B @ 14:00, TEST-C v TEST-D @ 18:00'. (c) Unscheduled fallback for tournaments with no fixtures still paints the span with border-dashed + opacity-60 italic and the data-testid cal-trn-unsched-{tid}, tooltip ending with '· Unscheduled — no match fixtures yet'. (d) Legend shows the Unscheduled chip. Test fixtures created via POST /api/tournaments/{tid}/matches were cleaned up.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TournamentCalendarView month grid", "issues": ["Cells routinely contain 4-5 tournament entries; slice(0,3) hides scheduled entries unless we sort scheduled-first (now added). Consider raising the visible cap to 4 or adding a hover expand for '+N more' to surface the actual scheduled fixture even when 3 unscheduled tournaments already occupy the cell."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Review the sort tweak I added inside tournamentsForDate() (unscheduled last) — confirm this ordering is desired product behavior.",
+    "Consider tightening the unscheduled span-paint: currently ANY tournament without fixtures paints across its full start_date→end_date range which can cover an entire month and drown out real match days. A future enhancement could cap unscheduled paints or only show them in the Undated section."
+  ],
+  "critical_code_review_comments": [
+    "CRITICAL BUG (fixed): TournamentCalendarView.jsx read f.scheduled_date / f.scheduled_time, but the /api/matches API and TournamentMatch model use match_date / start_time. This made MPCA-132's core feature (match-day-only painting) completely inoperative — every tournament was falling to the 'unscheduled' branch. Root cause is a schema mismatch between the calendar view and the backend fixture model (routes/tournament_workspace.py). Fixed by preferring match_date and falling back to scheduled_date. Please align field naming across the codebase so this cannot regress.",
+    "The scheduled-vs-unscheduled ordering inside each cell was left to the tournament array order, which meant real match days could be pushed past slice(0,3) and hidden. Added acc.sort() so scheduled entries always sort before unscheduled — a lightweight but important UX guarantee.",
+    "TournamentCalendarView.jsx is now ~325 lines with a lot of inline JSX + memoisation; still under the 700-line threshold but nearing the point where the Legend row and Undated section could be extracted into sibling components."
+  ],
+  "updated_files": ["/app/frontend/src/components/TournamentCalendarView.jsx"],
+  "success_rate": {"backend": "n/a (frontend-only task)", "frontend": "100% after fix"},
+  "test_credentials": "persona-chip-secretary (Sanjeev Dua, MPCA State)",
+  "seed_data_creation": "Created 2 temp fixtures on tournament fb79e6f3 (Aug 8 @ 14:00 and 18:00) to verify (×3) rendering, then DELETED both via /api/tournaments/{tid}/matches/{mid}. DB state restored.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "MPCA-132 fully working after this iteration. Key fixture field names in /api/matches are match_date and start_time (NOT scheduled_date/scheduled_time — that was the bug). Currently only 2 fixtures exist in DB (both for tournament fb79e6f3-9362-4b52-98ea-ad7a39cea53c 'JS Anand Trophy' on 2026-08-08 and 2026-08-15). To retest multi-match (×N) you must first seed same-day fixtures via POST /api/tournaments/{tid}/matches. Regression tickets in the request (MPCA-124/133/120/131/112) were not re-tested this iteration — main agent should self-verify or request another pass if concerned.",
+  "rca of the issue": "Field-name schema mismatch. Backend routes/tournament_workspace.py exposes TournamentMatch with match_date/start_time. Frontend TournamentCalendarView.jsx (new MPCA-132 code) assumed scheduled_date/scheduled_time (probably from an older draft of the fixture model). Because the code guarded early with `if (!d) return;`, the matchesByTid Map ended up empty for every tournament and every tournament silently fell through to the unscheduled span-paint fallback — masking the failure. Fix: use f.match_date || f.scheduled_date (kept fallback for defensive compatibility) and f.start_time || f.scheduled_time for the tooltip time. Also added acc.sort so scheduled entries render before unscheduled inside the slice(0,3) cap."
+}

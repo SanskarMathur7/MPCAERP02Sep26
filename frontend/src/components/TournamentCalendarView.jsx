@@ -23,12 +23,37 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // day-of-week starting Monday (0=Mon..6=Sun)
 const dowMon = (d) => (d.getDay() + 6) % 7;
 
-const TournamentCalendarView = ({ tournaments, bodies }) => {
+const TournamentCalendarView = ({ tournaments, bodies, matches }) => {
     const now = new Date();
     const [year, setYear] = useState(now.getFullYear());
     const [month, setMonth] = useState(now.getMonth());
     const [scope, setScope] = useState("All"); // All | State | Division | District
     const [bodyId, setBodyId] = useState("all"); // specific body code or 'all'
+
+    // MPCA-132 · Index fixtures by (tournament_id, ISO date) so the calendar
+    // paints a tournament ONLY on actual match days (not every day between
+    // start_date and end_date). Falls back to span-paint when a tournament
+    // has no fixtures yet — with a dashed "unscheduled" style so the user
+    // knows the calendar is showing a placeholder window, not real matches.
+    const matchesByTid = useMemo(() => {
+        const map = new Map();   // tid → { dates:Set<ISO>, byDate:Map<ISO, [fixtures]> }
+        (matches || []).forEach((f) => {
+            const d = (f.match_date || f.scheduled_date || "").slice(0, 10);
+            if (!d) return;
+            const tid = f.tournament_id;
+            if (!tid) return;
+            let bucket = map.get(tid);
+            if (!bucket) {
+                bucket = { dates: new Set(), byDate: new Map() };
+                map.set(tid, bucket);
+            }
+            bucket.dates.add(d);
+            const arr = bucket.byDate.get(d) || [];
+            arr.push(f);
+            bucket.byDate.set(d, arr);
+        });
+        return map;
+    }, [matches]);
 
     // Filter tournaments by host body scope + selection
     const filtered = useMemo(() => {
@@ -60,14 +85,30 @@ const TournamentCalendarView = ({ tournaments, bodies }) => {
     const monthFirst = new Date(year, month, 1);
     const monthLast = new Date(year, month, dim);
 
+    // MPCA-132 · Prefer match-day paint. For each tournament with fixtures,
+    // include it in the day only if that ISO date is a match day. If a
+    // tournament has NO fixtures yet, fall back to start→end span paint but
+    // mark those cells as "unscheduled" so we can visually distinguish.
     const tournamentsForDate = (date) => {
         if (!date) return [];
-        return filtered.filter((t) => {
+        const iso = toISODate(date);
+        return filtered.reduce((acc, t) => {
+            const bucket = matchesByTid.get(t.id);
+            if (bucket && bucket.dates.size > 0) {
+                // Match-scheduled tournament — only paint on actual match days.
+                if (bucket.dates.has(iso)) {
+                    acc.push({ tournament: t, fixtures: bucket.byDate.get(iso) || [], unscheduled: false });
+                }
+                return acc;
+            }
+            // Fallback: no fixtures yet — paint the span as an "unscheduled" window
             const s = parseDate(t.start_date);
             const e = parseDate(t.end_date) || s;
-            if (!s) return false;
-            return s <= date && e >= date;
-        });
+            if (s && s <= date && e >= date) {
+                acc.push({ tournament: t, fixtures: [], unscheduled: true });
+            }
+            return acc;
+        }, []).sort((a, b) => Number(a.unscheduled) - Number(b.unscheduled));
     };
 
     const undated = filtered.filter((t) => !t.start_date);
@@ -177,6 +218,11 @@ const TournamentCalendarView = ({ tournaments, bodies }) => {
                         <span className="w-1.5 h-1.5 rounded-full bg-current" /> {s.label}
                     </span>
                 ))}
+                {/* MPCA-132 · "Unscheduled" style — dashed border + faded text —
+                    marks tournaments whose fixtures aren't published yet. */}
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 border border-dashed border-mpca-gray-dark opacity-60 italic text-mpca-gray-dark">
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" /> Unscheduled
+                </span>
             </div>
 
             {/* Calendar Grid */}
@@ -207,17 +253,21 @@ const TournamentCalendarView = ({ tournaments, bodies }) => {
                                     </div>
                                 )}
                                 <div className="mt-1 space-y-0.5">
-                                    {trns.slice(0, 3).map((t) => {
+                                    {trns.slice(0, 3).map(({ tournament: t, fixtures, unscheduled }) => {
                                         const s = styleFor(t);
+                                        // MPCA-132 · Compose tooltip from actual fixtures if any.
+                                        const fixTip = fixtures.length > 0
+                                            ? " · " + fixtures.slice(0, 3).map((f) => `${f.home_team} v ${f.away_team}${(f.start_time || f.scheduled_time) ? " @ " + (f.start_time || f.scheduled_time) : ""}`).join(", ")
+                                            : (unscheduled ? " · Unscheduled — no match fixtures yet" : "");
                                         return (
                                             <Link
-                                                key={t.id}
+                                                key={t.id + (fixtures[0]?.id || "span")}
                                                 to={`/tournaments/${t.id}`}
-                                                className={`block text-[10px] px-1.5 py-0.5 border-l-2 ${s.border} ${s.bg} ${s.text} truncate hover:opacity-80 transition`}
-                                                title={`${t.name} · Host ${t.host_body_id}${t.venue_name_snapshot ? " · " + t.venue_name_snapshot : ""}`}
-                                                data-testid={`cal-trn-${t.id}`}
+                                                className={`block text-[10px] px-1.5 py-0.5 border-l-2 ${s.border} ${s.bg} ${s.text} truncate hover:opacity-80 transition ${unscheduled ? "opacity-60 italic border-dashed" : ""}`}
+                                                title={`${t.name} · Host ${t.host_body_id}${t.venue_name_snapshot ? " · " + t.venue_name_snapshot : ""}${fixTip}`}
+                                                data-testid={unscheduled ? `cal-trn-unsched-${t.id}` : `cal-trn-${t.id}`}
                                             >
-                                                {t.name}
+                                                {t.name}{fixtures.length > 1 ? ` (×${fixtures.length})` : ""}
                                             </Link>
                                         );
                                     })}

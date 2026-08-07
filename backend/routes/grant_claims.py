@@ -441,7 +441,11 @@ async def reject_grant_claim(cid: str, actor_name: str, reason: str):
     doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
-    if doc["status"] not in ("Submitted", "Under_Review"):
+    # MPCA-112 · MPCA may reject a grant claim even AFTER it was approved
+    # (post-approval audit, missing signatures, invoice discrepancies). The
+    # claim remains visible in the Approved-by-MPCA list with a Rejected pill
+    # + rejection_reason so the Division sees the audit trail.
+    if doc["status"] not in ("Submitted", "Under_Review", "Approved"):
         raise HTTPException(409, f"Cannot reject from status {doc['status']}")
     if not reason:
         raise HTTPException(400, "Rejection reason required")

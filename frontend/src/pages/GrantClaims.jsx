@@ -171,6 +171,9 @@ const GrantClaims = () => {
     // Only Division/District (non-MPCA) can submit; MPCA is approval authority only
     const canSubmit = !isMPCA && selected && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status) && allDocsUploaded;
     const canReview = isMPCA && selected && ["Submitted", "Under_Review"].includes(selected.status);
+    // MPCA-112 · MPCA can also REJECT a claim after it was Approved (audit
+    // finding, invoice discrepancy). Approve stays disabled post-approval.
+    const canPostApprovalReject = isMPCA && selected && selected.status === "Approved";
     const scheme = selected ? schemes.find((s) => s.scheme_code === selected.scheme_code) : null;
 
     return (
@@ -270,6 +273,19 @@ const GrantClaims = () => {
                                             <button className="btn-heritage-primary" onClick={approveClaim} data-testid="approve-claim-btn"><CheckCircle2 size={12} /> Approve</button>
                                             <button className="border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 text-[11px] uppercase tracking-widest" onClick={rejectClaim} data-testid="reject-claim-btn"><XCircle size={12} className="inline mr-1" /> Reject</button>
                                         </>
+                                    )}
+                                    {/* MPCA-112 · Post-approval audit reject —
+                                        stays in the Approved column but flips
+                                        to a Rejected pill with the reason. */}
+                                    {canPostApprovalReject && (
+                                        <button
+                                            className="border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 text-[11px] uppercase tracking-widest hover:bg-mpca-oxblood hover:text-mpca-ivory transition-colors"
+                                            onClick={rejectClaim}
+                                            data-testid="reject-approved-claim-btn"
+                                            title="Reject this claim on post-approval audit — Division will see the reason on their side."
+                                        >
+                                            <XCircle size={12} className="inline mr-1" /> Reject (Audit)
+                                        </button>
                                     )}
                                 </div>
                             </div>

@@ -65,6 +65,8 @@ const TournamentFinanceConsole = () => {
     }, [persona?.body_type]);
     const [perBodyOverrides, setPerBodyOverrides] = useState({});   // M39w · MPCA per-body head overrides
     const [showOverrides, setShowOverrides] = useState(false);
+    // MPCA-120 · District filter for Division supervisors.
+    const [districtScope, setDistrictScope] = useState("all");
 
     // M39z.g / M39z.h · `isMPCA` grants organiser-level rights (Prepare / Send
     // / Sanction, Pipeline tab, revision-review strip). Applied to:
@@ -149,18 +151,27 @@ const TournamentFinanceConsole = () => {
     const rows = matrix.rows || [];
     const pools = matrix.pools || [];
     const isMultiPool = matrix.multi_pool;
-    const hostRow = rows.find((r) => r.role === "Host");
-    const visitorRows = rows.filter((r) => r.role !== "Host");
-    const anyBudgetsExist = rows.some((r) => r.budget_id);
-    const anyDrafts = rows.some((r) => r.budget_status === "Draft");
-    const anyAccepted = rows.some((r) => r.budget_status === "Accepted_By_Division");
-    const anyRevision = rows.some((r) => r.budget_status === "Revision_Requested");
+    // MPCA-120 · Division supervising Districts sees a District filter at
+    // the top of the Console. When "all" (default), everything renders
+    // consolidated across every District row visible to them. When a
+    // specific District is picked, matrix rows filter to that District.
+    const districtRows = rows.filter((r) => (r.body_code || "").startsWith("DIST-"));
+    const canFilterByDistrict = persona?.body_type === "Division" && districtRows.length > 1;
+    const filteredRows = (districtScope === "all" || !canFilterByDistrict)
+        ? rows
+        : rows.filter((r) => r.body_code === districtScope || r.role === "Host");
+    const hostRow = filteredRows.find((r) => r.role === "Host");
+    const visitorRows = filteredRows.filter((r) => r.role !== "Host");
+    const anyBudgetsExist = filteredRows.some((r) => r.budget_id);
+    const anyDrafts = filteredRows.some((r) => r.budget_status === "Draft");
+    const anyAccepted = filteredRows.some((r) => r.budget_status === "Accepted_By_Division");
+    const anyRevision = filteredRows.some((r) => r.budget_status === "Revision_Requested");
     const myRow = !isMPCA ? rows.find((r) => r.body_code === myBody) : null;
 
     // M39s · Rows grouped by pool for the matrix + prepare UI
     const rowsByPool = pools.map((p) => ({
         pool: p,
-        rows: rows.filter((r) => r.pool_id === p.pool_id),
+        rows: filteredRows.filter((r) => r.pool_id === p.pool_id),
     }));
 
     const prepareBudgets = async () => {
@@ -345,6 +356,32 @@ const TournamentFinanceConsole = () => {
                     onRequestRevision={() => divisionRequestRevision(myRow.budget_id)}
                     busy={busy}
                 />
+            )}
+
+            {/* MPCA-120 · District Scope filter for Division supervisors
+                (visible when the Division sees more than one District row on
+                the matrix, e.g. an Inter-District tournament hosted by a
+                Division). Consolidated view is the default. */}
+            {canFilterByDistrict && (
+                <div className="mb-4 flex items-center gap-3 flex-wrap border-l-4 border-mpca-brass bg-mpca-brass/8 px-4 py-3" data-testid="fc-district-filter">
+                    <div className="overline text-[9px] text-mpca-oxblood font-semibold">Division Supervisor · District Scope</div>
+                    <select
+                        className="input-heritage !py-1 !text-xs !w-auto"
+                        value={districtScope}
+                        onChange={(e) => setDistrictScope(e.target.value)}
+                        data-testid="fc-district-filter-select"
+                    >
+                        <option value="all">All Districts · Consolidated ({districtRows.length})</option>
+                        {districtRows.map((r) => (
+                            <option key={r.body_code} value={r.body_code}>{r.body_name || r.body_code}</option>
+                        ))}
+                    </select>
+                    <div className="text-[10px] text-mpca-charcoal/80 italic">
+                        {districtScope === "all"
+                            ? "Showing rolled-up totals across every District you supervise. Pick a District above to drill in."
+                            : `Filtered to ${districtScope}. Reimbursement claims from this District will consolidate into your Division master when you approve them.`}
+                    </div>
+                </div>
             )}
 
             {/* M39u · Section tabs (visible when budgets exist, OR for

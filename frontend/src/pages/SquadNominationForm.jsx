@@ -127,11 +127,12 @@ const SquadNominationForm = () => {
                 <b>DECLARATION —</b> We hereby declare that the above-named players are eligible to represent <b>{squad.body_id}</b> in the said tournament and have been selected as per the MPCA selection guidelines. All players have valid MPCA registrations and requisite documentation on record. Any subsequent replacement will be intimated to MPCA in writing.
             </div>
 
-            {/* Signatures */}
-            <div className="grid grid-cols-3 gap-6 mt-16">
+            {/* Signatures — MPCA-107 · President removed from Division-side
+                squad approvals. Only Selection Committee Chairman + Hon.
+                Secretary sign off the nomination. */}
+            <div className="grid grid-cols-2 gap-6 mt-16">
                 <SigBlock title="Selection Committee Chairman" />
                 <SigBlock title="Hon. Secretary" body={squad.body_id} />
-                <SigBlock title="Hon. President" body={squad.body_id} />
             </div>
 
             <div className="mt-16 text-center text-[9px] uppercase tracking-widest text-gray-500 print:hidden">

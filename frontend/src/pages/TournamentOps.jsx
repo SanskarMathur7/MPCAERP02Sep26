@@ -291,7 +291,10 @@ const BudgetTab = ({ tournament }) => {
 };
 
 // ═══════════════════ Invoices Tab (with AI extractor) ═══════════════════
-const InvoicesTab = ({ tournament, persona, onChanged }) => {
+// MPCA-124 · Exported so the Tournament Finance Console renders this rich
+// upload UI directly on its Invoices tab (previously showed a read-only
+// summary that redirected to a broken URL).
+export const InvoicesTab = ({ tournament, persona, onChanged }) => {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [addOpen, setAddOpen] = useState(false);
@@ -352,7 +355,9 @@ const InvoicesTab = ({ tournament, persona, onChanged }) => {
             await createTournamentInvoice({
                 tournament_id: tournament.id,
                 body_id: persona?.body_code || "MPCA",
-                budget_id: tournament.auto_budget_id,
+                // MPCA-124 · budget_id resolved server-side from Approved
+                // budget of (tournament, body). Do not send legacy
+                // `auto_budget_id` (per-body budgets in M39r+).
                 ...form,
                 total_inr: parseFloat(form.total_inr) || (parseFloat(form.amount_inr) + parseFloat(form.gst_inr)),
                 amount_inr: parseFloat(form.amount_inr) || 0,
@@ -389,7 +394,7 @@ const InvoicesTab = ({ tournament, persona, onChanged }) => {
                         Upload vendor invoices — Gemini extracts vendor/date/amount/GST. Any amount over the sanctioned head becomes <strong>ineligible for grant</strong>.
                     </p>
                 </div>
-                {canAdd && tournament.auto_budget_id && (
+                {canAdd && (
                     <button onClick={() => setAddOpen(true)} className="btn-heritage-primary" data-testid="add-invoice-btn">
                         <Upload size={12} /> Upload Invoice
                     </button>

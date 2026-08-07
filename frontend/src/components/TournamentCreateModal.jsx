@@ -31,7 +31,7 @@ const TYPE_OPTIONS = [
 // Trimmed to formats that MPCA / Divisions actually schedule. Kept aligned with backend Literal.
 const FORMAT_OPTIONS = [
     { value: "Multi_Day", label: "Multi-Day" },
-    { value: "One_Day", label: "One-Day (50 overs)" },
+    { value: "One_Day", label: "Limited Overs" },
     { value: "T20", label: "T20" },
     { value: "Pink_Ball", label: "Pink-Ball" },
     { value: "FourDay_Senior", label: "4-Day Senior" },

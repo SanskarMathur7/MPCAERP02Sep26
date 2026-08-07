@@ -57,7 +57,7 @@ const TournamentInvoicesPanel = ({ tournament, persona }) => {
                 </div>
                 {/* M39z.c · Prominent Upload button — Divisions land here after
                     sanction so they can immediately upload vendor bills. */}
-                <Link to={`/tournaments/${tournament.id}/finance?tab=officials`} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-oxblood hover:bg-mpca-oxblood/90 px-3 py-2 inline-flex items-center gap-1.5" data-testid="ti-open-full-btn">
+                <Link to={`/tournaments/${tournament.id}/finance?tab=invoices`} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-oxblood hover:bg-mpca-oxblood/90 px-3 py-2 inline-flex items-center gap-1.5" data-testid="ti-open-full-btn">
                     <Upload size={11} /> Upload Invoice / DA <ArrowRight size={10} />
                 </Link>
             </div>

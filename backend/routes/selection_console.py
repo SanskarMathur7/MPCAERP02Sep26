@@ -704,7 +704,7 @@ async def my_pending_inbox(
                 if len(inbox) >= limit:
                     return
 
-    async for t in db.tournaments.find(t_query, {"_id": 0}):
+    async for t in db.tournaments.find(t_query, {"_id": 0}).sort("created_at", -1):
         await _process(t)
         if len(inbox) >= limit:
             break
@@ -714,7 +714,7 @@ async def my_pending_inbox(
         async for t in db.tournaments.find(
             {"id": {"$in": list(participant_tids)}, "status": {"$nin": ["Completed", "Cancelled"]}},
             {"_id": 0},
-        ):
+        ).sort("created_at", -1):
             await _process(t)
             if len(inbox) >= limit:
                 break

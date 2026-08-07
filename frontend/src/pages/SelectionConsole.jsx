@@ -141,7 +141,7 @@ const SelectionConsole = () => {
                 if (roleFilter && roleCode(p) !== roleFilter) return false;
                 if (flags.avail && (p.selection_meta?.availability || "Available") !== "Available") return false;
                 if (flags.fit && (yoyoOf(p) ?? 0) < yoyoMin) return false;
-                if (q && !p.full_name.toLowerCase().includes(q.toLowerCase()) && !divName(p).toLowerCase().includes(q.toLowerCase())) return false;
+                if (q && !(p.full_name || "").toLowerCase().includes(q.toLowerCase()) && !(divName(p) || "").toLowerCase().includes(q.toLowerCase())) return false;
                 return true;
             })
             .map((p) => ({ ...p, _index: calcIndex(p, weights) }))

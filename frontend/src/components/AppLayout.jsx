@@ -378,7 +378,10 @@ const AppLayout = ({ children }) => {
                         </div>
                     ))}
 
-                    {persona?.id !== "match-official" && !collapsed && (
+                    {/* MPCA-122 · "Coming Soon" section hidden — tabs
+                        without functional routes clutter the nav. When
+                        modules go live they are added to NAV_DOMAINS above. */}
+                    {false && persona?.id !== "match-official" && !collapsed && (
                     <div className="border-t border-mpca-brass/15 pt-4">
                         <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
                             Coming Soon

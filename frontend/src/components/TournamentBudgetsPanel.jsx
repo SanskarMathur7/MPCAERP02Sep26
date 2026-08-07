@@ -31,7 +31,7 @@ const STATUS_TONE = {
  * and render the full head-wise breakdown so they can see WHERE their
  * sanctioned rupees sit and reconcile invoices head-by-head.
  */
-const TournamentBudgetsPanel = ({ tournament, persona, onChange }) => {
+const TournamentBudgetsPanel = ({ tournament, persona, onChange, hideConsoleLinks = false }) => {
     const [budgets, setBudgets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(null);
@@ -109,9 +109,13 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange }) => {
                     </div>
                 </div>
                 <div className="flex gap-2">
+                    {/* MPCA-134 · Hide redundant "Full Finance Screen" link
+                        when panel already renders inside the Finance Console. */}
+                    {!hideConsoleLinks && (
                     <Link to={`/tournaments/${tournament.id}/finance`} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors inline-flex items-center gap-1" data-testid="tb-open-full-btn">
                         Full Finance Screen <ArrowRight size={10} />
                     </Link>
+                    )}
                 </div>
             </div>
 
@@ -161,9 +165,11 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange }) => {
                                         <button onClick={() => toggle(b.id)} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-green-dark hover:text-mpca-oxblood inline-flex items-center gap-1" data-testid={`tb-toggle-${b.id}`}>
                                             {isOpen ? "Hide" : "View"} heads <ChevronRight size={10} className={`transition-transform ${isOpen ? "rotate-90" : ""}`} />
                                         </button>
+                                        {!hideConsoleLinks && (
                                         <Link to={`/tournaments/${tournament.id}/finance`} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors" data-testid={`tb-open-${b.id}`}>
                                             Full detail
                                         </Link>
+                                        )}
                                     </div>
                                 </div>
 

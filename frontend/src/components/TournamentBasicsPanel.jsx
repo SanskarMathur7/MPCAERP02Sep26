@@ -395,8 +395,12 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                 )}
 
                 {/* Step 4b · Extra teams (clubs / schools / districts).
-                    M39z.i · On Club / School tournaments this becomes the
-                    PRIMARY entrant list (relabelled + required-styling).      */}
+                    MPCA-104 · Extra Teams section now renders ONLY for Club /
+                    School tournaments (isClubish) where it is the PRIMARY
+                    entrant list. Non-club tournaments (Inter-Divisional,
+                    Inter-District) rely on the pool-based body selection
+                    above and don't need the free-text entrant panel.       */}
+                {isClubish && (
                 <div className={`${isClubish ? "" : "border-t border-mpca-brass/20"} pt-4`} data-testid="basics-teams">
                     <div className="overline text-[9px] mb-2 flex items-center gap-2">
                         <UsersIcon size={11} />
@@ -446,6 +450,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                         </div>
                     )}
                 </div>
+                )}
                 </>
             )}
 

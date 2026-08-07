@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import {
     Send, Check, RotateCcw, Sparkles, AlertTriangle, Users, Building2,
     ArrowRight, CheckCircle2, Circle, Loader2, ShieldCheck, PackageOpen,
@@ -11,12 +11,11 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
-import TournamentInvoicesPanel from "@/components/TournamentInvoicesPanel";
 import MatchOfficialDAPanel from "@/components/MatchOfficialDAPanel";
 import {
     TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
 } from "@/components/TournamentWorkspacePanels";
-import { ExtraExpenseTab } from "@/pages/TournamentOps";
+import { ExtraExpenseTab, InvoicesTab } from "@/pages/TournamentOps";
 import { fmt, StatusPill } from "./finance/financeShared";
 import { MatrixRow, PoolGroup } from "./finance/MatrixRow";
 import { DivisionBudgetCard } from "./finance/DivisionBudgetCard";
@@ -36,6 +35,7 @@ import { ClaimsPanel } from "./finance/ClaimsPanel";
 const TournamentFinanceConsole = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { persona } = useAuth();
     const [matrix, setMatrix] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -47,6 +47,15 @@ const TournamentFinanceConsole = () => {
     const [activePoolTab, setActivePoolTab] = useState(null);    // M39s · currently editing pool
     const [preview, setPreview] = useState(null);
     const [activeTab, setActiveTab] = useState("pipeline");   // M39u · tabbed sections
+    // MPCA-124 · honour ?tab=X in URL so external links open the right panel
+    // (e.g. Upload Invoice / DA button from Workspace summary opens Invoices tab).
+    useEffect(() => {
+        const t = searchParams.get("tab");
+        if (t && ["pipeline", "budgets", "extras", "invoices", "da", "actuals", "claims", "receipts", "closure"].includes(t)) {
+            setActiveTab(t);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
     // M39y · Divisions land straight on Budgets & Extras since Pipeline is MPCA-only.
     useEffect(() => {
         if (persona?.body_type && persona.body_type !== "State" && activeTab === "pipeline") {
@@ -456,7 +465,7 @@ const TournamentFinanceConsole = () => {
             {/* M39u · Reusable panels for each tab */}
             {activeTab === "budgets" && (
                 <div className="bulletin-card p-4" data-testid="fc-tab-budgets-panel">
-                    <TournamentBudgetsPanel tournament={tournament} persona={persona} onChange={load} />
+                    <TournamentBudgetsPanel tournament={tournament} persona={persona} onChange={load} hideConsoleLinks />
                 </div>
             )}
             {activeTab === "extras" && (
@@ -466,7 +475,9 @@ const TournamentFinanceConsole = () => {
             )}
             {activeTab === "invoices" && (
                 <div className="bulletin-card p-4" data-testid="fc-tab-invoices-panel">
-                    <TournamentInvoicesPanel tournament={tournament} persona={persona} />
+                    {/* MPCA-124 · Full upload UI (AI-extract + head allocation
+                        + review) — was a read-only summary before. */}
+                    <InvoicesTab tournament={tournament} persona={persona} onChanged={load} />
                 </div>
             )}
             {activeTab === "da" && (

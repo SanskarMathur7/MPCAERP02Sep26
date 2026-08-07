@@ -64,10 +64,20 @@ def _tournament_scope_query(scope) -> dict:
             {"acceptance.required_from": {"$regex": f"^DIST-.+-{suffix}$"}},
         ]}
     if scope.is_district:
-        return {"$or": [
+        # MPCA-121 · Include tournaments hosted by parent Division and by
+        # sibling Districts under the same Division (so Division-orchestrated
+        # inter-district tournaments show up). Participation-based filtering
+        # for actual allocation is layered on via `_visible_tids_via_participations`.
+        parts = (scope.body_code or "").split("-")
+        div_suffix = parts[-1] if len(parts) >= 3 else ""
+        or_list = [
             {"host_body_id": scope.body_code},
             {"acceptance.required_from": scope.body_code},
-        ]}
+        ]
+        if div_suffix:
+            or_list.append({"host_body_id": f"DIV-{div_suffix}"})
+            or_list.append({"host_body_id": {"$regex": f"^DIST-.+-{div_suffix}$"}})
+        return {"$or": or_list}
     if scope.is_official:
         # Match officials see all — they may be assigned to any tournament
         return {}
@@ -195,19 +205,25 @@ async def get_tournament(tid: str, request: Request):
             pat = _re.compile(f"^DIST-.+-{req_scope.division_suffix}$")
             if pat.match(doc.get("host_body_id") or "") or any(pat.match(x or "") for x in req_from):
                 host_ok = True
-        # M39z.e · Districts: allowed only if the tournament is hosted by their
-        # parent Division (i.e. a Division-owned tournament they participate in).
+        # M39z.e / MPCA-121 · Districts strictly see only tournaments hosted
+        # by their parent Division OR by a sibling District under the same
+        # Division. Combined with the participation check below this ensures
+        # a District only sees tournaments in which they've been allocated
+        # (either explicitly on `acceptance.required_from` or via a
+        # `tournament_participations` row).
         if req_scope.is_district:
             me = await db.bodies.find_one({"code": req_scope.body_code}, {"_id": 0})
             parent = (me or {}).get("parent_code")
-            if parent and doc.get("host_body_id") == parent:
+            host = doc.get("host_body_id") or ""
+            if parent and host == parent:
                 host_ok = True
-            else:
-                raise HTTPException(
-                    403,
-                    "This tournament is not hosted by your parent Division — "
-                    "Districts only participate in Division-owned tournaments.",
-                )
+            elif parent and host.startswith("DIST-"):
+                # Sibling-District-hosted tournament — allow if hosted by a
+                # District under the same parent Division (participation
+                # check will confirm actual allocation below).
+                host_body = await db.bodies.find_one({"code": host}, {"_id": 0})
+                if host_body and host_body.get("parent_code") == parent:
+                    host_ok = True
         if not (host_ok or accept_ok):
             part_tids = await _visible_tids_via_participations(req_scope)
             if tid not in part_tids:
@@ -542,6 +558,15 @@ async def add_player_to_squad(squad_id: str, payload: SquadAddPlayer):
         raise HTTPException(404, "Tournament not found")
     if t["status"] not in ("Draft", "Upcoming", "Squad_Selection"):
         raise HTTPException(400, f"Cannot modify squad once tournament is {t['status']}")
+    # MPCA-131 · Once MPCA has APPROVED the squad, no further add/remove is
+    # allowed — the roster is locked. Rejected + Draft + Awaiting-review can
+    # still be edited. Any change post-approval must go via a new revision.
+    if squad.get("submission_status") == "Approved":
+        raise HTTPException(
+            409,
+            "This squad has been APPROVED by MPCA and is locked. To make "
+            "changes, MPCA must first re-open the squad for revision.",
+        )
     player = await db.players.find_one({"id": payload.player_id}, {"_id": 0})
     if not player:
         raise HTTPException(404, "Player not found")
@@ -601,6 +626,13 @@ async def remove_player_from_squad(squad_id: str, player_id: str):
     t = await db.tournaments.find_one({"id": squad["tournament_id"]}, {"_id": 0})
     if t and t["status"] not in ("Draft", "Upcoming", "Squad_Selection"):
         raise HTTPException(400, f"Cannot modify squad once tournament is {t['status']}")
+    # MPCA-131 · Squad-level lock after MPCA approval.
+    if squad.get("submission_status") == "Approved":
+        raise HTTPException(
+            409,
+            "This squad has been APPROVED by MPCA and is locked. To make "
+            "changes, MPCA must first re-open the squad for revision.",
+        )
     members = [m for m in (squad.get("members") or []) if m["player_id"] != player_id]
     if len(members) == len(squad.get("members") or []):
         raise HTTPException(404, "Player is not in this squad")

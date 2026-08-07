@@ -54,6 +54,49 @@ class MatchOfficial(MatchOfficialBase):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# MPCA-133 · Central Match-Official Assignment (per-tournament, MPCA-owned)
+# ═══════════════════════════════════════════════════════════════════════════
+# The old "each Division picks its own umpires for its Squad" flow (which
+# lived on `Squad.match_officials`) has been superseded by a central pool:
+# MPCA picks umpires / scorers / referees for the whole tournament, applies
+# standard per-day fees, and the DA + fees are paid centrally from MPCA
+# budgets. Divisions no longer carry these costs.
+STANDARD_MO_FEES_INR = {
+    "Umpire":   700.0,   # ₹700 / day per BCCI panel norms
+    "Scorer":   500.0,
+    "Referee":  1500.0,
+    "Physio":   1200.0,
+}
+STANDARD_MO_DA_INR = {   # per-day DA (food + local) — flat rate, MPCA-paid
+    "Umpire":   500.0,
+    "Scorer":   400.0,
+    "Referee":  700.0,
+    "Physio":   400.0,
+}
+
+
+class TournamentMatchOfficialBase(BaseModel):
+    """MPCA-assigned match official for a full tournament (not per-fixture)."""
+    model_config = ConfigDict(extra="ignore")
+    tournament_id: str
+    official_id: str                                   # match_officials.id
+    role: str                                          # Umpire / Scorer / Referee / Physio
+    days: int = 1
+    per_day_fee_inr: float = 0.0                       # standard rate at assignment time
+    per_day_da_inr: float = 0.0                        # standard DA at assignment time
+    notes: Optional[str] = None
+
+
+class TournamentMatchOfficial(TournamentMatchOfficialBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    assigned_by: Optional[str] = None
+    assigned_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # ── Snapshot for display / audit ──
+    official_name: Optional[str] = None
+    body_id: Optional[str] = None                      # official's owning body
+
+
 _ADMIN_ROLES = {"president", "secretary", "division-secretary", "district-secretary", "treasurer"}
 
 
@@ -137,3 +180,150 @@ async def delete_official(
     if r.deleted_count == 0:
         raise HTTPException(404, "Match official not found")
     return {"deleted": True}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MPCA-133 · Tournament-level Match-Official Assignments
+# ═══════════════════════════════════════════════════════════════════════════
+def _mpca_only(x_body_type: Optional[str], x_role_id: Optional[str]):
+    """Central assignment is MPCA-only per MPCA-133."""
+    if x_body_type and x_body_type != "State":
+        raise HTTPException(403, "Only MPCA may assign match officials centrally (MPCA-133).")
+    if x_role_id and x_role_id not in _ADMIN_ROLES:
+        raise HTTPException(403, "Only MPCA office bearers may assign match officials.")
+
+
+@api_router.get("/tournaments/{tid}/match-officials", response_model=List[TournamentMatchOfficial])
+async def list_tournament_officials(tid: str):
+    """MPCA-133 · List all officials assigned to this tournament."""
+    if not await db.tournaments.find_one({"id": tid}, {"_id": 0}):
+        raise HTTPException(404, "Tournament not found")
+    return await db.tournament_match_officials.find(
+        {"tournament_id": tid}, {"_id": 0}
+    ).sort("assigned_at", -1).to_list(500)
+
+
+@api_router.get("/match-officials/rates/standard")
+async def get_standard_mo_rates():
+    """MPCA-133 · Return the flat rate card (fee + DA per role per day)."""
+    return {
+        "fee_per_day": STANDARD_MO_FEES_INR,
+        "da_per_day": STANDARD_MO_DA_INR,
+        "note": "Rates are set centrally by MPCA and applied automatically on assignment.",
+    }
+
+
+class _TmoCreate(BaseModel):
+    """Payload for POST /tournaments/{tid}/match-officials."""
+    model_config = ConfigDict(extra="ignore")
+    official_id: str
+    role: str                                # Umpire / Scorer / Referee / Physio
+    days: int = 1
+    per_day_fee_inr: Optional[float] = None  # override; else standard
+    per_day_da_inr: Optional[float] = None   # override; else standard
+    notes: Optional[str] = None
+
+
+@api_router.post("/tournaments/{tid}/match-officials", response_model=TournamentMatchOfficial)
+async def assign_tournament_official(
+    tid: str,
+    payload: _TmoCreate,
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+):
+    _mpca_only(x_body_type, x_role_id)
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    off = await db.match_officials.find_one({"id": payload.official_id}, {"_id": 0})
+    if not off:
+        raise HTTPException(404, "Match official not found")
+    role = payload.role
+    if role not in STANDARD_MO_FEES_INR:
+        raise HTTPException(400, f"Unsupported role {role} — expected one of {list(STANDARD_MO_FEES_INR)}")
+    # Standard rate resolution — override only if MPCA passes an explicit value.
+    fee = payload.per_day_fee_inr if payload.per_day_fee_inr is not None else STANDARD_MO_FEES_INR[role]
+    da  = payload.per_day_da_inr  if payload.per_day_da_inr  is not None else STANDARD_MO_DA_INR[role]
+    tmo = TournamentMatchOfficial(
+        tournament_id=tid,
+        official_id=off["id"],
+        role=role,
+        days=max(1, int(payload.days)),
+        per_day_fee_inr=float(fee),
+        per_day_da_inr=float(da),
+        notes=payload.notes,
+        assigned_by=x_persona_name or "MPCA",
+        official_name=off.get("full_name"),
+        body_id=off.get("body_id"),
+    )
+    await db.tournament_match_officials.insert_one(tmo.model_dump())
+    return tmo
+
+
+class _TmoPatch(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    days: Optional[int] = None
+    per_day_fee_inr: Optional[float] = None
+    per_day_da_inr: Optional[float] = None
+    notes: Optional[str] = None
+
+
+@api_router.patch("/tournaments/{tid}/match-officials/{aid}", response_model=TournamentMatchOfficial)
+async def update_tournament_official(
+    tid: str,
+    aid: str,
+    payload: _TmoPatch,
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+):
+    _mpca_only(x_body_type, x_role_id)
+    doc = await db.tournament_match_officials.find_one({"id": aid, "tournament_id": tid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Assignment not found")
+    patch = payload.model_dump(exclude_unset=True)
+    if "days" in patch:
+        patch["days"] = max(1, int(patch["days"]))
+    await db.tournament_match_officials.update_one({"id": aid}, {"$set": patch})
+    return await db.tournament_match_officials.find_one({"id": aid}, {"_id": 0})
+
+
+@api_router.delete("/tournaments/{tid}/match-officials/{aid}")
+async def remove_tournament_official(
+    tid: str,
+    aid: str,
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+):
+    _mpca_only(x_body_type, x_role_id)
+    r = await db.tournament_match_officials.delete_one({"id": aid, "tournament_id": tid})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Assignment not found")
+    return {"deleted": True}
+
+
+@api_router.get("/tournaments/{tid}/match-officials/summary")
+async def tournament_officials_summary(tid: str):
+    """MPCA-133 · Roll-up of central MPCA-paid officiating spend for a tournament.
+    Divisions never see this as an expense on their budgets — it is settled
+    centrally from MPCA's officiating pool.
+    """
+    rows = await db.tournament_match_officials.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
+    fee_total = sum(float(r.get("per_day_fee_inr") or 0) * int(r.get("days") or 0) for r in rows)
+    da_total  = sum(float(r.get("per_day_da_inr")  or 0) * int(r.get("days") or 0) for r in rows)
+    by_role: dict = {}
+    for r in rows:
+        rl = r.get("role") or "Other"
+        b = by_role.setdefault(rl, {"count": 0, "fee_inr": 0.0, "da_inr": 0.0})
+        b["count"] += 1
+        b["fee_inr"] += float(r.get("per_day_fee_inr") or 0) * int(r.get("days") or 0)
+        b["da_inr"]  += float(r.get("per_day_da_inr")  or 0) * int(r.get("days") or 0)
+    return {
+        "tournament_id": tid,
+        "assignments": len(rows),
+        "fee_total_inr": fee_total,
+        "da_total_inr": da_total,
+        "grand_total_inr": fee_total + da_total,
+        "by_role": by_role,
+        "paid_by": "MPCA (central pool)",
+    }

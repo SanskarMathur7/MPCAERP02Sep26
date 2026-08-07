@@ -16,6 +16,7 @@ import {
     TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
 } from "@/components/TournamentWorkspacePanels";
 import { ExtraExpenseTab, InvoicesTab } from "@/pages/TournamentOps";
+import MatchOfficialsPanel from "./finance/MatchOfficialsPanel";
 import { fmt, StatusPill } from "./finance/financeShared";
 import { MatrixRow, PoolGroup } from "./finance/MatrixRow";
 import { DivisionBudgetCard } from "./finance/DivisionBudgetCard";
@@ -51,7 +52,7 @@ const TournamentFinanceConsole = () => {
     // (e.g. Upload Invoice / DA button from Workspace summary opens Invoices tab).
     useEffect(() => {
         const t = searchParams.get("tab");
-        if (t && ["pipeline", "budgets", "extras", "invoices", "da", "actuals", "claims", "receipts", "closure"].includes(t)) {
+        if (t && ["pipeline", "budgets", "extras", "invoices", "da", "officials", "actuals", "claims", "receipts", "closure"].includes(t)) {
             setActiveTab(t);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -398,6 +399,7 @@ const TournamentFinanceConsole = () => {
                         { id: "extras",    label: "Extras",           icon: Gavel,         show: true },
                         { id: "invoices",  label: "Invoices",         icon: Receipt,       show: true },
                         { id: "da",        label: "DA / TA Forms",    icon: ClipboardEdit, show: true },
+                        { id: "officials", label: "Match Officials",  icon: ShieldCheck,   show: true },
                         { id: "actuals",   label: "Actuals vs Budget",icon: Activity,      show: true },
                         { id: "claims",    label: "Reimbursement Claim", icon: FileSignature, show: true },
                         { id: "receipts",  label: "MPCA Receipts",    icon: HandCoins,     show: isMPCA },
@@ -520,6 +522,12 @@ const TournamentFinanceConsole = () => {
             {activeTab === "da" && (
                 <div className="bulletin-card p-4" data-testid="fc-tab-da-panel">
                     <MatchOfficialDAPanel tournamentId={id} onChange={load} />
+                </div>
+            )}
+            {activeTab === "officials" && (
+                <div data-testid="fc-tab-officials-panel">
+                    {/* MPCA-133 · MPCA-only central match-official assignments. */}
+                    <MatchOfficialsPanel tournament={tournament} persona={persona} />
                 </div>
             )}
             {activeTab === "actuals" && (

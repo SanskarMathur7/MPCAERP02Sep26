@@ -1,0 +1,29 @@
+{
+  "summary": "MPCA-133 Phase 6 Central Match-Official Assignment. Backend: 12/12 pytest cases pass (rate card, assign MPCA OK, assign Division/District 403 with correct message, bad role 400, missing official 404, list, summary math, patch/delete MPCA + persona RBAC). Frontend: MPCA panel fully functional (rate card, assign form, days editor, remove, summary with 'Paid by MPCA'). Division & District personas: assign form correctly hidden and info line shown. Fixed one CRITICAL blocker bug during testing (default import from @/lib/api).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TournamentFinanceConsole", "issue": "URL query ?tab=officials does not auto-activate the Match Officials tab on initial load for Division persona (defaults to Budgets tab). Works fine for MPCA persona. Panel reachable via tab click. Likely: division-secretary's default tab logic overrides ?tab= param.", "selector": "fc-tab-officials", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_mpca_133_match_officials.py", "/app/test_reports/pytest/mpca133_results.xml"],
+  "action_items": [
+    "OPTIONAL: Fix tab query-param handling in TournamentFinanceConsole for non-MPCA personas so /tournaments/{tid}/finance?tab=officials lands directly on the Match Officials tab (currently only works for MPCA)."
+  ],
+  "critical_code_review_comments": [
+    "MatchOfficialsPanel.jsx was using `import api from '@/lib/api'` but @/lib/api has NO default export — only named `api`. This blocked the entire finance console from compiling (webpack overlay covered the whole app). Fixed by changing to `import { api } from '@/lib/api'`. Please audit other new files for the same import pattern.",
+    "officialsForRole filter at line 70 has a redundant OR clause `(form.role === 'Umpire' && o.role === 'Umpire')` — the `o.role === form.role` already covers this case.",
+    "Backend _mpca_only allows requests where X-Body-Type is missing entirely (both conditions guarded by `if x_body_type`). If any front-end path omits the header, non-MPCA callers could pass. Consider requiring X-Body-Type == 'State' strictly.",
+    "Persona detection in the panel uses persona?.body_type === 'State'. Ensure the shared persona hook always populates this for MPCA office bearers (works today for secretary/president/treasurer)."
+  ],
+  "updated_files": ["/app/frontend/src/pages/finance/MatchOfficialsPanel.jsx", "/app/backend/tests/test_mpca_133_match_officials.py"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "test_credentials": "persona-chip-secretary (MPCA State), persona-chip-division-secretary (DIV-IND), persona-chip-district-secretary (DIST-INDO-IND). Persona login requires clicking chip AND then login-submit-btn.",
+  "seed_data_creation": "Created + deleted a test TournamentMatchOfficial via UI + backend tests (all cleaned up). Existing tournament 16a2fdd5-aac0-4832-9ad5-a862c31b33cd used.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 6 MPCA-133 verified end-to-end. One import bug found & fixed. Tab deep-link works only for MPCA persona currently. Regression on Phase 1-5 not re-executed by this agent — assumed unchanged since only new files were added. Backend regression test file /app/backend/tests/test_mpca_133_match_officials.py can be reused.",
+  "rca of the issue": "Bug: Compile error in MatchOfficialsPanel.jsx — `import api from '@/lib/api'` uses default import but /app/frontend/src/lib/api.js only exposes NAMED exports (`export const api = axios.create(...)`). Webpack overlay 'export default not found' rendered on all routes, breaking the entire app. Fix: change to `import { api } from '@/lib/api'` matching sibling files (ClaimsPanel.jsx line 6)."
+}

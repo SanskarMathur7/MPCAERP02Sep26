@@ -199,6 +199,15 @@ class MeetingBase(BaseModel):
     convened_by: Optional[str] = None
     agenda: List[AgendaItem] = []
     attendees: List[str] = []  # list of member UIDs
+    # MPCA-113 · Sub-committee auto-attendee expansion. When set, the backend
+    # resolves every member whose `positions[].committee == sub_committee_code`
+    # and adds them to `attendees` on create. External attendees are people
+    # who aren't in the MPCA member registry (guest speakers, BCCI officials,
+    # legal advisors) but need to appear on the invitation + minutes.
+    sub_committee_code: Optional[str] = None
+    external_attendees: List[dict] = Field(default_factory=list)   # [{name, email, org?}]
+    # MPCA-114 · Documents attached at meeting creation, visible to invitees.
+    documents: List[dict] = Field(default_factory=list)            # [{name, url, uploaded_at, uploaded_by}]
     minutes: Optional[str] = None
     minutes_url: Optional[str] = None
     # M39f · Signed-minutes AI summarisation

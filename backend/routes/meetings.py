@@ -31,12 +31,78 @@ async def get_meeting(meeting_id: str):
     return doc
 
 
+# MPCA-113 · Curated sub-committee registry. Names + descriptions are
+# constants (light-weight; can be moved to a collection later if needed).
+# When the client picks a code in the New Meeting form, we auto-resolve
+# every member whose `positions[].committee` matches the code's `label`.
+SUB_COMMITTEES = [
+    {"code": "SELECTION", "label": "Selection", "description": "Selection Committee — squad picks, trial reviews, age-group teams."},
+    {"code": "FINANCE",   "label": "Finance",   "description": "Finance Committee — budgets, audits, scheme approvals."},
+    {"code": "INFRA",     "label": "Infrastructure", "description": "Infrastructure & Grounds — stadium upgrades, ground certification."},
+    {"code": "DISCIPLINARY", "label": "Disciplinary", "description": "Disciplinary Committee — code-of-conduct, sanctions."},
+    {"code": "UMPIRING",  "label": "Umpiring",  "description": "Umpires & Match Officials Panel Committee."},
+    {"code": "COACHING",  "label": "Coaching",  "description": "Coaching & Age-Group Development Committee."},
+    {"code": "WOMENS",    "label": "Womens Cricket", "description": "Women's Cricket & Girls Development."},
+    {"code": "MEDIA",     "label": "Media & PR", "description": "Media, communications & sponsorship."},
+]
+
+
+@api_router.get("/sub-committees")
+async def list_sub_committees():
+    """MPCA-113 · Return the sub-committee registry enriched with member
+    counts so the New Meeting form can preview how many people will be
+    auto-invited before the user hits Save."""
+    out = []
+    for c in SUB_COMMITTEES:
+        cnt = await db.members.count_documents({"positions.committee": c["label"]})
+        out.append({**c, "member_count": cnt})
+    return out
+
+
+@api_router.get("/sub-committees/{code}/members")
+async def get_sub_committee_members(code: str):
+    """List members belonging to a sub-committee — used by MeetingNew to
+    render a preview + populate the attendees list on save."""
+    match = next((c for c in SUB_COMMITTEES if c["code"] == code), None)
+    if not match:
+        raise HTTPException(404, f"Sub-committee {code} not found")
+    label = match["label"]
+    members = await db.members.find(
+        {"positions.committee": label},
+        {"_id": 0, "id": 1, "full_name": 1, "email": 1, "phone": 1, "positions": 1},
+    ).to_list(200)
+    return {"code": code, "label": label, "count": len(members), "members": members}
+
+
 @api_router.post("/meetings", response_model=Meeting)
 async def create_meeting(payload: MeetingCreate):
     count = await db.meetings.count_documents({"meeting_type": payload.meeting_type})
     meeting_no = _next_meeting_no(payload.meeting_type, count)
-    meeting = Meeting(meeting_no=meeting_no, **payload.model_dump())
+    data = payload.model_dump()
+    # MPCA-113 · If sub-committee picked, auto-add its members to attendees.
+    if data.get("sub_committee_code"):
+        label_match = next((c for c in SUB_COMMITTEES if c["code"] == data["sub_committee_code"]), None)
+        if label_match:
+            member_ids = [
+                m["id"] for m in await db.members.find(
+                    {"positions.committee": label_match["label"]},
+                    {"_id": 0, "id": 1},
+                ).to_list(200)
+            ]
+            existing = set(data.get("attendees") or [])
+            for mid in member_ids:
+                existing.add(mid)
+            data["attendees"] = sorted(existing)
+    meeting = Meeting(meeting_no=meeting_no, **data)
     await db.meetings.insert_one(meeting.model_dump())
+    # MPCA-118 · Send invitation email if high-priority meeting.
+    try:
+        from core.email_notifications import send_meeting_invitation
+        await send_meeting_invitation(meeting)
+    except Exception as e:  # noqa: BLE001
+        # Non-fatal — email is best-effort. Log via infra later.
+        import logging
+        logging.getLogger("meetings").warning("Meeting invite email failed: %s", e)
     return meeting
 
 

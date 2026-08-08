@@ -42,6 +42,9 @@ const EventCalendar = () => {
     const [selectedDay, setSelectedDay] = useState(fmtISO(new Date()));
     const [showNew, setShowNew] = useState(false);
     const [draft, setDraft] = useState(null);
+    // MPCA-115 · Event type filter — "all" shows every event, else limit
+    // the day-cell paint to a single event_type.
+    const [typeFilter, setTypeFilter] = useState("all");
 
     const load = async () => {
         setLoading(true);
@@ -62,12 +65,15 @@ const EventCalendar = () => {
     const cells = useMemo(() => monthMatrix(cursor.year, cursor.month), [cursor]);
     const eventsByDay = useMemo(() => {
         const map = new Map();
-        for (const e of events) {
+        // MPCA-115 · Apply the type filter before bucketing so calendar +
+        // right-rail selection both respect it.
+        const filtered = typeFilter === "all" ? events : events.filter((e) => e.event_type === typeFilter);
+        for (const e of filtered) {
             if (!map.has(e.event_date)) map.set(e.event_date, []);
             map.get(e.event_date).push(e);
         }
         return map;
-    }, [events]);
+    }, [events, typeFilter]);
     const selectedEvents = eventsByDay.get(selectedDay) || [];
 
     const openNew = (dateStr) => {
@@ -165,6 +171,23 @@ const EventCalendar = () => {
                     <button onClick={() => jumpMonth(1)} className="p-1.5 border border-mpca-brass/30 hover:bg-mpca-cream/60" data-testid="next-month" title="Next month"><ChevronRight size={14} /></button>
                 </div>
                 <button onClick={jumpToday} className="text-[10px] uppercase tracking-widest border border-mpca-brass/40 px-3 py-1.5 text-mpca-green-dark hover:bg-mpca-cream/60" data-testid="today-btn">Today</button>
+                {/* MPCA-115 · Event type filter */}
+                <div className="flex items-center gap-2 ml-auto" data-testid="event-type-filter">
+                    <label className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">Type</label>
+                    <select
+                        value={typeFilter}
+                        onChange={(e) => setTypeFilter(e.target.value)}
+                        className="input-heritage !py-1 !text-xs !w-auto"
+                        data-testid="event-type-filter-select"
+                    >
+                        <option value="all">All</option>
+                        <option value="meeting">Meetings</option>
+                        <option value="tournament">Tournaments</option>
+                        <option value="announcement">Announcements</option>
+                        <option value="holiday">Holidays</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">

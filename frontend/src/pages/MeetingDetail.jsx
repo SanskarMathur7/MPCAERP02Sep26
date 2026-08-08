@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchMeeting, fetchResolutions, addResolution, updateMeeting } from "@/lib/api";
 import { api, API_BASE } from "@/lib/api";
-import { ArrowLeft, Calendar, MapPin, Clock, Users, CheckCircle2, XCircle, Plus, Gavel, Upload, Sparkles, FileText, RefreshCw, Loader2 } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Clock, Users, CheckCircle2, XCircle, Plus, Gavel, Upload, Sparkles, FileText, RefreshCw, Loader2, Paperclip } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
+import DocumentPreview from "@/components/DocumentPreview";
 
 const STATUS_PILL = {
     Scheduled: "pill-pending",
@@ -301,6 +302,26 @@ const MeetingDetail = () => {
                     )}
                 </div>
             </div>
+
+            {/* MPCA-114/129 · Meeting Documents with inline preview */}
+            {(meeting.documents || []).length > 0 && (
+                <section className="mb-12" data-testid="documents-section">
+                    <div className="overline mb-2">Attachments</div>
+                    <h2 className="font-serif text-3xl text-mpca-green-dark mb-6">Meeting Documents</h2>
+                    <div className="bulletin-card p-4 space-y-2">
+                        {meeting.documents.map((d, i) => (
+                            <div key={i} className="flex items-center gap-3 border-l-4 border-mpca-brass bg-mpca-parchment/40 px-3 py-2" data-testid={`meeting-doc-${i}`}>
+                                <Paperclip size={12} className="text-mpca-oxblood shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-serif text-sm text-mpca-green-dark truncate">{d.name}</div>
+                                    {d.uploaded_at && <div className="text-[10px] text-mpca-gray-dark">Uploaded {String(d.uploaded_at).slice(0, 10)}{d.uploaded_by ? ` · by ${d.uploaded_by}` : ""}</div>}
+                                </div>
+                                <DocumentPreview url={d.url} name={d.name} triggerLabel="Preview" />
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             {/* Agenda */}
             <section className="mb-12">

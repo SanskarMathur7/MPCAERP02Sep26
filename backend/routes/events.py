@@ -180,17 +180,24 @@ async def birthdays_upcoming(days: int = 30):
 
 @api_router.post("/events/birthdays/send-daily-emails")
 async def send_daily_birthday_emails():
-    """MOCKED · would fire at 9 AM daily via cron. Returns the intended
-    recipient list so the caller can verify wiring. Wire real SMTP later.
+    """MPCA-118 · Daily birthday emails.
+
+    Uses `core.email_notifications.send_birthday_greeting` which dispatches
+    via configured SMTP (env: `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM`)
+    or logs as MOCKED when SMTP isn't wired — no code change needed later.
     """
+    from core.email_notifications import send_birthday_greeting
     result = await birthdays_today()
     sent = []
+    mocked = 0
     for m in result.get("members", []):
-        if m.get("email"):
-            logger.info("[BIRTHDAY EMAIL · MOCKED] to=%s name=%s age=%s",
-                        m["email"], m.get("name"), m.get("age"))
-            sent.append({"to": m["email"], "name": m.get("name")})
-    return {"date": result["date"], "attempted": len(sent), "sent": sent, "mocked": True}
+        if not m.get("email"):
+            continue
+        r = await send_birthday_greeting({"email": m["email"], "full_name": m.get("name")})
+        sent.append({"to": m["email"], "name": m.get("name"), "status": r.get("status")})
+        if r.get("status") == "mocked":
+            mocked += 1
+    return {"date": result["date"], "attempted": len(sent), "sent": sent, "mocked": mocked > 0}
 
 
 # ── Scheme season activation (M39c) ──────────────────────────────────────

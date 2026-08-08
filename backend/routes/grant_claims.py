@@ -460,6 +460,13 @@ async def reject_grant_claim(cid: str, actor_name: str, reason: str):
         message=reason, link=f"/grant-claims/{cid}", related_type="grant_claim", related_id=cid,
         severity="warning", kind="info",
     )
+    # MPCA-118 · Fire SMTP notice on post-approval audit rejection.
+    try:
+        from core.email_notifications import send_claim_rejection_notice
+        await send_claim_rejection_notice(doc, reason)
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger("grant_claims").warning("Rejection email failed: %s", e)
     return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
 
 

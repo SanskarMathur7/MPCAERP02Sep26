@@ -1,0 +1,22 @@
+{
+  "summary": "Phase 8 MPCA-116 (Player Registration Campaign request/approval workflow) tested end-to-end. Backend: 11/11 pytest cases pass covering MPCA auto-approve, Division-defaults-Pending, approve/reject role guards, idempotency, empty-reason 400, public token guard for Pending/Rejected/Approved, and division scoping. Frontend: All UI acceptance checks pass — button label swap ('Request Campaign' vs 'New Campaign'), status pills, italic 'Awaiting MPCA approval' line, rejected reason element, conditional visibility of Copy/Invites/Preview only for Approved, MPCA-only Approve/Reject controls, and live status flip after Approve click (Pending → Active).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_mpca_116_campaign_requests.py",
+    "/app/test_reports/pytest/mpca_116.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PlayerRegistrations.jsx file is 764 lines — consider splitting CampaignsList / RegistrationsInbox / NewCampaignDialog / InvitesDialog into separate files (>700 line guideline).",
+    "reject_campaign_request writes approved_by/approved_at when rejecting — semantically these fields represent approver metadata; consider renaming to a neutral 'actioned_by'/'actioned_at' or introducing dedicated rejected_by/rejected_at fields for clarity.",
+    "rejectReq handler uses window.prompt() which is not ideal UX — a modal input would be more consistent with the rest of the ERP heritage design."
+  ],
+  "updated_files": ["/app/backend/tests/test_mpca_116_campaign_requests.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (all data-testid + role gating verified)"},
+  "test_credentials": "persona-chip-secretary (MPCA), persona-chip-division-secretary (DIV-IND), persona-chip-division-secretary-gwl (DIV-GWL)",
+  "seed_data_creation": "Created ~11 TEST_MPCA116_* campaigns via backend tests (auto-cleaned by teardown attempt; a few visible in UI list are harmless).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "MPCA-116 fully verified. Regression items from Phase 1-7+9 were not re-executed this iteration (Phase 7 iteration_79.json already covered them). Backend test file /app/backend/tests/test_mpca_116_campaign_requests.py is a stable regression suite for the campaign workflow."
+}

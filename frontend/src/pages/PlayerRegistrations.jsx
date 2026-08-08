@@ -94,7 +94,7 @@ const PlayerRegistrations = () => {
                     </p>
                 </div>
                 <button onClick={() => setShowNew(true)} className="btn-heritage-primary" data-testid="pr-new-campaign-btn">
-                    <Plus size={14} /> New Campaign
+                    <Plus size={14} /> {isMPCA ? "New Campaign" : "Request Campaign"}
                 </button>
             </div>
 
@@ -127,21 +127,45 @@ const PlayerRegistrations = () => {
 // ─────────────── Campaigns List ───────────────
 
 const CampaignsList = ({ campaigns, onCopy, onOpen, onChanged, persona }) => {
+    const isMPCA = persona?.body_type === "State";
     if (!campaigns.length) return (
         <div className="py-16 text-center border border-dashed border-mpca-brass/30 text-[11px] italic text-mpca-gray-dark" data-testid="pr-campaigns-empty">
-            No campaigns yet. Click &quot;New Campaign&quot; to open your first season registration window.
+            No campaigns yet. Click &quot;{isMPCA ? "New Campaign" : "Request Campaign"}&quot; to open your first season registration window.
         </div>
     );
+
+    // MPCA-116 · Approve / Reject request handlers (MPCA-only).
+    const approveReq = async (cid) => {
+        try { await api.post(`/player-registration-campaigns/${cid}/approve-request`); onChanged?.(); }
+        catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const rejectReq = async (cid) => {
+        const reason = window.prompt("Reason for rejecting this campaign request?");
+        if (!reason || !reason.trim()) return;
+        try { await api.post(`/player-registration-campaigns/${cid}/reject-request`, { reason: reason.trim() }); onChanged?.(); }
+        catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
     return (
         <div className="bulletin-card divide-y divide-mpca-brass/15" data-testid="pr-campaigns-list">
             {campaigns.map((c) => {
                 const expiring = c.expires_on && new Date(c.expires_on) < new Date();
+                const status = c.request_status || "Approved";
+                const isPending = status === "Pending";
+                const isRejected = status === "Rejected";
+                const isApproved = status === "Approved";
                 return (
                     <div key={c.id} className="grid grid-cols-12 items-center gap-3 px-5 py-4" data-testid={`pr-campaign-${c.id}`}>
                         <div className="col-span-4 min-w-0">
                             <div className="font-serif text-lg text-mpca-green-dark truncate">{c.title}</div>
                             <div className="text-[10px] text-mpca-brass font-mono mt-0.5">
                                 {c.body_code} · {c.cycle_code}{c.expires_on ? ` · expires ${c.expires_on}` : ""}
+                            </div>
+                            {/* MPCA-116 · Approval status line */}
+                            <div className="text-[10px] mt-1">
+                                {isPending && <span className="text-mpca-brass italic">⏳ Awaiting MPCA approval — public link disabled.</span>}
+                                {isRejected && <span className="text-mpca-oxblood italic" data-testid={`pr-rejected-reason-${c.id}`}>✗ Rejected: {c.rejection_reason || "(no reason)"}</span>}
+                                {isApproved && c.approved_by && <span className="text-mpca-green-dark/70">✓ Approved by {c.approved_by}</span>}
                             </div>
                         </div>
                         <div className="col-span-4 grid grid-cols-4 gap-2 text-center text-[10px] font-mono">
@@ -151,18 +175,43 @@ const CampaignsList = ({ campaigns, onCopy, onOpen, onChanged, persona }) => {
                             <div><div className="text-mpca-gray-dark">Rejected</div><div className="text-mpca-oxblood text-base">{c.rejected_count}</div></div>
                         </div>
                         <div className="col-span-4 flex flex-wrap justify-end gap-1">
-                            <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 border ${expiring ? "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40" : c.is_active ? "bg-mpca-green-dark/15 text-mpca-green-dark border-mpca-green-dark/40" : "bg-mpca-brass/20 text-mpca-brass border-mpca-brass/40"}`}>
-                                {expiring ? "Expired" : c.is_active ? "Active" : "Paused"}
+                            <span
+                                className={`text-[9px] uppercase tracking-widest px-2 py-0.5 border ${
+                                    isPending ? "bg-mpca-brass/15 text-mpca-brass border-mpca-brass/40"
+                                    : isRejected ? "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40"
+                                    : expiring ? "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40"
+                                    : c.is_active ? "bg-mpca-green-dark/15 text-mpca-green-dark border-mpca-green-dark/40"
+                                    : "bg-mpca-brass/20 text-mpca-brass border-mpca-brass/40"
+                                }`}
+                                data-testid={`pr-campaign-status-${c.id}`}
+                            >
+                                {isPending ? "Pending" : isRejected ? "Rejected" : (expiring ? "Expired" : c.is_active ? "Active" : "Paused")}
                             </span>
-                            <button onClick={() => onCopy(c.public_token)} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-mpca-brass/40 text-mpca-brass hover:bg-mpca-brass hover:text-mpca-ivory transition-colors inline-flex items-center gap-1" data-testid={`pr-copy-${c.id}`}>
-                                <Copy size={10} /> Copy public URL
-                            </button>
-                            <button onClick={() => onOpen(c)} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory transition-colors inline-flex items-center gap-1" data-testid={`pr-invites-${c.id}`}>
-                                <UserPlus size={10} /> Invites
-                            </button>
-                            <a href={publicUrlFor(c.public_token)} target="_blank" rel="noreferrer" className="text-[10px] uppercase tracking-widest px-2 py-1 text-mpca-gray-dark hover:text-mpca-green-dark inline-flex items-center gap-1" data-testid={`pr-preview-${c.id}`}>
-                                <ExternalLink size={10} /> Preview
-                            </a>
+                            {/* MPCA-116 · Public-link controls only when Approved */}
+                            {isApproved && (
+                                <>
+                                    <button onClick={() => onCopy(c.public_token)} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-mpca-brass/40 text-mpca-brass hover:bg-mpca-brass hover:text-mpca-ivory transition-colors inline-flex items-center gap-1" data-testid={`pr-copy-${c.id}`}>
+                                        <Copy size={10} /> Copy public URL
+                                    </button>
+                                    <button onClick={() => onOpen(c)} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory transition-colors inline-flex items-center gap-1" data-testid={`pr-invites-${c.id}`}>
+                                        <UserPlus size={10} /> Invites
+                                    </button>
+                                    <a href={publicUrlFor(c.public_token)} target="_blank" rel="noreferrer" className="text-[10px] uppercase tracking-widest px-2 py-1 text-mpca-gray-dark hover:text-mpca-green-dark inline-flex items-center gap-1" data-testid={`pr-preview-${c.id}`}>
+                                        <ExternalLink size={10} /> Preview
+                                    </a>
+                                </>
+                            )}
+                            {/* MPCA-116 · MPCA-only Approve / Reject buttons for Pending requests */}
+                            {isMPCA && isPending && (
+                                <>
+                                    <button onClick={() => approveReq(c.id)} className="text-[10px] uppercase tracking-widest px-2 py-1 bg-mpca-green-dark text-mpca-ivory hover:opacity-90 inline-flex items-center gap-1" data-testid={`pr-approve-req-${c.id}`}>
+                                        Approve
+                                    </button>
+                                    <button onClick={() => rejectReq(c.id)} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory transition-colors inline-flex items-center gap-1" data-testid={`pr-reject-req-${c.id}`}>
+                                        Reject
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 );

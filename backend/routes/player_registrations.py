@@ -15,7 +15,7 @@ RBAC
   them (rate limits deferred — env-controlled in a follow-up).
 """
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 import secrets
 import uuid
 
@@ -71,6 +71,16 @@ class PlayerRegistrationCampaign(BaseModel):
     submitted_count: int = 0
     approved_count: int = 0
     rejected_count: int = 0
+    # MPCA-116 · Division-wise request/approval workflow. Divisions can no
+    # longer publish a campaign directly — they raise a request; MPCA
+    # approves it before the public link becomes usable. MPCA-created
+    # campaigns default to Approved.
+    request_status: Literal["Pending", "Approved", "Rejected"] = "Approved"
+    requested_by: Optional[str] = None
+    request_note: Optional[str] = None
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+    rejection_reason: Optional[str] = None
     created_by: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -529,13 +539,84 @@ async def create_campaign(
     body = await db.bodies.find_one({"code": payload.body_code}, {"_id": 0})
     if not body:
         raise HTTPException(404, f"Body {payload.body_code} not found")
+    # MPCA-116 · Divisions raise a REQUEST — the campaign is created in
+    # Pending state, the public form refuses submissions until MPCA approves.
+    # MPCA-created campaigns are auto-Approved.
+    is_mpca_caller = (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES)
     row = PlayerRegistrationCampaign(
         **payload.model_dump(exclude_unset=True),
         body_name=body.get("name"),
         body_type=body.get("body_type"),
+        request_status=("Approved" if is_mpca_caller else "Pending"),
+        requested_by=payload.created_by,
+        approved_by=("MPCA" if is_mpca_caller else None),
+        approved_at=(datetime.now(timezone.utc).isoformat() if is_mpca_caller else None),
     )
     await db.player_registration_campaigns.insert_one(row.model_dump())
     return row
+
+
+@api_router.post("/player-registration-campaigns/{cid}/approve-request", response_model=PlayerRegistrationCampaign)
+async def approve_campaign_request(
+    cid: str,
+    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+):
+    """MPCA-116 · MPCA approves a Division's campaign request. Public form
+    submissions unlock once this fires."""
+    if not (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES):
+        raise HTTPException(403, "Only MPCA may approve campaign requests.")
+    doc = await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Campaign not found")
+    if doc.get("request_status") == "Approved":
+        return doc
+    await db.player_registration_campaigns.update_one(
+        {"id": cid},
+        {"$set": {
+            "request_status": "Approved",
+            "approved_by": x_persona_name or "MPCA",
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "rejection_reason": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    return await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
+
+
+class _RejectPayload(BaseModel):
+    reason: str = ""
+    model_config = ConfigDict(extra="ignore")
+
+
+@api_router.post("/player-registration-campaigns/{cid}/reject-request", response_model=PlayerRegistrationCampaign)
+async def reject_campaign_request(
+    cid: str,
+    payload: _RejectPayload,
+    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+):
+    """MPCA-116 · MPCA rejects a Division's campaign request."""
+    if not (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES):
+        raise HTTPException(403, "Only MPCA may reject campaign requests.")
+    if not (payload.reason or "").strip():
+        raise HTTPException(400, "A rejection reason is required.")
+    doc = await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Campaign not found")
+    await db.player_registration_campaigns.update_one(
+        {"id": cid},
+        {"$set": {
+            "request_status": "Rejected",
+            "rejection_reason": payload.reason.strip(),
+            "approved_by": x_persona_name or "MPCA",
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    return await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
 
 
 @api_router.get("/player-registration-campaigns", response_model=List[PlayerRegistrationCampaign])
@@ -682,6 +763,13 @@ async def resolve_token(token: str):
         raise HTTPException(404, "Unknown or invalid registration link.")
     if not camp.get("is_active"):
         raise HTTPException(410, "This campaign is no longer active.")
+    # MPCA-116 · Public form is disabled until MPCA has approved the request.
+    if camp.get("request_status") != "Approved":
+        raise HTTPException(
+            403,
+            "This campaign is awaiting MPCA approval and cannot accept "
+            "submissions yet. Please try again once approval is granted.",
+        )
     if camp.get("expires_on") and camp["expires_on"] < now[:10]:
         raise HTTPException(410, "This campaign has expired.")
     return {

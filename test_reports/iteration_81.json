@@ -1,0 +1,46 @@
+{
+  "summary": "Phase 6 (MPCA-133+) — Match Officials rework tested end-to-end. Backend: 7/9 pytest cases pass. Frontend: MPCA workspace setup-box 'box-officials' renders correctly, MatchOfficialsPanel loads with rate card + assign form + status pills (Rejected/Accepted verified visually). Finance Console has NO 'fc-tab-officials'. Match Official /my-assignments portal loads with KPI cards, list, Accept flips status to Accepted live, Submit DA link visible on accepted rows, Rejected rows show 'MPCA will re-post'. Fee/DA/Total visible for all statuses. Sidebar 'My Assignments' link present for match-official persona. 2 backend regression failures found (see critical).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/tournaments/{tid}/match-officials/{aid}/accept and /reject",
+        "issue": "Regression: Division/District/Treasurer/President personas can Accept/Reject any official's assignment. _official_may_respond() treats every value in _ADMIN_ROLES = {president, secretary, division-secretary, district-secretary, treasurer} as an authorized responder. Per the spec, only MPCA (State-scope) office bearers OR the assigned official may respond; Division/District must return 403. Reproduction: POST with headers X-Role-Id=division-secretary (no X-Persona-Name match) → 200 instead of 403.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/tournaments/{tid}/match-officials + tournaments create + /reject",
+        "issue": "Notifications are inserted with keys recipient_type + recipient_id, but the standard bell endpoint GET /api/notifications queries recipient_role_id (defined in models.Notification). Result: the assignment/reminder/rejection notifications ARE persisted in db.notifications correctly (verified via direct Mongo query per the spec) but they will NOT surface in the in-app bell until the notification schema is aligned (either rename to recipient_role_id or extend the list endpoint filter). Also `is_read` field is used on insert vs `read` field used by list_notifications filter — same mismatch."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mpca_133_plus_portal.py",
+    "/app/test_reports/pytest/mpca_133_plus.xml"
+  ],
+  "action_items": [
+    "Fix _official_may_respond() in /app/backend/routes/match_officials.py — restrict admin-shortcut to MPCA state-scope roles only (e.g. check X-Body-Type=='State' OR use a narrower set like {'secretary','president','treasurer'} combined with a State body-type check). Division-secretary and district-secretary must NOT be able to Accept/Reject on an official's behalf.",
+    "Align notification field names: match_officials.py + tournaments.py write recipient_id / recipient_type / is_read, but routes/notifications.py list_notifications reads recipient_role_id / read. Either standardize inserts to use recipient_role_id + read, OR update list_notifications to also match recipient_id. Otherwise the new bell reminders (MPCA post-officials, official assignment, official rejection) are invisible in the UI bell.",
+    "Consider filtering out Rejected rows from the MatchOfficialsPanel assignments table headline count OR adding a 'Rejected' badge in the list summary — currently 4 assignments visible (2 Accepted + 2 Rejected) with no clear filter."
+  ],
+  "critical_code_review_comments": [
+    "match_officials.py:369 — _ADMIN_ROLES is reused for both 'can assign' (MPCA-only path is enforced elsewhere by _mpca_only header check) and 'can respond to acceptance', but the second use is too permissive.",
+    "notifications insert vs list schema drift is app-wide (see notification bell endpoints); the new MPCA-133+ notifications inherit this drift.",
+    "MyAssignments page correctly shows fees + DA upfront (transparency requirement satisfied); UI polish is clean."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mpca_133_plus_portal.py (new)"
+  ],
+  "success_rate": {"backend": "78% (7/9)", "frontend": "100%"},
+  "test_credentials": "persona-chip-secretary (MPCA Sanjeev Dua), persona-chip-match-official (Chandrakant Pandit). X-Persona-Name for match-official = 'Chandrakant Pandit' (case-insensitive).",
+  "seed_data_creation": "Test created several TEST_mpca133plus / TEST_reject_row TournamentMatchOfficial rows under tournament 66ab51dc… (Gwalior Division Inter-District Championship) plus one TEST_MPCA133 Tournament Notify tournament for the notification reminder verification. These persist in DB — main agent may clean up if desired.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The two failing tests (test_reject_wrong_persona_forbidden, test_accept_wrong_persona_forbidden) surface a real business-logic regression — do NOT relax them. If main agent fixes _official_may_respond, rerun /app/backend/tests/test_mpca_133_plus_portal.py to confirm all 9 pass. Notifications DB inserts verified via direct Mongo query — no need to hit /api/notifications unless the bell schema is also fixed."
+}

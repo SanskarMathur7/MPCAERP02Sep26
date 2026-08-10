@@ -46,6 +46,7 @@ const Tournaments = lazy(() => import("@/pages/Tournaments"));
 const TournamentDetail = lazy(() => import("@/pages/TournamentDetail"));
 const SelectionConsole = lazy(() => import("@/pages/SelectionConsole"));
 const MatchOfficials = lazy(() => import("@/pages/MatchOfficials"));
+const MyAssignments = lazy(() => import("@/pages/MyAssignments"));
 const Fixtures = lazy(() => import("@/pages/Fixtures"));
 const AuditLog = lazy(() => import("@/pages/AuditLog"));
 const Rulebook = lazy(() => import("@/pages/Rulebook"));
@@ -177,6 +178,7 @@ function App() {
                             <Route path="/tournaments/:id/selection" element={<Protected><SelectionConsole /></Protected>} />
                             <Route path="/selection-funnel" element={<Protected><SelectionFunnel /></Protected>} />
                             <Route path="/match-officials" element={<Protected><MatchOfficials /></Protected>} />
+                            <Route path="/my-assignments" element={<Protected><MyAssignments /></Protected>} />
                             <Route path="/match-officials/:id" element={<Protected><MatchOfficialDetail /></Protected>} />
 
                             {/* Protected — Sprint 1: Finance Rails */}

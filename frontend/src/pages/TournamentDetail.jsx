@@ -27,6 +27,7 @@ import MatchOfficialDAPanel from "@/components/MatchOfficialDAPanel";
 import TournamentActivityLog from "@/components/TournamentActivityLog";
 import DiscussionThread from "@/components/DiscussionThread";
 import TournamentFinanceCard from "@/components/TournamentFinanceCard";
+import MatchOfficialsPanel from "@/pages/finance/MatchOfficialsPanel";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
@@ -349,6 +350,8 @@ const TournamentDetail = () => {
                             }} />
                             {/* M39t · Consolidated Finance action card — replaces the 6 individual finance boxes */}
                             <TournamentFinanceCard tournament={t} persona={persona} />
+                            {/* MPCA-133+ · Match Officials (moved out of Finance Console per user request). */}
+                            <SetupBox testId="box-officials" icon={ShieldCheck} label="Match Officials" note="MPCA assigns umpires · scorers · referees · physios centrally" onClick={() => setOpenBox(openBox === "officials" ? null : "officials")} active={openBox === "officials"} />
                             <SetupBox testId="box-activity" icon={History} label="Activity Log" note="Chronological trail of all actions" onClick={() => setOpenBox(openBox === "activity" ? null : "activity")} active={openBox === "activity"} />
                             <SetupBox testId="box-discussion" icon={MessageSquare} label="Discussion" note="MPCA · Division chat for this tournament" onClick={() => setOpenBox(openBox === "discussion" ? null : "discussion")} active={openBox === "discussion"} />
                         </>
@@ -386,6 +389,9 @@ const TournamentDetail = () => {
                 )}
                 {openBox === "my-da" && (
                     <div className="mt-4"><MatchOfficialDAPanel tournamentId={id} onChange={() => { refreshProgress(); load(); }} /></div>
+                )}
+                {openBox === "officials" && (
+                    <div className="mt-4" data-testid="box-officials-panel"><MatchOfficialsPanel tournament={t} persona={persona} /></div>
                 )}
                 {openBox === "activity" && (
                     <div className="mt-4"><TournamentActivityLog tournamentId={id} /></div>

@@ -160,9 +160,20 @@ const MatchOfficialsPanel = ({ tournament, persona }) => {
                             {assignments.map((a) => {
                                 const feeTotal = (a.per_day_fee_inr || 0) * (a.days || 0);
                                 const daTotal = (a.per_day_da_inr || 0) * (a.days || 0);
+                                const status = a.acceptance_status || "Pending";
+                                const pillCls =
+                                    status === "Accepted" ? "bg-mpca-green-dark/15 text-mpca-green-dark border-mpca-green-dark/50"
+                                    : status === "Rejected" ? "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40 animate-pulse"
+                                    : "bg-mpca-brass/15 text-mpca-brass border-mpca-brass/40";
                                 return (
                                     <tr key={a.id} className="border-b border-mpca-brass/20" data-testid={`mo-row-${a.id}`}>
-                                        <td className="py-1.5 font-serif text-mpca-green-dark">{a.official_name}</td>
+                                        <td className="py-1.5 font-serif text-mpca-green-dark">
+                                            {a.official_name}
+                                            <span className={`ml-2 text-[8px] font-mono uppercase tracking-widest px-1 py-0.5 border ${pillCls}`} data-testid={`mo-status-${a.id}`}>{status}</span>
+                                            {status === "Rejected" && a.rejection_reason && (
+                                                <div className="text-[10px] text-mpca-oxblood italic mt-0.5">Reason: {a.rejection_reason}</div>
+                                            )}
+                                        </td>
                                         <td className="py-1.5">{a.role}</td>
                                         <td className="py-1.5 text-mpca-gray-dark">{a.body_id || "—"}</td>
                                         <td className="py-1.5 text-right font-mono">
@@ -175,7 +186,7 @@ const MatchOfficialsPanel = ({ tournament, persona }) => {
                                         <td className="py-1.5 text-right font-mono font-semibold">{fmt(feeTotal + daTotal)}</td>
                                         {isMPCA && (
                                             <td className="py-1.5 text-right">
-                                                <button className="text-mpca-oxblood hover:bg-mpca-oxblood/10 p-1" onClick={() => removeAssignment(a.id)} title="Remove assignment" data-testid={`mo-remove-${a.id}`}>
+                                                <button className="text-mpca-oxblood hover:bg-mpca-oxblood/10 p-1" onClick={() => removeAssignment(a.id)} title="Remove / re-post" data-testid={`mo-remove-${a.id}`}>
                                                     <Trash2 size={12} />
                                                 </button>
                                             </td>

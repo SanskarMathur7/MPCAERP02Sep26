@@ -95,6 +95,14 @@ class TournamentMatchOfficial(TournamentMatchOfficialBase):
     # ── Snapshot for display / audit ──
     official_name: Optional[str] = None
     body_id: Optional[str] = None                      # official's owning body
+    # MPCA-133+ · Assignment lifecycle. Officials can Accept / Reject; MPCA
+    # can re-post replacement officials for a Rejected slot. Rejected rows are
+    # PRESERVED (audit trail) — not deleted.
+    acceptance_status: Literal["Pending", "Accepted", "Rejected"] = "Pending"
+    rejection_reason: Optional[str] = None
+    responded_at: Optional[str] = None
+    # Snapshot for the Match Official portal
+    tournament_name: Optional[str] = None
 
 
 _ADMIN_ROLES = {"president", "secretary", "division-secretary", "district-secretary", "treasurer"}
@@ -256,8 +264,27 @@ async def assign_tournament_official(
         assigned_by=x_persona_name or "MPCA",
         official_name=off.get("full_name"),
         body_id=off.get("body_id"),
+        tournament_name=t.get("name"),
     )
     await db.tournament_match_officials.insert_one(tmo.model_dump())
+    # Notify the official (in-app) that they have a new assignment awaiting response.
+    try:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "recipient_type": "match_official",
+            "recipient_id": off["id"],
+            "title": f"Match Official assignment · {t.get('name')}",
+            "message": f"You have been assigned as {role} for {t.get('name')} · {tmo.days} days. Please Accept or Reject.",
+            "link": "/my-assignments",
+            "related_type": "tournament_match_official",
+            "related_id": tmo.id,
+            "severity": "info",
+            "kind": "assignment",
+            "is_read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:  # noqa: BLE001
+        pass
     return tmo
 
 
@@ -327,3 +354,117 @@ async def tournament_officials_summary(tid: str):
         "by_role": by_role,
         "paid_by": "MPCA (central pool)",
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MPCA-133+ · Match-Official Portal (accept / reject / my assignments)
+# ═══════════════════════════════════════════════════════════════════════════
+class _RejectReason(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    reason: str
+
+
+def _official_may_respond(
+    doc: dict,
+    x_persona_name: Optional[str],
+    x_role_id: Optional[str],
+    x_body_type: Optional[str],
+) -> bool:
+    """Assignment response allowed only for:
+      · MPCA State-scope admins (secretary / president / treasurer with X-Body-Type=State), OR
+      · The assigned official themselves (X-Persona-Name matches snapshot).
+    Division / District office bearers are explicitly NOT allowed to
+    respond on an official's behalf.
+    """
+    if x_body_type == "State" and x_role_id in {"secretary", "president", "treasurer"}:
+        return True
+    if x_persona_name and (doc.get("official_name") or "").strip().lower() == x_persona_name.strip().lower():
+        return True
+    return False
+
+
+@api_router.post("/tournaments/{tid}/match-officials/{aid}/accept", response_model=TournamentMatchOfficial)
+async def accept_tournament_assignment(
+    tid: str,
+    aid: str,
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+):
+    doc = await db.tournament_match_officials.find_one({"id": aid, "tournament_id": tid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Assignment not found")
+    if not _official_may_respond(doc, x_persona_name, x_role_id, x_body_type):
+        raise HTTPException(403, "Only the assigned official (or MPCA state-scope admin) may respond to this assignment.")
+    await db.tournament_match_officials.update_one({"id": aid}, {"$set": {
+        "acceptance_status": "Accepted",
+        "responded_at": datetime.now(timezone.utc).isoformat(),
+        "rejection_reason": None,
+    }})
+    return await db.tournament_match_officials.find_one({"id": aid}, {"_id": 0})
+
+
+@api_router.post("/tournaments/{tid}/match-officials/{aid}/reject", response_model=TournamentMatchOfficial)
+async def reject_tournament_assignment(
+    tid: str,
+    aid: str,
+    payload: _RejectReason,
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+):
+    if not (payload.reason or "").strip():
+        raise HTTPException(400, "A rejection reason is required.")
+    doc = await db.tournament_match_officials.find_one({"id": aid, "tournament_id": tid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Assignment not found")
+    if not _official_may_respond(doc, x_persona_name, x_role_id, x_body_type):
+        raise HTTPException(403, "Only the assigned official (or MPCA state-scope admin) may respond to this assignment.")
+    await db.tournament_match_officials.update_one({"id": aid}, {"$set": {
+        "acceptance_status": "Rejected",
+        "rejection_reason": payload.reason.strip(),
+        "responded_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    # Notify MPCA so they can re-post a replacement.
+    try:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "recipient_type": "role",
+            "recipient_id": "secretary",
+            "title": f"Match Official rejected assignment · {doc.get('tournament_name') or doc.get('tournament_id')}",
+            "message": f"{doc.get('official_name')} rejected the {doc.get('role')} slot. Reason: {payload.reason.strip()}",
+            "link": f"/tournaments/{tid}",
+            "related_type": "tournament_match_official",
+            "related_id": aid,
+            "severity": "warning",
+            "kind": "info",
+            "is_read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:  # noqa: BLE001
+        pass
+    return await db.tournament_match_officials.find_one({"id": aid}, {"_id": 0})
+
+
+@api_router.get("/match-officials/me/assignments")
+async def my_official_assignments(
+    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+):
+    """Match-Official portal · list every assignment addressed to the caller.
+    Match uses the persona name (case-insensitive) against `official_name` snapshot.
+    """
+    if not x_persona_name:
+        raise HTTPException(400, "X-Persona-Name header required.")
+    # Case-insensitive equality via regex anchor.
+    import re as _re
+    name_pat = _re.compile(f"^{_re.escape(x_persona_name.strip())}$", _re.IGNORECASE)
+    rows = await db.tournament_match_officials.find(
+        {"official_name": {"$regex": name_pat}}, {"_id": 0},
+    ).sort("assigned_at", -1).to_list(500)
+    # Enrich with computed totals
+    for r in rows:
+        d = int(r.get("days") or 0)
+        r["fee_total_inr"] = float(r.get("per_day_fee_inr") or 0) * d
+        r["da_total_inr"] = float(r.get("per_day_da_inr") or 0) * d
+        r["grand_total_inr"] = r["fee_total_inr"] + r["da_total_inr"]
+    return {"count": len(rows), "assignments": rows}

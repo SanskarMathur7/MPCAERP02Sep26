@@ -337,6 +337,25 @@ async def create_tournament(payload: TournamentCreate):
         **data,
     )
     await db.tournaments.insert_one(t.model_dump())
+    # MPCA-133+ · Ping MPCA secretary that this new tournament needs match
+    # officials posted centrally. Non-fatal on any error.
+    try:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "recipient_type": "role",
+            "recipient_id": "secretary",
+            "title": f"New tournament — post match officials · {t.name}",
+            "message": f"Tournament {t.tournament_no} created (host {t.host_body_id}). Please assign umpires, scorers, referees and physios via the Match Officials tab on the Tournament Workspace.",
+            "link": f"/tournaments/{t.id}?tab=officials",
+            "related_type": "tournament",
+            "related_id": t.id,
+            "severity": "info",
+            "kind": "reminder",
+            "is_read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:  # noqa: BLE001
+        pass
     # M39m · Activity log
     from core.shared_services import log_activity
     await log_activity(

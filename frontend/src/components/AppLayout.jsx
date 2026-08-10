@@ -88,6 +88,7 @@ const OFFICIAL_NAV_DOMAINS = [
     {
         domain: "My Portal",
         items: [
+            { to: "/my-assignments", label: "My Assignments", icon: ShieldCheck },
             { to: "/my-da-forms", label: "My DA / TA Forms", icon: FileCheck },
         ],
     },

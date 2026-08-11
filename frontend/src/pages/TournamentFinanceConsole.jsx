@@ -743,7 +743,11 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, poolIvDraft
                 </div>
             </div>
 
-            {/* M39w · Per-body head editor — MPCA overrides scheme values */}
+            {/* M39w · Per-body head editor — MPCA overrides scheme values.
+                UX: One card per body; heads listed vertically as rows with
+                an amount input on the right (user request). Row shows
+                scheme placeholder in gray; the override input flips to
+                oxblood the moment MPCA types a number. */}
             {showOverrides && heads.length > 0 && (
                 <div className="mt-4 border-2 border-mpca-navy/40 bg-mpca-navy/5 p-4" data-testid="fc-overrides-panel">
                     <div className="flex items-center gap-2 mb-3">
@@ -751,71 +755,75 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, poolIvDraft
                         <div className="font-serif text-mpca-navy font-semibold">Edit head amounts per body</div>
                         <span className="text-[10px] text-mpca-gray-dark">Scheme-computed values shown as placeholder — override any cell to change that body&apos;s allocation.</span>
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                            <thead>
-                                <tr className="bg-mpca-parchment border-b-2 border-mpca-navy/40 text-[10px] uppercase tracking-widest text-mpca-gray-dark">
-                                    <th className="text-left px-2 py-1.5 sticky left-0 bg-mpca-parchment">Body</th>
-                                    {heads.map((h) => (
-                                        <th key={h.head} className="text-right px-2 py-1.5 min-w-[110px]">
-                                            {h.head.length > 20 ? h.head.slice(0, 18) + "…" : h.head}
-                                        </th>
-                                    ))}
-                                    <th className="text-right px-2 py-1.5 border-l border-mpca-navy/30">Total ₹</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((r) => {
-                                    const roleHeads = r.role === "Host" ? heads : heads.filter((h) => {
-                                        const l = ` ${h.head.toLowerCase()} `;
-                                        return ["travel", "da", "ta", "food", "stay", "hotel", "lodging", "boarding", "meal", "conveyance", "transport", "contingency"].some((k) => l.includes(k));
-                                    });
-                                    const bodyOv = perBodyOverrides[r.body_code] || {};
-                                    const rowTotal = heads.reduce((s, h) => {
-                                        if (!roleHeads.some((rh) => rh.head === h.head)) return s;
-                                        return s + (bodyOv[h.head] ?? h.limit_inr);
-                                    }, 0);
-                                    return (
-                                        <tr key={r.body_code} className="border-b border-mpca-navy/15 hover:bg-mpca-parchment/50">
-                                            <td className="px-2 py-1.5 font-serif text-mpca-green-dark sticky left-0 bg-inherit">
-                                                {r.body_name || r.body_code}
-                                                <span className="ml-2 text-[9px] uppercase text-mpca-brass">{r.role}</span>
-                                            </td>
-                                            {heads.map((h) => {
-                                                const applicable = roleHeads.some((rh) => rh.head === h.head);
-                                                if (!applicable) return <td key={h.head} className="px-2 py-1 text-right text-[10px] text-mpca-gray-dark/50">—</td>;
-                                                return (
-                                                    <td key={h.head} className="px-2 py-1 text-right">
-                                                        <input
-                                                            type="number"
-                                                            placeholder={String(Math.round(h.limit_inr))}
-                                                            value={bodyOv[h.head] ?? ""}
-                                                            onChange={(e) => {
-                                                                const v = e.target.value;
-                                                                setPerBodyOverrides((d) => {
-                                                                    const next = { ...d };
-                                                                    const bodyMap = { ...(next[r.body_code] || {}) };
-                                                                    if (v === "" || v === null) delete bodyMap[h.head];
-                                                                    else bodyMap[h.head] = parseFloat(v) || 0;
-                                                                    if (Object.keys(bodyMap).length) next[r.body_code] = bodyMap;
-                                                                    else delete next[r.body_code];
-                                                                    return next;
-                                                                });
-                                                            }}
-                                                            className="w-full text-right font-mono text-[11px] px-1 py-0.5 border border-mpca-brass/30 bg-mpca-parchment focus:outline-none focus:border-mpca-navy"
-                                                            data-testid={`fc-override-${r.body_code}-${h.head.slice(0, 12)}`}
-                                                        />
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="px-2 py-1 text-right font-mono text-mpca-oxblood font-semibold border-l border-mpca-navy/30">
-                                                {fmt(rowTotal)}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        {rows.map((r) => {
+                            const roleHeads = r.role === "Host" ? heads : heads.filter((h) => {
+                                const l = ` ${h.head.toLowerCase()} `;
+                                return ["travel", "da", "ta", "food", "stay", "hotel", "lodging", "boarding", "meal", "conveyance", "transport", "contingency"].some((k) => l.includes(k));
+                            });
+                            const bodyOv = perBodyOverrides[r.body_code] || {};
+                            const rowTotal = roleHeads.reduce((s, h) => s + (bodyOv[h.head] ?? h.limit_inr), 0);
+                            const hasOverride = Object.keys(bodyOv).length > 0;
+                            return (
+                                <div
+                                    key={r.body_code}
+                                    className={`bulletin-card p-3 ${hasOverride ? "border-mpca-navy" : ""}`}
+                                    data-testid={`fc-override-card-${r.body_code}`}
+                                >
+                                    <div className="flex items-center justify-between border-b border-mpca-brass/30 pb-2 mb-2">
+                                        <div className="min-w-0">
+                                            <div className="font-serif text-sm text-mpca-green-dark truncate" title={r.body_name}>{r.body_name || r.body_code}</div>
+                                            <div className="text-[10px] font-mono text-mpca-brass mt-0.5">{r.body_code} · <span className="uppercase">{r.role}</span></div>
+                                        </div>
+                                        {hasOverride && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPerBodyOverrides((d) => { const next = { ...d }; delete next[r.body_code]; return next; })}
+                                                className="text-[9px] uppercase tracking-widest text-mpca-oxblood hover:underline"
+                                                title="Reset all overrides for this body back to scheme defaults"
+                                                data-testid={`fc-override-reset-${r.body_code}`}
+                                            >
+                                                Reset
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        {roleHeads.map((h) => {
+                                            const val = bodyOv[h.head];
+                                            const isOver = val !== undefined && val !== "";
+                                            return (
+                                                <div key={h.head} className="grid grid-cols-[1fr_120px] gap-2 items-center">
+                                                    <label className="text-[11px] text-mpca-charcoal truncate" title={h.head}>{h.head}</label>
+                                                    <input
+                                                        type="number"
+                                                        placeholder={String(Math.round(h.limit_inr))}
+                                                        value={val ?? ""}
+                                                        onChange={(e) => {
+                                                            const v = e.target.value;
+                                                            setPerBodyOverrides((d) => {
+                                                                const next = { ...d };
+                                                                const bodyMap = { ...(next[r.body_code] || {}) };
+                                                                if (v === "" || v === null) delete bodyMap[h.head];
+                                                                else bodyMap[h.head] = parseFloat(v) || 0;
+                                                                if (Object.keys(bodyMap).length) next[r.body_code] = bodyMap;
+                                                                else delete next[r.body_code];
+                                                                return next;
+                                                            });
+                                                        }}
+                                                        className={`text-right font-mono text-[11px] px-1.5 py-1 border ${isOver ? "border-mpca-navy text-mpca-oxblood font-semibold" : "border-mpca-brass/30 text-mpca-charcoal"} bg-mpca-parchment focus:outline-none focus:border-mpca-navy`}
+                                                        data-testid={`fc-override-${r.body_code}-${h.head.slice(0, 12)}`}
+                                                    />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="mt-2 pt-2 border-t border-mpca-brass/30 flex items-center justify-between text-[11px]">
+                                        <span className="text-mpca-gray-dark uppercase tracking-widest text-[9px]">Body Total</span>
+                                        <span className="font-mono text-mpca-oxblood font-semibold">{fmt(rowTotal)}</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}

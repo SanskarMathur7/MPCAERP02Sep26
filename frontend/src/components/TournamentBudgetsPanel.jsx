@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Wallet, Loader2, ArrowRight, Send, PlusCircle, Info, TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
+import { Wallet, Loader2, ArrowRight, Send, PlusCircle, Info, TrendingUp, TrendingDown, ChevronRight, Pencil, Save, X, Plus } from "lucide-react";
 import { api } from "@/lib/api";
 
 const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
@@ -42,6 +42,49 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange, hideConsoleLink
 
     const isMPCA = persona?.body_type === "State";
     const myBody = persona?.body_code;
+
+    // Auto-drafted budget editing (MPCA for BCCI + Inter_Divisional; Divisions
+    // for every other scope). See backend `_may_edit_heads`.
+    const editableScopes = ["BCCI", "Inter_Divisional"];
+    const scope = tournament?.scope;
+    const canEditHeads = isMPCA
+        ? editableScopes.includes(scope)
+        : (persona?.body_type === "Division" || persona?.body_type === "District") && !editableScopes.includes(scope);
+    const [editing, setEditing] = useState(null);     // budget_id being edited
+    const [draftHeads, setDraftHeads] = useState([]); // [{head, limit_inr, notes?}]
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [editError, setEditError] = useState("");
+
+    const startEdit = (b) => {
+        setEditing(b.id);
+        setDraftHeads((b.head_allocations || []).map((h) => ({ ...h, limit_inr: Number(h.limit_inr) || 0 })));
+        setEditError("");
+    };
+    const cancelEdit = () => { setEditing(null); setDraftHeads([]); setEditError(""); };
+    const updateDraft = (idx, patch) => {
+        setDraftHeads((prev) => prev.map((h, i) => i === idx ? { ...h, ...patch } : h));
+    };
+    const removeDraft = (idx) => setDraftHeads((prev) => prev.filter((_, i) => i !== idx));
+    const addDraft = () => setDraftHeads((prev) => [...prev, { head: "", limit_inr: 0, notes: "" }]);
+    const saveEdit = async (b) => {
+        const cleaned = draftHeads
+            .map((h) => ({ head: (h.head || "").trim(), limit_inr: Number(h.limit_inr) || 0, notes: h.notes || null }))
+            .filter((h) => h.head.length > 0);
+        if (cleaned.length === 0) { setEditError("Add at least one line item."); return; }
+        const total = cleaned.reduce((s, h) => s + h.limit_inr, 0);
+        setSavingEdit(true); setEditError("");
+        try {
+            await api.patch(`/tournament-budgets/${b.id}/heads`, {
+                head_allocations: cleaned,
+                total_ceiling_inr: total,
+                edited_by: persona?.name || "Unknown",
+            });
+            cancelEdit();
+            await load();
+            onChange?.();
+        } catch (e) { setEditError(e?.response?.data?.detail || e.message); }
+        finally { setSavingEdit(false); }
+    };
 
     const load = async () => {
         setLoading(true);
@@ -165,6 +208,12 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange, hideConsoleLink
                                         <button onClick={() => toggle(b.id)} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-green-dark hover:text-mpca-oxblood inline-flex items-center gap-1" data-testid={`tb-toggle-${b.id}`}>
                                             {isOpen ? "Hide" : "View"} heads <ChevronRight size={10} className={`transition-transform ${isOpen ? "rotate-90" : ""}`} />
                                         </button>
+                                        {/* Auto-draft edit — MPCA (BCCI + Inter-Div) / Division (others). */}
+                                        {canEditHeads && editing !== b.id && ["Draft", "Returned", "Sent_To_Division", "Accepted_By_Division", "Revision_Requested", "Submitted"].includes(b.status) && (isMPCA || b.body_id === myBody) && (
+                                            <button onClick={() => startEdit(b)} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-brass hover:text-mpca-oxblood inline-flex items-center gap-1" data-testid={`tb-edit-${b.id}`}>
+                                                <Pencil size={10} /> Edit lines
+                                            </button>
+                                        )}
                                         {!hideConsoleLinks && (
                                         <Link to={`/tournaments/${tournament.id}/finance`} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors" data-testid={`tb-open-${b.id}`}>
                                             Full detail
@@ -173,8 +222,61 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange, hideConsoleLink
                                     </div>
                                 </div>
 
+                                {/* Inline line-item editor — replaces the read-only breakdown while active. */}
+                                {editing === b.id && (
+                                    <div className="mb-3 border-2 border-mpca-oxblood bg-mpca-parchment/60 p-3" data-testid={`tb-edit-form-${b.id}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="overline text-[9px] text-mpca-oxblood">Editing line items · {isMPCA ? "MPCA authority" : "Division authority"}</div>
+                                            <div className="text-[10px] font-mono text-mpca-charcoal/80">
+                                                New total: <b className="text-mpca-oxblood">{fmt(draftHeads.reduce((s, h) => s + (Number(h.limit_inr) || 0), 0))}</b>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            {draftHeads.map((h, i) => (
+                                                <div key={i} className="grid grid-cols-12 gap-2 items-center" data-testid={`tb-edit-row-${b.id}-${i}`}>
+                                                    <input
+                                                        className="col-span-6 input-heritage !py-1 !text-xs"
+                                                        placeholder="Head / line description"
+                                                        value={h.head}
+                                                        onChange={(e) => updateDraft(i, { head: e.target.value })}
+                                                        data-testid={`tb-edit-head-${b.id}-${i}`}
+                                                    />
+                                                    <input
+                                                        className="col-span-3 input-heritage !py-1 !text-xs font-mono text-right"
+                                                        type="number"
+                                                        min={0}
+                                                        placeholder="Amount ₹"
+                                                        value={h.limit_inr}
+                                                        onChange={(e) => updateDraft(i, { limit_inr: e.target.value })}
+                                                        data-testid={`tb-edit-amt-${b.id}-${i}`}
+                                                    />
+                                                    <input
+                                                        className="col-span-2 input-heritage !py-1 !text-xs"
+                                                        placeholder="Notes (optional)"
+                                                        value={h.notes || ""}
+                                                        onChange={(e) => updateDraft(i, { notes: e.target.value })}
+                                                    />
+                                                    <button onClick={() => removeDraft(i)} className="col-span-1 text-mpca-oxblood hover:bg-mpca-oxblood/10 p-1 justify-self-center" title="Remove line" data-testid={`tb-edit-remove-${b.id}-${i}`}>
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            <button onClick={addDraft} className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2 py-1 border border-dashed border-mpca-oxblood inline-flex items-center gap-1" data-testid={`tb-edit-add-${b.id}`}>
+                                                <Plus size={10} /> Add Line Item
+                                            </button>
+                                        </div>
+                                        {editError && <div className="mt-2 text-[10px] text-mpca-oxblood font-mono" data-testid={`tb-edit-error-${b.id}`}>{editError}</div>}
+                                        <div className="mt-3 flex gap-2 justify-end">
+                                            <button onClick={cancelEdit} disabled={savingEdit} className="text-[10px] uppercase tracking-widest px-3 py-1.5 border border-mpca-brass/40 text-mpca-charcoal hover:bg-mpca-parchment" data-testid={`tb-edit-cancel-${b.id}`}>Cancel</button>
+                                            <button onClick={() => saveEdit(b)} disabled={savingEdit} className="text-[10px] uppercase tracking-widest px-3 py-1.5 bg-mpca-green-dark text-mpca-ivory hover:opacity-90 disabled:opacity-40 inline-flex items-center gap-1" data-testid={`tb-edit-save-${b.id}`}>
+                                                {savingEdit ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />} Save changes
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* M39z.b · Head-wise breakdown with live spend (M39z.c) */}
-                                {isOpen && heads.length > 0 && (() => {
+                                {isOpen && editing !== b.id && heads.length > 0 && (() => {
                                     const spend = spendByBody[b.body_id];
                                     const spendByHead = {};
                                     (spend?.heads || []).forEach((r) => { spendByHead[r.head] = r; });

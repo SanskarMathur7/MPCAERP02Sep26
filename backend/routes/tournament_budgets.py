@@ -11,7 +11,8 @@ independently of the overall budget approval.
 """
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Header
+from pydantic import BaseModel, ConfigDict
 
 from core.infra import db, api_router
 from core.shared_services import next_seq  # H6 · atomic sequence
@@ -206,6 +207,90 @@ async def update_tournament_budget(bid: str, payload: TournamentBudgetCreate):
 
     update = payload.model_dump()
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.tournament_budgets.update_one({"id": bid}, {"$set": update})
+    return await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
+
+
+class _HeadEditPayload(BaseModel):
+    """MPCA-editable-lines · targeted patch of head_allocations + total_ceiling.
+
+    Auto-drafted budgets are otherwise immutable pre-submission — this
+    endpoint gives MPCA (for BCCI + Inter-Divisional tournaments) and
+    Divisions (for every other scope) the ability to tweak the auto-generated
+    line-item amounts or ADD custom line items with amounts before the
+    budget is sanctioned.
+    """
+    model_config = ConfigDict(extra="ignore")
+    head_allocations: List[BudgetHeadAllocation]
+    total_ceiling_inr: Optional[float] = None
+    edited_by: Optional[str] = None
+
+
+_MPCA_EDITABLE_SCOPES = {"BCCI", "Inter_Divisional"}  # MPCA authors the budget for these
+
+
+def _may_edit_heads(tournament: dict, body_type: Optional[str]) -> bool:
+    """MPCA-editable-lines RBAC.
+    · MPCA (State) may edit only for BCCI / Inter_Divisional tournaments.
+    · Division (or District) may edit for every OTHER tournament scope
+      (Inter_District, Championship, Invitational, Club, School, etc.).
+    """
+    scope = (tournament.get("scope") or "").strip()
+    if body_type == "State":
+        return scope in _MPCA_EDITABLE_SCOPES
+    if body_type in {"Division", "District"}:
+        return scope not in _MPCA_EDITABLE_SCOPES
+    return False
+
+
+@api_router.patch("/tournament-budgets/{bid}/heads", response_model=TournamentBudget)
+async def edit_budget_heads(
+    bid: str,
+    payload: _HeadEditPayload,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+):
+    doc = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Tournament budget not found")
+    # Pre-sanction editing only — after MPCA sanctions the budget the numbers
+    # freeze; use the standard approve/reject flow to revise then.
+    editable_statuses = {"Draft", "Returned", "Sent_To_Division",
+                         "Accepted_By_Division", "Revision_Requested", "Submitted"}
+    if doc["status"] not in editable_statuses:
+        raise HTTPException(409, f"Cannot edit heads once the budget is in '{doc['status']}'. Use the revision flow instead.")
+
+    tournament = await db.tournaments.find_one({"id": doc.get("tournament_id")}, {"_id": 0})
+    if not tournament:
+        raise HTTPException(404, "Parent tournament not found")
+    if not _may_edit_heads(tournament, x_body_type):
+        raise HTTPException(
+            403,
+            "You may not edit line items on this budget. MPCA edits BCCI + "
+            "Inter-Divisional budgets; Divisions edit every other scope.",
+        )
+    # Division can only edit their own body's budget row.
+    if x_body_type in {"Division", "District"} and doc.get("body_id") != x_user_body_code:
+        raise HTTPException(403, "You may only edit your own body's budget row.")
+
+    new_heads = [h.model_dump() for h in payload.head_allocations]
+    head_total = sum(h["limit_inr"] for h in new_heads)
+    new_ceiling = payload.total_ceiling_inr if payload.total_ceiling_inr is not None else max(head_total, float(doc.get("total_ceiling_inr") or 0))
+    if head_total > new_ceiling:
+        # Silently bump the ceiling to accommodate — line-item editing is the
+        # source of truth here, not the pre-existing ceiling.
+        new_ceiling = head_total
+
+    update = {
+        "head_allocations": new_heads,
+        "total_ceiling_inr": float(new_ceiling),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # If already Approved (rare — pre-sanction only path), keep approved
+    # mirror in sync so the Console shows the fresh figures.
+    if doc.get("approved_head_allocations"):
+        update["approved_head_allocations"] = new_heads
+        update["approved_total_inr"] = float(new_ceiling)
     await db.tournament_budgets.update_one({"id": bid}, {"$set": update})
     return await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
 

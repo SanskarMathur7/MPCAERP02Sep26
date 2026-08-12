@@ -1,308 +1,826 @@
 {
+  "fiscal_cycle": "2026-27",
   "schemes": [
     {
       "scheme_code": "1-A",
       "name": "Annual Grants to Divisional / District Cricket Associations",
+      "description": "Annual grant passed on by MPCA to Divisions for their Districts, and a portion retained by the Division for common expenses.",
       "scheme_type": "Annual_Grant",
       "eligible_bodies": [
         "Division",
         "District"
       ],
-      "frequency": "Annual",
-      "description": "Annual grants passed on to Districts via Divisions to support their cricket development activities. Amount is subject to a ceiling and based on previous spending patterns.",
+      "categories": [],
       "heads": [
         {
-          "code": "GRANT_PER_DIST",
+          "code": "GRANT_PER_DISTRICT",
           "label": "Grant per District (via Division)",
           "unit": "per_district_per_year",
           "rate_inr": 110000,
           "rate_display": "₹1,10,000 / District / year"
         },
         {
-          "code": "DIV_RETAINED",
+          "code": "DIVISION_RETAINED",
           "label": "Division-retained amount",
           "unit": "per_district_per_year",
           "rate_inr": 30000,
           "rate_display": "₹30,000 / District / year"
         }
       ],
+      "conditions": [
+        "Grant ceiling assessed against previous 2-3 years spending pattern; if <80%, average amount paid.",
+        "Grant forfeited if not claimed within 12 months of previous FY closure.",
+        "Submission of comprehensive documents for both Division and Districts is mandatory."
+      ],
       "required_documents": [
         "Utilization Certificate (CA-certified) for last grant",
-        "Confirmation of Division's registration under Societies Registration Act",
-        "Auditor's Report & Audited Statement of Accounts (previous FY)",
-        "Notice & Draft Minutes of AGM (attested by Hon. Secretary)",
-        "List of Divisional Association members as on AGM date",
+        "Confirmation of Division/District registration validity",
+        "Auditor's Report & Audited Statement of Accounts for preceding FY",
+        "Notice & Draft Minutes of AGM (attested)",
+        "List of members as on AGM date (attested)",
         "Annual Budget of the Division",
-        "Documents submitted to Registrar of Firms & Societies + challan copy",
-        "Bank statement showing last annual grant payment to Districts",
-        "For Districts: Auditor's Report, Balance Sheet, I&E / R&P (previous FY)",
-        "For Districts: Notice & Draft Minutes of AGM",
-        "For Districts: List of District Association members as on AGM date"
+        "Copy of documents submitted to Registrar of Firms & Societies",
+        "Bank statement showing payment of last grant to Districts"
       ],
-      "conditions": [
-        "Grant ceiling assessed against District's spending pattern over previous 2-3 years",
-        "If spending pattern < 80% of ceiling, average amount (not ceiling) is paid",
-        "Grant must be claimed within 12 months of previous FY closure, else forfeited"
-      ]
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "1-B",
       "name": "Share to Divisions out of Net Revenue from ODI / T20",
+      "description": "A percentage of net revenue from each International Match hosted by MPCA is shared with Divisions.",
       "scheme_type": "Revenue_Share",
       "eligible_bodies": [
         "Division"
       ],
-      "frequency": "Per_International_Match",
-      "description": "A percentage of net revenue from International ODIs and T20s hosted by MPCA is shared with the Divisions.",
+      "categories": [],
       "heads": [
         {
-          "code": "DIV_SHARE",
+          "code": "DIVISION_SURPLUS_SHARE",
           "label": "Division's Share",
           "unit": "percent_of_surplus",
-          "rate_inr": 0,
-          "rate_display": "4% of surplus per Division / match"
+          "rate_inr": 4,
+          "rate_display": "4% of the surplus per Division"
         }
+      ],
+      "conditions": [
+        "Applicable for ODI & T20 matches; case-to-case basis for Test Matches.",
+        "70% of surplus share MUST be utilized for earmarked investments (FDs for District incentive/junior rewards) or infrastructure development.",
+        "30% can be used for other common Division expenditures.",
+        "Internal distribution within 70% is at Division's discretion, payable after MPCA approval.",
+        "Entitlement to next share is contingent on receipt of all prior required documents chronologically."
       ],
       "required_documents": [
         "Copies of Fixed Deposit instruments for earmarked investments",
-        "Written norms for schemes funded (District Incentive / Junior Rewards)",
-        "CA-certified Utilization Certificate for surplus spent on infra/common expenditure"
+        "Written norms for District Incentive Scheme & Junior Player Rewards",
+        "CA-certified Utilization Certificate for surplus spent (infrastructure & common expenditure)"
       ],
-      "conditions": [
-        "Applicable for ODI & T20 matches only",
-        "Test Matches on case-to-case basis",
-        "70% of share must be utilised for earmarked FD for District incentive / junior rewards / infra",
-        "30% may be used for other common Division expenditure",
-        "Chronological UC submission required for next share release"
-      ]
+      "frequency": "Per_International_Match",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "2-A",
-      "name": "Inter-School Tournament Subsidy",
+      "name": "Inter-School Tournament Reimbursement",
+      "description": "Reimbursement for hosting Inter-School tournaments within a Division.",
       "scheme_type": "Reimbursement",
       "eligible_bodies": [
-        "Division",
         "District"
       ],
-      "frequency": "Per_tournament",
-      "description": "Subsidy for hosting Inter-School tournaments at Divisional and District levels, covering match-day costs.",
       "categories": [
-        "School"
+        "Inter-School"
       ],
       "heads": [
         {
-          "code": "PER_DAY_GRANT",
-          "label": "Per-day grant (balls/ground/trophies)",
+          "code": "GRANT_PER_DAY",
+          "label": "Per-day Grant",
           "unit": "per_day",
           "rate_inr": 5000,
-          "rate_display": "₹5,000 / day"
+          "rate_display": "₹5,000 / day (grant)"
         },
         {
-          "code": "UMPIRE_FEES",
-          "label": "Umpire fees",
-          "unit": "per_official_per_day",
-          "rate_inr": 700,
-          "rate_display": "₹700 / umpire / day (+ ₹100 if far)"
+          "code": "UMPIRE_FEE",
+          "label": "Umpire Fees",
+          "unit": "per_umpire_per_day",
+          "rate_inr": 1000,
+          "rate_display": "₹1,000 / umpire / day"
         },
         {
-          "code": "SCORER_FEES",
-          "label": "Scorer fees",
-          "unit": "per_official_per_day",
-          "rate_inr": 500,
-          "rate_display": "₹500 / scorer / day (+ ₹100 if far)"
+          "code": "UMPIRE_CONVEYANCE",
+          "label": "Umpire Conveyance (if ground far)",
+          "unit": "per_umpire_per_day",
+          "rate_inr": 150,
+          "rate_display": "₹150 / umpire / day"
+        },
+        {
+          "code": "SCORER_FEE",
+          "label": "Scorer Fees",
+          "unit": "per_scorer_per_day",
+          "rate_inr": 750,
+          "rate_display": "₹750 / scorer / day"
+        },
+        {
+          "code": "SCORER_CONVEYANCE",
+          "label": "Scorer Conveyance (if ground far)",
+          "unit": "per_scorer_per_day",
+          "rate_inr": 150,
+          "rate_display": "₹150 / scorer / day"
+        },
+        {
+          "code": "ENTRY_FEE_COLLECTION",
+          "label": "Entry Fee Collection (offset)",
+          "unit": "per_school",
+          "rate_inr": -1500,
+          "rate_display": "₹1,500 / school (mandatory)"
         }
       ],
+      "conditions": [
+        "Scheme covers match balls, ground rent (if any), and trophies within the ₹5,000/day grant.",
+        "Umpires/scorers get additional ₹150 conveyance if ground is far.",
+        "Only local schools invited; players return home daily. No hotel/food costs sanctioned.",
+        "Entry fee collection must be declared in the claim.",
+        "Maximum 12 schools at Div HQ / 8 at District."
+      ],
       "required_documents": [
-        "Statement of matches / format / days",
+        "Statement of matches/format/days",
         "Declaration of entry-fee collection",
         "Supporting bills"
       ],
-      "conditions": [
-        "Only year-round cricket-promoting schools (max 12 at Div HQ, 8 at District)",
-        "No accommodation/food/travel — local players only",
-        "Players must be registered with school since start of academic year",
-        "Segregate district vs city schools; top district teams invited to city phase",
-        "Entry fee ₹1,500/school mandatory & declared"
-      ]
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "2-B",
-      "name": "Inter-District Tournament Subsidy",
+      "name": "Inter-District Tournament Reimbursement",
+      "description": "Reimbursement for hosting Inter-District tournaments within a Division.",
+      "scheme_type": "Reimbursement",
+      "eligible_bodies": [
+        "District"
+      ],
+      "categories": [
+        "Inter-District"
+      ],
+      "heads": [
+        {
+          "code": "ACCOM_OUTSTATION",
+          "label": "Accommodation — outstation members",
+          "unit": "per_person_per_day",
+          "rate_inr": 500,
+          "rate_display": "₹500 / outstation member / day"
+        },
+        {
+          "code": "FOOD_MATCH_DAY",
+          "label": "Food — match days (lunch + tea)",
+          "unit": "per_person",
+          "rate_inr": 350,
+          "rate_display": "₹350 / member"
+        },
+        {
+          "code": "DINNER_OUTSTATION",
+          "label": "Dinner — outstation only",
+          "unit": "per_person",
+          "rate_inr": 150,
+          "rate_display": "₹150 / member"
+        },
+        {
+          "code": "MISC_EXPENSES_ONE_TEAM",
+          "label": "Miscellaneous expenses (one team outstation)",
+          "unit": "per_day",
+          "rate_inr": 3600,
+          "rate_display": "₹3,600 / day"
+        },
+        {
+          "code": "MISC_EXPENSES_BOTH_TEAMS",
+          "label": "Miscellaneous expenses (both teams outstation)",
+          "unit": "per_day",
+          "rate_inr": 4200,
+          "rate_display": "₹4,200 / day"
+        },
+        {
+          "code": "TRAVEL_INTER_CITY",
+          "label": "Visiting team inter-city travel",
+          "unit": "lump",
+          "rate_inr": 0,
+          "rate_display": "Estimate based on actuals (max 16 pax)"
+        },
+        {
+          "code": "UMPIRE_FEE",
+          "label": "Umpire Fees",
+          "unit": "per_umpire_per_day",
+          "rate_inr": 1000,
+          "rate_display": "₹1,000 / umpire / day"
+        },
+        {
+          "code": "UMPIRE_CONVEYANCE",
+          "label": "Umpire Conveyance (if ground far)",
+          "unit": "per_umpire_per_day",
+          "rate_inr": 150,
+          "rate_display": "₹150 / umpire / day"
+        },
+        {
+          "code": "SCORER_FEE",
+          "label": "Scorer Fees",
+          "unit": "per_scorer_per_day",
+          "rate_inr": 750,
+          "rate_display": "₹750 / scorer / day"
+        },
+        {
+          "code": "SCORER_CONVEYANCE",
+          "label": "Scorer Conveyance (if ground far)",
+          "unit": "per_scorer_per_day",
+          "rate_inr": 150,
+          "rate_display": "₹150 / scorer / day"
+        },
+        {
+          "code": "MOM_MULTI_DAY",
+          "label": "Man of the Match (Multi-day)",
+          "unit": "per_match",
+          "rate_inr": 1500,
+          "rate_display": "₹1,500 / match"
+        },
+        {
+          "code": "TEAM_PRIZE_RANK1_OPEN_U23",
+          "label": "Team prize — Rank 1 (Open & U-23)",
+          "unit": "lump",
+          "rate_inr": 30000,
+          "rate_display": "₹30,000"
+        },
+        {
+          "code": "TEAM_PRIZE_RANK2_OPEN_U23",
+          "label": "Team prize — Rank 2 (Open & U-23)",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "TEAM_PRIZE_RANK1_OTHER_AGE",
+          "label": "Team prize — Rank 1 (Other age-groups)",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "TEAM_PRIZE_RANK2_OTHER_AGE",
+          "label": "Team prize — Rank 2 (Other age-groups)",
+          "unit": "lump",
+          "rate_inr": 15000,
+          "rate_display": "₹15,000"
+        }
+      ],
+      "conditions": [
+        "Max 40 pax for food/tea.",
+        "Accommodation & Dinner limited to outstation teams only.",
+        "If ground is > 10 km from city, hotel/dinner cost is allowed.",
+        "Coach/manager/trainer fees absorbed within per-day ceiling.",
+        "If Division has >= 5 Districts, Rank 1 & Rank 2 prizes paid; <= 4 Districts, only Rank 1 prize paid.",
+        "Divisional HQ team excluded from prize money; if HQ wins, finalist is Rank 1, better semi-finalist is Rank 2.",
+        "Per-day ceiling: ~₹28,000 (one team outstation) / ~₹39,000 (both teams outstation) per match-day."
+      ],
+      "required_documents": [
+        "Claim submitted only on completion of tournament.",
+        "Fixtures, scoresheets, original bills/receipts/vouchers.",
+        "Photocopy of tickets for visiting team travel."
+      ],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "2-C",
+      "name": "Inter-Divisional Tournament — Travel",
+      "description": "Reimbursement for travel costs of Divisional teams participating in Inter-Divisional tournaments.",
       "scheme_type": "Reimbursement",
       "eligible_bodies": [
         "Division"
       ],
-      "frequency": "Per_tournament",
-      "description": "Subsidy for hosting Inter-District tournaments covering accommodation, food, travel and match-day expenses.",
       "categories": [
-        "Open",
-        "U-23",
-        "U-18",
-        "U-15",
-        "U-13"
+        "Inter-Divisional"
       ],
       "heads": [
         {
-          "code": "ACCOM",
-          "label": "Accommodation — outstation",
-          "unit": "per_person_per_day",
-          "rate_inr": 500,
-          "rate_display": "₹500 / member / day"
+          "code": "TRAVEL_MAIN_RAIL",
+          "label": "Inter-city travel — III-tier AC rail (to & fro)",
+          "unit": "lump",
+          "rate_inr": 0,
+          "rate_display": "Estimate based on actual fare"
         },
         {
-          "code": "FOOD_MATCH",
-          "label": "Food — match days",
-          "unit": "per_person_per_day",
-          "rate_inr": 350,
-          "rate_display": "₹350 / member (max 40 pax)"
+          "code": "TRAVEL_ALTERNATE_MODE",
+          "label": "Inter-city travel — alternate mode (to & fro)",
+          "unit": "lump",
+          "rate_inr": 0,
+          "rate_display": "Actual fare of alternate mode"
         },
         {
-          "code": "DINNER",
-          "label": "Dinner — outstation",
-          "unit": "per_person_per_day",
-          "rate_inr": 150,
-          "rate_display": "₹150 / outstation member"
+          "code": "MISC_JOURNEY_EXPENSE",
+          "label": "Misc. journey expense",
+          "unit": "lump",
+          "rate_inr": 5000,
+          "rate_display": "₹5,000"
         },
         {
-          "code": "MISC",
-          "label": "Miscellaneous expenses",
-          "unit": "per_day",
-          "rate_inr": 3600,
-          "rate_display": "₹3,600 or ₹4,200 / day"
+          "code": "JOINING_TRAVEL",
+          "label": "District-HQ → Division-HQ joining travel",
+          "unit": "lump",
+          "rate_inr": 0,
+          "rate_display": "Bus / ordinary class rail fare"
         },
         {
-          "code": "UMPIRE_FEES",
-          "label": "Umpire fees",
-          "unit": "per_official_per_day",
-          "rate_inr": 700,
-          "rate_display": "₹700 / day"
+          "code": "MEDICAL_DURING_TOUR",
+          "label": "Reasonable medical during tour",
+          "unit": "lump",
+          "rate_inr": 0,
+          "rate_display": "Estimate at actual"
         },
         {
-          "code": "SCORER_FEES",
-          "label": "Scorer fees",
-          "unit": "per_official_per_day",
-          "rate_inr": 500,
-          "rate_display": "₹500 / day"
-        },
-        {
-          "code": "MOM",
-          "label": "Man of the Match",
-          "unit": "per_match",
-          "rate_inr": 1500,
-          "rate_display": "₹1,500 / multi-day match"
-        },
-        {
-          "code": "PRIZE_1",
-          "label": "Team prize — Rank 1",
-          "unit": "per_team_lump",
-          "rate_inr": 30000,
-          "rate_display": "₹30,000 (Open/U-23) or ₹20,000"
-        },
-        {
-          "code": "PRIZE_2",
-          "label": "Team prize — Rank 2",
-          "unit": "per_team_lump",
-          "rate_inr": 20000,
-          "rate_display": "₹20,000 (Open/U-23) or ₹15,000 (if 5+ Districts)"
+          "code": "TATKAL_CANCELLATION_CHARGES",
+          "label": "Tatkal / cancellation charges",
+          "unit": "lump",
+          "rate_inr": 0,
+          "rate_display": "On actuals"
         }
       ],
-      "required_documents": [
-        "Fixtures",
-        "Scoresheets",
-        "Original bills/receipts/vouchers",
-        "Photocopy of tickets for visiting team travel"
-      ],
       "conditions": [
-        "Per-day ceiling applies (accommodation+food+dinner+misc+travel)",
-        "Players within 10km of venue: no hotel/dinner",
-        "Coach/manager/trainer fees within per-day ceiling",
-        "Claim only on tournament completion"
-      ]
+        "Team strength max 18 pax (15 players + coach + manager + trainer).",
+        "Coach & trainer must be MPCA empanelled.",
+        "Alternate mode of travel requires PRIOR MPCA approval.",
+        "Misc. journey expense covers refreshments en-route.",
+        "Joining travel only for players actually joining the team; not for camp-only players.",
+        "Tatkal/cancellation charges allowed on merits of the circumstance.",
+        "Out-of-MP senior guest player travel/lodging/boarding NOT reimbursed.",
+        "Claim submitted only on completion of the tournament.",
+        "Accommodation, food, local conveyance at venue, umpire/scorer fees etc. borne by the HOST Division."
+      ],
+      "required_documents": [
+        "Claim statement",
+        "Match/journey dates, team strength, mode/category of journey",
+        "Photocopy of tickets"
+      ],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "2-D",
-      "name": "Inter-Divisional Tournament — Hosting Subsidy",
+      "name": "Inter-Divisional Tournament — Hosting",
+      "description": "Reimbursement for hosting Inter-Divisional tournaments.",
       "scheme_type": "Reimbursement",
       "eligible_bodies": [
         "Division"
       ],
-      "frequency": "Per_tournament",
-      "description": "Subsidy for a Division hosting an Inter-Divisional Tournament — accommodation, food, ground costs, officials' honoraria, prizes.",
+      "categories": [
+        "Inter-Divisional"
+      ],
       "heads": [
         {
-          "code": "ACCOM_VISITING",
-          "label": "Accommodation — visiting team (Double Occ)",
-          "unit": "per_room_night",
+          "code": "ACCOMMODATION_ROOMS",
+          "label": "Accommodation — rooms (visiting team, host district players, officials)",
+          "unit": "per_room_per_day",
           "rate_inr": 1800,
-          "rate_display": "₹1,800 + taxes / room / day"
+          "rate_display": "₹1,800 + taxes / room / day (Double Occupancy)"
         },
         {
-          "code": "GROUND_RENT",
-          "label": "Ground rent + match-day tent",
+          "code": "GROUND_RENT_TENT",
+          "label": "Ground rent / tent",
           "unit": "per_match_day",
           "rate_inr": 4500,
           "rate_display": "₹4,500 / match-day"
         },
         {
-          "code": "FOOD_DAYBEFORE",
-          "label": "Food day-before (B+L+Eve+D)",
-          "unit": "per_person_per_day",
+          "code": "FOOD_DAY_BEFORE",
+          "label": "Food — day before match",
+          "unit": "per_person",
           "rate_inr": 630,
           "rate_display": "₹630 / head"
         },
         {
-          "code": "COACH_HON_MATCH",
-          "label": "Coach honorarium (match-day)",
-          "unit": "per_day",
-          "rate_inr": 1500,
-          "rate_display": "₹1,500 / match-day"
+          "code": "FOOD_MATCH_DAY_BFAST",
+          "label": "Match-day food — Breakfast",
+          "unit": "per_person",
+          "rate_inr": 100,
+          "rate_display": "₹100 / head"
         },
         {
-          "code": "TRAINER_HON_MATCH",
-          "label": "Trainer honorarium (match-day)",
+          "code": "FOOD_MATCH_DAY_TEA",
+          "label": "Match-day food — Tea",
+          "unit": "per_person",
+          "rate_inr": 20,
+          "rate_display": "₹20 / head"
+        },
+        {
+          "code": "FOOD_MATCH_DAY_EVE_BFAST",
+          "label": "Match-day food — Evening breakfast",
+          "unit": "per_person",
+          "rate_inr": 80,
+          "rate_display": "₹80 / head"
+        },
+        {
+          "code": "FOOD_MATCH_DAY_LUNCH",
+          "label": "Match-day food — Lunch (incl. 1 egg)",
+          "unit": "per_person",
+          "rate_inr": 300,
+          "rate_display": "₹300 / head"
+        },
+        {
+          "code": "FOOD_MATCH_DAY_DINNER_VISITING",
+          "label": "Match-day food — Dinner (visiting team only)",
+          "unit": "per_person",
+          "rate_inr": 300,
+          "rate_display": "₹300 / head"
+        },
+        {
+          "code": "COACH_HONORARIUM_MATCH_DAY",
+          "label": "Coach honorarium — scheduled match-days",
+          "unit": "per_day",
+          "rate_inr": 2000,
+          "rate_display": "₹2,000 / day"
+        },
+        {
+          "code": "COACH_HONORARIUM_NON_MATCH_DAY",
+          "label": "Coach honorarium — non-match days / one day before",
           "unit": "per_day",
           "rate_inr": 1000,
-          "rate_display": "₹1,000 / match-day"
+          "rate_display": "₹1,000 / day"
         },
         {
-          "code": "MANAGER_HON",
-          "label": "Manager honorarium",
-          "unit": "per_match_day",
+          "code": "COACH_HONORARIUM_CAMP_DAY",
+          "label": "Coach honorarium — pre-tournament camp",
+          "unit": "per_day",
+          "rate_inr": 1250,
+          "rate_display": "₹1,250 / day"
+        },
+        {
+          "code": "TRAINER_HONORARIUM_MATCH_DAY",
+          "label": "Trainer honorarium — scheduled match-days",
+          "unit": "per_day",
           "rate_inr": 1000,
-          "rate_display": "₹1,000 / match-day"
+          "rate_display": "₹1,000 / day"
         },
         {
-          "code": "MOM_MULTIDAY",
-          "label": "Man of the Match (multi-day)",
+          "code": "TRAINER_HONORARIUM_NON_MATCH_DAY",
+          "label": "Trainer honorarium — non-match days / one day before",
+          "unit": "per_day",
+          "rate_inr": 500,
+          "rate_display": "₹500 / day"
+        },
+        {
+          "code": "TRAINER_HONORARIUM_CAMP_DAY",
+          "label": "Trainer honorarium — pre-tournament camp",
+          "unit": "per_day",
+          "rate_inr": 750,
+          "rate_display": "₹750 / day"
+        },
+        {
+          "code": "MANAGER_HONORARIUM_MATCH_DAY",
+          "label": "Manager honorarium — scheduled match-day",
+          "unit": "per_day",
+          "rate_inr": 1250,
+          "rate_display": "₹1,250 / scheduled match-day"
+        },
+        {
+          "code": "MANAGER_HONORARIUM_NON_MATCH_DAY",
+          "label": "Manager honorarium — non-match day or one day before",
+          "unit": "per_day",
+          "rate_inr": 750,
+          "rate_display": "₹750 / non-match day or one day before"
+        },
+        {
+          "code": "MOM_LTD_OVERS_T20",
+          "label": "Man of the Match — Limited-overs / T20 match",
+          "unit": "per_match",
+          "rate_inr": 2500,
+          "rate_display": "₹2,500 / match"
+        },
+        {
+          "code": "MOM_MULTI_DAY",
+          "label": "Man of the Match — Multi-day match",
           "unit": "per_match",
           "rate_inr": 5000,
-          "rate_display": "₹5,000 / multi-day"
+          "rate_display": "₹5,000 / match"
+        },
+        {
+          "code": "TEAM_PRIZE_WINNER_MULTI_DAY_PLAYER_STAFF",
+          "label": "Team prize — WINNER (Multi-day, player + staff pool)",
+          "unit": "lump",
+          "rate_inr": 300000,
+          "rate_display": "₹3.00 L"
+        },
+        {
+          "code": "TEAM_PRIZE_WINNER_MULTI_DAY_DIVISION",
+          "label": "Team prize — WINNER (Multi-day, Division)",
+          "unit": "lump",
+          "rate_inr": 75000,
+          "rate_display": "₹75,000"
+        },
+        {
+          "code": "TEAM_PRIZE_RUNNER_UP_MULTI_DAY_PLAYER_STAFF",
+          "label": "Team prize — RUNNER-UP (Multi-day, player + staff pool)",
+          "unit": "lump",
+          "rate_inr": 150000,
+          "rate_display": "₹1.50 L"
+        },
+        {
+          "code": "TEAM_PRIZE_RUNNER_UP_MULTI_DAY_DIVISION",
+          "label": "Team prize — RUNNER-UP (Multi-day, Division)",
+          "unit": "lump",
+          "rate_inr": 35000,
+          "rate_display": "₹35,000"
+        },
+        {
+          "code": "TEAM_PRIZE_WINNER_LTD_OV_T20_PLAYER_STAFF",
+          "label": "Team prize — WINNER (Ltd-overs / T20, player + staff pool)",
+          "unit": "lump",
+          "rate_inr": 150000,
+          "rate_display": "₹1.50 L"
+        },
+        {
+          "code": "TEAM_PRIZE_WINNER_LTD_OV_T20_DIVISION",
+          "label": "Team prize — WINNER (Ltd-overs / T20, Division)",
+          "unit": "lump",
+          "rate_inr": 40000,
+          "rate_display": "₹40,000"
+        },
+        {
+          "code": "TEAM_PRIZE_RUNNER_UP_LTD_OV_T20_PLAYER_STAFF",
+          "label": "Team prize — RUNNER-UP (Ltd-overs / T20, player + staff pool)",
+          "unit": "lump",
+          "rate_inr": 75000,
+          "rate_display": "₹75,000"
+        },
+        {
+          "code": "TEAM_PRIZE_RUNNER_UP_LTD_OV_T20_DIVISION",
+          "label": "Team prize — RUNNER-UP (Ltd-overs / T20, Division)",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "LOCAL_CONVEYANCE_GROUND_USE",
+          "label": "Local conveyance — ground use",
+          "unit": "per_day",
+          "rate_inr": 1500,
+          "rate_display": "₹1,500 / day"
+        },
+        {
+          "code": "LOCAL_CONVEYANCE_TRANSFERS",
+          "label": "Local conveyance — station/bus-stand transfers",
+          "unit": "per_journey",
+          "rate_inr": 1500,
+          "rate_display": "₹1,500 / local journey"
+        },
+        {
+          "code": "MATCH_BALLS",
+          "label": "Match balls",
+          "unit": "at_actual",
+          "rate_inr": 0,
+          "rate_display": "Provided by MPCA in kind"
         }
+      ],
+      "conditions": [
+        "Team strength 18–20 players (7–8 outstation typical).",
+        "Camp days included within Coach/Trainer honorarium ceilings.",
+        "Coach & trainer from MPCA empanelled list only.",
+        "Match balls provided by MPCA in kind.",
+        "Medical allowed at actual cost.",
+        "Team prize money distribution: Playing XI 75% (pro-rata), non-playing 15%, coach 4%, other staff 6%.",
+        "TDS deducted for Senior & U-23/U-22 players; borne by MPCA for junior teams.",
+        "Refreshments on practice days between matches allowed reasonably.",
+        "Summer extras (lemon water, chaach, ice) and night ground-staff food allowed reasonably.",
+        "Coach & trainer profiles must be submitted in advance.",
+        "Hon. Secretary's endorsement required on all claim documents.",
+        "Office Bearers may allow minor variation in pax/charges at discretion."
       ],
       "required_documents": [
         "Claim statement",
         "Scoresheet",
         "Original bills/receipts/vouchers",
-        "MOM photo emailed to MPCA"
+        "MOM photo to MPCA"
+      ],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "2-E",
+      "name": "Inter-Club 'A' Grade Tournament Reimbursement",
+      "description": "Reimbursement for hosting Inter-Club 'A' Grade tournaments (2-day matches only).",
+      "scheme_type": "Reimbursement",
+      "eligible_bodies": [
+        "District"
+      ],
+      "categories": [
+        "Inter-Club"
+      ],
+      "heads": [
+        {
+          "code": "ACCOMMODATION_OUTSTATION_CLUBS",
+          "label": "Accommodation — outstation clubs",
+          "unit": "per_room_per_day",
+          "rate_inr": 1500,
+          "rate_display": "₹1,500 + taxes / room / day (Triple Sharing)"
+        },
+        {
+          "code": "FOOD_OUTSTATION_CLUBS",
+          "label": "Food — outstation clubs",
+          "unit": "per_person_per_day",
+          "rate_inr": 500,
+          "rate_display": "₹500 / day"
+        },
+        {
+          "code": "TRAVEL_INTER_CITY_OUTSTATION_CLUBS",
+          "label": "Inter-city travel — outstation clubs",
+          "unit": "lump",
+          "rate_inr": 0,
+          "rate_display": "SL rail / ordinary bus"
+        },
+        {
+          "code": "UMPIRE_FEE",
+          "label": "Umpire Fees",
+          "unit": "per_umpire_per_day",
+          "rate_inr": 1000,
+          "rate_display": "₹1,000 / umpire / day"
+        },
+        {
+          "code": "UMPIRE_CONVEYANCE",
+          "label": "Umpire Conveyance (if ground far)",
+          "unit": "per_umpire_per_day",
+          "rate_inr": 150,
+          "rate_display": "₹150 / umpire / day"
+        },
+        {
+          "code": "SCORER_FEE",
+          "label": "Scorer Fees",
+          "unit": "per_scorer_per_day",
+          "rate_inr": 750,
+          "rate_display": "₹750 / scorer / day"
+        },
+        {
+          "code": "SCORER_CONVEYANCE",
+          "label": "Scorer Conveyance (if ground far)",
+          "unit": "per_scorer_per_day",
+          "rate_inr": 150,
+          "rate_display": "₹150 / scorer / day"
+        },
+        {
+          "code": "WINNER_PRIZE",
+          "label": "Winner prize",
+          "unit": "lump",
+          "rate_inr": 50000,
+          "rate_display": "₹50,000"
+        },
+        {
+          "code": "RUNNER_UP_PRIZE",
+          "label": "Runner-up prize",
+          "unit": "lump",
+          "rate_inr": 30000,
+          "rate_display": "₹30,000"
+        }
       ],
       "conditions": [
-        "Coach & trainer must be MPCA-empanelled",
-        "Profiles must be submitted in advance",
-        "Refreshments on practice days admissible on reasonable basis"
-      ]
+        "Maximum 10–12 'A'-grade clubs (based on 10-point ranking guideline).",
+        "2-day matches ONLY; no one-day; no league-cum-knockout.",
+        "Only competitive clubs participate.",
+        "Local conveyance is the club's own responsibility.",
+        "Coach, trainer, manager fees are NOT sanctioned under this scheme.",
+        "Prize money paid by bank transfer to club's account only.",
+        "Prize money forfeited if not claimed within 6 months.",
+        "TDS applicable on prize money.",
+        "Scores of all matches to be provided to MPCA."
+      ],
+      "required_documents": [
+        "Scoresheets",
+        "Bills/receipts",
+        "Bank transfer details for prize money"
+      ],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "2-F",
+      "name": "Inter-Divisional Tournament — Officials' Match Fees, Conveyance & DA",
+      "description": "Fees, conveyance, and daily allowance for Selectors, Umpires, Scorers, and Observers in Inter-Divisional matches.",
+      "scheme_type": "Other",
+      "eligible_bodies": [
+        "Division"
+      ],
+      "categories": [
+        "Inter-Divisional",
+        "Officials"
+      ],
+      "heads": [
+        {
+          "code": "MATCH_FEE_SELECTOR_OBSERVER_MULTI_DAY",
+          "label": "Match Fee — Selectors / Observer (Multi-day / Ltd-over)",
+          "unit": "per_day",
+          "rate_inr": 9000,
+          "rate_display": "₹9,000 / day"
+        },
+        {
+          "code": "MATCH_FEE_UMPIRE_MULTI_DAY",
+          "label": "Match Fee — Umpires (Multi-day / Ltd-over)",
+          "unit": "per_day",
+          "rate_inr": 5000,
+          "rate_display": "₹5,000 / day"
+        },
+        {
+          "code": "MATCH_FEE_SCORER_BCCI_MULTI_DAY",
+          "label": "Match Fee — Scorers (BCCI Panel, Multi-day / Ltd-over)",
+          "unit": "per_day",
+          "rate_inr": 2500,
+          "rate_display": "₹2,500 / day"
+        },
+        {
+          "code": "MATCH_FEE_SCORER_OTHER_MULTI_DAY",
+          "label": "Match Fee — Scorers (Other, Multi-day / Ltd-over)",
+          "unit": "per_day",
+          "rate_inr": 1500,
+          "rate_display": "₹1,500 / day"
+        },
+        {
+          "code": "MATCH_FEE_SELECTOR_OBSERVER_T20",
+          "label": "Match Fee — Selectors / Observer (T20)",
+          "unit": "per_day",
+          "rate_inr": 9000,
+          "rate_display": "₹9,000 / day"
+        },
+        {
+          "code": "MATCH_FEE_UMPIRE_T20",
+          "label": "Match Fee — Umpires (T20)",
+          "unit": "per_day",
+          "rate_inr": 2750,
+          "rate_display": "₹2,750 / day"
+        },
+        {
+          "code": "MATCH_FEE_SCORER_BCCI_T20",
+          "label": "Match Fee — Scorers (BCCI Panel, T20)",
+          "unit": "per_day",
+          "rate_inr": 1500,
+          "rate_display": "₹1,500 / day"
+        },
+        {
+          "code": "MATCH_FEE_SCORER_OTHER_T20",
+          "label": "Match Fee — Scorers (Other, T20)",
+          "unit": "per_day",
+          "rate_inr": 900,
+          "rate_display": "₹900 / day"
+        },
+        {
+          "code": "CONVEYANCE_LOCAL_OFFICIALS",
+          "label": "Conveyance — Local officials",
+          "unit": "per_day",
+          "rate_inr": 750,
+          "rate_display": "₹750 / day"
+        },
+        {
+          "code": "CONVEYANCE_OUTSTATION_OFFICIALS",
+          "label": "Conveyance — Outstation officials",
+          "unit": "per_day",
+          "rate_inr": 300,
+          "rate_display": "₹300 / day"
+        },
+        {
+          "code": "DA_VENUE_METRO",
+          "label": "Daily Allowance — Indore/Bhopal/Gwalior/Jabalpur",
+          "unit": "per_day",
+          "rate_inr": 2000,
+          "rate_display": "₹2,000 / day"
+        },
+        {
+          "code": "DA_VENUE_OTHER",
+          "label": "Daily Allowance — Other cities",
+          "unit": "per_day",
+          "rate_inr": 1500,
+          "rate_display": "₹1,500 / day"
+        }
+      ],
+      "conditions": [
+        "Applies to Selectors, Umpires, Scorers, and Observers.",
+        "Conveyance is for actual days including one day before.",
+        "DA is for outstation officials only.",
+        "Paid per scheduled match-day."
+      ],
+      "required_documents": [],
+      "frequency": "Per_match_day",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "3-A",
       "name": "Periodical Coaching Camp for District Players",
+      "description": "Coaching camps for district/rural players unable to access divisional guidance daily.",
       "scheme_type": "Camp",
       "eligible_bodies": [
-        "Division"
+        "District"
       ],
-      "frequency": "Per_camp_annual",
-      "description": "Subsidy for a 2-week annual coaching camp for district & rural players.",
+      "categories": [
+        "Coaching Camp"
+      ],
       "heads": [
         {
-          "code": "ACCOM",
+          "code": "ACCOMMODATION",
           "label": "Accommodation",
           "unit": "per_person_per_day",
           "rate_inr": 500,
@@ -316,585 +834,1688 @@
           "rate_display": "₹500 / player / day"
         },
         {
-          "code": "DAILY_CONV",
+          "code": "TRAVEL",
+          "label": "Travel",
+          "unit": "at_actuals",
+          "rate_inr": 0,
+          "rate_display": "Actual ordinary bus / SL rail fare"
+        },
+        {
+          "code": "DAILY_CONVEYANCE",
           "label": "Daily Conveyance",
-          "unit": "per_person_per_day",
+          "unit": "per_person",
           "rate_inr": 50,
           "rate_display": "₹50 / player"
         },
         {
-          "code": "MISC",
+          "code": "MISC_EXPENSES",
           "label": "Misc. Expenses",
-          "unit": "per_camp_lump",
+          "unit": "lump",
           "rate_inr": 15000,
           "rate_display": "Up to ₹15,000 / camp"
+        },
+        {
+          "code": "MATCH_BALLS",
+          "label": "Match Balls",
+          "unit": "lump",
+          "rate_inr": 0,
+          "rate_display": "Provided by MPCA"
         }
+      ],
+      "conditions": [
+        "Duration: 2 weeks, once a year.",
+        "Two groups: up to 18 yrs and elder players.",
+        "Camp modelled on MPCA academy: daily 2 sessions, one weekly off.",
+        "Accommodation: triple occupancy only.",
+        "Not applicable for camps of Divisional teams before Inter-Divisional Tournament (use Scheme 3-D).",
+        "Inform MPCA in advance with player numbers, native places, and duration.",
+        "Division must issue a media release (news + photos) about the endeavour."
       ],
       "required_documents": [
         "Claim form",
-        "Bills / vouchers",
-        "Supporting documents for expenditure"
+        "Bills/vouchers & relevant supporting documents for expenditure"
       ],
-      "conditions": [
-        "Duration 2 weeks, once a year",
-        "Two groups: up to 18 years and elder players",
-        "MPCA academy model — 2 sessions daily, one weekly off",
-        "Not for Divisional-team pre-tournament camps"
-      ]
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "3-B",
       "name": "Vacation Camps",
+      "description": "Coaching camps during summer vacation.",
       "scheme_type": "Camp",
       "eligible_bodies": [
-        "Division"
+        "District"
       ],
-      "frequency": "Per_camp_annual",
-      "description": "Vacation camps during summer covering accommodation, food, travel for outstation participants.",
+      "categories": [
+        "Coaching Camp"
+      ],
       "heads": [
         {
-          "code": "ACCOM",
-          "label": "Accommodation (outstation)",
+          "code": "ACCOMMODATION",
+          "label": "Accommodation (outstation players)",
           "unit": "per_person_per_day",
           "rate_inr": 500,
           "rate_display": "₹500 / player / day"
         },
         {
           "code": "FOOD",
-          "label": "Food (outstation)",
+          "label": "Food (outstation players)",
           "unit": "per_person_per_day",
           "rate_inr": 500,
           "rate_display": "₹500 / player / day"
         },
         {
+          "code": "TRAVEL",
+          "label": "Inter-city Travel",
+          "unit": "at_actuals",
+          "rate_inr": 0,
+          "rate_display": "Actual ordinary bus / SL rail fare"
+        },
+        {
+          "code": "LOCAL_CONVEYANCE_OUTSTATION",
+          "label": "Local Conveyance (outstation)",
+          "unit": "per_person_per_day",
+          "rate_inr": 50,
+          "rate_display": "₹50 / player / day"
+        },
+        {
+          "code": "REFRESHMENT_LOCAL",
+          "label": "Refreshment (local players)",
+          "unit": "per_person_per_day",
+          "rate_inr": 50,
+          "rate_display": "₹50 / player / day"
+        },
+        {
           "code": "KIT_MISC",
-          "label": "Kit & Misc",
-          "unit": "per_camp_lump",
+          "label": "Kit & Misc.",
+          "unit": "lump",
           "rate_inr": 15000,
           "rate_display": "₹15,000 / camp"
+        },
+        {
+          "code": "MATCH_BALLS",
+          "label": "Match Balls",
+          "unit": "lump",
+          "rate_inr": 0,
+          "rate_display": "Provided by MPCA on request"
         }
+      ],
+      "conditions": [
+        "Duration: 2–3 weeks (summer vacation).",
+        "Two groups: up to 18 yrs and elder players.",
+        "MPCA academy model: daily 2 sessions, one weekly off.",
+        "Accommodation: triple occupancy.",
+        "Divisional Secretary's undertaking required: no charges collected from players.",
+        "Claim form + bills/vouchers + undertaking required."
       ],
       "required_documents": [
         "Claim form",
-        "Bills / vouchers",
-        "Divisional Secretary's undertaking (no fee charged from players)"
+        "Bills/vouchers",
+        "Divisional Secretary's undertaking (no charges from players)"
       ],
-      "conditions": [
-        "Duration 2-3 weeks, once a year (summer vacation)",
-        "Two age groups: up to 18 and elder",
-        "MPCA academy model"
-      ]
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "3-D",
       "name": "Pre-Tournament Camp for Divisional Teams",
+      "description": "Camps for Divisional teams before Inter-Divisional Tournaments.",
       "scheme_type": "Camp",
       "eligible_bodies": [
         "Division"
       ],
-      "frequency": "Per_tournament_camp",
-      "description": "Pre-tournament camp before Inter-Divisional Tournaments.",
+      "categories": [
+        "Coaching Camp"
+      ],
       "heads": [
         {
-          "code": "DAILY_SUBSIDY",
-          "label": "Max Daily Subsidy (accom+food+conveyance)",
+          "code": "MAX_DAILY_SUBSIDY",
+          "label": "Max Daily Subsidy",
           "unit": "per_day",
           "rate_inr": 11000,
           "rate_display": "₹11,000 / day"
         },
         {
-          "code": "COACH_HON",
-          "label": "Coach Honorarium",
-          "unit": "per_camp_day",
-          "rate_inr": 1000,
-          "rate_display": "₹1,000 / day"
+          "code": "ACCOM_ADJUSTMENT_OUTSTATION",
+          "label": "Accommodation adjustment (outstation player)",
+          "unit": "per_person_per_day",
+          "rate_inr": 500,
+          "rate_display": "₹500 / day"
         },
         {
-          "code": "TRAINER_HON",
+          "code": "BOARDING_ADJUSTMENT_PLAYER",
+          "label": "Boarding adjustment (per player)",
+          "unit": "per_person_per_day",
+          "rate_inr": 500,
+          "rate_display": "₹500 / day"
+        },
+        {
+          "code": "COACH_HONORARIUM",
+          "label": "Coach Honorarium",
+          "unit": "per_day",
+          "rate_inr": 1250,
+          "rate_display": "₹1,250 / day"
+        },
+        {
+          "code": "TRAINER_HONORARIUM",
           "label": "Trainer Honorarium",
-          "unit": "per_camp_day",
+          "unit": "per_day",
           "rate_inr": 750,
           "rate_display": "₹750 / day"
+        },
+        {
+          "code": "MEDICAL",
+          "label": "Medical",
+          "unit": "at_actuals",
+          "rate_inr": 0,
+          "rate_display": "At actual"
+        },
+        {
+          "code": "MATCH_BALLS",
+          "label": "Match Balls",
+          "unit": "lump",
+          "rate_inr": 0,
+          "rate_display": "Provided by MPCA for the camp"
         }
       ],
+      "conditions": [
+        "Camp duration max 8 days (including reporting & departure).",
+        "Team strength 18–20 players (typically 7–8 outstation).",
+        "Subsidy subject to actuals & documents.",
+        "If Division has more district players, subsidy adjusted based on accommodation (₹500/day/outstation player) + boarding (₹500/day/player).",
+        "Coach & trainer from MPCA empanelled list only.",
+        "If tournament postponed within 8–10 days and camp already scheduled, additional camp days allowed case-to-case."
+      ],
       "required_documents": [
-        "Claim form",
-        "Supporting bills / vouchers"
+        "Claim statement",
+        "Bills/vouchers",
+        "Relevant supporting documents"
+      ],
+      "frequency": "Per_camp",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "3-E.1",
+      "name": "Award for top District team in multi-day Inter-District Tournament",
+      "description": "Monetary award for top-ranked District teams in MPCA Inter-District multi-day tournaments.",
+      "scheme_type": "Award",
+      "eligible_bodies": [
+        "District"
+      ],
+      "categories": [
+        "Inter-District Tournament"
+      ],
+      "heads": [
+        {
+          "code": "RANK_1_OPEN_U23",
+          "label": "Rank 1 (Open & U-23)",
+          "unit": "lump",
+          "rate_inr": 30000,
+          "rate_display": "₹30,000"
+        },
+        {
+          "code": "RANK_2_OPEN_U23",
+          "label": "Rank 2 (Open & U-23)",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "RANK_1_OTHER_AGE",
+          "label": "Rank 1 (Other age groups)",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "RANK_2_OTHER_AGE",
+          "label": "Rank 2 (Other age groups)",
+          "unit": "lump",
+          "rate_inr": 15000,
+          "rate_display": "₹15,000"
+        }
       ],
       "conditions": [
-        "Max 8 camp days (incl. reporting & departure)",
-        "Camp strength 18-20 players (7-8 outstation typical)",
-        "Coach & trainer from MPCA-empanelled list"
-      ]
+        "Award is for Districts other than the Divisional HQ team.",
+        "For Divisions with 5+ Districts: top 2 ranked teams receive awards.",
+        "For Divisions with ≤ 4 Districts: only the top 1 team receives an award.",
+        "If the HQ team wins, the finalist is treated as Rank 1; better-performing losing semi-finalist as Rank 2."
+      ],
+      "required_documents": [],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "3-E.2",
       "name": "Coaching Grant for Districts",
+      "description": "Annual grant to District Cricket Associations for coaching activities.",
       "scheme_type": "Annual_Grant",
       "eligible_bodies": [
         "District"
       ],
-      "frequency": "Annual",
-      "description": "Annual grant for District coaching camps & coach development.",
+      "categories": [
+        "Coaching"
+      ],
       "heads": [
         {
-          "code": "DIST_COACH_CAMP",
-          "label": "Coaching camps at District",
-          "unit": "per_season_lump",
-          "rate_inr": 25000,
-          "rate_display": "Up to ₹25,000 / season"
-        },
-        {
-          "code": "DIST_COACH_TOUR",
-          "label": "Coaches attending Inter-District tournaments",
-          "unit": "per_season_lump",
-          "rate_inr": 25000,
-          "rate_display": "Up to ₹25,000 / season"
+          "code": "ANNUAL_GRANT",
+          "label": "Annual Grant",
+          "unit": "per_annum",
+          "rate_inr": 50000,
+          "rate_display": "₹50,000 / season"
         }
       ],
-      "required_documents": [
-        "Claim form",
-        "Bills / vouchers for coaching activities"
-      ],
       "conditions": [
-        "Total grant ₹50,000 / season to all Districts",
-        "CANNOT be claimed if Scheme 1-A annual claim not submitted accurately within 8-9 months of previous FY closure"
-      ]
+        "Split as: Up to ₹25,000 for conducting coaching camps at District level.",
+        "Split as: Up to ₹25,000 for coaches attending Inter-District tournaments.",
+        "Cannot be claimed if Scheme 1-A claim is not submitted accurately within 8–9 months of the previous FY closure."
+      ],
+      "required_documents": [],
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "3-E.3",
       "name": "Administrative Grant for Districts",
+      "description": "Annual grant to District Cricket Associations for basic administrative purposes.",
       "scheme_type": "Annual_Grant",
       "eligible_bodies": [
         "District"
       ],
-      "frequency": "Annual",
-      "description": "Annual grant for basic administrative purposes at District level.",
+      "categories": [
+        "Administration"
+      ],
       "heads": [
         {
-          "code": "ADMIN_GRANT",
-          "label": "Administrative Grant",
-          "unit": "per_year_lump",
+          "code": "ANNUAL_GRANT",
+          "label": "Annual Grant",
+          "unit": "per_annum",
           "rate_inr": 25000,
           "rate_display": "₹25,000 / year"
         }
       ],
-      "required_documents": [
-        "Claim form",
-        "Utilization certificate for previous grant"
-      ],
       "conditions": [
-        "CANNOT be claimed if Scheme 1-A annual claim not submitted accurately within 8-9 months of previous FY closure"
-      ]
+        "Cannot be claimed if Scheme 1-A claim is not submitted accurately within 8–9 months of the previous FY closure."
+      ],
+      "required_documents": [],
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "3-E.4",
       "name": "Scholarship for raw / untapped District players",
-      "scheme_type": "Welfare",
+      "description": "Scholarship for promising District players not yet involved in Divisional activities.",
+      "scheme_type": "Award",
       "eligible_bodies": [
-        "District"
+        "Player"
       ],
-      "frequency": "Annual",
-      "description": "Scholarship for promising District players not part of active Divisional / State activities.",
+      "categories": [
+        "Player Development",
+        "Scholarship"
+      ],
       "heads": [
         {
-          "code": "SCHOLARSHIP_M",
-          "label": "Top 5 players (multi-day Inter-Divisional)",
-          "unit": "per_player_per_year",
+          "code": "SCHOLARSHIP_MALE",
+          "label": "Scholarship for top 5 players in multi-day Inter-Divisional circuit",
+          "unit": "per_annum",
           "rate_inr": 15000,
           "rate_display": "₹15,000 / year (cash or kind)"
         },
         {
-          "code": "SCHOLARSHIP_W",
-          "label": "Top 5 players (Women's Inter-Divisional)",
-          "unit": "per_player_per_year",
+          "code": "SCHOLARSHIP_FEMALE",
+          "label": "Scholarship for top 5 players in Women's Inter-Divisional circuit",
+          "unit": "per_annum",
           "rate_inr": 15000,
-          "rate_display": "₹15,000 / year"
+          "rate_display": "₹15,000 / year (cash or kind)"
         }
       ],
-      "required_documents": [
-        "Nomination list from Division",
-        "Player residence proof",
-        "Confirmation player not at Divisional HQ"
+      "conditions": [
+        "Player must reside and be coached in Districts.",
+        "Player should not be a state team member or above.",
+        "Player must not be involved in any active activity at the Divisional HQ."
+      ],
+      "required_documents": [],
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "4-A",
+      "name": "Benevolent Fund for Health Care (BFHC) — Players & Umpires",
+      "description": "Reimbursement of medical expenses for major ailments to former players and umpires.",
+      "scheme_type": "Welfare",
+      "eligible_bodies": [
+        "Player",
+        "Umpire"
+      ],
+      "categories": [
+        "Health Care",
+        "Welfare"
+      ],
+      "heads": [
+        {
+          "code": "MAX_LIFETIME_ASSISTANCE",
+          "label": "Lifetime Maximum Assistance",
+          "unit": "lump",
+          "rate_inr": 300000,
+          "rate_display": "₹3,00,000"
+        },
+        {
+          "code": "ADDITIONAL_ASSISTANCE",
+          "label": "Additional Assistance (case-to-case)",
+          "unit": "lump",
+          "rate_inr": 100000,
+          "rate_display": "Up to ₹1,00,000"
+        },
+        {
+          "code": "MINIMUM_CLAIM",
+          "label": "Minimum Claim Amount",
+          "unit": "lump",
+          "rate_inr": 25000,
+          "rate_display": "₹25,000"
+        },
+        {
+          "code": "INTERIM_RELIEF_MAX",
+          "label": "Interim Relief (emergency) Maximum",
+          "unit": "lump",
+          "rate_inr": 200000,
+          "rate_display": "Up to ₹2,00,000"
+        },
+        {
+          "code": "ADVANCE_PAYMENT_MAX",
+          "label": "Advance Payment Maximum",
+          "unit": "percent",
+          "rate_inr": 40,
+          "rate_display": "40%"
+        }
       ],
       "conditions": [
-        "Player NOT a state team member or above",
-        "Must reside & be coached at Districts, not at Divisional HQ"
-      ]
+        "Covers treatment of major & serious ailments including hospitalization in India.",
+        "Does not cover medical aid, equipment, or gadgets.",
+        "Players: Played for India OR MP in Senior/Junior Domestic tournaments (min 6 years for juniors).",
+        "Umpires: BCCI Panel OR MPCA State Panel (min 10 years officiating).",
+        "Not payable if personal monthly income ≥ ₹35,000 or total immovable assets > ₹35 lacs (CA-certified).",
+        "Must exhaust benefits from other sources (BCCI, employer, insurance) first.",
+        "Applications must be received within 6 months of treatment commencement.",
+        "Beneficiary cannot be facing disciplinary action or involved in unsanctioned matches."
+      ],
+      "required_documents": [
+        "Application form",
+        "Medical certificate from treating physician",
+        "CA-certified income and asset declaration"
+      ],
+      "frequency": "One_time",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "4-B",
+      "name": "Apparels to State Team Players",
+      "description": "Provision of comprehensive cricket apparels to players selected for MP State teams.",
+      "scheme_type": "Welfare",
+      "eligible_bodies": [
+        "Player"
+      ],
+      "categories": [
+        "Equipment",
+        "Player Welfare"
+      ],
+      "heads": [],
+      "conditions": [
+        "Provided before tournament/tour start.",
+        "Players must use the provided apparels for all appearances.",
+        "Includes team kit bag, playing & practice T-shirts/trousers/shorts, caps, sweaters, hoodie, track suit."
+      ],
+      "required_documents": [],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "4-C",
-      "name": "Performance Awards to Players / Teams / Umpires",
+      "name": "Performance Awards to Players / Teams / Umpires (BCCI & Domestic Circuit)",
+      "description": "Awards for outstanding performance in BCCI and MPCA tournaments.",
       "scheme_type": "Award",
       "eligible_bodies": [
-        "All"
+        "Player",
+        "Team",
+        "Umpire"
       ],
-      "frequency": "Annual",
-      "description": "Awards recognising outstanding performance in BCCI & MPCA domestic circuits.",
+      "categories": [
+        "Performance Award",
+        "Player Award",
+        "Team Award",
+        "Umpire Award"
+      ],
       "heads": [
         {
-          "code": "INT_DEBUT",
-          "label": "International Debut",
-          "unit": "per_player_lump",
+          "code": "INTL_DEBUT_AWARD",
+          "label": "International Debut Award",
+          "unit": "lump",
           "rate_inr": 500000,
           "rate_display": "₹5,00,000"
         },
         {
-          "code": "SCINDIA_M_SR",
-          "label": "Madhavrao Scindia (Best Sr. Cricketer - Men)",
-          "unit": "per_player_lump",
+          "code": "BEST_SR_MENS_CRICKETER_AWARD",
+          "label": "Madhavrao Scindia Award — Best Senior Cricketer (Men's)",
+          "unit": "lump",
           "rate_inr": 100000,
           "rate_display": "₹1,00,000"
         },
         {
-          "code": "SCINDIA_M_JR",
-          "label": "Madhavrao Scindia (Best Jr. Cricketer - Men)",
-          "unit": "per_player_lump",
+          "code": "BEST_JR_MENS_CRICKETER_AWARD",
+          "label": "Madhavrao Scindia Award — Best Junior Cricketer (Men's)",
+          "unit": "lump",
           "rate_inr": 100000,
           "rate_display": "₹1,00,000"
         },
         {
-          "code": "USHA_SR",
-          "label": "Maharani Ushadevi (Best Sr. - Women)",
-          "unit": "per_player_lump",
+          "code": "BEST_SR_WOMENS_CRICKETER_AWARD",
+          "label": "Maharani Ushadevi Award — Best Senior Cricketer (Women's)",
+          "unit": "lump",
           "rate_inr": 50000,
           "rate_display": "₹50,000"
         },
         {
-          "code": "CHANDRA_NAYUDU",
-          "label": "Chandra Nayudu (Best Jr. - Women)",
-          "unit": "per_player_lump",
+          "code": "BEST_JR_WOMENS_CRICKETER_AWARD",
+          "label": "Chandra Nayudu Award — Best Junior Cricketer (Women's)",
+          "unit": "lump",
           "rate_inr": 50000,
           "rate_display": "₹50,000"
         },
         {
-          "code": "SPECIAL_RECOG",
-          "label": "Special Recognition",
-          "unit": "per_lump",
+          "code": "BEST_SPIN_U16_AWARD",
+          "label": "Best Spin Bowler in U-16 BCCI tournament",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "BEST_FAST_U16_AWARD",
+          "label": "Best Fast Bowler in U-16 BCCI tournament",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "BEST_SPIN_U19_AWARD",
+          "label": "Narendra Hirwani Award — Best Spin Bowler in U-19 BCCI tournament",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "BEST_FAST_U19_AWARD",
+          "label": "Ashok Jagdale Award — Best Fast Bowler in U-19 BCCI tournament",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "PROMISING_DEBUTANT_WOMEN_AWARD",
+          "label": "Rekha Punekar Award — Promising Debutant (Women's)",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "SPECIAL_RECOGNITION_AWARD",
+          "label": "Special Recognition Award",
+          "unit": "lump",
           "rate_inr": 30000,
           "rate_display": "₹30,000"
+        },
+        {
+          "code": "MD_TROPHY_WINNER_PRIZE",
+          "label": "MY Memorial Trophy — WINNER (Players+Staff Pool)",
+          "unit": "lump",
+          "rate_inr": 300000,
+          "rate_display": "₹3.00 Lacs"
+        },
+        {
+          "code": "MD_TROPHY_WINNER_DIV_PRIZE",
+          "label": "MY Memorial Trophy — WINNER (Division Share)",
+          "unit": "lump",
+          "rate_inr": 75000,
+          "rate_display": "₹75,000"
+        },
+        {
+          "code": "MD_TROPHY_RUNNERUP_PRIZE",
+          "label": "MY Memorial Trophy — RUNNER-UP (Players+Staff Pool)",
+          "unit": "lump",
+          "rate_inr": 150000,
+          "rate_display": "₹1.50 Lacs"
+        },
+        {
+          "code": "MD_TROPHY_RUNNERUP_DIV_PRIZE",
+          "label": "MY Memorial Trophy — RUNNER-UP (Division Share)",
+          "unit": "lump",
+          "rate_inr": 35000,
+          "rate_display": "₹35,000"
+        },
+        {
+          "code": "LO_T20_TROPHY_WINNER_PRIZE",
+          "label": "Ltd. Overs / T20 Trophy — WINNER (Players+Staff Pool)",
+          "unit": "lump",
+          "rate_inr": 150000,
+          "rate_display": "₹1.50 Lacs"
+        },
+        {
+          "code": "LO_T20_TROPHY_WINNER_DIV_PRIZE",
+          "label": "Ltd. Overs / T20 Trophy — WINNER (Division Share)",
+          "unit": "lump",
+          "rate_inr": 40000,
+          "rate_display": "₹40,000"
+        },
+        {
+          "code": "LO_T20_TROPHY_RUNNERUP_PRIZE",
+          "label": "Ltd. Overs / T20 Trophy — RUNNER-UP (Players+Staff Pool)",
+          "unit": "lump",
+          "rate_inr": 75000,
+          "rate_display": "₹75,000"
+        },
+        {
+          "code": "LO_T20_TROPHY_RUNNERUP_DIV_PRIZE",
+          "label": "Ltd. Overs / T20 Trophy — RUNNER-UP (Division Share)",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_BB_BATSMAN_MY",
+          "label": "MY Memorial Trophy — Best Batsman",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_BB_BOWLER_MY",
+          "label": "MY Memorial Trophy — Best Bowler",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_BB_FIELDER_MY",
+          "label": "MY Memorial Trophy — Best Fielder / WK",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_SCO_BATSMAN_MDS",
+          "label": "Madhavrao Scindia Trophy — Best Batsman",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000"
+        },
+        {
+          "code": "INTERDIV_SCO_BOWLER_MDS",
+          "label": "Madhavrao Scindia Trophy — Best Bowler",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000"
+        },
+        {
+          "code": "INTERDIV_SCO_FIELDER_MDS",
+          "label": "Madhavrao Scindia Trophy — Best Fielder",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000"
+        },
+        {
+          "code": "INTERDIV_JN_BHAYA_TROPHY",
+          "label": "JN Bhaya Trophy",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000 (each)"
+        },
+        {
+          "code": "INTERDIV_HG_BATSMAN_AWARD",
+          "label": "H. Gaekwad Trophy — Best Batsman",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_HG_BOWLER_AWARD",
+          "label": "H. Gaekwad Trophy — Best Bowler",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_HG_FIELDER_AWARD",
+          "label": "H. Gaekwad Trophy — Best Fielder / WK",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_SMK_TROPHY",
+          "label": "SM Khan Trophy",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000 (each)"
+        },
+        {
+          "code": "INTERDIV_PP_TROPHY",
+          "label": "Parmanandbhai Patel Trophy",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000 (each)"
+        },
+        {
+          "code": "INTERDIV_U22_LO_WINNER",
+          "label": "Boys U-22 Ltd. Over Trophy",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000 (each)"
+        },
+        {
+          "code": "INTERDIV_MMJ_BATSMAN_AWARD",
+          "label": "MM Jagdale Trophy — Best Batsman",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_MMJ_BOWLER_AWARD",
+          "label": "MM Jagdale Trophy — Best Bowler",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_MMJ_FIELDER_AWARD",
+          "label": "MM Jagdale Trophy — Best Fielder / WK",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_AK_BATSMAN_AWARD",
+          "label": "AW Kanmadikar Trophy — Best Batsman",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_AK_BOWLER_AWARD",
+          "label": "AW Kanmadikar Trophy — Best Bowler",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_AK_FIELDER_AWARD",
+          "label": "AW Kanmadikar Trophy — Best Fielder / WK",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "INTERDIV_JS_BATSMAN_AWARD",
+          "label": "JS Anand Trophy — Best Batsman",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000"
+        },
+        {
+          "code": "INTERDIV_JS_BOWLER_AWARD",
+          "label": "JS Anand Trophy — Best Bowler",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000"
+        },
+        {
+          "code": "INTERDIV_JS_FIELDER_AWARD",
+          "label": "JS Anand Trophy — Best Fielder / WK",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000"
+        },
+        {
+          "code": "INTERDIV_G18_TROPHY",
+          "label": "Girls U-18 Trophy",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000 (each)"
+        },
+        {
+          "code": "UPCOMING_UMPIRE_AWARD",
+          "label": "Consistent Upcoming Umpire / Scorer Award",
+          "unit": "lump",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000 (Narendra Menon Award)"
         }
       ],
-      "required_documents": [
-        "Nomination form with performance stats",
-        "BCCI selection certificate (if applicable)",
-        "Match scoresheets supporting the performance"
+      "conditions": [
+        "Team prize money distributed among players and support staff.",
+        "TDS applicable for Senior & U-23/U-22 groups; borne by MPCA for junior teams.",
+        "Awards to Best Spin & Fast bowlers subject to noteworthy performance.",
+        "Team prize money for BCCI tournaments decided by Managing Committee annually.",
+        "MPCA tournament prize money to be paid by bank transfer to club's account."
+      ],
+      "required_documents": [],
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "4-D",
+      "name": "Incentive Scheme for Encouraging Outright Victories (Multi-Day Matches)",
+      "description": "Incentives for outright victories in multi-day matches (BCCI and MPCA Inter-Divisional).",
+      "scheme_type": "Award",
+      "eligible_bodies": [
+        "Team",
+        "Player"
+      ],
+      "categories": [
+        "Match Incentive",
+        "Outright Victory"
+      ],
+      "heads": [
+        {
+          "code": "PLAYER_INDIV_AWARD",
+          "label": "Individual reward for scoring 100+ runs OR taking 5+ wickets",
+          "unit": "lump",
+          "rate_inr": 20000,
+          "rate_display": "₹20,000"
+        },
+        {
+          "code": "RANJI_LEAGUE_WIN_INNINGS_AWARD",
+          "label": "Ranji Trophy — League win by innings or 10 wkts",
+          "unit": "lump",
+          "rate_inr": 220000,
+          "rate_display": "₹2.20 L"
+        },
+        {
+          "code": "RANJI_LEAGUE_OUTRIGHT_AWARD",
+          "label": "Ranji Trophy — League outright win",
+          "unit": "lump",
+          "rate_inr": 165000,
+          "rate_display": "₹1.65 L"
+        },
+        {
+          "code": "RANJI_LEAGUE_NRR_BONUS_AWARD",
+          "label": "Ranji Trophy — League bonus (NRR > 20%)",
+          "unit": "lump",
+          "rate_inr": 110000,
+          "rate_display": "+₹1.10 L"
+        },
+        {
+          "code": "RANJI_KNOCKOUT_WIN_AWARD",
+          "label": "Ranji Trophy — Knock-out outright win",
+          "unit": "lump",
+          "rate_inr": 330000,
+          "rate_display": "₹3.30 L"
+        },
+        {
+          "code": "U23_LEAGUE_WIN_INNINGS_AWARD",
+          "label": "U-23 — League win by innings or 10 wkts",
+          "unit": "lump",
+          "rate_inr": 165000,
+          "rate_display": "₹1.65 L"
+        },
+        {
+          "code": "U23_LEAGUE_OUTRIGHT_AWARD",
+          "label": "U-23 — League outright win",
+          "unit": "lump",
+          "rate_inr": 110000,
+          "rate_display": "₹1.10 L"
+        },
+        {
+          "code": "U23_LEAGUE_NRR_BONUS_AWARD",
+          "label": "U-23 — League bonus (NRR > 20%)",
+          "unit": "lump",
+          "rate_inr": 110000,
+          "rate_display": "+₹1.10 L"
+        },
+        {
+          "code": "U23_KNOCKOUT_WIN_AWARD",
+          "label": "U-23 — Knock-out outright win",
+          "unit": "lump",
+          "rate_inr": 330000,
+          "rate_display": "₹3.30 L"
+        },
+        {
+          "code": "U19_LEAGUE_WIN_INNINGS_AWARD",
+          "label": "U-19 — League win by innings or 10 wkts",
+          "unit": "lump",
+          "rate_inr": 165000,
+          "rate_display": "₹1.65 L"
+        },
+        {
+          "code": "U19_LEAGUE_OUTRIGHT_AWARD",
+          "label": "U-19 — League outright win",
+          "unit": "lump",
+          "rate_inr": 110000,
+          "rate_display": "₹1.10 L"
+        },
+        {
+          "code": "U19_LEAGUE_NRR_BONUS_AWARD",
+          "label": "U-19 — League bonus (NRR > 20%)",
+          "unit": "lump",
+          "rate_inr": 110000,
+          "rate_display": "+₹1.10 L"
+        },
+        {
+          "code": "U19_KNOCKOUT_WIN_AWARD",
+          "label": "U-19 — Knock-out outright win",
+          "unit": "lump",
+          "rate_inr": 330000,
+          "rate_display": "₹3.30 L"
+        },
+        {
+          "code": "U16_LEAGUE_WIN_INNINGS_AWARD",
+          "label": "U-16 — League win by innings or 10 wkts",
+          "unit": "lump",
+          "rate_inr": 110000,
+          "rate_display": "₹1.10 L"
+        },
+        {
+          "code": "U16_LEAGUE_OUTRIGHT_AWARD",
+          "label": "U-16 — League outright win",
+          "unit": "lump",
+          "rate_inr": 82500,
+          "rate_display": "₹82,500"
+        },
+        {
+          "code": "U16_LEAGUE_NRR_BONUS_AWARD",
+          "label": "U-16 — League bonus (NRR > 20%)",
+          "unit": "lump",
+          "rate_inr": 55000,
+          "rate_display": "+₹55,000"
+        },
+        {
+          "code": "U16_KNOCKOUT_WIN_AWARD",
+          "label": "U-16 — Knock-out outright win",
+          "unit": "lump",
+          "rate_inr": 330000,
+          "rate_display": "₹3.30 L"
+        },
+        {
+          "code": "MPCA_OPEN_LEAGUE_WIN_INNINGS_AWARD",
+          "label": "MPCA Open — League win by innings or 10 wkts",
+          "unit": "lump",
+          "rate_inr": 55000,
+          "rate_display": "₹55,000"
+        },
+        {
+          "code": "MPCA_OPEN_LEAGUE_OUTRIGHT_AWARD",
+          "label": "MPCA Open — League outright win",
+          "unit": "lump",
+          "rate_inr": 44000,
+          "rate_display": "₹44,000"
+        },
+        {
+          "code": "MPCA_OPEN_LEAGUE_NRR_BONUS_AWARD",
+          "label": "MPCA Open — League bonus (NRR > 20%)",
+          "unit": "lump",
+          "rate_inr": 22000,
+          "rate_display": "+₹22,000"
+        },
+        {
+          "code": "MPCA_OPEN_KNOCKOUT_WIN_AWARD",
+          "label": "MPCA Open — Knock-out outright win",
+          "unit": "lump",
+          "rate_inr": 77000,
+          "rate_display": "₹77,000"
+        },
+        {
+          "code": "MPCA_U23_LEAGUE_WIN_INNINGS_AWARD",
+          "label": "MPCA U-23 — League win by innings or 10 wkts",
+          "unit": "lump",
+          "rate_inr": 55000,
+          "rate_display": "₹55,000"
+        },
+        {
+          "code": "MPCA_U23_LEAGUE_OUTRIGHT_AWARD",
+          "label": "MPCA U-23 — League outright win",
+          "unit": "lump",
+          "rate_inr": 44000,
+          "rate_display": "₹44,000"
+        },
+        {
+          "code": "MPCA_U23_LEAGUE_NRR_BONUS_AWARD",
+          "label": "MPCA U-23 — League bonus (NRR > 20%)",
+          "unit": "lump",
+          "rate_inr": 22000,
+          "rate_display": "+₹22,000"
+        },
+        {
+          "code": "MPCA_U23_KNOCKOUT_WIN_AWARD",
+          "label": "MPCA U-23 — Knock-out outright win",
+          "unit": "lump",
+          "rate_inr": 77000,
+          "rate_display": "₹77,000"
+        },
+        {
+          "code": "MPCA_U18_LEAGUE_WIN_INNINGS_AWARD",
+          "label": "MPCA U-18 — League win by innings or 10 wkts",
+          "unit": "lump",
+          "rate_inr": 44000,
+          "rate_display": "₹44,000"
+        },
+        {
+          "code": "MPCA_U18_LEAGUE_OUTRIGHT_AWARD",
+          "label": "MPCA U-18 — League outright win",
+          "unit": "lump",
+          "rate_inr": 33000,
+          "rate_display": "₹33,000"
+        },
+        {
+          "code": "MPCA_U18_LEAGUE_NRR_BONUS_AWARD",
+          "label": "MPCA U-18 — League bonus (NRR > 20%)",
+          "unit": "lump",
+          "rate_inr": 11000,
+          "rate_display": "+₹11,000"
+        },
+        {
+          "code": "MPCA_U18_KNOCKOUT_WIN_AWARD",
+          "label": "MPCA U-18 — Knock-out outright win",
+          "unit": "lump",
+          "rate_inr": 77000,
+          "rate_display": "₹77,000"
+        },
+        {
+          "code": "MPCA_U15_LEAGUE_WIN_INNINGS_AWARD",
+          "label": "MPCA U-15 — League win by innings or 10 wkts",
+          "unit": "lump",
+          "rate_inr": 33000,
+          "rate_display": "₹33,000"
+        },
+        {
+          "code": "MPCA_U15_LEAGUE_OUTRIGHT_AWARD",
+          "label": "MPCA U-15 — League outright win",
+          "unit": "lump",
+          "rate_inr": 22000,
+          "rate_display": "₹22,000"
+        },
+        {
+          "code": "MPCA_U15_LEAGUE_NRR_BONUS_AWARD",
+          "label": "MPCA U-15 — League bonus (NRR > 20%)",
+          "unit": "lump",
+          "rate_inr": 11000,
+          "rate_display": "+₹11,000"
+        },
+        {
+          "code": "MPCA_U15_KNOCKOUT_WIN_AWARD",
+          "label": "MPCA U-15 — Knock-out outright win",
+          "unit": "lump",
+          "rate_inr": 77000,
+          "rate_display": "₹77,000"
+        }
       ],
       "conditions": [
-        "Performance in BCCI & MPCA domestic circuits",
-        "Team prize distribution: Playing XI 75%, Non-playing 15%, Coach 4%, Other staff 6%"
-      ]
+        "Applicable if team reaches knock-out/super-league stage of the tournament.",
+        "Distribution: Playing XI (75% pro-rata), Non-playing (15% pro-rata), Coach (4%), Other staff (6%).",
+        "TDS deducted for Senior & U-23/U-22; borne by MPCA for junior teams.",
+        "Additional rewards considered for exceptional individual performances.",
+        "League stage awards criteria: Wins against top-ranked teams; 75% for other wins (BCCI); 50% for other wins (MPCA)."
+      ],
+      "required_documents": [],
+      "frequency": "Per_match",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "4-E",
+      "name": "MPCA Lifetime Achievement Awards",
+      "description": "MPCA's highest annual award recognizing contributions to cricket in India and MP.",
+      "scheme_type": "Award",
+      "eligible_bodies": [
+        "Player",
+        "Umpire"
+      ],
+      "categories": [
+        "Lifetime Achievement"
+      ],
+      "heads": [
+        {
+          "code": "AWARD_CT_SARWATE_ON_FIELD",
+          "label": "C T Sarwate Award — On-Field Category",
+          "unit": "lump",
+          "rate_inr": 500000,
+          "rate_display": "₹5,00,000 + silver plaque"
+        },
+        {
+          "code": "AWARD_MADHAVRAO_SCINDIA_GENERAL",
+          "label": "Madhavrao Scindia Award — General Category",
+          "unit": "lump",
+          "rate_inr": 500000,
+          "rate_display": "₹5,00,000 + silver plaque"
+        }
+      ],
+      "conditions": [
+        "Maximum 2 awards per year (one for each category).",
+        "Usually one candidate per award; not shared as far as possible.",
+        "Awarded during the lifetime of the awardee — NOT posthumous.",
+        "Open for Men's or Women's cricket candidates.",
+        "No candidate facing punitive action from MPCA / BCCI is eligible.",
+        "Priority 1: Contribution to cricket in India; Priority 2: Contribution to cricket in MP/Madhya Bharat/Holkar."
+      ],
+      "required_documents": [],
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "4-F",
+      "name": "MPCA Nishkaam Karmyogi Awards",
+      "description": "Recognition for 'Unsung Heroes' supporting cricket with passionate involvement.",
+      "scheme_type": "Award",
+      "eligible_bodies": [
+        "Player",
+        "Umpire"
+      ],
+      "categories": [
+        "Unsung Hero",
+        "Support Staff"
+      ],
+      "heads": [
+        {
+          "code": "NISHKAAM_KARMYOGI_AWARD",
+          "label": "Nishkaam Karmyogi Award",
+          "unit": "lump",
+          "rate_inr": 111111,
+          "rate_display": "₹1,11,111"
+        }
+      ],
+      "conditions": [
+        "Awarded to industrious individuals supporting cricket with on-field/off-field activities.",
+        "Recognizes contributions with little or no glory/award-reward.",
+        "Awarded annually to 3 individuals."
+      ],
+      "required_documents": [],
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "4-G",
       "name": "Annual Incentive Scheme for Divisional Cricket Associations",
-      "scheme_type": "Award",
-      "eligible_bodies": [
-        "Division"
-      ],
-      "frequency": "Annual",
-      "description": "Incentive for top 2 Divisional Cricket Associations based on performance & development.",
-      "heads": [
-        {
-          "code": "RANK_1",
-          "label": "1st Rank Division",
-          "unit": "per_lump",
-          "rate_inr": 750000,
-          "rate_display": "₹7.50 Lacs"
-        },
-        {
-          "code": "RANK_2",
-          "label": "2nd Rank Division",
-          "unit": "per_lump",
-          "rate_inr": 500000,
-          "rate_display": "₹5.00 Lacs"
-        }
-      ],
-      "required_documents": [
-        "Annual activity report",
-        "Player development data",
-        "Statutory compliance certificates",
-        "Resource development documentation"
-      ],
-      "conditions": [
-        "Multi-faceted parameters: activities, player development, resource development, admin, statutory compliances",
-        "Rated annually by CDC"
-      ]
-    },
-    {
-      "scheme_code": "5-B",
-      "name": "Computer & Peripherals for Divisional Office",
-      "scheme_type": "Infrastructure",
-      "eligible_bodies": [
-        "Division"
-      ],
-      "frequency": "Once_in_5_8_years",
-      "description": "One-time reimbursement for essential computer equipment for Divisional Office.",
-      "heads": [
-        {
-          "code": "DESKTOP",
-          "label": "All-in-One Desktop",
-          "unit": "one_time",
-          "rate_inr": 0,
-          "rate_display": "As per specified config"
-        },
-        {
-          "code": "PRINTER",
-          "label": "All-in-One Printer",
-          "unit": "one_time",
-          "rate_inr": 0,
-          "rate_display": "Printer + Copier + Scanner"
-        },
-        {
-          "code": "UPS",
-          "label": "UPS",
-          "unit": "one_time",
-          "rate_inr": 0,
-          "rate_display": "15-20 min backup"
-        }
-      ],
-      "required_documents": [
-        "Original invoice endorsed by Division Secretary",
-        "Quotations for consolidated rates (before purchase)"
-      ],
-      "conditions": [
-        "One-time allotment every 5-8 years",
-        "Includes AMC after warranty",
-        "MPCA issues PO to vendor after confirmation; direct payment to vendor"
-      ]
-    },
-    {
-      "scheme_code": "6-A",
-      "name": "Annual Grant for Engaging Office Staff (Divisional Office)",
+      "description": "Monetary incentive for top two Divisions based on multi-faceted performance parameters.",
       "scheme_type": "Annual_Grant",
       "eligible_bodies": [
         "Division"
       ],
-      "frequency": "Half_yearly",
-      "description": "Grant for engaging Divisional office staff — admin, cricketing, accounts.",
+      "categories": [
+        "Divisional Incentive"
+      ],
       "heads": [
         {
-          "code": "STAFF_CTC",
-          "label": "Staff CTC (office/cricketing/accounts)",
-          "unit": "per_year",
-          "rate_inr": 354500,
-          "rate_display": "Up to ₹3,54,500 p.a."
+          "code": "INCENTIVE_RANK1_DIVISION",
+          "label": "1st Rank Division",
+          "unit": "lump",
+          "rate_inr": 750000,
+          "rate_display": "₹7.50 Lacs"
         },
         {
-          "code": "OFFICE_EXP",
-          "label": "Other office expenses (stationery/printing/postage)",
-          "unit": "per_year",
-          "rate_inr": 44300,
-          "rate_display": "Up to ₹44,300 p.a."
+          "code": "INCENTIVE_RANK2_DIVISION",
+          "label": "2nd Rank Division",
+          "unit": "lump",
+          "rate_inr": 500000,
+          "rate_display": "₹5.00 Lacs"
         }
       ],
-      "required_documents": [
-        "Photocopy of monthly attendance register (with signatures & time)",
-        "Photocopy of bank statement highlighting staff cheque payments",
-        "Supportings for office expenses (Secretary-certified)",
-        "Copy of employment / assignment letter (scope, hours, leave, pay, joining date)"
-      ],
       "conditions": [
-        "Division must inform MPCA of individuals for Accounts+office and Cricket roles",
-        "Pay not less than minimum wages",
-        "In-built 5% p.a. escalation",
-        "Claim periodicity: Half-yearly (April & October)"
-      ]
+        "Based on cricket-oriented activities, player development, resource development efforts, administrative set-up, statutory compliances etc.",
+        "Parameters reviewed annually by CDC.",
+        "Divisions must submit supporting documents."
+      ],
+      "required_documents": [
+        "Documents supporting claim"
+      ],
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
-      "scheme_code": "6-B",
-      "name": "Subsidy for Ground Maintenance (Divisional CA)",
+      "scheme_code": "5-A",
+      "name": "Ground Maintenance Equipment to Districts / Divisions",
+      "description": "One-time allotment of ground equipment to Districts for grounds used for regular cricket activities.",
+      "scheme_type": "Infrastructure",
+      "eligible_bodies": [
+        "District",
+        "Division"
+      ],
+      "categories": [
+        "Infrastructure",
+        "Equipment Grant"
+      ],
+      "heads": [],
+      "conditions": [
+        "Application in MPCA format, submitted by District President & Hon. Secretary, backed by committee resolution.",
+        "One set of equipment per ground/pitch category (turf OR matting) per District.",
+        "Only equipment not already available is provided; miscellaneous items may be bought locally with prior MPCA approval and reimbursed against invoice.",
+        "Ownership remains with MPCA; equipment may be pulled back if utility is unsatisfactory.",
+        "Original cost of unrecoverable items is recoverable from amounts due to District within 3 years."
+      ],
+      "required_documents": [
+        "Application in MPCA specific format",
+        "District Committee resolution",
+        "Satisfactory report from Divisional Secretary & CDC nominee"
+      ],
+      "frequency": "One_time",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "5-B",
+      "name": "Computer & Peripherals for Divisional Office",
+      "description": "Reimbursement for computer and peripherals for Divisional offices.",
       "scheme_type": "Infrastructure",
       "eligible_bodies": [
         "Division"
       ],
-      "frequency": "Annual",
-      "description": "Subsidy for maintaining Divisional cricket grounds — curator staff, equipment, misc.",
-      "heads": [
-        {
-          "code": "CURATOR_BCCI",
-          "label": "Main ground curator (BCCI-Accredited ground)",
-          "unit": "per_year",
-          "rate_inr": 400000,
-          "rate_display": "₹4,00,000 / year"
-        },
-        {
-          "code": "CURATOR_OTHER",
-          "label": "Main ground curator (Other grounds)",
-          "unit": "per_year",
-          "rate_inr": 260000,
-          "rate_display": "₹2,60,000 / year"
-        },
-        {
-          "code": "SUPPORT_BCCI",
-          "label": "Additional support staff (BCCI-Accredited)",
-          "unit": "per_year",
-          "rate_inr": 490000,
-          "rate_display": "₹4,90,000 / year"
-        },
-        {
-          "code": "SUPPORT_OTHER",
-          "label": "Additional support staff (Other)",
-          "unit": "per_year",
-          "rate_inr": 245500,
-          "rate_display": "₹2,45,500 / year"
-        },
-        {
-          "code": "EQUIP_BCCI",
-          "label": "Ground equipment / maintenance (BCCI-Accredited)",
-          "unit": "per_year_lump",
-          "rate_inr": 282000,
-          "rate_display": "₹2,82,000 / year"
-        },
-        {
-          "code": "EQUIP_OTHER",
-          "label": "Ground equipment / maintenance (Other)",
-          "unit": "per_year_lump",
-          "rate_inr": 171500,
-          "rate_display": "₹1,71,500 / year"
-        }
+      "categories": [
+        "Office Equipment"
+      ],
+      "heads": [],
+      "conditions": [
+        "Applicable once in a span of 5–8 years.",
+        "Items reimbursed: All-in-One Desktop Computer (500 GB SSD, 8 GB RAM, i3 Processor, 20-22 inch screen), All-in-One Printer (Print/Copy/Scan), UPS (15-20 min backup).",
+        "Procure consolidated rates (quotation) from an established service provider.",
+        "Include charges for annual maintenance after warranty.",
+        "MPCA issues PO after confirmation; payment is direct to vendor after delivery and endorsement by Division's Secretary."
       ],
       "required_documents": [
-        "Photocopy of monthly attendance register",
-        "Photocopy of bank statement (staff cheque payments)",
-        "Supportings for expenses (Secretary-certified)",
-        "Copy of employment letter per engagement",
-        "Undertaking on continued ground use ≥3 years"
+        "Consolidated rates/quotation",
+        "Original invoice endorsed by Division Secretary"
+      ],
+      "frequency": "One_time",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "6-A",
+      "name": "Annual Grant for Engaging Office Staff (Divisional Office)",
+      "description": "Grant for engaging office and cricket staff in Divisional offices.",
+      "scheme_type": "Annual_Grant",
+      "eligible_bodies": [
+        "Division"
+      ],
+      "categories": [
+        "Staffing",
+        "Office Expenses"
+      ],
+      "heads": [
+        {
+          "code": "CTC_STAFF",
+          "label": "CTC for hiring services (office/cricket/accounts)",
+          "unit": "per_annum",
+          "rate_inr": 372320,
+          "rate_display": "Up to ₹3,72,320 p.a. (rounded off)"
+        },
+        {
+          "code": "OFFICE_EXPENSES",
+          "label": "Cost towards other office expenses (stationery etc.)",
+          "unit": "per_annum",
+          "rate_inr": 46540,
+          "rate_display": "Up to ₹46,540 p.a. (rounded off)"
+        },
+        {
+          "code": "ESCALATION",
+          "label": "In-built escalation",
+          "unit": "percent_per_annum",
+          "rate_inr": 5,
+          "rate_display": "5% per annum"
+        }
       ],
       "conditions": [
-        "Max 2 grounds per Division",
-        "Ground must be CDC-approved",
-        "Hon. Secretary must assure continued use for 3+ years",
-        "5% p.a. increment from FY 2025-26 (subject to performance)",
-        "Failure to provide ground: grant discontinued + previous 3 years recoverable"
-      ]
+        "Division must inform MPCA of individuals handling Accounts/office work and Cricket activities.",
+        "Covering letter mentioning qualifications of individuals.",
+        "Employment/assignment letter copy required, detailing scope of work, hours, leave, emoluments, joining date, probation.",
+        "Monetary consideration must not be less than minimum wages.",
+        "Claim periodicity: Half-yearly (April & October).",
+        "Payment to staff strictly by cheque; bank statement copy required."
+      ],
+      "required_documents": [
+        "Monthly attendance register (signed by staff & supervisor)",
+        "Photocopy of bank statement highlighting payments",
+        "Supportings for office expenses (certified by Secretary/office bearer)",
+        "Copy of employment/assignment letter"
+      ],
+      "frequency": "Half_yearly",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "6-B",
+      "name": "Subsidy for Ground Maintenance (Divisional Cricket Association)",
+      "description": "Subsidy for upkeep of cricket grounds managed by Divisional Cricket Associations.",
+      "scheme_type": "Annual_Grant",
+      "eligible_bodies": [
+        "Division"
+      ],
+      "categories": [
+        "Ground Maintenance",
+        "Infrastructure"
+      ],
+      "heads": [
+        {
+          "code": "MAINTENANCE_BCCI_GROUND_CURATOR_STAFF",
+          "label": "Main ground curator / staff (BCCI-Accredited Grounds)",
+          "unit": "per_annum",
+          "rate_inr": 425000,
+          "rate_display": "₹4,25,000 / year"
+        },
+        {
+          "code": "MAINTENANCE_BCCI_GROUND_ADDL_STAFF",
+          "label": "Additional support staff (BCCI-Accredited Grounds)",
+          "unit": "per_annum",
+          "rate_inr": 515000,
+          "rate_display": "₹5,15,000 / year"
+        },
+        {
+          "code": "MAINTENANCE_BCCI_GROUND_EQUIPMENT_SOIL",
+          "label": "Ground equipment / soil laying (BCCI-Accredited Grounds)",
+          "unit": "lump",
+          "rate_inr": 296500,
+          "rate_display": "₹2,96,500"
+        },
+        {
+          "code": "MAINTENANCE_OTHER_GROUND_CURATOR_STAFF",
+          "label": "Main ground curator / staff (Other Grounds)",
+          "unit": "per_annum",
+          "rate_inr": 275000,
+          "rate_display": "₹2,75,000 / year"
+        },
+        {
+          "code": "MAINTENANCE_OTHER_GROUND_ADDL_STAFF",
+          "label": "Additional support staff (Other Grounds)",
+          "unit": "per_annum",
+          "rate_inr": 258000,
+          "rate_display": "₹2,58,000 / year"
+        },
+        {
+          "code": "MAINTENANCE_OTHER_GROUND_EQUIPMENT_SOIL",
+          "label": "Ground equipment / soil laying (Other Grounds)",
+          "unit": "lump",
+          "rate_inr": 180000,
+          "rate_display": "₹1,80,000"
+        }
+      ],
+      "conditions": [
+        "Maximum 2 grounds per Division covered.",
+        "Division must provide assurance of continued use for Divisional/BCCI matches for min. 3 years.",
+        "Ground must be approved by the CDC.",
+        "If ground not provided for MPCA purposes, grant discontinued & previous 3 years' grant recoverable.",
+        "5% annual increment subject to satisfactory performance (w.e.f. FY 2025-26).",
+        "Payment to staff strictly by cheque; bank statement copy required.",
+        "Claim documentation includes attendance, employment letters, and expense supportings."
+      ],
+      "required_documents": [
+        "List of grounds regularly used for Divisional/BCCI matches",
+        "Written assurance for min. 3 years use",
+        "Photocopy of monthly attendance register",
+        "Photocopy of bank statement highlighting payments to staff",
+        "Supportings for expenses",
+        "Copy of employment/assignment letter for staff"
+      ],
+      "frequency": "Annual",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
       "scheme_code": "7-A",
-      "name": "Monthly Benevolence Contribution Scheme",
+      "name": "Monthly Benevolence Contribution Scheme (Men)",
+      "description": "Monthly financial assistance for former First-Class cricketers and Umpires from MP not covered by similar BCCI/State schemes.",
       "scheme_type": "Welfare",
       "eligible_bodies": [
-        "All"
+        "Player",
+        "Umpire"
       ],
-      "frequency": "Monthly",
-      "description": "Monthly financial assistance for former first-class cricketers and State/BCCI Panel umpires from MP/Holkar not covered by BCCI/state schemes.",
+      "categories": [
+        "Benevolence",
+        "Welfare"
+      ],
       "heads": [
         {
-          "code": "PLAYER_75PLUS",
-          "label": "Players 75+ years",
+          "code": "MBC_PLAYER_15_24_MATCHES",
+          "label": "Players — 15 – 24 matches played",
           "unit": "per_month",
-          "rate_inr": 15000,
-          "rate_display": "₹15,000 / month"
+          "rate_inr": 12500,
+          "rate_display": "₹12,500 / month"
         },
         {
-          "code": "PLAYER_15_24",
-          "label": "Players (15-24 FC matches)",
+          "code": "MBC_PLAYER_5_14_MATCHES",
+          "label": "Players — 5 – 14 matches played",
           "unit": "per_month",
           "rate_inr": 10000,
           "rate_display": "₹10,000 / month"
         },
         {
-          "code": "PLAYER_5_14",
-          "label": "Players (5-14 FC matches)",
+          "code": "MBC_PLAYER_UP_TO_4_MATCHES",
+          "label": "Players — up to 4 matches played",
+          "unit": "per_month",
+          "rate_inr": 7000,
+          "rate_display": "₹7,000 / month"
+        },
+        {
+          "code": "MBC_UMPIRE_BCCI_NOT_COVERED",
+          "label": "Umpires — BCCI Panel (not covered by BCCI scheme)",
+          "unit": "per_month",
+          "rate_inr": 10000,
+          "rate_display": "₹10,000 / month"
+        },
+        {
+          "code": "MBC_UMPIRE_STATE_PANEL",
+          "label": "Umpires — State Panel",
+          "unit": "per_month",
+          "rate_inr": 6500,
+          "rate_display": "₹6,500 / month"
+        },
+        {
+          "code": "MBC_AGE_INCREMENT",
+          "label": "75-year increment",
           "unit": "per_month",
           "rate_inr": 7500,
-          "rate_display": "₹7,500 / month"
-        },
-        {
-          "code": "PLAYER_UPTO_4",
-          "label": "Players (up to 4 FC matches)",
-          "unit": "per_month",
-          "rate_inr": 5000,
-          "rate_display": "₹5,000 / month"
-        },
-        {
-          "code": "BCCI_UMPIRE",
-          "label": "BCCI Panel umpires (not covered by BCCI)",
-          "unit": "per_month",
-          "rate_inr": 7500,
-          "rate_display": "₹7,500 / month"
-        },
-        {
-          "code": "STATE_UMPIRE",
-          "label": "State Panel umpires",
-          "unit": "per_month",
-          "rate_inr": 5000,
-          "rate_display": "₹5,000 / month"
+          "rate_display": "+₹7,500 / month"
         }
       ],
-      "required_documents": [
-        "Age proof (60+ / 75+)",
-        "FC/State match record certificate",
-        "Retirement declaration",
-        "Declaration of no other scheme coverage",
-        "Bank account details for direct transfer"
-      ],
       "conditions": [
-        "Only for former first-class cricketers / state-panel / BCCI-panel umpires not covered by similar schemes",
-        "Beneficiary in ONE category only",
-        "Players: from Holkar/MP, retired FC, 40+ years (since Sep 2017)",
-        "Umpires: 55+ years age & retired",
-        "Not posthumous",
-        "Revised provisions w.e.f. 01.04.2025"
-      ]
+        "Applicable only to former first-class cricketers / State-panel or BCCI-panel umpires NOT covered by similar schemes.",
+        "Beneficiary entitled under only ONE category (player or umpire, whichever is higher).",
+        "Players must have played for Holkar/MP, retired from first-class cricket, and be 40+ years of age (since Sep 2017).",
+        "Umpires must have crossed 55 years of age and retired from umpiring.",
+        "Scheme ceases on the life of the beneficiary; not applicable posthumously.",
+        "Late-enrolment cut-off: No benefits prior to enrolment date (w.e.f. 01.01.2022).",
+        "Revised provisions w.e.f. 01.04.2025: Players with >24 FC matches NOT entitled. Players eligible after 50 years (or 60 if employed). International/IPL players eligible after 60 years.",
+        "Revised provisions w.e.f. 01.04.2025: Umpires inducted into State Panel after this date NOT eligible. Employed umpires eligible after 60 years.",
+        "Scheme reviewed annually and can be discontinued."
+      ],
+      "required_documents": [],
+      "frequency": "Monthly",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     },
     {
-      "scheme_code": "9-BCCI",
-      "name": "BCCI Tournament — Hosting + Participation",
-      "scheme_type": "Reimbursement",
+      "scheme_code": "9-1",
+      "name": "Hosting Fees & Participation Subsidy (BCCI)",
+      "description": "Fees paid by BCCI to Host Associations and subsidy paid to visiting teams' State Associations.",
+      "scheme_type": "Revenue_Share",
       "eligible_bodies": [
-        "All"
+        "Division"
       ],
-      "frequency": "Per_BCCI_tournament",
-      "description": "BCCI hosting fees and participation subsidies for domestic tournaments.",
+      "categories": [
+        "BCCI Guidelines",
+        "Hosting Fee",
+        "Participation Subsidy"
+      ],
       "heads": [
         {
-          "code": "HOST_MULTIDAY",
-          "label": "Hosting fee — Multi-day RED-ball",
+          "code": "HOSTING_FEE_MULTI_DAY_RED_BALL",
+          "label": "Hosting Fee — All multi-day RED-ball tournaments",
           "unit": "per_match_day",
           "rate_inr": 175000,
-          "rate_display": "₹1.75 L / match-day"
+          "rate_display": "₹1.75 Lakhs / match-day"
         },
         {
-          "code": "HOST_LTDOVERS",
-          "label": "Hosting fee — Ltd-overs WHITE-ball",
+          "code": "HOSTING_FEE_LIMITED_OVERS_WHITE_BALL",
+          "label": "Hosting Fee — Limited-overs WHITE-ball tournaments (50 overs & T20)",
           "unit": "per_match",
           "rate_inr": 350000,
-          "rate_display": "₹3.50 L / match"
+          "rate_display": "₹3.50 Lakhs / match"
         },
         {
-          "code": "HOST_LIGHTS",
-          "label": "Hosting fee — Ltd-overs UNDER LIGHTS",
+          "code": "HOSTING_FEE_LIMITED_OVERS_UNDER_LIGHTS",
+          "label": "Hosting Fee — Limited-overs WHITE-ball tournaments UNDER LIGHTS",
           "unit": "per_match",
           "rate_inr": 450000,
-          "rate_display": "₹4.50 L / match"
+          "rate_display": "₹4.50 Lakhs / match"
         },
         {
-          "code": "PART_MULTIDAY",
-          "label": "Participation subsidy — Multi-day",
+          "code": "PARTICIPATION_SUBSIDY_MULTI_DAY_RED_BALL",
+          "label": "Participation Subsidy — All multi-day RED-ball tournaments",
           "unit": "per_match",
           "rate_inr": 125000,
-          "rate_display": "₹1.25 L / match"
+          "rate_display": "₹1.25 Lakhs / match"
         },
         {
-          "code": "PART_LTDOVERS",
-          "label": "Participation subsidy — Ltd-overs",
+          "code": "PARTICIPATION_SUBSIDY_LIMITED_OVERS_WHITE_BALL",
+          "label": "Participation Subsidy — All limited-overs WHITE-ball tournaments",
           "unit": "per_match",
           "rate_inr": 75000,
-          "rate_display": "₹0.75 L / match"
+          "rate_display": "₹0.75 Lakhs / match"
         }
       ],
-      "required_documents": [
-        "BCCI staging compliance certificate",
-        "Match reports",
-        "Ground infrastructure verification"
+      "conditions": [
+        "Hosting fees paid by BCCI to Host.",
+        "Participation subsidy paid by BCCI to visiting team's State Association.",
+        "Host Association arranges local security at all match AND practice venues.",
+        "Host provides at least 2 practice sessions of 3 hours each per team.",
+        "Match balls are arranged & sent by BCCI.",
+        "BCCI provides Winner/Runner-up medals.",
+        "State teams must use State-Association-provided clothing with NAME & NUMBER."
+      ],
+      "required_documents": [],
+      "frequency": "Per_match",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "9-2",
+      "name": "Match Operations — Security, Reporting, Squad & Match Conditions (BCCI)",
+      "description": "BCCI guidelines on match operations, including security, practice, squad size, and match conditions.",
+      "scheme_type": "Other",
+      "eligible_bodies": [
+        "Division"
+      ],
+      "categories": [
+        "BCCI Guidelines",
+        "Operations"
+      ],
+      "heads": [
+        {
+          "code": "PRACTICE_SESSIONS",
+          "label": "Practice Sessions per team",
+          "unit": "per_team",
+          "rate_inr": 2,
+          "rate_display": ">= 2 sessions of 3 hours each"
+        },
+        {
+          "code": "SQUAD_SIZE_MAX_MEMBERS",
+          "label": "Squad Size (Max Members)",
+          "unit": "per_squad",
+          "rate_inr": 25,
+          "rate_display": "Up to 25 members per squad"
+        },
+        {
+          "code": "SQUAD_SIZE_MAX_PLAYERS",
+          "label": "Squad Size (Max Players in Dressing Room)",
+          "unit": "per_team",
+          "rate_inr": 15,
+          "rate_display": "Not more than 15 players"
+        },
+        {
+          "code": "MATCH_FEE_ELIGIBILITY_PLAYING_XI",
+          "label": "Match Fee Eligibility — Playing XI",
+          "unit": "percent",
+          "rate_inr": 100,
+          "rate_display": "100% match fee"
+        },
+        {
+          "code": "MATCH_FEE_ELIGIBILITY_NON_PLAYING",
+          "label": "Match Fee Eligibility — Remaining 4 (non-Playing XI)",
+          "unit": "percent",
+          "rate_inr": 50,
+          "rate_display": "50% match fee"
+        }
       ],
       "conditions": [
-        "Must comply with all BCCI staging guidelines",
-        "Match balls provided by BCCI",
-        "Winner/Runner-up medals by BCCI",
-        "Host bears catering/security/transport from hosting fees"
-      ]
+        "Security personnel at all match AND practice venues.",
+        "At least 2 practice sessions of 3 hours each per team.",
+        "Max 15 players + 10 support staff per squad.",
+        "Playing XI gets 100% match fee; remaining 4 players get 50%.",
+        "Team India cricketer deputed by BCCI eligible for match fee above 15-player limit.",
+        "Match Playing Conditions covered in a separate BCCI document.",
+        "Host MUST provide at least one practice session under lights for relevant tournaments.",
+        "BCCI provides Winner/Runner-up medals.",
+        "All State teams must wear State-Association-provided clothing with NAME & NUMBER."
+      ],
+      "required_documents": [],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "9-3",
+      "name": "Match Balls Specifications (BCCI)",
+      "description": "Specifications for match balls used in BCCI Domestic Tournaments.",
+      "scheme_type": "Other",
+      "eligible_bodies": [
+        "Division"
+      ],
+      "categories": [
+        "BCCI Guidelines",
+        "Match Equipment"
+      ],
+      "heads": [],
+      "conditions": [
+        "Match balls are arranged & sent by BCCI to all Host Associations.",
+        "Host does not procure balls.",
+        "Specific ball types (SG Test LE Red/White, Kookaburra Turf White) mandated for different men's & women's tournaments."
+      ],
+      "required_documents": [],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "9-4",
+      "name": "Venue Infrastructure Requirements (BCCI)",
+      "description": "Mandatory infrastructure requirements for venues staging BCCI tournaments.",
+      "scheme_type": "Infrastructure",
+      "eligible_bodies": [
+        "Division"
+      ],
+      "categories": [
+        "BCCI Guidelines",
+        "Infrastructure"
+      ],
+      "heads": [
+        {
+          "code": "DRESSING_ROOM_SIZE",
+          "label": "Dressing Room Size",
+          "unit": "sq_ft",
+          "rate_inr": 2000,
+          "rate_display": "~2,000 sq ft"
+        },
+        {
+          "code": "DRESSING_ROOM_SEATING",
+          "label": "Dressing Room Seating",
+          "unit": "pax",
+          "rate_inr": 20,
+          "rate_display": "Space for minimum 20 pax"
+        },
+        {
+          "code": "PHYSIO_TABLES",
+          "label": "Physiotherapy / Massage Tables",
+          "unit": "per_team",
+          "rate_inr": 2,
+          "rate_display": "At least 2 tables for visiting teams"
+        }
+      ],
+      "conditions": [
+        "Camera structure must be stable and firm (Front-fix 30ft, Side-camera 12ft).",
+        "One 500 kg AND one 750 kg roller per ground.",
+        "Ground covers for main square AND bowling run-ups both ends.",
+        "One Super Sopper per ground.",
+        "Sight screen minimum dimensions: 20 × 60 ft.",
+        "Dressing rooms must have attached toilets & showers, space for kit bags.",
+        "Sufficient ice supplied by Host for ice baths.",
+        "Separate Men's & Women's washrooms within PMOA for women's matches.",
+        "Dedicated buffet-dining area within PMOA.",
+        "Anti-doping room must have attached toilet and be available on all match & practice days.",
+        "NADA officials collect samples; testing plan is confidential."
+      ],
+      "required_documents": [],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "9-5",
+      "name": "Visiting Team Hospitality & Logistics (BCCI)",
+      "description": "BCCI guidelines on hotel accommodation, medical, transport, catering, and TLO for visiting teams.",
+      "scheme_type": "Other",
+      "eligible_bodies": [
+        "Division"
+      ],
+      "categories": [
+        "BCCI Guidelines",
+        "Hospitality",
+        "Logistics"
+      ],
+      "heads": [],
+      "conditions": [
+        "Host Association helps teams book hotels of their choice.",
+        "Host may tentatively block rooms for knock-out stages.",
+        "Match Officials' hotel invoices borne by BCCI; Team members' by State Association.",
+        "Doctor on site, ambulance with 2+ paramedics, and tie-up with nearest hospital (green corridor) mandatory on all match & practice days.",
+        "Host makes ALL transport arrangements: 45-seater luxury coach, baggage van, team manager Innova, officials Innova.",
+        "Catering includes buffet meals, tea/coffee, fruits; food boxes for ground staff; sufficient bottled water.",
+        "Dedicated TLO per team coordinates arrival/departure, accreditation, ground transfers, catering.",
+        "Separate Liaison Officer for match officials."
+      ],
+      "required_documents": [],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
+    },
+    {
+      "scheme_code": "9-6",
+      "name": "Accreditation, Anti-Corruption, Media & General (BCCI)",
+      "description": "BCCI guidelines on accreditation, anti-corruption measures, media access, and general notes.",
+      "scheme_type": "Other",
+      "eligible_bodies": [
+        "Division"
+      ],
+      "categories": [
+        "BCCI Guidelines",
+        "Accreditation",
+        "Anti-Corruption",
+        "Media"
+      ],
+      "heads": [
+        {
+          "code": "PMOA_ACCREDITATION_PLAYERS",
+          "label": "PMOA Accreditation Limit — Players",
+          "unit": "per_team",
+          "rate_inr": 15,
+          "rate_display": "No more than 15 players"
+        },
+        {
+          "code": "PMOA_ACCREDITATION_SUPPORT_STAFF",
+          "label": "PMOA Accreditation Limit — Support Staff",
+          "unit": "per_team",
+          "rate_inr": 10,
+          "rate_display": "Max 10 support staff"
+        }
+      ],
+      "conditions": [
+        "Participating teams prepare accreditation cards.",
+        "Host Association prepares signage per anti-corruption guidelines, including headshot boards.",
+        "BCCI Anti-Corruption Officials provide guidance.",
+        "Media allowed only in dedicated Media Enclosure.",
+        "Selectors not part of squad stay in team hotel at State Association's expense; Host provides separate seating.",
+        "Basic hygiene & sanitisation of dressing rooms and common areas to be maintained.",
+        "One ACLO (Anti-Corruption Liaison Officer) appointed by Host per venue.",
+        "BCCI reserves the right to amend guidelines at any time."
+      ],
+      "required_documents": [],
+      "frequency": "Per_tournament",
+      "fiscal_cycle": "2026-27",
+      "is_active": true
     }
   ]
 }

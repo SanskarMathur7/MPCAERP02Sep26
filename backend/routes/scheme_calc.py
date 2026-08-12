@@ -97,9 +97,10 @@ def _compute_2A(inp: dict, heads_ref: dict) -> List[dict]:
     umpires = float(inp.get("umpires_per_day", 2))
     scorers = float(inp.get("scorers_per_day", 1))
     matches = float(inp.get("matches", 12))
+    # 2026-27 rates (fallback if DB head keys don't match): Per-day grant ₹5,000; Umpire ₹1,000; Scorer ₹750
     per_day = float(heads_ref.get("PER_DAY_GRANT", 5000))
-    ump_rate = float(heads_ref.get("UMPIRE_FEES", 700))
-    sc_rate = float(heads_ref.get("SCORER_FEES", 500))
+    ump_rate = float(heads_ref.get("UMPIRE_FEES", 1000))
+    sc_rate = float(heads_ref.get("SCORER_FEES", 750))
     rows = [
         {"head": "Per-day grant (balls/ground/trophies)", "limit_inr": per_day * days, "formula": f"₹{per_day:,.0f} × {days:g} days"},
         {"head": "Umpire fees", "limit_inr": ump_rate * umpires * days, "formula": f"₹{ump_rate:,.0f} × {umpires:g} × {days:g}"},
@@ -132,8 +133,8 @@ def _compute_2B(inp: dict, heads: dict) -> List[dict]:
     food_rate = float(heads.get("FOOD_MATCH", 350))
     dinner_rate = float(heads.get("DINNER", 150))
     misc_rate = float(heads.get("MISC", 3600 if outstation_teams == "1" else 4200))
-    ump_rate = float(heads.get("UMPIRE_FEES", 700))
-    sc_rate = float(heads.get("SCORER_FEES", 500))
+    ump_rate = float(heads.get("UMPIRE_FEES", 1000))
+    sc_rate = float(heads.get("SCORER_FEES", 750))
     mom_rate = float(heads.get("MOM", 1500))
     team_travel = float(heads.get("TEAM_TRAVEL", 5000))
     prize1 = float(heads.get("PRIZE_1", 30000))
@@ -199,9 +200,9 @@ def _compute_2D(inp: dict, heads: dict) -> List[dict]:
     accom = float(heads.get("ACCOM_VISITING", 1800))
     gr = float(heads.get("GROUND_RENT", 4500))
     daybefore = float(heads.get("FOOD_DAYBEFORE", 630))
-    coach = float(heads.get("COACH_HON_MATCH", 1500))
+    coach = float(heads.get("COACH_HON_MATCH", 2000))
     trainer = float(heads.get("TRAINER_HON_MATCH", 1000))
-    manager = float(heads.get("MANAGER_HON", 1000))
+    manager = float(heads.get("MANAGER_HON", 1250))
     mom_m = float(heads.get("MOM_MULTIDAY", 5000))
     mom_l = 2500
     rooms_total = rv + rh + ro

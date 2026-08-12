@@ -42,6 +42,7 @@ const TournamentFinanceConsole = () => {
     const [busy, setBusy] = useState(false);
     const [tournament, setTournament] = useState(null);
     const [schemeSpec, setSchemeSpec] = useState(null);
+    const [visitorSchemeSpec, setVisitorSchemeSpec] = useState(null);
     const [ivDraft, setIvDraft] = useState({});
     const [poolIvDrafts, setPoolIvDrafts] = useState({});        // M39s · per-pool IV overrides
     const [activePoolTab, setActivePoolTab] = useState(null);    // M39s · currently editing pool
@@ -107,9 +108,19 @@ const TournamentFinanceConsole = () => {
             setActivePoolTab(firstPoolId || null);
             if (tRes.data?.scheme_code) {
                 try {
-                    const { data: spec } = await api.get(`/schemes/${tRes.data.scheme_code}/input-spec`);
+                    const hostCode = tRes.data.host_scheme_code || tRes.data.scheme_code;
+                    const { data: spec } = await api.get(`/schemes/${hostCode}/input-spec`);
                     setSchemeSpec(spec);
                 } catch { /* scheme without a backend spec is OK */ }
+            }
+            // MPCA-Feb2026 · Load the visiting scheme spec too when the
+            // tournament uses two schemes (Inter-Div: host 2-D + visiting 2-C).
+            if (tRes.data?.visiting_scheme_code
+                && tRes.data.visiting_scheme_code !== (tRes.data.host_scheme_code || tRes.data.scheme_code)) {
+                try {
+                    const { data: vSpec } = await api.get(`/schemes/${tRes.data.visiting_scheme_code}/input-spec`);
+                    setVisitorSchemeSpec(vSpec);
+                } catch { /* no-op */ }
             }
         } catch (e) {
             // M39z.e · graceful access-denied card instead of blank/dev-overlay
@@ -125,18 +136,39 @@ const TournamentFinanceConsole = () => {
 
     // Live compute preview whenever IV draft changes (MPCA-only prep step)
     // In multi-pool tournaments, preview reflects the currently-selected pool tab.
+    // MPCA-Feb2026 · When the tournament has `visiting_scheme_code` (Inter-
+    // Divisional / Inter-District), compute TWO previews — one for the host
+    // scheme, one for the visitor scheme — and stash both. Falls back to a
+    // single preview + legacy keyword split for older tournaments.
     useEffect(() => {
         if (!isMPCA || !tournament?.scheme_code) return;
         const ivsToUse = activePoolTab ? (poolIvDrafts[activePoolTab] || ivDraft) : ivDraft;
         if (!ivsToUse || Object.keys(ivsToUse).length === 0) return;
         const t = setTimeout(async () => {
             try {
-                const { data } = await api.post(`/schemes/${tournament.scheme_code}/compute-budget`, { inputs: ivsToUse });
-                setPreview(data);
+                const hostCode = tournament.host_scheme_code || tournament.scheme_code;
+                const visitCode = tournament.visiting_scheme_code;
+                const fc = tournament.fiscal_cycle;
+                const params = fc ? { fiscal_cycle: fc } : {};
+                if (visitCode && visitCode !== hostCode) {
+                    const [hostRes, visRes] = await Promise.all([
+                        api.post(`/schemes/${hostCode}/compute-budget`, { inputs: ivsToUse }, { params }),
+                        api.post(`/schemes/${visitCode}/compute-budget`, { inputs: ivsToUse }, { params }),
+                    ]);
+                    setPreview({
+                        host_preview: hostRes.data,
+                        visitor_preview: visRes.data,
+                        head_allocations: hostRes.data.head_allocations,  // legacy fallback
+                        total_ceiling_inr: hostRes.data.total_ceiling_inr,
+                    });
+                } else {
+                    const { data } = await api.post(`/schemes/${tournament.scheme_code}/compute-budget`, { inputs: ivsToUse }, { params });
+                    setPreview(data);
+                }
             } catch { setPreview(null); }
         }, 400);
         return () => clearTimeout(t);
-    }, [ivDraft, poolIvDrafts, activePoolTab, tournament?.scheme_code, isMPCA]);
+    }, [ivDraft, poolIvDrafts, activePoolTab, tournament?.scheme_code, tournament?.host_scheme_code, tournament?.visiting_scheme_code, isMPCA]);
 
     if (loading) return <CricketLoader label="Loading finance console…" />;
     if (accessDenied) return (
@@ -301,6 +333,7 @@ const TournamentFinanceConsole = () => {
                 <PreparePanel
                     tournament={tournament}
                     schemeSpec={schemeSpec}
+                    visitorSchemeSpec={visitorSchemeSpec}
                     ivDraft={ivDraft}
                     setIvDraft={setIvDraft}
                     poolIvDrafts={poolIvDrafts}
@@ -554,18 +587,28 @@ const TournamentFinanceConsole = () => {
 
 // ─────────────────── Prepare Panel (MPCA) ───────────────────
 
-const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, poolIvDrafts, setPoolIvDrafts, activePoolTab, setActivePoolTab, pools, isMultiPool, preview, hostCount, visitorCount, rows, perBodyOverrides, setPerBodyOverrides, showOverrides, setShowOverrides, onPrepare, busy }) => {
+const PreparePanel = ({ tournament, schemeSpec, visitorSchemeSpec, ivDraft, setIvDraft, poolIvDrafts, setPoolIvDrafts, activePoolTab, setActivePoolTab, pools, isMultiPool, preview, hostCount, visitorCount, rows, perBodyOverrides, setPerBodyOverrides, showOverrides, setShowOverrides, onPrepare, busy }) => {
     const inputVars = schemeSpec?.input_variables || [];
+    const visitorInputVars = visitorSchemeSpec?.input_variables || [];
 
-    // Split preview heads into host-flavour vs visitor-flavour (mirrors backend)
-    const VISITOR_KEYWORDS = ["travel", "da", "ta", "food", "stay", "hotel", "lodging", "boarding", "meal", "conveyance", "transport", "contingency"];
-    const isVisitorHead = (label) => {
-        const l = ` ${(label || "").toLowerCase()} `;
-        return VISITOR_KEYWORDS.some((k) => l.includes(k));
-    };
+    // MPCA-Feb2026 · Prefer server-computed dual previews (host_preview /
+    // visitor_preview). For legacy single-scheme tournaments (Inter-School,
+    // Inter-Club, camps, BCCI) we fall back to the keyword split.
+    let hostHeads, visitorHeads;
+    if (preview?.host_preview && preview?.visitor_preview) {
+        hostHeads = preview.host_preview.head_allocations || [];
+        visitorHeads = preview.visitor_preview.head_allocations || [];
+    } else {
+        const VISITOR_KEYWORDS = ["travel", "da", "ta", "food", "stay", "hotel", "lodging", "boarding", "meal", "conveyance", "transport", "contingency"];
+        const isVisitorHead = (label) => {
+            const l = ` ${(label || "").toLowerCase()} `;
+            return VISITOR_KEYWORDS.some((k) => l.includes(k));
+        };
+        const heads = preview?.head_allocations || [];
+        hostHeads = heads.filter((h) => !isVisitorHead(h.head));
+        visitorHeads = heads.filter((h) => isVisitorHead(h.head));
+    }
     const heads = preview?.head_allocations || [];
-    const hostHeads = heads.filter((h) => !isVisitorHead(h.head));
-    const visitorHeads = heads.filter((h) => isVisitorHead(h.head));
     const hostTotal = hostHeads.reduce((s, h) => s + (h.limit_inr || 0), 0);
     const visitorTotal = visitorHeads.reduce((s, h) => s + (h.limit_inr || 0), 0);
 
@@ -660,8 +703,13 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, poolIvDraft
 
             {/* IV editor for active pool (or global) */}
             <div className="mt-5">
-                <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-2">
-                    Input Variables
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-2 flex items-center gap-2">
+                    <span>Input Variables</span>
+                    {schemeSpec?.scheme_code && (
+                        <span className="font-mono text-[9px] bg-mpca-brass/15 text-mpca-oxblood px-1.5 py-0.5 rounded normal-case tracking-normal" data-testid="fc-host-iv-badge">
+                            Host · {schemeSpec.scheme_code}
+                        </span>
+                    )}
                     {isMultiPool && currentPool && (
                         <span className="ml-2 text-mpca-navy">· {currentPool.pool_name}</span>
                     )}
@@ -686,15 +734,57 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, poolIvDraft
                         ))}
                     </div>
                 )}
+                {/* MPCA-Feb2026 · Visitor scheme input variables — shown only
+                    when the tournament uses two schemes (Inter-Div: 2-D host
+                    + 2-C visiting, Inter-District: 2-B + 2-C). */}
+                {visitorInputVars.length > 0 && (
+                    <div className="mt-5 pt-4 border-t border-mpca-brass/30">
+                        <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-oxblood mb-2 flex items-center gap-2">
+                            <span>Visitor Input Variables</span>
+                            {visitorSchemeSpec?.scheme_code && (
+                                <span className="font-mono text-[9px] bg-mpca-oxblood/15 text-mpca-oxblood px-1.5 py-0.5 rounded normal-case tracking-normal" data-testid="fc-visitor-iv-badge">
+                                    Visitor · {visitorSchemeSpec.scheme_code}
+                                </span>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {visitorInputVars.map((v) => (
+                                <label key={`vis-${v.key || v.name}`} className="block">
+                                    <div className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood mb-1">
+                                        {v.label || v.key || v.name}{v.unit && <span className="text-mpca-gray-dark ml-1">({v.unit})</span>}
+                                    </div>
+                                    <input
+                                        type={typeof v.default === "string" ? "text" : "number"}
+                                        value={activePoolIvs[v.key || v.name] ?? v.default ?? 0}
+                                        onChange={(e) => {
+                                            const raw = e.target.value;
+                                            const val = typeof v.default === "string" ? raw : (parseFloat(raw) || 0);
+                                            setActivePoolIv(v.key || v.name, val);
+                                        }}
+                                        className="input-heritage !py-1.5 !text-xs"
+                                        data-testid={`fc-iv-${v.key || v.name}`}
+                                    />
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Two-panel preview: Host vs Visitors */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <BudgetPreviewPanel
                     title={isMultiPool && currentPool ? `Host Budget · ${currentPool.pool_name}` : "Host Budget"}
-                    subtitle={isMultiPool && currentPool
-                        ? `Host: ${currentPool.host_body_name || currentPool.host_body_code || "TBD"}`
-                        : `${hostCount} host body`}
+                    subtitle={<>
+                        {isMultiPool && currentPool
+                            ? `Host: ${currentPool.host_body_name || currentPool.host_body_code || "TBD"}`
+                            : `${hostCount} host body`}
+                        {preview?.host_preview?.scheme_code && (
+                            <span className="ml-2 font-mono text-[10px] uppercase bg-mpca-brass/15 text-mpca-oxblood px-1.5 py-0.5 rounded" data-testid="fc-host-scheme-badge">
+                                {preview.host_preview.scheme_code} · {preview.host_preview.scheme_name}
+                            </span>
+                        )}
+                    </>}
                     icon={Building2}
                     heads={hostHeads}
                     total={hostTotal}
@@ -702,9 +792,16 @@ const PreparePanel = ({ tournament, schemeSpec, ivDraft, setIvDraft, poolIvDraft
                 />
                 <BudgetPreviewPanel
                     title={isMultiPool && currentPool ? `Visitor Budget · ${currentPool.pool_name}` : "Visitor Budget (per body)"}
-                    subtitle={isMultiPool && currentPool
-                        ? `× ${Math.max(0, currentPool.member_count - 1)} visitors in this pool`
-                        : `× ${visitorCount} visiting bodies`}
+                    subtitle={<>
+                        {isMultiPool && currentPool
+                            ? `× ${Math.max(0, currentPool.member_count - 1)} visitors in this pool`
+                            : `× ${visitorCount} visiting bodies`}
+                        {preview?.visitor_preview?.scheme_code && (
+                            <span className="ml-2 font-mono text-[10px] uppercase bg-mpca-brass/15 text-mpca-oxblood px-1.5 py-0.5 rounded" data-testid="fc-visitor-scheme-badge">
+                                {preview.visitor_preview.scheme_code} · {preview.visitor_preview.scheme_name}
+                            </span>
+                        )}
+                    </>}
                     icon={Users}
                     heads={visitorHeads}
                     total={visitorTotal}

@@ -259,30 +259,42 @@ async def patch_tournament(tid: str, patch: dict):
 # the scheme-mapping-correction sprint. Any non-UI caller that omits
 # scheme_code still gets the right default now.
 def _auto_scheme_for(tournament_type, scope, type_code):
+    """M39w / MPCA-Feb2026 · Returns (main_scheme, host_scheme, visiting_scheme).
+
+    For tournaments where visiting bodies claim under a DIFFERENT scheme from
+    the host (Inter-Divisional & Inter-District), we return both codes:
+
+      • Inter-Divisional  → host: 2-D (hosting)   / visiting: 2-C (travel)
+      • Inter-District    → host: 2-B (hosting)   / visiting: 2-C (travel)
+
+    For single-scheme tournaments (Inter-School, Inter-Club, camps, etc.)
+    the same scheme applies to everyone → host & visiting return `None`
+    (callers keep the single `scheme_code`).
+    """
     tc = (type_code or "").lower()
     sc = (scope or "")
     tt = (tournament_type or "")
     if tt == "BCCI" or tc.startswith("bcci") or tc == "away_participation":
-        return "9-BCCI"
+        return "9-BCCI", None, None
     if sc == "Inter_District" or tc == "inter_district":
-        return "2-B"
+        return "2-B", "2-B", "2-C"
     if tc == "inter_div_travel":
-        return "2-C"
+        return "2-C", None, None
     if sc == "Inter_Divisional" or tc == "inter_div":
-        return "2-D"
+        return "2-D", "2-D", "2-C"
     if tc == "inter_school":
-        return "2-A"
+        return "2-A", None, None
     if tc == "inter_club":
-        return "2-E"
+        return "2-E", None, None
     if tc == "reciprocal":
-        return "3-C"
+        return "3-C", None, None
     if tc == "coaching_camp":
-        return "3-A"
+        return "3-A", None, None
     if tc == "vacation_camp":
-        return "3-B"
+        return "3-B", None, None
     if tc == "pre_camp":
-        return "3-D"
-    return None
+        return "3-D", None, None
+    return None, None, None
 
 
 @api_router.post("/tournaments", response_model=Tournament)
@@ -309,10 +321,27 @@ async def create_tournament(payload: TournamentCreate):
     # M39w · Auto-map scheme_code from tournament type + scope when caller
     # didn't set one — fixes the "Inter-Divisional tournament picked
     # Inter-District scheme" bug.
+    # M39w / MPCA-Feb2026 · Auto-map scheme_code + host/visiting split
+    # (Inter-Div uses 2-D host + 2-C visiting; Inter-District 2-B + 2-C).
     if not data.get("scheme_code"):
-        data["scheme_code"] = _auto_scheme_for(
+        main, host_s, vis_s = _auto_scheme_for(
             data.get("tournament_type"), data.get("scope"), data.get("tournament_type_code"),
         )
+        data["scheme_code"] = main
+        if not data.get("host_scheme_code") and host_s:
+            data["host_scheme_code"] = host_s
+        if not data.get("visiting_scheme_code") and vis_s:
+            data["visiting_scheme_code"] = vis_s
+    else:
+        # Caller supplied scheme_code but may not have set host/visiting split.
+        # Only backfill when the two are still empty.
+        _, host_s, vis_s = _auto_scheme_for(
+            data.get("tournament_type"), data.get("scope"), data.get("tournament_type_code"),
+        )
+        if not data.get("host_scheme_code") and host_s:
+            data["host_scheme_code"] = host_s
+        if not data.get("visiting_scheme_code") and vis_s:
+            data["visiting_scheme_code"] = vis_s
     if payload.venue_id:
         v = await db.venues.find_one({"id": payload.venue_id}, {"_id": 0})
         if not v:

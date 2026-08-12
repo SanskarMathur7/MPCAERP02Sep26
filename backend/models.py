@@ -2084,7 +2084,8 @@ class ReimbursementScheme(BaseModel):
     required_documents: List[str] = []            # docs to submit for claim
     frequency: str = "Annual"                     # "Annual" | "One_time" | "Per_tournament" | "Half_yearly" | "Monthly"
     is_active: bool = True
-    fiscal_cycle: str = "2025-26"
+    fiscal_cycle: str = "2026-27"
+    revision_history: List[dict] = []              # [{version, changed_at, changed_by, note, changed_fields}]
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 

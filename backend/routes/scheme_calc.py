@@ -255,13 +255,18 @@ class ComputeRequest(BaseModel):
 
 
 @api_router.get("/schemes/{scheme_code}/input-spec")
-async def get_input_spec(scheme_code: str):
-    scheme = await db.reimbursement_schemes.find_one({"scheme_code": scheme_code}, {"_id": 0})
+async def get_input_spec(scheme_code: str, fiscal_cycle: Optional[str] = None):
+    from routes.reimbursement_schemes import CURRENT_FISCAL_CYCLE
+    fc = fiscal_cycle or CURRENT_FISCAL_CYCLE
+    scheme = await db.reimbursement_schemes.find_one(
+        {"scheme_code": scheme_code, "fiscal_cycle": fc}, {"_id": 0}
+    )
     if not scheme:
-        raise HTTPException(404, "Scheme not found")
+        raise HTTPException(404, f"Scheme {scheme_code} not found for {fc}")
     vars_ = INPUT_SPECS.get(scheme_code, [])
     return {
         "scheme_code": scheme_code, "scheme_name": scheme["name"],
+        "fiscal_cycle": fc,
         "computable": scheme_code in COMPUTE_FN,
         "input_variables": [v.model_dump() for v in vars_],
         "conditions": scheme.get("conditions", []),
@@ -269,10 +274,14 @@ async def get_input_spec(scheme_code: str):
 
 
 @api_router.post("/schemes/{scheme_code}/compute-budget")
-async def compute_budget(scheme_code: str, req: ComputeRequest):
-    scheme = await db.reimbursement_schemes.find_one({"scheme_code": scheme_code}, {"_id": 0})
+async def compute_budget(scheme_code: str, req: ComputeRequest, fiscal_cycle: Optional[str] = None):
+    from routes.reimbursement_schemes import CURRENT_FISCAL_CYCLE
+    fc = fiscal_cycle or CURRENT_FISCAL_CYCLE
+    scheme = await db.reimbursement_schemes.find_one(
+        {"scheme_code": scheme_code, "fiscal_cycle": fc}, {"_id": 0}
+    )
     if not scheme:
-        raise HTTPException(404, "Scheme not found")
+        raise HTTPException(404, f"Scheme {scheme_code} not found for {fc}")
     heads_ref = {h["code"]: h["rate_inr"] for h in (scheme.get("heads") or [])}
     fn = COMPUTE_FN.get(scheme_code)
     if fn:
@@ -286,6 +295,7 @@ async def compute_budget(scheme_code: str, req: ComputeRequest):
     total = round(sum(h["limit_inr"] for h in head_allocations), 2)
     return {
         "scheme_code": scheme_code, "scheme_name": scheme["name"],
+        "fiscal_cycle": fc,
         "inputs_used": req.inputs,
         "head_allocations": head_allocations,
         "total_ceiling_inr": total,
@@ -319,14 +329,19 @@ async def scheme_for_body(tid: str, body_code: str):
                     "No scheme assigned for this role yet. MPCA must set the "
                     f"tournament's {role}-scheme."
                 )}
-    scheme = await db.reimbursement_schemes.find_one({"scheme_code": scheme_code}, {"_id": 0})
+    from routes.reimbursement_schemes import CURRENT_FISCAL_CYCLE
+    fc = t.get("fiscal_cycle") or CURRENT_FISCAL_CYCLE
+    scheme = await db.reimbursement_schemes.find_one(
+        {"scheme_code": scheme_code, "fiscal_cycle": fc}, {"_id": 0}
+    )
     if not scheme:
-        raise HTTPException(404, f"Scheme {scheme_code} not found")
+        raise HTTPException(404, f"Scheme {scheme_code} not found for {fc}")
     vars_ = INPUT_SPECS.get(scheme_code, [])
     return {
         "role": role,
         "scheme_code": scheme_code,
         "scheme_name": scheme["name"],
+        "fiscal_cycle": fc,
         "computable": scheme_code in COMPUTE_FN,
         "input_variables": [v.model_dump() for v in vars_],
         "conditions": scheme.get("conditions", []),

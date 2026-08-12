@@ -1,0 +1,36 @@
+{
+  "summary": "Tested MPCA-Feb2026 season-versioned schemes + Host/Visitor scheme split bug fix. Backend: 9/9 tests pass (season list, per-season GET, per-season compute, host/visitor head disjoint, Inter-Div and Inter-District auto-scheme-split on tournament create, mid-year PUT edit + revision audit, non-MPCA 403, season clone + duplicate 409 + Mongo cleanup). Frontend: /schemes loads for MPCA Secretary with activation banner; season switcher confirms modal and reloads list: 33 schemes for 2026-27 vs 18 for 2025-26, and 2-A shows season-specific name ('Inter-School Tournament Reimbursement' vs 'Inter-School Tournament Subsidy'). Clicking Edit opens inline heads editor with data-testid='edit-head-rate-0'; Cancel does NOT fire a PUT. One backend bug was found and fixed by testing agent.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/schemes header", "issues": ["Card labelled 'Total Potential (FY 25-26)' but active season is 2026-27 — label appears hard-coded and does not follow the season context. Cosmetic only."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mpca_feb2026_schemes.py",
+    "/app/test_reports/pytest/pytest_feb2026.xml"
+  ],
+  "action_items": [
+    "(Minor) Fix hard-coded 'Total Potential (FY 25-26)' label on SchemesMaster header to interpolate the active season from useSeason() so it reads 'FY 2026-27' when 2026-27 is selected."
+  ],
+  "critical_code_review_comments": [
+    "clone_season() in /app/backend/routes/reimbursement_schemes.py copied source documents verbatim, retaining the source's `id` field. Because reimbursement_schemes has a unique index on `id`, the very FIRST clone attempt to any target season threw pymongo.errors.DuplicateKeyError and returned HTTP 500 (blocking the entire new-season workflow in production). FIXED by regenerating uuid4 for each cloned doc's `id`. Recommend a regression test for this in the next sprint.",
+    "SchemesMaster header 'TOTAL POTENTIAL (FY 25-26)' label is not driven by the season context — cosmetic mismatch when a different season is active."
+  ],
+  "updated_files": [
+    "/app/backend/routes/reimbursement_schemes.py (bug fix — clone_season regenerates id on each clone to avoid unique-index collision)",
+    "/app/backend/tests/test_mpca_feb2026_schemes.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (smoke)"},
+  "test_credentials": "persona-chip-secretary (Sanjeev Dua · MPCA State) — headers X-Body-Type=State, X-Body-Code=MPCA. For 403 test: X-Body-Type=Division / X-Body-Code=DIV-IND.",
+  "seed_data_creation": "Test tournaments TEST_Feb2026_InterDiv_* and TEST_Feb2026_InterDist_* were created via /api/tournaments and cleaned up by pytest module teardown (regex delete on name). Cloned season TEST-99-00 was deleted via direct Mongo delete_many. Scheme 2-A/2026-27 heads were mutated then restored to original 6 heads within the test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green for the Feb-2026 schemes work. clone_season had an id-uniqueness bug that testing agent fixed inline; verify the fix is still in place. Two revision_history entries now exist on scheme 2-A/2026-27 from prior smoke tests plus one from this iteration's mid-year-edit test that was restored — safe to ignore. Cosmetic 'FY 25-26' label on SchemesMaster header is the only outstanding UI polish item.",
+  "rca of the issue": "clone_season bug — Source-of-truth: /app/backend/routes/reimbursement_schemes.py line ~198. `async for doc in db.reimbursement_schemes.find({'fiscal_cycle': from_cycle}, {'_id':0})` returned each doc INCLUDING its `id` UUID field (only `_id` was projected out). The subsequent upsert on (scheme_code, fiscal_cycle) created a NEW document (target season had 0 matches), but the copied `id` collided with the source-season's document because the collection has a unique index on `id`. Mitigation applied: assign `doc['id'] = str(uuid.uuid4())` right after mutating fiscal_cycle. Reproduction: POST /api/reimbursement-schemes/clone-season {from_cycle:'2026-27', to_cycle:'anything'} — 500 before fix, 200 after."
+}

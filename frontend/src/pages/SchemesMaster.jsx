@@ -39,7 +39,7 @@ const SchemesMaster = () => {
         setLoading(true);
         try {
             const [{ data: s }, { data: r }, { data: act }] = await Promise.all([
-                api.get("/reimbursement-schemes", { params: { active_only: false } }),
+                api.get("/reimbursement-schemes", { params: { active_only: false, fiscal_cycle: season } }),
                 api.get("/schemes-recommendations").catch(() => ({ data: null })),
                 api.get("/schemes/season-activation", { params: { fiscal_cycle: season } }),
             ]);
@@ -140,14 +140,21 @@ const SchemesMaster = () => {
 
     const saveEdit = async () => {
         try {
+            const revision_note = window.prompt(
+                "Briefly describe why this scheme is being revised (goes into the audit log).",
+                "Mid-year revision — MPCA Managing Committee resolution",
+            );
+            if (revision_note === null) return; // user cancelled
             const patch = {
                 name: editing.name, description: editing.description,
-                scheme_type: editing.scheme_type, eligible_bodies: editing.eligible_bodies,
-                categories: editing.categories, heads: editing.heads,
+                heads: editing.heads,
                 conditions: editing.conditions, required_documents: editing.required_documents,
-                frequency: editing.frequency, is_active: editing.is_active,
+                is_active: editing.is_active,
+                revision_note,
             };
-            await api.patch(`/reimbursement-schemes/${editing.scheme_code}`, patch);
+            await api.put(`/reimbursement-schemes/${editing.scheme_code}`, patch, {
+                params: { fiscal_cycle: season },
+            });
             setEditing(null);
             setSelected(null);
             await load();
@@ -173,7 +180,7 @@ const SchemesMaster = () => {
                 <div className="flex items-center gap-3">
                     {recos && (
                         <div className="bulletin-card px-4 py-3 text-right">
-                            <div className="overline text-[9px]">Total Potential (FY 25-26)</div>
+                            <div className="overline text-[9px]">Total Potential (FY {season})</div>
                             <div className="font-serif text-2xl text-mpca-oxblood" data-testid="total-potential">{fmt(recos.total_potential_inr)}</div>
                         </div>
                     )}
@@ -325,18 +332,99 @@ const SchemesMaster = () => {
                                 <p className="text-sm text-mpca-gray-dark mb-4">{cur.description}</p>
                             )}
 
-                            {/* Budget heads */}
+                            {/* Budget heads — editable when MPCA in edit mode */}
                             <div className="mb-4">
                                 <div className="overline text-[9px] mb-2">Budget Heads ({(cur.heads || []).length})</div>
                                 <div className="space-y-1">
                                     {(cur.heads || []).map((h, i) => (
-                                        <div key={i} className="flex justify-between text-xs border-b border-mpca-brass/10 pb-1">
-                                            <div className="text-mpca-green-dark">{h.label}</div>
-                                            <div className="font-mono text-mpca-brass shrink-0 ml-3">{h.rate_display || fmt(h.rate_inr)}</div>
-                                        </div>
+                                        editing ? (
+                                            <div key={i} className="grid grid-cols-[1fr_100px_120px_auto] gap-2 items-center border-b border-mpca-brass/10 pb-1.5 pt-1" data-testid={`edit-head-${i}`}>
+                                                <input
+                                                    className="input-heritage text-[11px] !py-1"
+                                                    value={h.label || ""}
+                                                    onChange={(e) => {
+                                                        const arr = [...editing.heads];
+                                                        arr[i] = { ...arr[i], label: e.target.value };
+                                                        setEditing({ ...editing, heads: arr });
+                                                    }}
+                                                    placeholder="Label"
+                                                    data-testid={`edit-head-label-${i}`}
+                                                />
+                                                <input
+                                                    type="number"
+                                                    className="input-heritage text-[11px] !py-1 font-mono"
+                                                    value={h.rate_inr ?? 0}
+                                                    onChange={(e) => {
+                                                        const arr = [...editing.heads];
+                                                        arr[i] = { ...arr[i], rate_inr: parseFloat(e.target.value) || 0 };
+                                                        setEditing({ ...editing, heads: arr });
+                                                    }}
+                                                    placeholder="₹"
+                                                    data-testid={`edit-head-rate-${i}`}
+                                                />
+                                                <input
+                                                    className="input-heritage text-[10px] !py-1"
+                                                    value={h.rate_display || ""}
+                                                    onChange={(e) => {
+                                                        const arr = [...editing.heads];
+                                                        arr[i] = { ...arr[i], rate_display: e.target.value };
+                                                        setEditing({ ...editing, heads: arr });
+                                                    }}
+                                                    placeholder="Display (e.g. ₹5,000 / day)"
+                                                    data-testid={`edit-head-display-${i}`}
+                                                />
+                                                <button
+                                                    onClick={() => setEditing({ ...editing, heads: editing.heads.filter((_, j) => j !== i) })}
+                                                    className="text-mpca-oxblood text-xs px-1"
+                                                    title="Remove this head"
+                                                    data-testid={`remove-head-${i}`}
+                                                >×</button>
+                                            </div>
+                                        ) : (
+                                            <div key={i} className="flex justify-between text-xs border-b border-mpca-brass/10 pb-1">
+                                                <div className="text-mpca-green-dark">{h.label}</div>
+                                                <div className="font-mono text-mpca-brass shrink-0 ml-3">{h.rate_display || fmt(h.rate_inr)}</div>
+                                            </div>
+                                        )
                                     ))}
                                 </div>
+                                {editing && (
+                                    <button
+                                        className="text-[10px] text-mpca-brass mt-2 uppercase tracking-widest"
+                                        onClick={() => setEditing({
+                                            ...editing,
+                                            heads: [...(editing.heads || []), { code: `NEW_HEAD_${(editing.heads || []).length + 1}`, label: "New head", unit: "lump", rate_inr: 0, rate_display: "" }],
+                                        })}
+                                        data-testid="add-head-btn"
+                                    >
+                                        + Add budget head
+                                    </button>
+                                )}
                             </div>
+
+                            {/* Revision history — audit trail of every mid-year edit */}
+                            {!editing && (cur.revision_history || []).length > 0 && (
+                                <div className="mb-4 border-t border-mpca-brass/20 pt-3" data-testid="revision-history-block">
+                                    <div className="overline text-[9px] mb-2">Revision History ({cur.revision_history.length})</div>
+                                    <div className="space-y-1.5">
+                                        {[...cur.revision_history].reverse().map((r, i) => (
+                                            <div key={i} className="text-[10px] text-mpca-gray-dark border-l-2 border-mpca-brass/40 pl-2" data-testid={`revision-${r.version}`}>
+                                                <div>
+                                                    <span className="font-mono text-mpca-oxblood">v{r.version}</span>
+                                                    <span className="mx-1.5 text-mpca-brass">·</span>
+                                                    <span>{new Date(r.changed_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                                                    <span className="mx-1.5 text-mpca-brass">·</span>
+                                                    <span>{r.changed_by}</span>
+                                                </div>
+                                                <div className="italic mt-0.5">{r.note}</div>
+                                                {r.changed_fields?.length > 0 && (
+                                                    <div className="text-mpca-brass mt-0.5">Fields: {r.changed_fields.join(", ")}</div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Required docs */}
                             {(cur.required_documents || []).length > 0 && (

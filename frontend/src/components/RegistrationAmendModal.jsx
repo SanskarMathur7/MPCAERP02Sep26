@@ -80,6 +80,55 @@ const RegistrationAmendModal = ({ registration, persona, onClose, onSaved }) => 
         }
     };
 
+    // MPCA-Feb2026 · Other Documents (append-only free-form uploads by
+    // Division/MPCA). Each entry is {label, url}. Persisted via /edit patch.
+    const [otherLabel, setOtherLabel] = useState("");
+    const [otherFile, setOtherFile] = useState(null);
+    const [otherBusy, setOtherBusy] = useState(false);
+
+    const uploadOtherDoc = async () => {
+        if (!otherFile || !otherLabel.trim()) {
+            setErr("Give the extra document a name and pick a file first.");
+            return;
+        }
+        setOtherBusy(true); setErr("");
+        try {
+            const fd = new FormData();
+            fd.append("file", otherFile);
+            fd.append("related_type", "player_registration");
+            fd.append("related_id", registration.id);
+            fd.append("body_id", persona?.body_code || "MPCA");
+            fd.append("uploaded_by", persona?.name || "");
+            const { data: rec } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+            const nextOthers = [...(form.other_docs || []), { label: otherLabel.trim(), url: rec.url, uploaded_by: persona?.name || "" }];
+            // Persist immediately via /edit patch so it's saved even if user closes modal
+            await api.post(`/player-registrations/${registration.id}/edit`, {
+                patch: { other_docs: nextOthers },
+                actor_name: persona?.name,
+            });
+            setForm((f) => ({ ...f, other_docs: nextOthers }));
+            setOtherLabel("");
+            setOtherFile(null);
+        } catch (e) {
+            setErr(e?.response?.data?.detail || e.message);
+        } finally {
+            setOtherBusy(false);
+        }
+    };
+
+    const removeOtherDoc = async (idx) => {
+        const nextOthers = (form.other_docs || []).filter((_, i) => i !== idx);
+        try {
+            await api.post(`/player-registrations/${registration.id}/edit`, {
+                patch: { other_docs: nextOthers },
+                actor_name: persona?.name,
+            });
+            setForm((f) => ({ ...f, other_docs: nextOthers }));
+        } catch (e) {
+            setErr(e?.response?.data?.detail || e.message);
+        }
+    };
+
     const save = async () => {
         setBusy(true); setErr("");
         try {
@@ -207,6 +256,52 @@ const RegistrationAmendModal = ({ registration, persona, onClose, onSaved }) => 
                                     )}
                                 </div>
                             ))}
+                        </div>
+                    </div>
+
+                    {/* MPCA-Feb2026 · Other Documents (free-form). Division/MPCA can
+                        attach any additional doc with a custom label — surfaces on
+                        the attachment preview grid + gets picked up by AI review. */}
+                    <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-oxblood mb-2 flex items-center gap-2">
+                            <span>Other Documents</span>
+                            <span className="text-[9px] normal-case tracking-normal text-mpca-gray-dark italic">Extra docs beyond the standard list — visible to AI review too.</span>
+                        </div>
+                        <div className="space-y-2">
+                            {(form.other_docs || []).map((d, i) => (
+                                <div key={i} className="border border-mpca-brass/30 bg-mpca-parchment px-3 py-2 flex items-center gap-3" data-testid={`amend-other-doc-${i}`}>
+                                    <span className="text-[11px] text-mpca-green-dark flex-1 truncate">{d.label}</span>
+                                    <a href={d.url} target="_blank" rel="noreferrer" className="text-[10px] uppercase tracking-widest text-mpca-brass hover:underline">Preview</a>
+                                    <button type="button" onClick={() => removeOtherDoc(i)} className="text-[10px] uppercase tracking-widest text-mpca-oxblood" data-testid={`amend-other-doc-remove-${i}`}>Remove</button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-3 border border-mpca-brass/40 bg-mpca-cream/40 px-3 py-2 flex flex-col md:flex-row md:items-center gap-2" data-testid="amend-other-doc-add">
+                            <input
+                                type="text"
+                                placeholder="Label · e.g. School TC, Character Certificate, Coach reference"
+                                value={otherLabel}
+                                onChange={(e) => setOtherLabel(e.target.value)}
+                                className="input-heritage !py-1.5 !text-xs flex-1"
+                                data-testid="amend-other-doc-label"
+                            />
+                            <input
+                                type="file"
+                                accept="image/*,application/pdf"
+                                onChange={(e) => setOtherFile(e.target.files?.[0] || null)}
+                                className="text-[11px]"
+                                data-testid="amend-other-doc-file"
+                            />
+                            <button
+                                type="button"
+                                onClick={uploadOtherDoc}
+                                disabled={otherBusy || !otherFile || !otherLabel.trim()}
+                                className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40"
+                                data-testid="amend-other-doc-upload"
+                            >
+                                {otherBusy ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                                Add Doc
+                            </button>
                         </div>
                     </div>
                 </div>

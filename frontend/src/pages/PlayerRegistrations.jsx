@@ -10,6 +10,8 @@ import { useSeason } from "@/context/SeasonContext";
 import { api } from "@/lib/api";
 import CricketLoader from "@/components/CricketLoader";
 import RegistrationAmendModal from "@/components/RegistrationAmendModal";
+import DocumentPreview from "@/components/DocumentPreview";
+import { REGISTRATION_DOC_SPEC, isDocApplicable } from "@/lib/registrationDocs";
 
 const STATUS_TONE = {
     Submitted: "bg-mpca-navy/15 text-mpca-navy border-mpca-navy/40",
@@ -489,18 +491,56 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                 <Field label="Consent" value={pd.consent ? "Yes" : "No"} />
                 <Field label="Bank IFSC" value={pd.bank_ifsc} />
             </div>
-            {(pd.photo_url || pd.aadhaar_url || pd.address_proof_url || pd.birth_cert_url) && (
-                <div className="px-5 py-3 border-t border-mpca-brass/20">
-                    <div className="overline mb-2">Attachments</div>
-                    <div className="flex flex-wrap gap-2">
-                        {[["Photo", pd.photo_url], ["Aadhaar", pd.aadhaar_url], ["Address Proof", pd.address_proof_url], ["Birth Cert.", pd.birth_cert_url]].filter(([, u]) => u).map(([label, url]) => (
-                            <a key={label} href={url} target="_blank" rel="noreferrer" className="text-[10px] uppercase tracking-widest px-2 py-1 border border-mpca-brass/40 text-mpca-brass hover:bg-mpca-brass hover:text-mpca-ivory transition-colors inline-flex items-center gap-1">
-                                <ExternalLink size={9} /> {label}
-                            </a>
-                        ))}
+            {/* Attachments — inline PREVIEWS (no download). Shows every doc slot
+                that carries a URL PLUS any player-supplied Other Documents. */}
+            {(() => {
+                const specDocs = REGISTRATION_DOC_SPEC.filter((s) => isDocApplicable(s, pd) && pd[s.field]);
+                const otherDocs = Array.isArray(pd.other_docs) ? pd.other_docs.filter((o) => o && o.url) : [];
+                if (specDocs.length === 0 && otherDocs.length === 0) return null;
+                return (
+                    <div className="px-5 py-3 border-t border-mpca-brass/20">
+                        <div className="overline mb-2">Attachments · Preview only</div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {specDocs.map((s) => (
+                                <DocumentPreview
+                                    key={s.field}
+                                    url={pd[s.field]}
+                                    name={s.label}
+                                    hideExport
+                                    renderTrigger={(openPreview) => (
+                                        <button
+                                            type="button"
+                                            onClick={openPreview}
+                                            className="text-[10px] uppercase tracking-widest px-2 py-1 border border-mpca-brass/40 text-mpca-brass hover:bg-mpca-brass hover:text-mpca-ivory transition-colors inline-flex items-center gap-1 text-left truncate"
+                                            data-testid={`pr-doc-preview-${s.field}`}
+                                        >
+                                            <ExternalLink size={9} /> <span className="truncate">{s.label}</span>
+                                        </button>
+                                    )}
+                                />
+                            ))}
+                            {otherDocs.map((o, i) => (
+                                <DocumentPreview
+                                    key={`other-${i}`}
+                                    url={o.url}
+                                    name={o.label || `Other Doc ${i + 1}`}
+                                    hideExport
+                                    renderTrigger={(openPreview) => (
+                                        <button
+                                            type="button"
+                                            onClick={openPreview}
+                                            className="text-[10px] uppercase tracking-widest px-2 py-1 border border-mpca-oxblood/40 text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory transition-colors inline-flex items-center gap-1 text-left truncate"
+                                            data-testid={`pr-doc-preview-other-${i}`}
+                                        >
+                                            <ExternalLink size={9} /> <span className="truncate">Other · {o.label || `Doc ${i + 1}`}</span>
+                                        </button>
+                                    )}
+                                />
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
             {reg.division_remark && (
                 <div className="px-5 py-3 border-t border-mpca-brass/20 bg-mpca-brass/5" data-testid="division-remark-banner">
                     <div className="overline mb-1 text-mpca-brass">Division Remark · {reg.division_reviewed_by || "—"}{reg.division_reviewed_at ? ` · ${reg.division_reviewed_at.slice(0, 10)}` : ""}</div>

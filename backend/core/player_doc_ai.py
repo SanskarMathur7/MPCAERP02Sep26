@@ -466,6 +466,8 @@ async def run_full_registration_ai(reg_doc: Dict[str, Any]) -> Dict[str, Any]:
     pd = reg_doc.get("player_data") or {}
 
     # Ordered document tuples: (label sent to Gemini, url on record)
+    # MPCA-Feb2026 · extended to cover every doc slot on the registration
+    # form + any player-supplied Other Documents so AI sees the FULL picture.
     doc_slots = [
         ("Aadhaar", pd.get("aadhaar_url")),
         ("PAN", pd.get("pan_url")),
@@ -474,7 +476,30 @@ async def run_full_registration_ai(reg_doc: Dict[str, Any]) -> Dict[str, Any]:
         ("Cancelled Cheque", pd.get("cancelled_cheque_url")),
         ("Address Proof", pd.get("address_proof_url")),
         ("Passport Photo", pd.get("photo_url")),
+        ("Samagra ID · Player", pd.get("samagra_id_player_url")),
+        ("Samagra ID · Family", pd.get("samagra_id_family_url")),
+        ("Consent Form (Notarized)", pd.get("consent_form_url")),
+        ("No-Study Affidavit", pd.get("no_study_affidavit_url")),
+        ("School Bonafide Certificate", pd.get("bonafide_school_cert_url")),
+        ("Appointment Letter", pd.get("appointment_letter_url")),
+        ("Salary Slip", pd.get("salary_slip_url")),
+        ("Bank Statement (1-year)", pd.get("bank_statement_1yr_url")),
+        ("NOC · Previous Division", pd.get("noc_previous_division_url")),
+        ("Passport", pd.get("passport_url")),
+        ("Driving Licence", pd.get("driving_licence_url")),
+        ("Voter ID", pd.get("voter_id_url")),
+        ("Aadhaar Update History", pd.get("aadhaar_history_url")),
+        ("Affidavit (legacy)", pd.get("affidavit_url")),
+        ("GST Certificate", pd.get("gst_certificate_url")),
     ]
+    # Append every player-supplied Other Document (unbounded list of {label, url})
+    for other in (pd.get("other_docs") or []):
+        if not isinstance(other, dict):
+            continue
+        url = other.get("url")
+        label = other.get("label") or "Other Document"
+        if url:
+            doc_slots.append((f"Other · {label}", url))
     attachments: List[Tuple[str, FileContentWithMimeType]] = []
     missing: List[str] = []
     for label, url in doc_slots:

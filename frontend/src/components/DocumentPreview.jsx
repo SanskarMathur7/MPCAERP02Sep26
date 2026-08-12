@@ -20,7 +20,7 @@ import { X, ExternalLink, FileText, Image as ImageIcon, Download } from "lucide-
 const isImage = (url = "") => /\.(png|jpe?g|gif|webp|heic|heif|bmp)($|\?)/i.test(url);
 const isPdf = (url = "") => /\.pdf($|\?)/i.test(url);
 
-const DocumentPreview = ({ url, name, triggerLabel, renderTrigger }) => {
+const DocumentPreview = ({ url, name, triggerLabel, renderTrigger, hideExport = false }) => {
     const [open, setOpen] = useState(false);
     if (!url) return null;
 
@@ -65,12 +65,16 @@ const DocumentPreview = ({ url, name, triggerLabel, renderTrigger }) => {
                                 <span className="font-serif truncate">{name || "Document"}</span>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                                <a href={url} target="_blank" rel="noreferrer" className="text-[10px] uppercase tracking-widest text-mpca-gold-light hover:text-mpca-ivory inline-flex items-center gap-1" data-testid="doc-preview-newtab">
-                                    <ExternalLink size={11} /> New Tab
-                                </a>
-                                <a href={url} download className="text-[10px] uppercase tracking-widest text-mpca-gold-light hover:text-mpca-ivory inline-flex items-center gap-1" data-testid="doc-preview-download">
-                                    <Download size={11} /> Download
-                                </a>
+                                {!hideExport && (
+                                    <>
+                                        <a href={url} target="_blank" rel="noreferrer" className="text-[10px] uppercase tracking-widest text-mpca-gold-light hover:text-mpca-ivory inline-flex items-center gap-1" data-testid="doc-preview-newtab">
+                                            <ExternalLink size={11} /> New Tab
+                                        </a>
+                                        <a href={url} download className="text-[10px] uppercase tracking-widest text-mpca-gold-light hover:text-mpca-ivory inline-flex items-center gap-1" data-testid="doc-preview-download">
+                                            <Download size={11} /> Download
+                                        </a>
+                                    </>
+                                )}
                                 <button onClick={() => setOpen(false)} className="text-mpca-gold-light hover:text-mpca-ivory" data-testid="doc-preview-close">
                                     <X size={16} />
                                 </button>
@@ -80,7 +84,7 @@ const DocumentPreview = ({ url, name, triggerLabel, renderTrigger }) => {
                             {isImage(url) ? (
                                 <img src={url} alt={name || ""} className="max-w-full max-h-[80vh] mx-auto" data-testid="doc-preview-image" />
                             ) : isPdf(url) ? (
-                                <iframe src={url} title={name || "PDF"} className="w-full h-[80vh] border-0" data-testid="doc-preview-iframe" />
+                                <iframe src={hideExport ? `${url}#toolbar=0&navpanes=0` : url} title={name || "PDF"} className="w-full h-[80vh] border-0" data-testid="doc-preview-iframe" />
                             ) : (
                                 <div className="p-12 text-center">
                                     <FileText className="mx-auto mb-4 text-mpca-brass" size={48} strokeWidth={1} />

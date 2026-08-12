@@ -1,0 +1,42 @@
+{
+  "summary": "MPCA Squad Selection Sprint · Iteration A · fully validated. Backend (5/5 pytest) + Frontend (16 UI assertions) all PASS after fixing a MPCA-141 notification schema bug. Verified MPCA-125/154 (single Squads entry point on TournamentDetail), MPCA-131 (Approved-lock backend 409 + UI hides +Pick/+Cap/X, MPCA still can edit Awaiting/Rejected/Draft), MPCA-130 (Finalize XV gone), MPCA-106 (only 4 support-staff slots), MPCA-126 (SquadDetail renders with legacy players), MPCA-141 (secretary + president notifications on approve & reject).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/squads/{sid}/review (MPCA-141)",
+        "issue": "Notification.kind Literal was ['claim_event','sla_breach','info'] — did NOT include 'squad_review'. Also severity Literal was ['info','warning','critical'] — did NOT include 'success'. review_squad_by_mpca passed kind='squad_review' and severity='success' on approve, both failing Pydantic validation. The exception was swallowed by the surrounding try/except, so notifications were NEVER inserted for approve OR reject. Fixed by widening both Literals in /app/backend/models.py (Notification model).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mpca_squad_iter_a.py",
+    "/app/test_reports/pytest/mpca_squad_iter_a.xml"
+  ],
+  "action_items": [
+    "Main agent: confirm the models.py widening (Notification.kind += 'squad_review', severity += 'success') is acceptable. Alternative would be to drop 'success' from the review handler and use kind='info' — but the current change matches the intent described in MPCA-141 (kind='squad_review') so is preferred.",
+    "Consider replacing the bare `except Exception: pass` in review_squad_by_mpca with logging so future schema-mismatch bugs surface early instead of silently dropping notifications."
+  ],
+  "critical_code_review_comments": [
+    "selection_console.py review_squad_by_mpca wraps notification creation in a bare try/except pass — this masked the Pydantic validation failure and made MPCA-141 look 'silently broken' in production. Add structured logging.",
+    "SquadDetail.jsx `canEdit` correctly implements MPCA-131 lock. The isMine-vs-isMPCA logic is subtle — consider a comment explaining that reviewer edits are ALLOWED in all states except Approved (rejected+awaiting+draft are all editable for MPCA).",
+    "MPCA-141 notifications target role_id='secretary' + 'president' with body_id = squad.body_id. For a DIV-IND squad this notifies role_id='secretary' at DIV-IND — but the actual Division Secretary persona uses role_id='division-secretary'. Verify with product whether these notifications are intended for MPCA-side visibility only or should also fan out to 'division-secretary' when body is a Division/District. (Not blocking Iteration A, but flagging.)"
+  ],
+  "updated_files": [
+    "/app/backend/models.py (Notification.kind + severity Literals widened)",
+    "/app/backend/tests/test_mpca_squad_iter_a.py (new pytest suite)"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (16/16 UI assertions across MPCA-125/154/131/130/106/126)"},
+  "test_credentials": "persona-chip-secretary (MPCA) used for MPCA flows. Backend tests use raw X-Role-Id/X-User-Body-Code headers.",
+  "seed_data_creation": "Reused existing squad 93a7fa22-9c1f-4740-b1e6-9feb331046d1 (DIV-IND, Madhavrao Scindia Trophy). Left in Draft state post-test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration B will bring age filter (MPCA-136/137), per-player approve/reject (MPCA-140), PDF export overhaul (MPCA-127/142). The DIV-IND squad on Madhavrao Scindia Trophy is now built out with 11 players + captain (TEST_M35 Player One) and can be submitted/approved on demand. Backend Notification model now accepts kind='squad_review' + severity='success'.",
+  "rca of the issue": "MPCA-141 initial implementation failed silently because Notification Pydantic model's kind and severity Literals were narrower than the values passed by review_squad_by_mpca. The enclosing try/except pass in the handler suppressed the ValidationError, so approve/reject worked but zero notifications reached the DB. Reproduction: POST /api/squads/{sid}/review with action=approve → response 200 → GET /api/notifications?recipient_role_id=secretary&recipient_body_id={body_id} returns nothing. Fix: widen the Literals in models.py."
+}

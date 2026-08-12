@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from core.infra import db, api_router
 from core.scoping import get_scope
+from core.helpers import _create_notification
 from models import Squad, SquadMember, MatchOfficials, SquadWaiver
 
 _DIVISION_ROLES = {"division-secretary", "district-secretary", "president", "secretary"}
@@ -352,6 +353,51 @@ async def review_squad_by_mpca(
         "review_note": payload.note,
         "finalized_by_mpca": payload.action == "finalize",
     }})
+
+    # MPCA-141 · Notify the squad's owning body (Division/District Secretary)
+    # so they see the outcome in their action centre + bell.
+    try:
+        tournament = await db.tournaments.find_one({"id": doc.get("tournament_id")}, {"_id": 0})
+        t_name = (tournament or {}).get("name") or doc.get("tournament_id")
+        body_code = doc.get("body_id")
+        squad_link = f"/squads/{sid}"
+        if new_status == "Approved":
+            title = f"Squad approved by MPCA · {t_name}"
+            message = (
+                f"MPCA has approved your {doc.get('team_name')} squad for {t_name}."
+                + (f" Note: {payload.note}" if payload.note else "")
+            )
+            severity = "success"
+        else:
+            title = f"Squad rejected by MPCA · {t_name}"
+            message = (
+                f"MPCA has rejected your {doc.get('team_name')} squad for {t_name}."
+                + (f" Reason: {payload.note}" if payload.note else "")
+                + " Please revise and resubmit."
+            )
+            severity = "warning"
+        # Send to the office bearers of the owning body so at least one sees it.
+        # Include Division/District specific role ids in addition to generic ones.
+        for role_id in ("secretary", "president", "division-secretary", "district-secretary"):
+            await _create_notification(
+                recipient_role_id=role_id,
+                recipient_body_id=body_code,
+                title=title,
+                message=message,
+                link=squad_link,
+                related_type="squad",
+                related_id=sid,
+                severity=severity,
+                kind="squad_review",
+            )
+    except Exception as e:
+        # Log but never let notification failures block the review action.
+        import logging
+        logging.getLogger("mpca-erp").warning(
+            "MPCA-141 · Failed to send squad-review notification for %s: %s",
+            sid, e,
+        )
+
     return await db.squads.find_one({"id": sid}, {"_id": 0})
 
 

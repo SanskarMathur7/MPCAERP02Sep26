@@ -188,9 +188,11 @@ const SquadDetail = () => {
     };
 
     const handleReview = async (action) => {
-        const verb = action === "approve" ? "APPROVE" : action === "reject" ? "REJECT" : "FINALIZE";
+        const verb = action === "approve" ? "APPROVE" : "REJECT";
         if (!window.confirm(`${verb} this squad?`)) return;
-        const note = action === "reject" ? window.prompt("Rejection note (required):") : window.prompt("Optional note:") ?? "";
+        const note = action === "reject"
+            ? window.prompt("Rejection note (required):")
+            : (window.prompt("Optional note:") || "");
         if (action === "reject" && !note) return;
         await guardAsync(async () => {
             const { data: updated } = await api.post(`/squads/${squad.id}/review`, { action, note: note || null });
@@ -214,12 +216,12 @@ const SquadDetail = () => {
     const isMine = persona?.body_code === squad?.body_id;
     const isMPCA = persona?.body_type === "State";
 
-    // Edit rules: Division can edit while status is Draft/Rejected. MPCA can always edit
-    // (used to make final adjustments after Division submits).
-    const canEdit = (isMine && ["Draft", "Rejected"].includes(status)) || isMPCA;
+    // Edit rules: Division can edit while status is Draft/Rejected. MPCA can edit
+    // in any status EXCEPT Approved (MPCA-131 · once MPCA approves, the roster
+    // is locked; MPCA must Reopen the squad to make further changes).
+    const canEdit = (isMine && ["Draft", "Rejected"].includes(status)) || (isMPCA && status !== "Approved");
     const canSubmit = isMine && ["Draft", "Rejected"].includes(status);
     const canReview = isMPCA && status === "Awaiting_MPCA_Approval";
-    const canFinalize = isMPCA && status !== "Approved";
     const canReopen = isMPCA && status === "Approved";
 
     const filteredPool = useMemo(() => {
@@ -228,7 +230,14 @@ const SquadDetail = () => {
             .filter((p) => !memberIds.has(p.id))
             .filter((p) => roleFilter === "all" || p.role === roleFilter)
             .filter((p) => catFilter === "all" || p.category === catFilter)
-            .filter((p) => !query || p.full_name.toLowerCase().includes(query) || (p.player_id || "").toLowerCase().includes(query));
+            .filter((p) => {
+                if (!query) return true;
+                // MPCA-126 · null-safe search — some legacy player rows had
+                // full_name/player_id missing and crashed the render.
+                const name = (p.full_name || "").toLowerCase();
+                const code = (p.player_id || "").toLowerCase();
+                return name.includes(query) || code.includes(query);
+            });
     }, [players, memberIds, q, roleFilter, catFilter]);
 
     // Role breakdown for header stats
@@ -502,13 +511,13 @@ const SquadDetail = () => {
                                 <div key={p.id} className="px-5 py-3 grid grid-cols-12 items-center gap-3" data-testid={`squad-pool-row-${testKey}`} data-player-id={p.id} data-player-no={p.player_id}>
                                     <div className="col-span-1">
                                         <div className="w-9 h-9 rounded-full bg-mpca-parchment text-mpca-green-dark flex items-center justify-center text-[10px] font-serif shrink-0">
-                                            {p.full_name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+                                            {(p.full_name || "?").split(" ").filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"}
                                         </div>
                                     </div>
                                     <div className="col-span-6 min-w-0">
-                                        <div className="font-serif text-sm text-mpca-green-dark truncate">{p.full_name}</div>
+                                        <div className="font-serif text-sm text-mpca-green-dark truncate">{p.full_name || "(unnamed player)"}</div>
                                         <div className="text-[10px] text-mpca-gray-dark font-mono truncate">
-                                            <span className="text-mpca-brass">{p.player_id}</span> · {ROLE_LABEL[p.role] || p.role} · {CATEGORY_LABEL[p.category] || p.category} · {p.body_id}
+                                            <span className="text-mpca-brass">{p.player_id || "—"}</span> · {ROLE_LABEL[p.role] || p.role || "—"} · {CATEGORY_LABEL[p.category] || p.category || "—"} · {p.body_id || "—"}
                                         </div>
                                         {(p.batting_style || p.bowling_style) && (
                                             <div className="text-[9px] text-mpca-gray-dark mt-0.5">
@@ -596,16 +605,14 @@ const SquadDetail = () => {
 };
 
 // ────────────────── M34 · Officials sub-component ──────────────────
-
+// MPCA-106 · Only support staff live on the squad now. On-field match officials
+// (umpires · scorer · referee) are assigned centrally via the Match Officials
+// module — nominating them here duplicated data and confused Divisions.
 const OFFICIAL_SLOTS = [
-    { key: "manager", label: "Team Manager", isMatchOfficial: false },
-    { key: "coach", label: "Head Coach", isMatchOfficial: false },
-    { key: "trainer", label: "Trainer", isMatchOfficial: false },
-    { key: "physio", label: "Physio", isMatchOfficial: false },
-    { key: "umpire_1", label: "Umpire #1 (On-field)", isMatchOfficial: true, roleFilter: "Umpire" },
-    { key: "umpire_2", label: "Umpire #2 (On-field)", isMatchOfficial: true, roleFilter: "Umpire" },
-    { key: "scorer", label: "Scorer", isMatchOfficial: true, roleFilter: "Scorer" },
-    { key: "referee", label: "Match Referee", isMatchOfficial: true, roleFilter: "Referee" },
+    { key: "manager", label: "Team Manager" },
+    { key: "coach", label: "Head Coach" },
+    { key: "trainer", label: "Trainer" },
+    { key: "physio", label: "Physio" },
 ];
 
 const SquadOfficialsSection = ({ squad, canEdit, onSaved }) => {
@@ -613,32 +620,8 @@ const SquadOfficialsSection = ({ squad, canEdit, onSaved }) => {
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState("");
-    // M37 · Match Officials fetched from DB (dropdown source)
-    const [officialsDb, setOfficialsDb] = useState([]);
-    const [loadingDb, setLoadingDb] = useState(true);
 
     useEffect(() => { setOfficials(squad.match_officials || {}); setDirty(false); }, [squad.id, squad.match_officials]);
-
-    useEffect(() => {
-        // Fetch pool of match officials — server will apply scope but for Divisions we
-        // want to also see MPCA state-panel officials, so we do two fetches and merge.
-        (async () => {
-            setLoadingDb(true);
-            try {
-                const [ownRes, mpcaRes] = await Promise.all([
-                    api.get("/match-officials"),
-                    // MPCA-panel officials (only fetched separately if squad body is a division/district)
-                    (squad.body_id && squad.body_id !== "MPCA")
-                        ? api.get("/match-officials", { params: { body_id: "MPCA" } }).catch(() => ({ data: [] }))
-                        : Promise.resolve({ data: [] }),
-                ]);
-                const merged = [...(ownRes.data || []), ...(mpcaRes.data || [])];
-                const dedup = Object.values(Object.fromEntries(merged.map((o) => [o.id, o])));
-                setOfficialsDb(dedup);
-            } catch { setOfficialsDb([]); }
-            finally { setLoadingDb(false); }
-        })();
-    }, [squad.body_id]);
 
     const setField = (k, v) => { setOfficials((o) => ({ ...o, [k]: v })); setDirty(true); };
 
@@ -660,12 +643,12 @@ const SquadOfficialsSection = ({ squad, canEdit, onSaved }) => {
         <div className="mt-8 bulletin-card" data-testid="squad-officials-card">
             <div className="px-5 py-3 border-b border-mpca-brass/20 flex items-center justify-between">
                 <div>
-                    <div className="overline">Match Officials</div>
+                    <div className="overline">Support Staff</div>
                     <div className="font-serif text-lg text-mpca-green-dark mt-0.5">
                         {filled} of {OFFICIAL_SLOTS.length} slots filled
                     </div>
                     <div className="text-[10px] text-mpca-gray-dark mt-1">
-                        Nominated by {squad.body_id} along with the XV. On-field officials (Umpires · Scorer · Referee) are picked from the MPCA / Division match-officials panel so their login can access this tournament&apos;s DA form. Support staff (Manager, Coach, Trainer, Physio) are free-text.
+                        Nominated by {squad.body_id} along with the XV — Team Manager, Head Coach, Trainer and Physio only. On-field match officials (umpires, scorer, referee) are assigned centrally by MPCA in the Match Officials module.
                     </div>
                 </div>
                 {canEdit && dirty && (
@@ -682,54 +665,18 @@ const SquadOfficialsSection = ({ squad, canEdit, onSaved }) => {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3 p-5">
-                {OFFICIAL_SLOTS.map((slot) => {
-                    const currentVal = officials[slot.key] || "";
-                    if (slot.isMatchOfficial) {
-                        // Filter DB to relevant role for this slot
-                        const opts = officialsDb.filter((o) => o.role === slot.roleFilter);
-                        const matchInDb = opts.some((o) => o.full_name === currentVal);
-                        return (
-                            <label key={slot.key} className="block" data-testid={`squad-official-field-${slot.key}`}>
-                                <div className="text-[10px] uppercase tracking-widest text-mpca-brass font-mono mb-1 flex items-center justify-between">
-                                    <span>{slot.label}</span>
-                                    <span className="text-[9px] text-mpca-gray-dark normal-case tracking-normal">{loadingDb ? "loading…" : `${opts.length} available`}</span>
-                                </div>
-                                <select
-                                    value={matchInDb || !currentVal ? currentVal : "__legacy__"}
-                                    onChange={(e) => {
-                                        if (e.target.value === "__legacy__") return;
-                                        setField(slot.key, e.target.value);
-                                    }}
-                                    disabled={!canEdit || loadingDb}
-                                    className="input-heritage !py-1.5 !text-xs"
-                                    data-testid={`squad-official-select-${slot.key}`}
-                                >
-                                    <option value="">— Select from panel —</option>
-                                    {!matchInDb && currentVal && (
-                                        <option value="__legacy__">{currentVal} (legacy · not linked)</option>
-                                    )}
-                                    {opts.map((o) => (
-                                        <option key={o.id} value={o.full_name}>
-                                            {o.full_name} · {o.grade?.replace(/_/g, " ")} · {o.body_id === "MPCA" ? "MPCA State" : o.body_id}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                        );
-                    }
-                    return (
-                        <label key={slot.key} className="block" data-testid={`squad-official-field-${slot.key}`}>
-                            <div className="text-[10px] uppercase tracking-widest text-mpca-brass font-mono mb-1">{slot.label}</div>
-                            <input
-                                value={currentVal}
-                                onChange={(e) => setField(slot.key, e.target.value)}
-                                disabled={!canEdit}
-                                placeholder="Full name"
-                                className="input-heritage !py-1.5 !text-xs"
-                            />
-                        </label>
-                    );
-                })}
+                {OFFICIAL_SLOTS.map((slot) => (
+                    <label key={slot.key} className="block" data-testid={`squad-official-field-${slot.key}`}>
+                        <div className="text-[10px] uppercase tracking-widest text-mpca-brass font-mono mb-1">{slot.label}</div>
+                        <input
+                            value={officials[slot.key] || ""}
+                            onChange={(e) => setField(slot.key, e.target.value)}
+                            disabled={!canEdit}
+                            placeholder="Full name"
+                            className="input-heritage !py-1.5 !text-xs"
+                        />
+                    </label>
+                ))}
             </div>
         </div>
     );

@@ -26,7 +26,7 @@
 export const TOURNAMENT_TYPE_CATALOG = [
     {
         code: "bcci_staging",
-        scheme_code: "2-D",
+        scheme_code: "9-BCCI",
         name: "BCCI Domestic Tournament (Staging)",
         family: "BCCI",
         default_format: "FiveDay",
@@ -41,7 +41,7 @@ export const TOURNAMENT_TYPE_CATALOG = [
     },
     {
         code: "away_participation",
-        scheme_code: null,
+        scheme_code: "9-BCCI",
         name: "BCCI Away Participation (MP Team)",
         family: "BCCI",
         default_format: "FiveDay",
@@ -56,7 +56,7 @@ export const TOURNAMENT_TYPE_CATALOG = [
     },
     {
         code: "inter_div",
-        scheme_code: "2-B",
+        scheme_code: "2-D",
         name: "MPCA Inter-Divisional Tournament",
         family: "MPCA_InterDivisional",
         default_format: "Multi_Day",
@@ -112,7 +112,7 @@ export const TOURNAMENT_TYPE_CATALOG = [
     },
     {
         code: "reciprocal",
-        scheme_code: null,
+        scheme_code: "3-C",
         name: "Reciprocal Matches Between Divisions",
         family: "MPCA_InterDivisional",
         default_format: "Multi_Day",
@@ -127,7 +127,7 @@ export const TOURNAMENT_TYPE_CATALOG = [
     },
     {
         code: "inter_district",
-        scheme_code: "2-A",
+        scheme_code: "2-B",
         name: "Inter-District Tournament",
         family: "MPCA_InterDivisional",
         default_format: "Multi_Day",
@@ -142,7 +142,7 @@ export const TOURNAMENT_TYPE_CATALOG = [
     },
     {
         code: "inter_school",
-        scheme_code: null,
+        scheme_code: "2-A",
         name: "Inter-School Tournament",
         family: "Invitational",
         default_format: "One_Day",
@@ -157,7 +157,7 @@ export const TOURNAMENT_TYPE_CATALOG = [
     },
     {
         code: "inter_club",
-        scheme_code: null,
+        scheme_code: "2-E",
         name: "Inter-Club Tournament ('A' Grade Clubs)",
         family: "Invitational",
         default_format: "Multi_Day",
@@ -187,7 +187,7 @@ export const TOURNAMENT_TYPE_CATALOG = [
     },
     {
         code: "vacation_camp",
-        scheme_code: null,
+        scheme_code: "3-B",
         name: "Vacation Camp",
         family: "MPCA_InterDivisional",
         default_format: "Multi_Day",

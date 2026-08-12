@@ -255,18 +255,33 @@ async def patch_tournament(tid: str, patch: dict):
 # M39w · Tournament type + scope → default reimbursement scheme.
 # When MPCA users create a new tournament, we pre-fill scheme_code so the
 # finance console picks up the right catalogue immediately.
+# ⚡ Feb-2026 · Aligned with /app/frontend/src/lib/tournamentCatalog.js after
+# the scheme-mapping-correction sprint. Any non-UI caller that omits
+# scheme_code still gets the right default now.
 def _auto_scheme_for(tournament_type, scope, type_code):
     tc = (type_code or "").lower()
     sc = (scope or "")
     tt = (tournament_type or "")
-    if tt == "BCCI" or tc.startswith("bcci"):
-        return "2-D"
+    if tt == "BCCI" or tc.startswith("bcci") or tc == "away_participation":
+        return "9-BCCI"
     if sc == "Inter_District" or tc == "inter_district":
-        return "2-A"
-    if sc == "Inter_Divisional" or tc == "inter_div":
         return "2-B"
-    if tt == "MPCA_Championship" or sc == "Championship":
+    if tc == "inter_div_travel":
         return "2-C"
+    if sc == "Inter_Divisional" or tc == "inter_div":
+        return "2-D"
+    if tc == "inter_school":
+        return "2-A"
+    if tc == "inter_club":
+        return "2-E"
+    if tc == "reciprocal":
+        return "3-C"
+    if tc == "coaching_camp":
+        return "3-A"
+    if tc == "vacation_camp":
+        return "3-B"
+    if tc == "pre_camp":
+        return "3-D"
     return None
 
 

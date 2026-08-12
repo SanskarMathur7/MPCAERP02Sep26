@@ -1,0 +1,45 @@
+{
+  "summary": "Verified tournament-type → scheme_code mapping correction sprint. Backend: 41/42 tests pass, 1 skipped (custom type is not defined in catalog which is expected). All 11 catalog entries have the correct scheme_code (bcci_staging=9-BCCI, away_participation=9-BCCI, inter_div=2-D, inter_div_travel=2-C, inter_district=2-B, inter_school=2-A, inter_club=2-E, reciprocal=3-C, pre_camp=3-D, coaching_camp=3-A, vacation_camp=3-B). All 10 target scheme codes exist in db.reimbursement_schemes with semantically-correct names. Calculator input-spec endpoint returns non-empty variables for 2-A/2-B/2-C/2-D/3-A/3-D; non-calc schemes (2-E, 3-B, 3-C, 9-BCCI) return 200 with empty variables (informational only). POST /api/tournaments preserves the client-supplied scheme_code for all 8 newly-created MPCA-persona tournaments; scheme_code round-trips correctly on subsequent GET. Frontend Playwright smoke: MPCA secretary login → Tournaments → New Tournament modal → all three MPCA-creatable cards (bcci_staging / away_participation / inter_div) render with data-testid trn-type-card-*; step 2 opens with the right tournament type name.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/tournaments · _auto_scheme_for() in routes/tournaments.py:258-270",
+        "issue": "Stale fallback mapping — when scheme_code is NOT provided on the payload, _auto_scheme_for() returns OLD codes: BCCI→'2-D' (should be '9-BCCI'), Inter_District→'2-A' (should be '2-B'), Inter_Divisional→'2-B' (should be '2-D'). Not a blocker for current sprint because the frontend catalog now always sends scheme_code and the backend preserves it (verified). However this is a latent bug — any programmatic caller that omits scheme_code will get the wrong default. Recommend updating the fallback map to match the corrected catalog (or removing the fallback entirely and requiring scheme_code)."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "TournamentCreateModal · Step 2 (trn-type-badge)",
+        "issues": ["Task spec mentions data-testid 'trn-scheme-hint' should surface the scheme code (e.g. '2-D · Inter-Divisional Hosting') next to the picked type. Currently the badge only shows the tournament type name and a generic 'rate-card + input variables ... pre-defined by MPCA' message — the linked scheme_code is submitted but not displayed to the user before saving. Consider adding a small chip like '<Scheme 2-D · Inter-Divisional Hosting>' on the step-2 badge for clarity."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_tournament_scheme_mapping.py",
+    "/app/test_reports/pytest/tournament_scheme_mapping.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Update _auto_scheme_for() in /app/backend/routes/tournaments.py to the corrected mapping (BCCI→9-BCCI, inter_district→2-B, inter_div→2-D, inter_school→2-A, inter_club→2-E, reciprocal→3-C, vacation_camp→3-B) so any caller that omits scheme_code still gets the right default. Frontend already sends the right code, so this is non-blocking.",
+    "OPTIONAL UX: On TournamentCreateModal step-2, surface the resolved scheme_code + scheme_name (from form.scheme_code) inside a chip near data-testid=trn-type-badge (or as trn-scheme-hint) so users see which reimbursement scheme is being locked in before they save."
+  ],
+  "critical_code_review_comments": [
+    "routes/tournaments.py:258 _auto_scheme_for() logic still encodes the OLD tournament-type → scheme_code mapping. This wasn't updated as part of the catalog fix. It's dormant because the frontend now always supplies scheme_code, but the two mappings are now out of sync and will re-introduce the original bug for any non-UI POST /api/tournaments caller.",
+    "routes/scheme_calc.py — the calculator endpoint is /api/schemes/{code}/input-spec (not /api/scheme-calculator/{code}/inputs as originally worded in the task); documented mismatch corrected in the test file.",
+    "9-BCCI, 2-E, 3-B, 3-C have no INPUT_SPECS entry — this is intentional per the calculator model (fallback to raw head rates or manual budget). No action needed unless a formula is desired."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_tournament_scheme_mapping.py (new — 42 parametrized cases)"
+  ],
+  "success_rate": {"backend": "100% (41/41 executed, 1 skipped)", "frontend": "100% (smoke + RBAC + modal step-2 verified)"},
+  "test_credentials": "persona-chip-secretary (MPCA Sanjeev Dua). Login flow: click persona chip → click login-submit-btn.",
+  "seed_data_creation": "8 TEST_MAP_{type}_{uuid6} tournaments created via POST /api/tournaments (one per tournament_type_code exercised). They persist in db.tournaments with scheme_code correctly set. Main agent may clean up via db.tournaments.delete_many({'name': {'$regex': '^TEST_MAP_'}}).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The scheme-mapping fix is confirmed correct on the frontend catalog AND round-trips correctly through POST /api/tournaments. If the main agent updates _auto_scheme_for() (see minor issue #1), rerun /app/backend/tests/test_tournament_scheme_mapping.py; all 41 tests should still pass unchanged. Existing tournaments in DB were NOT touched (per user's choice B).",
+  "rca of the issue": "Original bug: /app/frontend/src/lib/tournamentCatalog.js had wrong or null scheme_code values for 7 tournament types, so newly created tournaments carried mismatched or absent scheme_code snapshots and hit the wrong reimbursement scheme downstream. Fix applied by main agent: updated the JS catalog with correct scheme_code strings. Verified: (a) file grep confirms exact strings, (b) each target scheme exists in reimbursement_schemes with the right semantic name, (c) POST /api/tournaments preserves the passed scheme_code end-to-end. Residual: the backend's _auto_scheme_for() default-mapping in tournaments.py:258 still has the OLD codes; harmless while the frontend supplies scheme_code but should be aligned for defense-in-depth."
+}

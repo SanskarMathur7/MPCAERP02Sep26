@@ -28,6 +28,8 @@ const isPdfByUrl = (url = "") => /\.pdf($|\?)/i.test(url);
 const DocumentPreview = ({ url, name, triggerLabel, renderTrigger, hideExport = false }) => {
     const [open, setOpen] = useState(false);
     const [sniffedType, setSniffedType] = useState(null);   // "image" | "pdf" | "other" | null (still checking)
+    const [imgFailed, setImgFailed] = useState(false);
+    const [iframeFailed, setIframeFailed] = useState(false);
 
     // Sniff the file type via HEAD once the modal is opened AND the URL
     // does not have a recognisable extension.
@@ -51,14 +53,7 @@ const DocumentPreview = ({ url, name, triggerLabel, renderTrigger, hideExport = 
 
     const isImage = isImageByUrl(url) || sniffedType === "image";
     const isPdf = isPdfByUrl(url) || sniffedType === "pdf";
-    // Feb-2026 · When neither URL suffix nor HEAD sniff gave a definitive
-    // answer, we OPTIMISTICALLY try `<img>` first (largest population —
-    // photos / Aadhaar / PAN scans). If it errors we swap to `<iframe>`
-    // which handles PDFs correctly. If THAT also fails we finally show
-    // the "not supported" screen — but with Download always available.
     const stillSniffing = !isImage && !isPdf && sniffedType === null;
-    const [imgFailed, setImgFailed] = useState(false);
-    const [iframeFailed, setIframeFailed] = useState(false);
     // Attempted render order: image → iframe → unsupported
     const showImage = isImage || (sniffedType === null && !imgFailed);
     const showIframe = !showImage && (isPdf || (sniffedType === null && imgFailed && !iframeFailed));

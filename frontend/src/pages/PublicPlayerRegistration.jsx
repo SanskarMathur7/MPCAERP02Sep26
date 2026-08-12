@@ -132,12 +132,29 @@ const PublicPlayerRegistration = () => {
         if (!form.email?.trim()) { setSubmitErr("Email is required."); return; }
         setSubmitting(true);
         try {
-            const { data } = await public_api.post("/public/player-registration/submit", { token, player: form });
+            // Feb 2026 · Coerce empty numeric-optional fields to null so Pydantic
+            // doesn't reject the submission with an int_parsing 422. Historically
+            // `bcci_registration_year` was the culprit — the input is a text-mode
+            // number that stays as "" until the user explicitly types a year.
+            const cleaned = {
+                ...form,
+                bcci_registration_year: form.bcci_registered && form.bcci_registration_year !== ""
+                    ? Number(form.bcci_registration_year) || null
+                    : null,
+            };
+            const { data } = await public_api.post("/public/player-registration/submit", { token, player: cleaned });
             setDone(data);
         } catch (e) {
-            const msg = e?.response?.data?.detail || e.message;
+            let msg = e?.response?.data?.detail || e.message;
+            // Pydantic v2 validation errors come back as an array — surface the
+            // first field-level message rather than the raw JSON blob.
+            if (Array.isArray(msg)) {
+                const first = msg[0];
+                msg = first?.msg
+                    ? `${(first.loc || []).slice(-1)[0] || "field"}: ${first.msg}`
+                    : "Some fields are invalid — please review the highlighted fields and try again.";
+            }
             setSubmitErr(msg);
-            // scroll to top so the user sees the banner
             window.scrollTo({ top: 0, behavior: "smooth" });
         }
         finally { setSubmitting(false); }

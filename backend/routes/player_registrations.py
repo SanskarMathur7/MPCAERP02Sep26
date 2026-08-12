@@ -20,7 +20,7 @@ import secrets
 import uuid
 
 from fastapi import HTTPException, Header
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from core.infra import db, api_router
 from core.email_notifications import send_email
@@ -102,6 +102,23 @@ class PlayerRegistrationInvite(BaseModel):
 
 class PlayerRegistrationData(BaseModel):
     """Payload from the public form."""
+    # ------------------------------------------------------------------
+    # Feb 2026 · Guard against empty-string values for optional numeric
+    # fields. The React form defaults `bcci_registration_year` to "" and
+    # the user typically leaves it blank → Pydantic 2 rejected the
+    # payload with HTTP 422 "int_parsing", which the UI reported as a
+    # generic "submission crashed". Coerce "" to None BEFORE validation
+    # for every optional numeric field the form ships.
+    # ------------------------------------------------------------------
+    @model_validator(mode="before")
+    @classmethod
+    def _empty_string_to_none(cls, data):
+        if isinstance(data, dict):
+            for k in ("bcci_registration_year",):
+                if data.get(k) == "":
+                    data[k] = None
+        return data
+
     full_name: str = ""                                 # M39q · Auto-composed from first_name + surname (kept for backward-compat with squads / players)
     first_name: Optional[str] = None                    # M39q · Split name capture
     surname: Optional[str] = None                       # M39q · Split name capture

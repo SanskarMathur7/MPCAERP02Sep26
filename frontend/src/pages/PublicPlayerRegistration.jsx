@@ -17,7 +17,7 @@ const public_api = axios.create({ baseURL: `${BACKEND_URL}/api` });
 const emptyPlayer = {
     full_name: "", first_name: "", surname: "", father_name: "", dob: "", gender: "M", role: "Batter",
     batting_style: "Right_Hand", bowling_style: "None",
-    mobile: "", email: "", home_district_code: "", preferred_division_code: "", category: "Local_MP",
+    mobile: "", email: "", preferred_division_code: "", category: "Local_MP",
     guardian_name: "", address: "", aadhaar_no: "", pan_no: "", gst_no: "",
     bank_name: "", bank_account_no: "", bank_ifsc: "",
     consent: false, dpdp_consent: false, no_recent_studies: false,
@@ -26,6 +26,14 @@ const emptyPlayer = {
     address_proof_url: "", birth_cert_url: "",
     marksheet_3yr_url: "", affidavit_url: "",
     cancelled_cheque_url: "", gst_certificate_url: "",
+    // MPCA-151 · Feb-2026 · Extended fields
+    samagra_id_player_url: "", samagra_id_family_url: "",
+    consent_form_url: "", no_study_affidavit_url: "", bonafide_school_cert_url: "",
+    is_employed: false,
+    appointment_letter_url: "", salary_slip_url: "", bank_statement_1yr_url: "",
+    last_season_division_code: "", noc_previous_division_url: "",
+    place_of_birth_city: "", place_of_birth_state: "",
+    bcci_registered: false, bcci_registration_year: "",
     other_docs: [],
 };
 
@@ -275,9 +283,6 @@ const PublicPlayerRegistration = () => {
                                         {["None", "Right_Arm_Fast", "Right_Arm_Off_Spin", "Right_Arm_Leg_Spin", "Left_Arm_Fast", "Left_Arm_Orthodox", "Left_Arm_Chinaman"].map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
                                     </select>
                                 </Field>
-                                <Field label="Home district (code)">
-                                    <input value={form.home_district_code} onChange={(e) => setField("home_district_code", e.target.value)} placeholder="e.g. DIST-IND" className="input-heritage font-mono !py-1.5 !text-xs" />
-                                </Field>
                             </Grid>
                         </Section>
 
@@ -307,6 +312,39 @@ const PublicPlayerRegistration = () => {
                             </Grid>
                         </Section>
 
+                        {/* MPCA-151 · Feb 2026 · Place of birth + cross-division audit + BCCI history */}
+                        <Section title="Place of Birth · Cross-Division · BCCI">
+                            <Grid>
+                                <Field label="Place of birth · City"><input value={form.place_of_birth_city} onChange={(e) => setField("place_of_birth_city", e.target.value)} placeholder="e.g. Indore" className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-pob-city" /></Field>
+                                <Field label="Place of birth · State"><input value={form.place_of_birth_state} onChange={(e) => setField("place_of_birth_state", e.target.value)} placeholder="e.g. Madhya Pradesh" className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-pob-state" /></Field>
+                                <Field label="Division played from LAST season">
+                                    <select value={form.last_season_division_code} onChange={(e) => setField("last_season_division_code", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-last-season-div">
+                                        <option value="">— None / new to cricket —</option>
+                                        {(env?.divisions || []).map((d) => (
+                                            <option key={d.code} value={d.code}>{d.name} ({d.code})</option>
+                                        ))}
+                                    </select>
+                                </Field>
+                                <Field label="BCCI Registered?">
+                                    <select value={form.bcci_registered ? "Yes" : "No"} onChange={(e) => setField("bcci_registered", e.target.value === "Yes")} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-bcci-registered">
+                                        <option value="No">No</option>
+                                        <option value="Yes">Yes</option>
+                                    </select>
+                                </Field>
+                                {form.bcci_registered && (
+                                    <Field label="BCCI Registration Year" required>
+                                        <input required type="number" min="1990" max="2100" value={form.bcci_registration_year} onChange={(e) => setField("bcci_registration_year", e.target.value)} placeholder="e.g. 2021" className="input-heritage font-mono !py-1.5 !text-xs" data-testid="pr-pub-bcci-year" />
+                                    </Field>
+                                )}
+                            </Grid>
+                        </Section>
+
+                        {/* MPCA-151 · Employment toggle (alternative to marksheets) */}
+                        <label className="flex items-start gap-2 text-[11px] text-mpca-charcoal border border-mpca-brass/40 bg-mpca-parchment px-3 py-2" data-testid="is-employed-row">
+                            <input type="checkbox" checked={form.is_employed} onChange={(e) => setField("is_employed", e.target.checked)} className="mt-0.5" data-testid="pr-pub-is-employed" />
+                            <span>I am currently employed — I will upload <strong>appointment letter, salary slip and 1-year bank statement</strong> in place of the 3-year marksheet + school bonafide.</span>
+                        </label>
+
                         <Section title={tr("bank")}>
                             <Grid>
                                 <Field label={tr("bank_name")}><input value={form.bank_name} onChange={(e) => setField("bank_name", e.target.value)} placeholder="e.g. HDFC Bank" className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-bank-name" /></Field>
@@ -335,15 +373,41 @@ const PublicPlayerRegistration = () => {
                                     ["driving_licence_url", "Driving Licence"],
                                     ["voter_id_url", "Voter ID"],
                                     ["birth_cert_url", "Birth Certificate * (with QR)"],
-                                    ["address_proof_url", "Current Address Proof"],
-                                    ["cancelled_cheque_url", "Cancelled Cheque"],
+                                    ["address_proof_url", "Current Address Proof *"],
+                                    // MPCA-151 · New required docs
+                                    ["samagra_id_player_url", "Samagra ID · Player *"],
+                                    ["samagra_id_family_url", "Samagra ID · Family *"],
+                                    ["consent_form_url", "Consent Form (Notarized) *", { template: "/api/uploads/consent_form_template.pdf" }],
                                     ...(form.no_recent_studies
-                                        ? [["affidavit_url", "Affidavit — No recent studies"]]
-                                        : [["marksheet_3yr_url", "Marksheets · last 3 yrs (single PDF)"]]),
+                                        ? [["no_study_affidavit_url", "No-Study Affidavit *", { template: "/api/uploads/no_study_affidavit_template.pdf" }]]
+                                        : []),
+                                    ["cancelled_cheque_url", "Cancelled Cheque"],
+                                    // Employment path vs Marksheet + Bonafide path
+                                    ...(form.is_employed
+                                        ? [
+                                            ["appointment_letter_url", "Appointment Letter *"],
+                                            ["salary_slip_url", "Latest Salary Slip *"],
+                                            ["bank_statement_1yr_url", "1-Year Bank Statement (PDF) *"],
+                                        ]
+                                        : [
+                                            ["marksheet_3yr_url", "Marksheets · last 3 yrs (single PDF) *"],
+                                            ["bonafide_school_cert_url", "School Bonafide Certificate *"],
+                                        ]),
+                                    // NOC only if last-season division differs from current
+                                    ...(form.last_season_division_code && form.last_season_division_code !== form.preferred_division_code
+                                        ? [["noc_previous_division_url", `NOC from ${form.last_season_division_code} (Previous Division) *`]]
+                                        : []),
                                     ...(form.gst_no ? [["gst_certificate_url", "GST Certificate"]] : []),
-                                ].map(([key, label]) => (
+                                ].map(([key, label, extra]) => (
                                     <div key={key} className="border border-mpca-brass/30 bg-mpca-parchment p-3">
-                                        <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-1">{label}</div>
+                                        <div className="flex items-center justify-between gap-2 mb-1">
+                                            <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark">{label}</div>
+                                            {extra?.template && (
+                                                <a href={extra.template} target="_blank" rel="noreferrer" className="text-[9px] uppercase tracking-widest text-mpca-brass hover:underline" data-testid={`pr-pub-template-${key}`}>
+                                                    Sample →
+                                                </a>
+                                            )}
+                                        </div>
                                         {form[key] ? (
                                             <div className="flex items-center justify-between text-[11px]"><a href={form[key]} target="_blank" rel="noreferrer" className="text-mpca-oxblood underline truncate">Uploaded ✓</a><button type="button" onClick={() => setField(key, "")} className="text-[9px] uppercase text-mpca-brass">Remove</button></div>
                                         ) : (

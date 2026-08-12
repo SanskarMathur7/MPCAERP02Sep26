@@ -1,0 +1,51 @@
+{
+  "summary": "MPCA Feb-2026 Player Registration sprint (MPCA-147/148/149/151/152/153). Backend 6/6 PASS. Frontend: MPCA-147/148/149/151 PASS; MPCA-153 amend modal is BROKEN due to ReferenceError — 'setAmendOpen is not defined' inside RegistrationsInbox component (state lives on the parent PlayerRegistrations but is not passed down). Return-to-player button correctly removed and Reject button present (verified statically & from live DOM after fix). Also caught an unrelated hydration warning on /register/player/<token> ('<span> cannot be a child of <option>').",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "PlayerRegistrations.jsx > RegistrationsInbox.doAction",
+        "issue": "Clicking 'Amend Data' (pr-edit-btn) throws 'ReferenceError: setAmendOpen is not defined'. State (`amendOpen`, `setAmendOpen`) is declared in the parent `PlayerRegistrations` component (line 57) but the child `RegistrationsInbox` (line 242) calls `setAmendOpen(true)` at lines 261 & 266 without receiving it as a prop. Modal never opens; 'Amend Data' & 'Upload Doc on Behalf' buttons are entirely non-functional.",
+        "selector": "[data-testid=pr-edit-btn]",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "PublicPlayerRegistration.jsx",
+        "issue": "React hydration warning: '<span> cannot be a child of <option>'. Non-blocking but should be fixed for cleanliness.",
+        "selector": "n/a (console warning)",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Amend Data (MPCA-153)",
+        "issue": "Because setAmendOpen is undefined, no PATCH is ever issued to /api/player-registrations/<id>/edit from the UI. Backend endpoint works fine (proven by pytest), but UI cannot reach it.",
+        "affected_selectors": ["[data-testid=pr-edit-btn]", "[data-testid=pr-amend-modal]", "[data-testid=pr-upload-doc-btn]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mpca_feb2026_player_reg_sprint.py",
+    "/app/test_reports/pytest/mpca_feb2026_sprint.xml"
+  ],
+  "action_items": [
+    "FIX (critical): In /app/frontend/src/pages/PlayerRegistrations.jsx pass `onOpenAmend` (or `amendOpen`+`setAmendOpen`) as props from PlayerRegistrations (parent) into RegistrationsInbox (child). Simplest fix: hoist the `setAmendOpen` call by lifting the 'amend' action into the parent via a callback prop, OR move the `amendOpen` state into RegistrationsInbox and render RegistrationAmendModal from there.",
+    "Fix hydration warning `<span> cannot be a child of <option>` on public player registration form (likely a <select> whose <option>s contain <span> markup)."
+  ],
+  "critical_code_review_comments": [
+    "PlayerRegistrations.jsx RegistrationsInbox.doAction — dead code path: `setAmendOpen` reference throws at runtime. This means MPCA-153 acceptance criterion 'clicking Amend Data opens the RegistrationAmendModal' is not met.",
+    "player_registrations.py — no DELETE endpoint for campaigns; testing agents must use direct mongo cleanup to prevent stale TEST rows. Consider adding an admin-only DELETE /api/player-registration-campaigns/{cid} guarded to MPCA + only when no submissions exist.",
+    "player_registrations.py edit_registration silently ignores unchanged fields (good) but returns 200 with no 'edited' event when diff is empty — acceptable but could confuse frontend caller."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mpca_feb2026_player_reg_sprint.py (new)"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "83% (5/6 acceptance points; the amend modal path is fully broken)" },
+  "test_credentials": "persona-chip-secretary (Sanjeev Dua, MPCA)",
+  "seed_data_creation": "All test campaigns/registrations created during backend + frontend runs were cleaned up (mongo delete_many on TEST_ email prefix and TEST · title prefix). Verified 0 residuals.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_mpca_feb2026_player_reg_sprint.py — reruns cleanly. The single frontend failure (setAmendOpen ReferenceError) is deterministic; open dev tools on /player-registrations, click Inbox tab, click any Submitted row, click Amend Data → console shows the error. After E1 fixes, re-run the same Playwright test flow and verify [data-testid=pr-amend-modal] appears with ≥5 scalar inputs and ≥5 upload buttons.",
+  "rca of the issue": "PlayerRegistrations.jsx has the parent component holding `const [amendOpen, setAmendOpen] = useState(false);` at line 57, but the child <RegistrationsInbox> (declared at line 242) calls setAmendOpen(true) at lines 261 (action==='edit') and 266 (action==='upload-doc'). setAmendOpen is not in scope of RegistrationsInbox — it was never passed via props. Fix: (a) hoist the `edit`/`upload-doc` branches out of RegistrationsInbox.doAction, OR (b) pass a callback prop `onOpenAmend={() => setAmendOpen(true)}` from parent into <RegistrationsInbox onOpenAmend=... /> and use that in doAction. Repro: /player-registrations → Inbox tab → click any Submitted row → click 'Amend Data' → runtime overlay shows 'setAmendOpen is not defined'."
+}

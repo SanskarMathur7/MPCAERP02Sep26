@@ -41,19 +41,35 @@ const STATUS_META = {
 };
 
 // Standard KYC / permanent-record document slots
+// MPCA-152 · Feb 2026 — aligned with the extended registration doc set so
+// the Registration form and the Player Profile KYC page ask for the SAME
+// documents. Keys map to `player_documents.doc_type`.
 const DOC_SLOTS = [
-    { key: "birth_certificate",   label: "Birth Certificate (with QR)", required: true,  hint: "Municipal certificate with QR verification code." },
-    { key: "aadhar",              label: "Aadhaar Card",                required: true,  hint: "Front + back scan, or e-Aadhaar PDF." },
-    { key: "pan",                 label: "PAN Card",                    required: false, hint: "For players ≥ 18 years." },
-    { key: "passport",            label: "Passport",                    required: false, hint: "For international / out-of-MP guests." },
-    { key: "samagra_id",          label: "Samagra ID",                  required: false, hint: "MP state family / individual Samagra." },
-    { key: "marksheet_10",        label: "Class-10 Marksheet",          required: false, hint: "For education-eligible guest players." },
-    { key: "marksheet_12",        label: "Class-12 Marksheet",          required: false, hint: "For senior category." },
-    { key: "transfer_certificate",label: "Transfer Certificate (TC)",   required: false, hint: "From previous institution." },
-    { key: "affidavit",           label: "Affidavit / Guardian Consent",required: false, hint: "Notarised affidavit if under 18." },
-    { key: "hospital_cert",       label: "Hospital Birth Certificate",  required: false, hint: "Alternative proof of age (TW3 corroboration)." },
-    { key: "photo",               label: "Player Photograph",           required: true,  hint: "Recent passport-size photo." },
-    { key: "signature",           label: "Signature Specimen",          required: false, hint: "On white paper, scanned." },
+    { key: "birth_certificate",         label: "Birth Certificate (with QR)",  required: true,  hint: "Municipal certificate with QR verification code." },
+    { key: "aadhar",                    label: "Aadhaar Card",                 required: true,  hint: "Front + back scan, or e-Aadhaar PDF." },
+    { key: "pan",                       label: "PAN Card",                     required: false, hint: "For players ≥ 18 years." },
+    { key: "passport",                  label: "Passport",                     required: false, hint: "For international / out-of-MP guests." },
+    { key: "photo",                     label: "Player Photograph",            required: true,  hint: "Recent passport-size photo." },
+    { key: "address_proof",             label: "Current Address Proof",        required: true,  hint: "Utility bill / rent agreement / bank passbook." },
+    // MPCA-151 · Samagra + affidavits + bonafide
+    { key: "samagra_id_player",         label: "Samagra ID · Player",          required: true,  hint: "MP state Samagra — player's own ID." },
+    { key: "samagra_id_family",         label: "Samagra ID · Family",          required: true,  hint: "MP state Samagra — family SSSM ID." },
+    { key: "consent_form",              label: "Consent Form (Notarized)",     required: true,  hint: "MPCA template · get notarized · then upload." },
+    { key: "no_study_affidavit",        label: "No-Study Affidavit",           required: false, hint: "If not currently studying (U-23 path)." },
+    { key: "bonafide_school_cert",      label: "School Bonafide Certificate",  required: false, hint: "Alternative to marksheet path." },
+    // MPCA-151 · Education or Employment path
+    { key: "marksheet_3yr",             label: "Marksheets · last 3 yrs",      required: false, hint: "Bundled PDF from previous school." },
+    { key: "appointment_letter",        label: "Appointment Letter",           required: false, hint: "Only for employed players." },
+    { key: "salary_slip",               label: "Salary Slip (latest)",         required: false, hint: "Only for employed players." },
+    { key: "bank_statement_1yr",        label: "1-Year Bank Statement",        required: false, hint: "Only for employed players." },
+    { key: "noc_previous_division",     label: "NOC · Previous Division",      required: false, hint: "Required if player played from different Division last season." },
+    // Legacy slots retained
+    { key: "marksheet_10",              label: "Class-10 Marksheet",           required: false, hint: "For education-eligible guest players." },
+    { key: "marksheet_12",              label: "Class-12 Marksheet",           required: false, hint: "For senior category." },
+    { key: "transfer_certificate",      label: "Transfer Certificate (TC)",    required: false, hint: "From previous institution." },
+    { key: "affidavit",                 label: "Affidavit / Guardian Consent", required: false, hint: "Notarised affidavit if under 18." },
+    { key: "hospital_cert",             label: "Hospital Birth Certificate",   required: false, hint: "Alternative proof of age (TW3 corroboration)." },
+    { key: "signature",                 label: "Signature Specimen",           required: false, hint: "On white paper, scanned." },
 ];
 
 const Pill = ({ tone, label, testId }) => {

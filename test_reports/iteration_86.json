@@ -1,0 +1,31 @@
+{
+  "summary": "MPCA-153 RETEST · Amend flow now works. The setAmendOpen ReferenceError from iteration_85 is fixed — amendOpen state was moved into RegistrationsInbox and RegistrationAmendModal is rendered from inside that same component. Verified end-to-end: (1) Amend Data button opens [data-testid=pr-amend-modal] with all scalar fields including [amend-field-mobile] and [amend-field-place_of_birth_city]; (2) editing mobile → Save Changes persists via POST /api/player-registrations/<id>/edit (backend audit event 'edited' appended, mobile updated to 9111111111 in DB); (3) modal closes after save; (4) Upload Doc on Behalf opens the SAME amend modal (no separate flow); (5) 'Return to Player' button is ABSENT and [pr-reject-btn] is present. Zero console errors during the flow. One MINOR UX side-effect noted below.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "MPCA-153 · Amend Save UX",
+        "issue": "After 'Save Changes' the parent PlayerRegistrations.load() sets `loading=true` which unmounts RegistrationsInbox entirely (renders <CricketLoader/> instead), so the previously selected row is lost. On re-render the review drawer shows the empty-state 'Select a registration on the left to review.' The updated mobile (9111111111) is only visible after the user manually re-clicks the row. The acceptance line 'review drawer should reflect the new mobile' is technically satisfied only after that extra click. Suggestion: in `load()` skip `setLoading(true)` for silent refreshes (add a `silent=true` param) OR after api.get in onSaved, don't call onChanged() and instead just update local `regs` state. Alternatively lift `selected` into the parent so it survives the loader remount.",
+        "affected_selectors": ["[data-testid=pr-inbox-detail]", "[data-testid=pr-amend-save]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "MINOR: Prevent the review drawer from disappearing after Amend Save. Fix by making the post-save refresh 'silent' (don't toggle the full-page CricketLoader) so `selected` persists in RegistrationsInbox and the updated mobile shows inline without re-selecting the row."
+  ],
+  "critical_code_review_comments": [
+    "PlayerRegistrations.jsx load() blindly sets loading=true on every refresh — that unmounts child inboxes/detail panes on every save. Should pass a `silent` flag from mutating child actions to keep child state alive.",
+    "RegistrationAmendModal · edit endpoint returns 200 with no payload usage — save() ignores the response body; if the backend returns the updated registration, we could `setSelected(data)` directly from that call and skip the extra GET+load() round-trip."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "100%", "frontend": "100% of MPCA-153 acceptance criteria (1 minor UX regression on drawer refresh after save)" },
+  "test_credentials": "persona-chip-secretary (Shri Sanjeev Dua · MPCA · Honorary Secretary)",
+  "seed_data_creation": "Reused existing Submitted registration a18400a517cf495d9f7bfdbfb41d8f1e ('NAME Corrected'). Mobile mutated to 9111111111 as part of the test — this row is a TEST_ record from an earlier iteration so it can be cleaned up by future runs. Audit trail now has 6 events including the new 'edited' event.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "MPCA-153 amend-modal fix is verified green. The only follow-up is the minor drawer refresh UX described above. Everything else in the Feb-2026 sprint (147/148/149/151/152) was previously green in iteration_85 and does not need re-verification.",
+  "rca of the issue": "iteration_85 RCA (setAmendOpen not defined) resolved. Fix approach: moved `const [amendOpen, setAmendOpen] = useState(false)` from parent PlayerRegistrations into child RegistrationsInbox (line 230) and rendered <RegistrationAmendModal .../> from within RegistrationsInbox' return tree (lines 311-326). Both `doAction('edit')` and `doAction('upload-doc')` now correctly reach setAmendOpen in scope. Verified via live UI: modal opens, fields render, save PATCHes /edit, DB shows mobile=9111111111 and audit 'edited' event."
+}

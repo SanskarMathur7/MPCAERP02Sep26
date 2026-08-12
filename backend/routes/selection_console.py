@@ -660,6 +660,32 @@ async def my_pending_inbox(
             })
         return {"items": inbox[:limit], "count": len(inbox), "scope": "official"}
 
+    # MPCA-148 · Pending Registration-Campaign approval requests. Divisions
+    # raise a campaign with request_status='Pending' — MPCA must approve
+    # before the public link becomes usable. Surface here for MPCA only.
+    is_mpca_early = scope.body_code == "MPCA" or scope.is_state
+    if is_mpca_early:
+        async for c in db.player_registration_campaigns.find(
+            {"request_status": "Pending"}, {"_id": 0},
+        ).sort("created_at", 1).limit(50):
+            if (not kind) or (kind == "registration_campaign_approval"):
+                inbox.append({
+                    "kind": "registration_campaign_approval",
+                    "waiting_on": "MPCA",
+                    "record_id": c["id"],
+                    "label": f"Approve campaign · {c.get('title') or c['id']}",
+                    "cta": "Review",
+                    "link": "/player-registrations",
+                    "body_code": c.get("body_code"),
+                    "body_name": c.get("body_name"),
+                    "cycle_code": c.get("cycle_code"),
+                    "requested_by": c.get("requested_by"),
+                    "request_note": c.get("request_note"),
+                    "created_at": c.get("created_at"),
+                })
+                if len(inbox) >= limit:
+                    return {"items": inbox[:limit], "count": len(inbox), "scope": "mpca"}
+
     # ── State / Division / District: iterate tournaments in scope ──
     from routes.tournaments import _tournament_scope_query
     t_query = _tournament_scope_query(scope) or {}

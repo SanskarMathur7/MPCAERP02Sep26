@@ -21,6 +21,7 @@ const KIND_LABEL = {
     closure_letter: "Closure Letter",
     da_fill: "DA Form · Pending fill",
     extra_expense: "Extra Expense",
+    registration_campaign_approval: "Registration Campaign",     // MPCA-148
 };
 const KIND_TONE = {
     squad_review: "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40",
@@ -38,6 +39,7 @@ const KIND_TONE = {
     closure_letter: "bg-mpca-oxblood/10 text-mpca-oxblood border-mpca-oxblood/40",
     da_fill: "bg-mpca-brass/10 text-mpca-brass border-mpca-brass/40",
     extra_expense: "bg-mpca-gold-light/20 text-mpca-brass border-mpca-brass/40",
+    registration_campaign_approval: "bg-mpca-navy/10 text-mpca-navy border-mpca-navy/40",  // MPCA-148
 };
 
 /** M39 · Persona-scoped Action Center */

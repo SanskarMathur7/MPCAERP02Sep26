@@ -23,6 +23,7 @@ from fastapi import HTTPException, Header
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
+from core.email_notifications import send_email
 
 
 async def _ensure_indexes():
@@ -133,10 +134,30 @@ class PlayerRegistrationData(BaseModel):
     voter_id_url: Optional[str] = None                  # M39o
     address_proof_url: Optional[str] = None             # Current Address Proof
     birth_cert_url: Optional[str] = None
-    marksheet_3yr_url: Optional[str] = None             # M39o · Single PDF · last 3 years bundled
+    marksheet_3yr_url: Optional[str] = None             # M39o · Single PDF · last 3 years bundled (optional if is_employed)
     affidavit_url: Optional[str] = None                 # M39o · Only when no_recent_studies=True
     cancelled_cheque_url: Optional[str] = None          # M39o · Bank verification proof
     gst_certificate_url: Optional[str] = None           # M39o · If GST number provided
+    # MPCA-151 · Feb-2026 · Extended document set + conditional fields
+    samagra_id_player_url: Optional[str] = None         # Samagra ID (player's own)
+    samagra_id_family_url: Optional[str] = None         # Samagra ID (family)
+    consent_form_url: Optional[str] = None              # Notarized MPCA-issued consent template
+    no_study_affidavit_url: Optional[str] = None        # MPCA-issued No-Study affidavit template
+    bonafide_school_cert_url: Optional[str] = None      # School Bonafide certificate
+    # Employed-player alternate path (in lieu of marksheet_3yr_url)
+    is_employed: bool = False
+    appointment_letter_url: Optional[str] = None        # if is_employed=True
+    salary_slip_url: Optional[str] = None               # if is_employed=True (last month)
+    bank_statement_1yr_url: Optional[str] = None        # if is_employed=True (12-month PDF)
+    # Cross-division registration audit
+    last_season_division_code: Optional[str] = None     # Division played from LAST cricketing season
+    noc_previous_division_url: Optional[str] = None     # Required if last_season_division_code != preferred_division_code
+    # Place of birth
+    place_of_birth_city: Optional[str] = None
+    place_of_birth_state: Optional[str] = None
+    # BCCI registration history
+    bcci_registered: bool = False
+    bcci_registration_year: Optional[int] = None        # e.g. 2019 — required if bcci_registered=True
     other_docs: List[Dict[str, str]] = Field(default_factory=list)  # M39o · [{label, url}]
     bank_account_no: Optional[str] = None
     bank_ifsc: Optional[str] = None
@@ -327,6 +348,23 @@ async def division_approve(
     }})
     await _log_event(rid, "division_approved", actor_name=action.actor_name,
                      actor_body_id=x_user_body_code, actor_role=x_role_id, note=action.remark)
+    # MPCA-153 · Notify player by email on Division approval
+    pd = doc.get("player_data") or {}
+    if pd.get("email"):
+        try:
+            await send_email(
+                to=pd["email"],
+                subject="MPCA · Your registration passed Division review",
+                html_body=(
+                    f"<p>Dear {pd.get('full_name') or 'Player'},</p>"
+                    f"<p>Your MPCA player registration has been <strong>approved by your Home Division</strong>"
+                    f" ({doc.get('body_code')}). It is now pending MPCA final approval.</p>"
+                    f"<p><em>Division remark:</em> {action.remark}</p>"
+                    f"<p>Regards,<br/>Team MPCA</p>"
+                ),
+            )
+        except Exception:
+            pass
     return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
 
 
@@ -396,6 +434,24 @@ async def mpca_approve(
     if doc.get("invite_id"):
         await db.player_registration_invites.update_one({"id": doc["invite_id"]}, {"$set": {"status": "Approved"}})
     await _touch_counts(doc["campaign_id"], {"submitted_count": -1, "approved_count": 1})
+    # MPCA-153 · Notify player by email on MPCA final approval + player creation
+    if pd.get("email"):
+        try:
+            await send_email(
+                to=pd["email"],
+                subject=f"MPCA · Registration APPROVED — your Player ID is {player_id}",
+                html_body=(
+                    f"<p>Dear {pd.get('full_name') or 'Player'},</p>"
+                    f"<p>Congratulations! Your MPCA player registration has been <strong>approved</strong>"
+                    f" and your official Player ID is <strong>{player_id}</strong>.</p>"
+                    f"<p><em>MPCA remark:</em> {action.remark}</p>"
+                    f"<p>You may now be selected for tournaments. Reach out to your Home Division"
+                    f" for the next steps.</p>"
+                    f"<p>Regards,<br/>Team MPCA</p>"
+                ),
+            )
+        except Exception:
+            pass
     return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
 
 
@@ -1133,6 +1189,24 @@ async def reject_registration(
     await _touch_counts(doc["campaign_id"], {"rejected_count": 1})
     if doc.get("invite_id"):
         await db.player_registration_invites.update_one({"id": doc["invite_id"]}, {"$set": {"status": "Rejected"}})
+    # MPCA-153 · Notify player by email on rejection
+    pd = doc.get("player_data") or {}
+    if pd.get("email"):
+        try:
+            await send_email(
+                to=pd["email"],
+                subject="MPCA · Your registration was NOT approved",
+                html_body=(
+                    f"<p>Dear {pd.get('full_name') or 'Player'},</p>"
+                    f"<p>We regret to inform you that your MPCA player registration was <strong>not approved</strong> at this time.</p>"
+                    f"<p><em>Reason:</em> {action.note}</p>"
+                    f"<p>You may reach out to your Home Division ({doc.get('body_code')}) if you have questions"
+                    f" or wish to submit a fresh application in the next season.</p>"
+                    f"<p>Regards,<br/>Team MPCA</p>"
+                ),
+            )
+        except Exception:
+            pass
     return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
 
 

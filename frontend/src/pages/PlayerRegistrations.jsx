@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSeason } from "@/context/SeasonContext";
 import { api } from "@/lib/api";
 import CricketLoader from "@/components/CricketLoader";
+import RegistrationAmendModal from "@/components/RegistrationAmendModal";
 
 const STATUS_TONE = {
     Submitted: "bg-mpca-navy/15 text-mpca-navy border-mpca-navy/40",
@@ -46,7 +47,7 @@ const registerName = (pd) => {
  */
 const PlayerRegistrations = () => {
     const { persona } = useAuth();
-    const { cycle } = useSeason();
+    const { season } = useSeason();
     const [tab, setTab] = useState("campaigns");
     const [campaigns, setCampaigns] = useState([]);
     const [regs, setRegs] = useState([]);
@@ -57,8 +58,8 @@ const PlayerRegistrations = () => {
     const isMPCA = persona?.body_type === "State";
     const myBody = persona?.body_code;
 
-    const load = async () => {
-        setLoading(true);
+    const load = async ({ silent = false } = {}) => {
+        if (!silent) setLoading(true);
         try {
             const [{ data: camps }, { data: rows }] = await Promise.all([
                 api.get("/player-registration-campaigns"),
@@ -67,7 +68,7 @@ const PlayerRegistrations = () => {
             setCampaigns(camps || []);
             setRegs(rows || []);
         } catch (_) { setCampaigns([]); setRegs([]); }
-        finally { setLoading(false); }
+        finally { if (!silent) setLoading(false); }
     };
 
     useEffect(() => { load(); }, []);
@@ -90,7 +91,7 @@ const PlayerRegistrations = () => {
                     <div className="overline">Membership · Season Registrations</div>
                     <h1 className="font-serif text-3xl md:text-4xl text-mpca-green-dark mt-2 leading-tight">Player Registrations</h1>
                     <p className="text-[11px] text-mpca-gray-dark mt-2 max-w-2xl">
-                        Open a season-scoped campaign, share the public URL (or per-player invites), and review incoming registrations in the inbox. Approved rows automatically create a Player under {isMPCA ? "the chosen body" : myBody} + {cycle || "current cycle"}.
+                        Open a season-scoped campaign, share the public URL (or per-player invites), and review incoming registrations in the inbox. Approved rows automatically create a Player under {isMPCA ? "the chosen body" : myBody} + {season || "current cycle"}.
                     </p>
                 </div>
                 <button onClick={() => setShowNew(true)} className="btn-heritage-primary" data-testid="pr-new-campaign-btn">
@@ -115,7 +116,7 @@ const PlayerRegistrations = () => {
             {tab === "inbox" && <RegistrationsInbox regs={regs} campaigns={campaigns} onChanged={load} persona={persona} />}
 
             {showNew && (
-                <NewCampaignDialog persona={persona} cycle={cycle} onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load(); }} />
+                <NewCampaignDialog persona={persona} season={season} onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load(); }} />
             )}
             {activeInvites && (
                 <InvitesDialog campaign={activeInvites} onClose={() => setActiveInvites(null)} onCopy={copyLink} onChanged={load} />
@@ -226,6 +227,7 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
     const [filter, setFilter] = useState("Submitted");
     const [selected, setSelected] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [amendOpen, setAmendOpen] = useState(false);   // MPCA-153 · inline amend modal
 
     const filtered = useMemo(() => filter === "all" ? regs : regs.filter((r) => r.status === filter), [regs, filter]);
 
@@ -239,50 +241,14 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
             } catch { /* silent */ }
             return;
         }
-        // M39n · Inline "amend data" flow — collect field + value from prompts
+        // MPCA-153 · Amend via inline modal — no more prompt() driving field names
         if (action === "edit") {
-            const field = window.prompt("Which field to amend? (e.g. full_name, dob, mobile, email, address, aadhaar_no, home_district_code, preferred_division_code, guardian_name)");
-            if (!field) return;
-            const value = window.prompt(`New value for ${field}?`);
-            if (value === null) return;
-            setBusy(true);
-            try {
-                const { data } = await api.post(`/player-registrations/${rid}/edit`, {
-                    patch: { [field]: value },
-                    actor_name: persona?.name,
-                });
-                setSelected(data); onChanged?.();
-            } catch (e) { alert(e?.response?.data?.detail || e.message); }
-            finally { setBusy(false); }
+            setAmendOpen(true);
             return;
         }
-        // M39n · Upload doc on behalf — pick a file, upload to /uploads, patch slot
+        // MPCA-153 · Doc upload is now inside the amend modal — legacy no-op
         if (action === "upload-doc") {
-            const key = window.prompt("Which doc slot? (photo_url | aadhaar_url | address_proof_url | birth_cert_url)");
-            if (!key) return;
-            const input = document.createElement("input");
-            input.type = "file";
-            input.accept = "image/*,application/pdf";
-            input.onchange = async (ev) => {
-                const file = ev.target.files?.[0];
-                if (!file) return;
-                setBusy(true);
-                try {
-                    const fd = new FormData();
-                    fd.append("file", file);
-                    fd.append("related_type", "player_registration");
-                    fd.append("related_id", rid);
-                    fd.append("body_id", persona?.body_code || "MPCA");
-                    fd.append("uploaded_by", persona?.name || "");
-                    const { data: rec } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
-                    const { data } = await api.post(`/player-registrations/${rid}/upload-doc`, {
-                        doc_key: key, doc_url: rec.url, actor_name: persona?.name,
-                    });
-                    setSelected(data); onChanged?.();
-                } catch (e) { alert(e?.response?.data?.detail || e.message); }
-                finally { setBusy(false); }
-            };
-            input.click();
+            setAmendOpen(true);
             return;
         }
         setBusy(true);
@@ -341,6 +307,24 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
                         )}
                     </div>
                 </div>
+            )}
+            {/* MPCA-153 · Inline amend modal */}
+            {amendOpen && selected && (
+                <RegistrationAmendModal
+                    registration={selected}
+                    persona={persona}
+                    onClose={() => setAmendOpen(false)}
+                    onSaved={async () => {
+                        setAmendOpen(false);
+                        try {
+                            const { data } = await api.get(`/player-registrations/${selected.id}`);
+                            setSelected(data);
+                        } catch { /* silent */ }
+                        // Silent list refresh — do NOT unmount RegistrationsInbox
+                        // (keeps the review drawer visible with the updated data).
+                        onChanged?.({ silent: true });
+                    }}
+                />
             )}
         </div>
     );
@@ -499,7 +483,6 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                 <Field label="Mobile" value={pd.mobile} icon={Phone} />
                 <Field label="Email" value={pd.email} icon={Mail} />
                 <Field label="Host Division" value={pd.preferred_division_code} />
-                <Field label="Home District" value={pd.home_district_code} />
                 <Field label="Aadhaar" value={pd.aadhaar_no ? `••••${pd.aadhaar_no.slice(-4)}` : null} />
                 <Field label="Guardian" value={pd.guardian_name} />
                 <Field label="Address" value={pd.address} span={2} />
@@ -565,11 +548,7 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                             {reg.status !== "Division_Approved" && <AlertTriangle size={11} />}
                         </button>
                     )}
-                    {canReturn && (
-                        <button onClick={() => { const n = window.prompt("Return reason (required):"); if (n) onAction(reg.id, "return-to-player", n); }} disabled={busy} className="text-[11px] uppercase tracking-widest border border-amber-700 text-amber-700 px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-return-btn">
-                            <RotateCcw size={11} /> Return to Player
-                        </button>
-                    )}
+                    {/* MPCA-153 · "Return to Player" removed — amendments happen inline via the modal above */}
                     {canReturn && (
                         <button onClick={() => { const n = window.prompt("Rejection reason (required):"); if (n) onAction(reg.id, "reject", n); }} disabled={busy} className="text-[11px] uppercase tracking-widest border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-reject-btn">
                             <XCircle size={11} /> Reject
@@ -618,8 +597,8 @@ const Field = ({ label, value, span = 1, icon: Icon }) => (
 
 // ─────────────── New Campaign dialog ───────────────
 
-const NewCampaignDialog = ({ persona, cycle, onClose, onSaved }) => {
-    const [title, setTitle] = useState(`Season ${cycle || "2025-26"} Registrations`);
+const NewCampaignDialog = ({ persona, season, onClose, onSaved }) => {
+    const [title, setTitle] = useState(`Season ${season || "2026-27"} Registrations`);
     const [bodyCode, setBodyCode] = useState(persona?.body_code || "MPCA");
     const [expiresOn, setExpiresOn] = useState("");
     const [notes, setNotes] = useState("");
@@ -631,7 +610,7 @@ const NewCampaignDialog = ({ persona, cycle, onClose, onSaved }) => {
         setBusy(true); setErr("");
         try {
             await api.post("/player-registration-campaigns", {
-                body_code: bodyCode, cycle_code: cycle || "2025-26", title, expires_on: expiresOn || null, notes, created_by: persona?.name,
+                body_code: bodyCode, cycle_code: season || "2026-27", title, expires_on: expiresOn || null, notes, created_by: persona?.name,
             });
             onSaved?.();
         } catch (ex) { setErr(ex?.response?.data?.detail || ex.message); }
@@ -657,7 +636,7 @@ const NewCampaignDialog = ({ persona, cycle, onClose, onSaved }) => {
                         </label>
                         <label className="block">
                             <span className="overline text-[9px]">Cycle</span>
-                            <input value={cycle || "2025-26"} disabled className="input-heritage font-mono !py-1.5 !text-xs mt-1" />
+                            <input value={season || "2026-27"} disabled className="input-heritage font-mono !py-1.5 !text-xs mt-1" data-testid="pr-new-cycle" />
                         </label>
                     </div>
                     <label className="block">

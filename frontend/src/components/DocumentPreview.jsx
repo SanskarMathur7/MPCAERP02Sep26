@@ -51,11 +51,17 @@ const DocumentPreview = ({ url, name, triggerLabel, renderTrigger, hideExport = 
 
     const isImage = isImageByUrl(url) || sniffedType === "image";
     const isPdf = isPdfByUrl(url) || sniffedType === "pdf";
-    // While we don't yet know the type, we OPTIMISTICALLY show as image
-    // (largest population — photos, aadhaar scans, PAN, etc.). The <img>
-    // tag will silently fail if the file is actually a PDF and the HEAD
-    // sniff will kick in on next render anyway.
+    // Feb-2026 · When neither URL suffix nor HEAD sniff gave a definitive
+    // answer, we OPTIMISTICALLY try `<img>` first (largest population —
+    // photos / Aadhaar / PAN scans). If it errors we swap to `<iframe>`
+    // which handles PDFs correctly. If THAT also fails we finally show
+    // the "not supported" screen — but with Download always available.
     const stillSniffing = !isImage && !isPdf && sniffedType === null;
+    const [imgFailed, setImgFailed] = useState(false);
+    const [iframeFailed, setIframeFailed] = useState(false);
+    // Attempted render order: image → iframe → unsupported
+    const showImage = isImage || (sniffedType === null && !imgFailed);
+    const showIframe = !showImage && (isPdf || (sniffedType === null && imgFailed && !iframeFailed));
 
     const openPreview = (e) => {
         e?.preventDefault?.();
@@ -114,16 +120,22 @@ const DocumentPreview = ({ url, name, triggerLabel, renderTrigger, hideExport = 
                             </div>
                         </div>
                         <div className="flex-1 overflow-auto bg-mpca-charcoal/5">
-                            {isImage ? (
+                            {showImage ? (
                                 <img
                                     src={url}
                                     alt={name || ""}
                                     className="max-w-full max-h-[80vh] mx-auto"
                                     data-testid="doc-preview-image"
-                                    onError={() => setSniffedType("pdf")}  /* silent fallback if actually a PDF */
+                                    onError={() => setImgFailed(true)}
                                 />
-                            ) : isPdf ? (
-                                <iframe src={hideExport ? `${url}#toolbar=0&navpanes=0` : url} title={name || "PDF"} className="w-full h-[80vh] border-0" data-testid="doc-preview-iframe" />
+                            ) : showIframe ? (
+                                <iframe
+                                    src={hideExport ? `${url}#toolbar=0&navpanes=0` : url}
+                                    title={name || "PDF"}
+                                    className="w-full h-[80vh] border-0"
+                                    data-testid="doc-preview-iframe"
+                                    onError={() => setIframeFailed(true)}
+                                />
                             ) : stillSniffing ? (
                                 <div className="p-12 text-center">
                                     <FileText className="mx-auto mb-4 text-mpca-brass animate-pulse" size={48} strokeWidth={1} />
@@ -133,9 +145,13 @@ const DocumentPreview = ({ url, name, triggerLabel, renderTrigger, hideExport = 
                                 <div className="p-12 text-center">
                                     <FileText className="mx-auto mb-4 text-mpca-brass" size={48} strokeWidth={1} />
                                     <div className="font-serif text-lg text-mpca-green-dark">Inline preview not supported for this file type.</div>
-                                    {!hideExport && (
-                                        <div className="text-[11px] text-mpca-gray-dark mt-2">Use &quot;New Tab&quot; or &quot;Download&quot; from the toolbar above.</div>
-                                    )}
+                                    <div className="text-[11px] text-mpca-gray-dark mt-2 mb-4">Use the Download button below to view the file locally.</div>
+                                    {/* Feb-2026 · Always show Download as escape hatch,
+                                        even when hideExport was requested — user
+                                        clearly cannot see the file otherwise. */}
+                                    <a href={url} download className="btn-heritage-primary inline-flex items-center gap-1" data-testid="doc-preview-download-fallback">
+                                        <Download size={12} /> Download File
+                                    </a>
                                 </div>
                             )}
                         </div>

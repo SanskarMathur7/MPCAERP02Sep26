@@ -667,30 +667,108 @@ const DocumentsTab = ({ player, persona, onChanged }) => {
             </div>
 
             {/* MPCA-Feb2026 · Other Documents — free-form uploads with a
-                label prefix `other:*`, carried over from the reg form. Not
-                part of the fixed DOC_SLOTS list. */}
+                label prefix `other:*`. Includes both docs the player
+                submitted via the reg form AND any extras added later by
+                Division / MPCA directly on this profile. */}
             {(() => {
                 const otherDocs = (player.documents || []).filter((d) => (d.doc_type || "").startsWith("other:"));
-                if (otherDocs.length === 0) return null;
+                if (otherDocs.length === 0 && !canValidate) return null;
                 return (
                     <div className="mt-8" data-testid="doc-other-list">
-                        <div className="overline mb-3">Other Documents (from registration)</div>
-                        <div className="grid sm:grid-cols-2 gap-4">
-                            {otherDocs.map((d, i) => (
-                                <DocSlot
-                                    key={`other-${i}`}
-                                    slot={{ key: d.doc_type, label: d.doc_type.replace(/^other:/, "Other · "), required: false }}
-                                    existing={d}
-                                    playerId={player.id}
-                                    persona={persona}
-                                    locked={locked}
-                                    onChanged={onChanged}
-                                />
-                            ))}
-                        </div>
+                        <div className="overline mb-3">Other Documents</div>
+                        {otherDocs.length > 0 && (
+                            <div className="grid sm:grid-cols-2 gap-4">
+                                {otherDocs.map((d, i) => (
+                                    <DocSlot
+                                        key={`other-${i}`}
+                                        slot={{ key: d.doc_type, label: d.doc_type.replace(/^other:/, "Other · "), required: false }}
+                                        existing={d}
+                                        playerId={player.id}
+                                        persona={persona}
+                                        locked={locked}
+                                        onChanged={onChanged}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                        {/* Add-new-other-doc utility — MPCA / Division only */}
+                        {canValidate && !locked && (
+                            <AddOtherDoc playerId={player.id} persona={persona} onChanged={onChanged} />
+                        )}
                     </div>
                 );
             })()}
+        </div>
+    );
+};
+
+/** MPCA-Feb2026 · Add an "Other Document" directly on the profile (KYC tab).
+ * MPCA/Division uploads a file, gives it a label, and it lands in
+ * `player.documents` with `doc_type=other:{label}`. */
+const AddOtherDoc = ({ playerId, persona, onChanged }) => {
+    const [label, setLabel] = useState("");
+    const [file, setFile] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState(null);
+
+    const submit = async () => {
+        if (!file || !label.trim()) { setErr("Give the document a label and pick a file first."); return; }
+        setBusy(true); setErr(null);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("related_type", "player");
+            fd.append("related_id", playerId);
+            if (persona?.body_code) fd.append("body_id", persona.body_code);
+            if (persona?.display_name) fd.append("uploaded_by", persona.display_name);
+            const res = await fetch(`${API}/api/uploads`, { method: "POST", body: fd });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.detail || `Upload failed (${res.status})`);
+            }
+            const record = await res.json();
+            const doc_type = `other:${label.trim()}`;
+            const updated = await addPlayerDocument(playerId, doc_type, record.url, record.original_name);
+            onChanged(updated);
+            setLabel(""); setFile(null);
+        } catch (e) { setErr(e.message || "Upload failed"); }
+        finally { setBusy(false); }
+    };
+
+    return (
+        <div className="mt-4 border border-dashed border-mpca-brass/50 bg-mpca-cream/40 p-4" data-testid="kyc-add-other-doc">
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-oxblood mb-2">Add another document</div>
+            <div className="grid sm:grid-cols-[1fr_auto_auto] gap-3 items-end">
+                <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-1">Label</div>
+                    <input
+                        value={label}
+                        onChange={(e) => setLabel(e.target.value)}
+                        placeholder="e.g. School TC, Coach Reference, Character Certificate"
+                        className="input-heritage !py-1.5 !text-xs w-full"
+                        data-testid="kyc-other-label"
+                    />
+                </div>
+                <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-1">File</div>
+                    <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        onChange={(e) => setFile(e.target.files?.[0] || null)}
+                        className="text-[11px]"
+                        data-testid="kyc-other-file"
+                    />
+                </div>
+                <button
+                    onClick={submit}
+                    disabled={busy || !file || !label.trim()}
+                    className="btn-heritage-primary !py-1.5 !px-3 !text-xs"
+                    data-testid="kyc-other-add-btn"
+                >
+                    {busy ? <><Loader2 size={12} className="animate-spin" /> Uploading…</> : <><Upload size={12} /> Add</>}
+                </button>
+            </div>
+            {err && <div className="text-[11px] text-mpca-oxblood mt-2">{err}</div>}
         </div>
     );
 };

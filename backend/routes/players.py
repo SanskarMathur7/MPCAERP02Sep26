@@ -333,8 +333,10 @@ async def update_player(pid: str, patch: dict):
 @api_router.post("/players/{pid}/documents", response_model=Player)
 async def add_document(pid: str, doc_type: str, url: str, filename: Optional[str] = None):
     """Attach an uploaded document to the player."""
-    if doc_type not in PLAYER_DOC_TYPES:
-        raise HTTPException(400, f"Unknown doc_type '{doc_type}'. Allowed: {PLAYER_DOC_TYPES}")
+    # Feb-2026 · Free-form "other:*" docs bypass the fixed whitelist so
+    # MPCA/Division can attach any extra document with a custom label.
+    if not doc_type.startswith("other:") and doc_type not in PLAYER_DOC_TYPES:
+        raise HTTPException(400, f"Unknown doc_type '{doc_type}'. Allowed: {PLAYER_DOC_TYPES} or prefix with 'other:'")
     doc = await db.players.find_one({"id": pid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Player not found")

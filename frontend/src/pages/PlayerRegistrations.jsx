@@ -148,6 +148,17 @@ const CampaignsList = ({ campaigns, onCopy, onOpen, onChanged, persona }) => {
         try { await api.post(`/player-registration-campaigns/${cid}/reject-request`, { reason: reason.trim() }); onChanged?.(); }
         catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
+    // MPCA-Feb2026 · End / Resume a campaign — flips is_active. When false
+    // the public link + invite tokens all return HTTP 410 (Gone).
+    const toggleActive = async (c) => {
+        const nextActive = !c.is_active;
+        const verb = nextActive ? "Resume this campaign — the public URL will start accepting submissions again?" : "End this campaign now? The public URL will stop accepting new submissions immediately (existing registrations are preserved).";
+        if (!window.confirm(verb)) return;
+        try {
+            await api.patch(`/player-registration-campaigns/${c.id}`, { is_active: nextActive });
+            onChanged?.();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
 
     return (
         <div className="bulletin-card divide-y divide-mpca-brass/15" data-testid="pr-campaigns-list">
@@ -202,6 +213,19 @@ const CampaignsList = ({ campaigns, onCopy, onOpen, onChanged, persona }) => {
                                     <a href={publicUrlFor(c.public_token)} target="_blank" rel="noreferrer" className="text-[10px] uppercase tracking-widest px-2 py-1 text-mpca-gray-dark hover:text-mpca-green-dark inline-flex items-center gap-1" data-testid={`pr-preview-${c.id}`}>
                                         <ExternalLink size={10} /> Preview
                                     </a>
+                                    {/* MPCA-Feb2026 · Active toggle — MPCA or the owning body can end/resume the campaign at any point. */}
+                                    <button
+                                        onClick={() => toggleActive(c)}
+                                        className={`text-[10px] uppercase tracking-widest px-2 py-1 border inline-flex items-center gap-1 transition-colors ${
+                                            c.is_active
+                                                ? "border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory"
+                                                : "border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory"
+                                        }`}
+                                        title={c.is_active ? "End this campaign — public URL stops accepting submissions" : "Resume this campaign — public URL becomes live again"}
+                                        data-testid={`pr-toggle-active-${c.id}`}
+                                    >
+                                        {c.is_active ? "End Campaign" : "Resume"}
+                                    </button>
                                 </>
                             )}
                             {/* MPCA-116 · MPCA-only Approve / Reject buttons for Pending requests */}

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import {
     getTournamentPlan, saveTournamentPlan, previewAutoBudget,
     submitTournamentPlan, approveTournamentPlan, returnTournamentPlan,
-    fetchGrantRates, fetchBudgetTracker,
+    fetchGrantRates, fetchBudgetTracker, fetchTournamentBudgets,
     fetchTournamentInvoices, createTournamentInvoice, aiExtractInvoice,
     submitTournamentInvoice, approveTournamentInvoice, rejectTournamentInvoice,
     fetchDAForms, updateDAForm, submitDAForm, approveDAForm, rejectDAForm, rebuildDAForms,
@@ -17,12 +17,13 @@ import {
 import {
     ClipboardList, IndianRupee, FileText, Users, Save, Send, CheckCircle2, X,
     Sparkles, Upload, AlertTriangle, Loader2, ArrowUpRight, RotateCcw,
-    Plus, HelpCircle, ScrollText, Gavel,
+    Plus, HelpCircle, ScrollText, Gavel, Trash2,
 } from "lucide-react";
 import WorkflowTimeline from "@/components/WorkflowTimeline";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const fmtINR = (v) => `₹${(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
 const PLAN_META = {
     Draft:            { tone: "lapsed",    label: "Draft" },
@@ -294,29 +295,77 @@ const BudgetTab = ({ tournament }) => {
 // MPCA-124 · Exported so the Tournament Finance Console renders this rich
 // upload UI directly on its Invoices tab (previously showed a read-only
 // summary that redirected to a broken URL).
+// Sprint T-RIM · Single invoice can now be set off against multiple budget
+// heads. Head dropdown is filtered to only the approved budget line-items
+// for THIS tournament + spending body.
 export const InvoicesTab = ({ tournament, persona, onChanged }) => {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [addOpen, setAddOpen] = useState(false);
     const [aiExtracting, setAiExtracting] = useState(false);
     const [aiPreview, setAiPreview] = useState(null);
-    const [form, setForm] = useState({
+    const [approvedBudget, setApprovedBudget] = useState(null);
+    const emptyForm = () => ({
         vendor_name: "", invoice_no: "", invoice_date: "",
         amount_inr: 0, gst_inr: 0, total_inr: 0,
-        budget_head_code: "", file_url: "", filename: "", ai_extracted: false,
+        allocations: [{ head_code: "", head_label: "", amount_inr: 0 }],
+        file_url: "", filename: "", ai_extracted: false,
     });
+    const [form, setForm] = useState(emptyForm());
     const inputRef = useRef(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
 
+    // Master label ↔ code map (mirrors backend HEAD_CODE_TO_LABEL)
+    const HEAD_CODE_TO_LABEL = {
+        MATCH_OFFICIAL_DA:     "Match Official DA",
+        MATCH_OFFICIAL_TRAVEL: "Match Official Travel",
+        PLAYER_DA_FOOD:        "Player DA / Food",
+        PLAYER_TRAVEL:         "Player Travel",
+        PLAYER_STAY:           "Player Stay (Hotel)",
+        GROUND_FEES:           "Ground Fees",
+        KIT_CONSUMABLES:       "Balls / Kit Consumables",
+        UMPIRE_HONORARIUM:     "Umpire Honorarium",
+        SCORER_HONORARIUM:     "Scorer Honorarium",
+        PHYSIO_HONORARIUM:     "Physio Honorarium",
+        CONTINGENCY:           "Contingency",
+    };
+    const labelToCode = (label) => {
+        const entry = Object.entries(HEAD_CODE_TO_LABEL).find(([, l]) => l === label);
+        return entry ? entry[0] : (label || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+    };
+
+    // Approved budget heads → options for the dropdown. Falls back to empty list.
+    const budgetHeads = useMemo(() => {
+        if (!approvedBudget) return [];
+        const heads = approvedBudget.approved_head_allocations?.length
+            ? approvedBudget.approved_head_allocations
+            : (approvedBudget.head_allocations || []);
+        return heads
+            .filter((h) => (h.limit_inr || 0) > 0)
+            .map((h) => ({
+                code: labelToCode(h.head),
+                label: h.head,
+                limit_inr: h.limit_inr || 0,
+            }));
+    }, [approvedBudget]);
+
     const load = async () => {
         setLoading(true);
         try {
-            const inv = await fetchTournamentInvoices({ tournament_id: tournament.id });
+            const [inv, budgets] = await Promise.all([
+                fetchTournamentInvoices({ tournament_id: tournament.id }),
+                fetchTournamentBudgets({
+                    tournament_id: tournament.id,
+                    body_id: persona?.body_code,
+                    status: "Approved",
+                }).catch(() => []),
+            ]);
             setInvoices(inv);
+            setApprovedBudget((budgets && budgets.length) ? budgets[0] : null);
         } finally { setLoading(false); }
     };
-    useEffect(() => { load(); }, [tournament.id]);
+    useEffect(() => { load(); }, [tournament.id, persona?.body_code]);
 
     const canAdd = persona && (persona.body_type === "State" || persona.body_type === "Division" || persona.body_type === "District");
 
@@ -332,6 +381,11 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
             const rec = await res.json();
             const preview = await aiExtractInvoice(rec.url);
             setAiPreview(preview.ai_extraction);
+            const aiHeadCode = preview.prefill.budget_head_code || "";
+            const aiTotal = preview.prefill.total_inr || 0;
+            // Seed the first allocation with AI-suggested head ONLY if that head
+            // is present in the tournament's approved budget; otherwise blank.
+            const matched = budgetHeads.find((h) => h.code === aiHeadCode);
             setForm((f) => ({
                 ...f,
                 file_url: rec.url,
@@ -341,49 +395,86 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                 invoice_date: preview.prefill.invoice_date || f.invoice_date,
                 amount_inr: preview.prefill.amount_inr || 0,
                 gst_inr: preview.prefill.gst_inr || 0,
-                total_inr: preview.prefill.total_inr || 0,
-                budget_head_code: preview.prefill.budget_head_code || f.budget_head_code,
+                total_inr: aiTotal,
+                allocations: [{
+                    head_code: matched?.code || "",
+                    head_label: matched?.label || "",
+                    amount_inr: matched ? aiTotal : 0,
+                }],
                 ai_extracted: true,
             }));
         } catch (e) { setError(e.message); }
         finally { setAiExtracting(false); if (inputRef.current) inputRef.current.value = ""; }
     };
 
+    // Derived totals for the allocations block
+    const invoiceTotal = useMemo(
+        () => parseFloat(form.total_inr) || (parseFloat(form.amount_inr) + parseFloat(form.gst_inr)) || 0,
+        [form.total_inr, form.amount_inr, form.gst_inr]
+    );
+    const allocSum = useMemo(
+        () => (form.allocations || []).reduce((s, a) => s + (parseFloat(a.amount_inr) || 0), 0),
+        [form.allocations]
+    );
+    const allocDelta = round2(invoiceTotal - allocSum);
+    const allocMismatch = Math.abs(allocDelta) > 0.5;
+    const allHeadsPicked = (form.allocations || []).every((a) => a.head_code);
+
+    const updateAllocation = (idx, patch) => {
+        setForm((f) => {
+            const next = [...f.allocations];
+            next[idx] = { ...next[idx], ...patch };
+            return { ...f, allocations: next };
+        });
+    };
+    const addAllocation = () => setForm((f) => ({
+        ...f,
+        allocations: [...f.allocations, { head_code: "", head_label: "", amount_inr: 0 }],
+    }));
+    const removeAllocation = (idx) => setForm((f) => ({
+        ...f,
+        allocations: f.allocations.filter((_, i) => i !== idx),
+    }));
+
     const save = async () => {
         setBusy(true); setError(null);
         try {
+            const total = round2(invoiceTotal);
+            const cleanedAllocs = (form.allocations || [])
+                .filter((a) => a.head_code)
+                .map((a) => ({
+                    head_code: a.head_code,
+                    head_label: a.head_label || HEAD_CODE_TO_LABEL[a.head_code] || a.head_code,
+                    amount_inr: parseFloat(a.amount_inr) || 0,
+                }));
+            if (!cleanedAllocs.length) throw new Error("Pick at least one budget head to set off this invoice against.");
+            const sum = round2(cleanedAllocs.reduce((s, a) => s + a.amount_inr, 0));
+            if (Math.abs(sum - total) > 0.5)
+                throw new Error(`Sum of head allocations (₹${sum.toLocaleString("en-IN")}) must equal invoice total (₹${total.toLocaleString("en-IN")}).`);
+
             await createTournamentInvoice({
                 tournament_id: tournament.id,
                 body_id: persona?.body_code || "MPCA",
                 // MPCA-124 · budget_id resolved server-side from Approved
-                // budget of (tournament, body). Do not send legacy
-                // `auto_budget_id` (per-body budgets in M39r+).
-                ...form,
-                total_inr: parseFloat(form.total_inr) || (parseFloat(form.amount_inr) + parseFloat(form.gst_inr)),
+                // budget of (tournament, body).
+                vendor_name: form.vendor_name,
+                invoice_no: form.invoice_no,
+                invoice_date: form.invoice_date,
                 amount_inr: parseFloat(form.amount_inr) || 0,
                 gst_inr: parseFloat(form.gst_inr) || 0,
+                total_inr: total,
+                file_url: form.file_url,
+                filename: form.filename,
+                ai_extracted: form.ai_extracted,
+                allocations: cleanedAllocs,
+                budget_head_code: cleanedAllocs[0].head_code, // legacy compat
             });
             setAddOpen(false); setAiPreview(null);
-            setForm({ vendor_name: "", invoice_no: "", invoice_date: "", amount_inr: 0, gst_inr: 0, total_inr: 0, budget_head_code: "", file_url: "", filename: "", ai_extracted: false });
+            setForm(emptyForm());
             await load(); onChanged?.();
         } catch (e) { setError(e?.response?.data?.detail || e.message); }
         finally { setBusy(false); }
     };
-
-    const HEAD_OPTIONS = [
-        ["", "— Select head —"],
-        ["MATCH_OFFICIAL_DA", "Match Official DA"],
-        ["MATCH_OFFICIAL_TRAVEL", "Match Official Travel"],
-        ["PLAYER_DA_FOOD", "Player DA / Food"],
-        ["PLAYER_TRAVEL", "Player Travel"],
-        ["PLAYER_STAY", "Player Stay (Hotel)"],
-        ["GROUND_FEES", "Ground Fees"],
-        ["KIT_CONSUMABLES", "Balls / Kit Consumables"],
-        ["UMPIRE_HONORARIUM", "Umpire Honorarium"],
-        ["SCORER_HONORARIUM", "Scorer Honorarium"],
-        ["PHYSIO_HONORARIUM", "Physio Honorarium"],
-        ["CONTINGENCY", "Contingency"],
-    ];
 
     return (
         <div className="space-y-6" data-testid="invoices-tab">
@@ -395,11 +486,24 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                     </p>
                 </div>
                 {canAdd && (
-                    <button onClick={() => setAddOpen(true)} className="btn-heritage-primary" data-testid="add-invoice-btn">
+                    <button
+                        onClick={() => setAddOpen(true)}
+                        disabled={budgetHeads.length === 0}
+                        title={budgetHeads.length === 0 ? "This tournament has no approved budget yet — invoices can only be added after MPCA sanctions the budget." : ""}
+                        className="btn-heritage-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                        data-testid="add-invoice-btn"
+                    >
                         <Upload size={12} /> Upload Invoice
                     </button>
                 )}
             </div>
+
+            {budgetHeads.length === 0 && canAdd && (
+                <div className="border border-mpca-brass/40 bg-mpca-parchment/40 p-3 text-xs text-mpca-gray-dark" data-testid="no-approved-budget-msg">
+                    <AlertTriangle size={12} className="inline mr-1 text-mpca-oxblood" />
+                    No <strong>approved budget</strong> found for {persona?.body_code || "this body"} on this tournament yet. Invoices can only be logged after MPCA sanctions the budget.
+                </div>
+            )}
 
             {loading ? <div className="p-8 text-center"><Loader2 className="animate-spin inline" /></div> : (
                 invoices.length === 0 ? (
@@ -411,7 +515,7 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                         <table className="w-full text-sm" data-testid="invoices-table">
                             <thead className="bg-mpca-parchment border-b border-mpca-brass/40">
                                 <tr>
-                                    {["Ref", "Vendor", "Head", "Date", "Amount", "GST", "Total", "Eligible", "Status"].map((h) => (
+                                    {["Ref", "Vendor", "Head(s)", "Date", "Amount", "GST", "Total", "Eligible", "Status"].map((h) => (
                                         <th key={h} className="text-left px-3 py-3 text-[11px] uppercase tracking-wider text-mpca-brass">{h}</th>
                                     ))}
                                 </tr>
@@ -419,6 +523,7 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                             <tbody>
                                 {invoices.map((i) => {
                                     const over = i.over_budget_amount_inr > 0;
+                                    const allocs = (i.allocations && i.allocations.length) ? i.allocations : null;
                                     return (
                                         <tr key={i.id} className={"border-b border-mpca-brass/20 " + (over ? "bg-mpca-oxblood/5" : "")} data-testid={`inv-row-${i.invoice_ref}`}>
                                             <td className="px-3 py-2 font-mono text-[10px]">{i.invoice_ref}
@@ -426,7 +531,18 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                                 {i.manually_overridden && <span className="ml-1 text-[9px] text-mpca-brass">EDITED</span>}
                                             </td>
                                             <td className="px-3 py-2">{i.vendor_name || "—"}</td>
-                                            <td className="px-3 py-2 text-[11px]">{HEAD_OPTIONS.find((h) => h[0] === i.budget_head_code)?.[1] || "—"}</td>
+                                            <td className="px-3 py-2 text-[11px]">
+                                                {allocs ? (
+                                                    <div className="space-y-0.5" data-testid={`inv-heads-${i.invoice_ref}`}>
+                                                        {allocs.map((a, idx) => (
+                                                            <div key={idx} className="flex items-baseline gap-1">
+                                                                <span>{a.head_label || HEAD_CODE_TO_LABEL[a.head_code] || a.head_code}</span>
+                                                                <span className="font-mono text-[10px] text-mpca-brass">· {fmtINR(a.amount_inr)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (HEAD_CODE_TO_LABEL[i.budget_head_code] || "—")}
+                                            </td>
                                             <td className="px-3 py-2 font-mono text-[11px]">{i.invoice_date || "—"}</td>
                                             <td className="px-3 py-2 font-mono">{fmtINR(i.amount_inr)}</td>
                                             <td className="px-3 py-2 font-mono">{fmtINR(i.gst_inr)}</td>
@@ -465,7 +581,7 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                 <div className="overline !text-mpca-gold-light">New Invoice</div>
                                 <div className="font-serif text-2xl mt-1">Upload & AI-Extract</div>
                             </div>
-                            <button onClick={() => setAddOpen(false)}><X className="text-mpca-gold-light" /></button>
+                            <button onClick={() => { setAddOpen(false); setForm(emptyForm()); setAiPreview(null); }}><X className="text-mpca-gold-light" /></button>
                         </div>
                         <div className="p-6 space-y-4">
                             <div>
@@ -507,12 +623,6 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                     <input type="date" value={form.invoice_date} onChange={(e) => setForm((f) => ({ ...f, invoice_date: e.target.value }))} className="input-heritage" data-testid="inv-date" />
                                 </div>
                                 <div>
-                                    <label className="label-heritage">Budget Head *</label>
-                                    <select value={form.budget_head_code} onChange={(e) => setForm((f) => ({ ...f, budget_head_code: e.target.value }))} className="input-heritage" data-testid="inv-head">
-                                        {HEAD_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                                    </select>
-                                </div>
-                                <div>
                                     <label className="label-heritage">Amount (pre-GST)</label>
                                     <input type="number" value={form.amount_inr} onChange={(e) => setForm((f) => ({ ...f, amount_inr: e.target.value }))} className="input-heritage" data-testid="inv-amount" />
                                 </div>
@@ -520,17 +630,118 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                     <label className="label-heritage">GST</label>
                                     <input type="number" value={form.gst_inr} onChange={(e) => setForm((f) => ({ ...f, gst_inr: e.target.value }))} className="input-heritage" data-testid="inv-gst" />
                                 </div>
-                                <div className="sm:col-span-2">
+                                <div>
                                     <label className="label-heritage">Total</label>
                                     <input type="number" value={form.total_inr || ((+form.amount_inr || 0) + (+form.gst_inr || 0))} onChange={(e) => setForm((f) => ({ ...f, total_inr: e.target.value }))} className="input-heritage" data-testid="inv-total" />
                                 </div>
                             </div>
 
-                            {error && <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood p-2 text-xs">{error}</div>}
+                            {/* Sprint T-RIM · Multi-Head Set-Off */}
+                            <div className="border border-mpca-brass/40 bg-mpca-parchment/30 p-3 space-y-2" data-testid="inv-allocations-block">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="overline">Budget Head Set-Off</div>
+                                        <div className="text-[11px] text-mpca-gray-dark mt-0.5">
+                                            Split this invoice across the tournament&apos;s approved budget heads. The sum of allocations must equal the invoice total.
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button" onClick={addAllocation}
+                                        className="text-[10px] uppercase tracking-wider text-mpca-oxblood underline"
+                                        data-testid="inv-add-alloc"
+                                    >
+                                        + Add head
+                                    </button>
+                                </div>
+
+                                {budgetHeads.length === 0 ? (
+                                    <div className="text-xs text-mpca-oxblood italic">
+                                        No approved budget heads found. Please sanction the budget first.
+                                    </div>
+                                ) : (form.allocations.map((a, idx) => {
+                                    const usedHeads = form.allocations
+                                        .filter((_, i2) => i2 !== idx)
+                                        .map((x) => x.head_code)
+                                        .filter(Boolean);
+                                    const options = budgetHeads.filter((h) => !usedHeads.includes(h.code));
+                                    return (
+                                        <div key={idx} className="grid grid-cols-[1fr_140px_28px] gap-2 items-end" data-testid={`inv-alloc-row-${idx}`}>
+                                            <div>
+                                                <label className="label-heritage text-[10px]">Budget Head #{idx + 1}</label>
+                                                <select
+                                                    value={a.head_code}
+                                                    onChange={(e) => {
+                                                        const code = e.target.value;
+                                                        const match = budgetHeads.find((h) => h.code === code);
+                                                        updateAllocation(idx, {
+                                                            head_code: code,
+                                                            head_label: match?.label || "",
+                                                        });
+                                                    }}
+                                                    className="input-heritage"
+                                                    data-testid={`inv-alloc-head-${idx}`}
+                                                >
+                                                    <option value="">— Select head —</option>
+                                                    {options.map((h) => (
+                                                        <option key={h.code} value={h.code}>
+                                                            {h.label} · limit {fmtINR(h.limit_inr)}
+                                                        </option>
+                                                    ))}
+                                                    {a.head_code && !options.find((h) => h.code === a.head_code) && (
+                                                        <option value={a.head_code}>
+                                                            {a.head_label || a.head_code}
+                                                        </option>
+                                                    )}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="label-heritage text-[10px]">Amount</label>
+                                                <input
+                                                    type="number" min="0" step="0.01"
+                                                    value={a.amount_inr}
+                                                    onChange={(e) => updateAllocation(idx, { amount_inr: e.target.value })}
+                                                    className="input-heritage"
+                                                    data-testid={`inv-alloc-amt-${idx}`}
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeAllocation(idx)}
+                                                disabled={form.allocations.length === 1}
+                                                className="text-mpca-oxblood disabled:opacity-30 pb-2"
+                                                title="Remove"
+                                                data-testid={`inv-alloc-del-${idx}`}
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    );
+                                }))}
+
+                                {budgetHeads.length > 0 && (
+                                    <div className={"text-[11px] flex items-center justify-between mt-1 pt-2 border-t border-mpca-brass/30 " + (allocMismatch ? "text-mpca-oxblood font-semibold" : "text-mpca-green-dark")} data-testid="inv-alloc-summary">
+                                        <span>Allocated: <span className="font-mono">{fmtINR(allocSum)}</span> · Invoice total: <span className="font-mono">{fmtINR(invoiceTotal)}</span></span>
+                                        <span>
+                                            {allocMismatch ? (
+                                                allocDelta > 0
+                                                    ? <>Short by {fmtINR(Math.abs(allocDelta))}</>
+                                                    : <>Over by {fmtINR(Math.abs(allocDelta))}</>
+                                            ) : <>Balanced ✓</>}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {error && <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood p-2 text-xs" data-testid="inv-error">{error}</div>}
                         </div>
                         <div className="px-6 pb-5 flex justify-end gap-3">
-                            <button onClick={() => setAddOpen(false)} className="btn-heritage-ghost">Cancel</button>
-                            <button onClick={save} disabled={busy || !form.budget_head_code} className="btn-heritage-primary" data-testid="inv-save">
+                            <button onClick={() => { setAddOpen(false); setForm(emptyForm()); setAiPreview(null); }} className="btn-heritage-ghost">Cancel</button>
+                            <button
+                                onClick={save}
+                                disabled={busy || !allHeadsPicked || allocMismatch || budgetHeads.length === 0 || invoiceTotal <= 0}
+                                className="btn-heritage-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                                data-testid="inv-save"
+                            >
                                 {busy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save Invoice
                             </button>
                         </div>

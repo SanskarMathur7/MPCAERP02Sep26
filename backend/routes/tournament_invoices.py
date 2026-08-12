@@ -14,7 +14,7 @@ from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 from models import (
     TournamentInvoice, TournamentInvoiceCreate, TournamentInvoiceStatus,
-    AIInvoiceExtraction,
+    AIInvoiceExtraction, InvoiceHeadAllocation,
 )
 
 # Reuse LLM plumbing already in ai_validator
@@ -171,6 +171,21 @@ async def create_invoice(payload: TournamentInvoiceCreate):
         raise HTTPException(404, "Tournament not found")
     cycle = t.get("fiscal_cycle") or "2025-26"
     body = payload.model_dump()
+
+    # Sprint T-RIM · validate multi-head allocations sum to invoice total (₹1 tolerance)
+    allocs = body.get("allocations") or []
+    if allocs:
+        total = round(float(body.get("total_inr") or 0), 2)
+        alloc_sum = round(sum(float(a.get("amount_inr") or 0) for a in allocs), 2)
+        if abs(alloc_sum - total) > 1.0:
+            raise HTTPException(
+                422,
+                f"Sum of head allocations (₹{alloc_sum:,.2f}) must equal the invoice total (₹{total:,.2f}).",
+            )
+        # Convenience: keep legacy budget_head_code = first allocation's code
+        if not body.get("budget_head_code"):
+            body["budget_head_code"] = allocs[0].get("head_code")
+
     # Resolve budget if not set
     if not body.get("budget_id"):
         tb = await db.tournament_budgets.find_one({
@@ -207,6 +222,7 @@ class TournamentInvoicePatch(BaseModel):
     gst_inr: Optional[float] = Field(None, ge=0)
     total_inr: Optional[float] = Field(None, ge=0)
     budget_head_code: Optional[str] = None
+    allocations: Optional[List[InvoiceHeadAllocation]] = None  # Sprint T-RIM · multi-head splits
     notes: Optional[str] = None
     manually_overridden: Optional[bool] = None
 
@@ -282,9 +298,12 @@ async def delete_invoice(iid: str):
 
 
 async def _apply_grant_eligibility(inv: TournamentInvoice) -> TournamentInvoice:
-    """Compute over_budget + eligible amounts against remaining head budget."""
+    """Compute over_budget + eligible amounts against remaining head budget.
+    Sprint T-RIM · when the invoice has multi-head allocations, eligibility is
+    computed per head and aggregated. Legacy single-head invoices continue to work."""
     inv.total_inr = round(float(inv.amount_inr or 0) + float(inv.gst_inr or 0), 2)
-    if not inv.budget_id or not inv.budget_head_code:
+
+    if not inv.budget_id:
         # No budget attached — treat as fully eligible
         inv.eligible_for_grant_inr = inv.total_inr
         inv.ineligible_for_grant_inr = 0.0
@@ -294,13 +313,60 @@ async def _apply_grant_eligibility(inv: TournamentInvoice) -> TournamentInvoice:
     if not tb:
         inv.eligible_for_grant_inr = inv.total_inr
         return inv
-    # Match head by explicit code map
+
+    heads_ref = tb.get("approved_head_allocations") or tb.get("head_allocations") or []
+    # Build a head-label → limit map, and code → label map for legacy lookup
+    head_limit_by_label: dict = {}
+    for h in heads_ref:
+        head_limit_by_label[h.get("head")] = float(h.get("limit_inr") or 0)
+
+    # ─────── Multi-head path ───────
+    if inv.allocations:
+        # Fetch peer invoices once (perf) — filter per head in memory.
+        other_invoices = await db.tournament_invoices.find({
+            "budget_id": inv.budget_id,
+            "status": {"$in": ["Approved", "Submitted"]},
+            "id": {"$ne": inv.id},
+        }, {"_id": 0}).to_list(500)
+        total_eligible = 0.0
+        total_over = 0.0
+        for alloc in inv.allocations:
+            head_label = alloc.head_label or HEAD_CODE_TO_LABEL.get((alloc.head_code or "").upper(), alloc.head_code)
+            head_code = (alloc.head_code or HEAD_LABEL_TO_CODE.get(head_label, "")).upper()
+            head_limit = head_limit_by_label.get(head_label, 0.0)
+            alloc_amt = float(alloc.amount_inr or 0)
+            spent_so_far = 0.0
+            for p in other_invoices:
+                p_allocs = p.get("allocations") or []
+                if p_allocs:
+                    for pa in p_allocs:
+                        if pa.get("head_label") == head_label or (pa.get("head_code") or "").upper() == head_code:
+                            spent_so_far += float(pa.get("amount_inr") or 0)
+                else:
+                    if (p.get("budget_head_code") or "").upper() == head_code:
+                        spent_so_far += float(p.get("total_inr") or 0)
+            remaining = max(head_limit - spent_so_far, 0.0)
+            if head_limit == 0:
+                # unknown head → treat as fully eligible (no budget cap)
+                total_eligible += alloc_amt
+            elif alloc_amt <= remaining:
+                total_eligible += alloc_amt
+            else:
+                total_eligible += remaining
+                total_over += (alloc_amt - remaining)
+        inv.eligible_for_grant_inr = round(total_eligible, 2)
+        inv.ineligible_for_grant_inr = round(total_over, 2)
+        inv.over_budget_amount_inr = round(total_over, 2)
+        return inv
+
+    # ─────── Legacy single-head path ───────
+    if not inv.budget_head_code:
+        inv.eligible_for_grant_inr = inv.total_inr
+        inv.ineligible_for_grant_inr = 0.0
+        inv.over_budget_amount_inr = 0.0
+        return inv
     head_label = HEAD_CODE_TO_LABEL.get(inv.budget_head_code.upper(), inv.budget_head_code)
-    head_limit = 0.0
-    for h in (tb.get("approved_head_allocations") or tb.get("head_allocations") or []):
-        if h.get("head") == head_label:
-            head_limit = float(h.get("limit_inr") or 0)
-            break
+    head_limit = head_limit_by_label.get(head_label, 0.0)
     # Compute already-spent (approved invoices for same head)
     prev = await db.tournament_invoices.find({
         "budget_id": inv.budget_id,

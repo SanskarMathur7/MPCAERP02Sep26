@@ -1,0 +1,28 @@
+{
+  "summary": "Sprint T-RIM (Tournament Reimbursement Invoice · Multi-head set-off) — full acceptance test PASSED across backend + frontend. Backend: 6/6 pytest cases green (multi-head create with matching sum → 200 + persistence, sum mismatch → 422 with clear message, per-head eligibility compute correctly attributes 2000 ineligible to the ₹5000 head only while the ₹100k+ head is fully eligible, legacy single-head path still works when allocations=[], tracker sums allocations + legacy without double-counting). Frontend: Upload Invoice modal renders new 'Budget Head Set-Off' block with 1 initial row; Budget Head dropdown lists ONLY the 9 approved-budget heads for Madhavrao Scindia Trophy · DIV-IND (custom labels like 'Accommodation — all rooms · limit ₹7,20,000') NOT the 11-code master list; + Add head appends a row and the new row excludes the already-selected head; delete button is disabled when only 1 row exists and enabled when >1; summary line shows 'Allocated: ₹8,000 · Invoice total: ₹8,000 Balanced ✓' and inv-save is enabled when balanced, and shows 'Over by ₹1,000' with save disabled when unbalanced. After saving a multi-head invoice, the Invoices table 'Head(s)' column renders each allocation on its own line ('Ground rent + tent · ₹2,500' / 'Manager honorarium · ₹1,500') inside [data-testid=inv-heads-INV-2026-27-0007]. Note: CT Sarwate Trophy is not seeded in this environment; used Madhavrao Scindia Trophy (id 1c8e8e70-…, DIV-IND, budget 12c0398b-…, Approved) which is functionally equivalent (approved budget on DIV-IND).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_trim_multi_head_invoices.py",
+    "/app/test_reports/pytest/trim_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/tournament_invoices.py _apply_grant_eligibility does an inner db.tournament_invoices.find() per allocation loop iteration — for an invoice with N heads it issues N queries. Cheap fix: fetch the peer-invoices list ONCE before the for-alloc loop and iterate in memory.",
+    "Frontend labelToCode() at TournamentOps.jsx line 333 generates a code like 'ACCOMMODATION_ALL_ROOMS' by uppercase-slugifying the label. Backend eligibility path matches heads by head_label (preferred) but the tracker also matches by head_code as a fallback. If a budget's custom head label ever changes (e.g. rename), previously-saved allocations would silently mismatch by both label AND code. Consider storing budget_head_allocation.id on the allocation instead of relying on label matching.",
+    "Sum validation tolerance is ₹1.0 in create_invoice — acceptable but should be documented; if the client sends `total_inr=0` with allocations=[…], the current code lets a 0-total invoice pass eligibility with 0 allocations (already caught by frontend disabling save when invoiceTotal<=0, but backend does not enforce total>0)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_trim_multi_head_invoices.py (NEW)"
+  ],
+  "success_rate": { "backend": "100% (6/6)", "frontend": "100% of T-RIM acceptance criteria (13/13)" },
+  "test_credentials": "persona-chip-division-secretary (Shri Devashish Nilosey · DIV-IND)",
+  "seed_data_creation": "Used seeded Madhavrao Scindia Trophy · DIV-IND · TB-2026-27-007 Approved budget. All TEST_TRIM_* invoices created during tests were deleted via DELETE /api/tournament-invoices/{id} in the cleanup phase. UI test also cleaned up its temporary INV-2026-27-0007.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sprint T-RIM is fully green. Reusable regression tests live in /app/backend/tests/test_trim_multi_head_invoices.py — tournament/budget IDs are seeded fixtures. If seeds change, update the module-level constants at the top of that file. CT Sarwate Trophy referenced in the request is NOT seeded in this env — Madhavrao Scindia Trophy (DIV-IND) is used instead and is functionally equivalent (Approved budget, DIV-IND persona access)."
+}

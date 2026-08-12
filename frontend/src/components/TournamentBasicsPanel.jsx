@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Save, Loader2, Plus, Trash2, Users as UsersIcon, MapPin, Home, Plane } from "lucide-react";
 import { api } from "@/lib/api";
 import { getTypeByCode } from "@/lib/tournamentCatalog";
+import TournamentSchemeBadge from "@/components/TournamentSchemeBadge";
 
 const inputCls = "input-heritage !py-1.5 !text-xs";
 const CAMP_TYPES = ["pre_camp", "coaching_camp", "vacation_camp"];
@@ -242,6 +243,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                     Capture the category, {isCamp ? "player group, and camp venue" : "division pools with a host, extra teams, and grounds"}.
                     These feed the auto-budget and light up the setup progress phase.
                 </div>
+                <TournamentSchemeBadge tournament={tournament} />
             </div>
 
             {/* Step 2 · Category + Age Group */}

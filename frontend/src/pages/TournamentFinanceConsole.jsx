@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
+import TournamentSchemeBadge from "@/components/TournamentSchemeBadge";
 import MatchOfficialDAPanel from "@/components/MatchOfficialDAPanel";
 import {
     TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
@@ -316,10 +317,9 @@ const TournamentFinanceConsole = () => {
                     <div className="overline mt-1">Finance Console</div>
                     <h1 className="font-serif text-3xl text-mpca-green-dark mt-1" data-testid="fc-title">{matrix.tournament_name}</h1>
                     <div className="text-[11px] text-mpca-gray-dark mt-1 flex items-center gap-2 flex-wrap">
-                        {matrix.scheme_code && <span className="font-mono bg-mpca-brass/15 px-2 py-0.5">Scheme {matrix.scheme_code}</span>}
-                        <span>· Fiscal cycle {matrix.fiscal_cycle}</span>
-                        <span>· {rows.length} participating {rows.length === 1 ? "body" : "bodies"}</span>
+                        <span>{rows.length} participating {rows.length === 1 ? "body" : "bodies"}</span>
                     </div>
+                    <TournamentSchemeBadge tournament={tournament} />
                 </div>
                 <div className="text-[10px] uppercase tracking-widest">
                     <span className="px-2 py-1 bg-mpca-green-dark/10 text-mpca-green-dark border border-mpca-green-dark/30">

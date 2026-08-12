@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { BookOpen, Edit3, X, Save, Sparkles, ChevronRight, IndianRupee, Lock, CheckCircle2, Upload, Download, RefreshCw, AlertTriangle } from "lucide-react";
 import { api, API_BASE } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -49,6 +49,17 @@ const SchemesMaster = () => {
         } finally { setLoading(false); }
     };
     useEffect(() => { load(); }, [season]);
+
+    // Feb-2026 · Deep-link — when arriving from a Tournament Basics /
+    // Finance Console badge via /schemes?scheme=X-Y, auto-open that scheme
+    // in the detail pane so the user lands directly on the source of truth.
+    const [searchParams] = useSearchParams();
+    useEffect(() => {
+        const target = searchParams.get("scheme");
+        if (!target || schemes.length === 0) return;
+        const match = schemes.find((s) => s.scheme_code === target);
+        if (match) setSelected(match);
+    }, [searchParams, schemes]);
 
     const uploadSignedPdf = async (file) => {
         if (!file) return;
@@ -158,6 +169,15 @@ const SchemesMaster = () => {
             setEditing(null);
             setSelected(null);
             await load();
+            alert(
+                `Scheme ${patch.name ? "" : ""}revised.\n\n` +
+                `Season ${season} has been DEACTIVATED automatically.\n` +
+                `Next steps:\n` +
+                `  1. Click "Export PDF" to download the updated master.\n` +
+                `  2. Get it re-signed by the office bearers.\n` +
+                `  3. Click "Upload Signed" to re-activate the season.\n\n` +
+                `Existing tournaments already created keep their frozen budgets — this only blocks NEW tournaments/claims until re-activation.`,
+            );
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
 
@@ -202,6 +222,12 @@ const SchemesMaster = () => {
                                 Divisions may create new grant claims and tournaments for this season.
                                 {activation?.signed_by && <> Signed by <strong>{activation.signed_by}</strong>{activation?.signed_at ? ` · ${new Date(activation.signed_at).toLocaleDateString("en-IN")}` : ""}.</>}
                                 {activation?.bootstrap && <span className="ml-1 text-mpca-brass">(Bootstrap · re-upload the signed PDF anytime to formalize.)</span>}
+                            </>
+                        ) : activation?.deactivation_reason ? (
+                            <>
+                                <strong className="text-mpca-oxblood">Deactivated after a mid-year revision.</strong> {activation.deactivation_reason}
+                                {" "}Re-download the master PDF, get it re-signed by the office bearers, and re-upload here.
+                                <span className="block mt-1">No new tournaments or grant claims can be created for {season} until this is done.</span>
                             </>
                         ) : (
                             <>

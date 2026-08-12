@@ -1,0 +1,25 @@
+{
+  "summary": "MPCA Feb-2026 auto-deactivation gate + tournament scheme badge fully verified. Backend 8/8 pass: baseline season-activation, PUT scheme 2-A conditions triggers revision_history + auto-flips is_active=false with deactivation_reason mentioning scheme code + deactivated_by_revision, POST /api/tournaments returns 403 during inactive state, re-upload signed_pdf_url re-activates, retry create returns 200 with host_scheme_code='2-D' + visiting_scheme_code='2-C', 2025-26 season-activation unaffected, non-MPCA (Division) PUT returns 403. Frontend: MPCA Secretary login works; Finance Console badge shows all 4 pills (Season·2026-27, Host·2-D→/schemes?scheme=2-D, Visitor·2-C→/schemes?scheme=2-C, View 2026-27 Signed Master→/api/uploads/...); host pill click navigates to /schemes?scheme=2-D and auto-opens detail-name 'Inter-Divisional Tournament — Hosting'. Inter-Dist tournament badge correctly shows Host·2-B, Visitor·2-C. Basics panel badge appears after clicking Tournament Basics setup card (not landing tab). Deep-link /schemes?scheme=2-D auto-populates scheme-detail with correct name. Cleanup ran: season 2026-27 restored to is_active=true; scheme 2-A conditions restored; test tournament deleted.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mpca_feb2026_autodeactivation.py",
+    "/app/test_reports/pytest/pytest_autodeact.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "update_scheme() in /app/backend/routes/reimbursement_schemes.py correctly upserts scheme_activation_seasons on any mid-year PUT (lines 178-195). Consider: if payload has ONLY revision_note or is a no-op (patch ends up empty after excluding revision_note), the endpoint still deactivates the season. Currently the code checks nothing about `patch` being non-empty — a stray PUT with no changes would still block all new tournaments. Consider guarding with `if patch:` to avoid accidental gating."
+  ],
+  "updated_files": ["/app/backend/tests/test_mpca_feb2026_autodeactivation.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100%"},
+  "test_credentials": "persona-chip-secretary (Sanjeev Dua · MPCA State) via /login click-through. Backend: X-Body-Type=State, X-Body-Code=MPCA, X-Role-Id=secretary. For 403: X-Body-Type=Division, X-Body-Code=DIV-IND.",
+  "seed_data_creation": "Test tournament TEST_AutoDeact_<date> created via /api/tournaments then deleted in module teardown. Scheme 2-A conditions mutated then restored.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Auto-deactivation gate on PUT /reimbursement-schemes/{code} is fully working and audited. TournamentSchemeBadge renders on both Finance Console (default) and Basics panel (after clicking Tournament Basics setup card). Only minor code-review nit: consider skipping auto-deactivation when the effective patch is empty (a no-op PUT would otherwise still gate the whole season).",
+  "rca of the issue": "N/A — no bugs found this iteration."
+}

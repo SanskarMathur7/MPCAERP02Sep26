@@ -152,6 +152,11 @@ async def update_scheme(
     if "heads" in patch:
         patch["heads"] = [h.model_dump() if hasattr(h, "model_dump") else h for h in patch["heads"]]
 
+    # Guard · a PUT that only supplied `revision_note` (no actual field
+    # change) is a no-op and MUST NOT deactivate the season by accident.
+    if not patch:
+        raise HTTPException(400, "No editable fields supplied — nothing to revise")
+
     now = datetime.now(timezone.utc).isoformat()
     prior_history = existing.get("revision_history", []) or []
     version = len(prior_history) + 1
@@ -169,6 +174,29 @@ async def update_scheme(
     await db.reimbursement_schemes.update_one(
         {"scheme_code": scheme_code, "fiscal_cycle": fc},
         {"$set": patch},
+    )
+    # MPCA-Feb2026 · Any mid-year revision AUTO-DEACTIVATES the season.
+    # MPCA must then re-download the master PDF, get it re-signed by the
+    # office bearers, and re-upload it under /schemes to unblock tournament
+    # / grant-claim creation. Existing tournaments already in-flight keep
+    # their frozen head_allocations snapshots, so this only gates NEW work.
+    await db.scheme_activation_seasons.update_one(
+        {"fiscal_cycle": fc},
+        {"$set": {
+            "is_active": False,
+            "deactivated_at": now,
+            "deactivation_reason": (
+                f"Scheme {scheme_code} revised (v{version}) by "
+                f"{scope.name or 'MPCA'} — {revision_note or 'no note supplied'}. "
+                "Re-upload the freshly signed master PDF to re-activate."
+            ),
+            "deactivated_by_revision": {
+                "scheme_code": scheme_code,
+                "version": version,
+                "changed_by": scope.name or "MPCA",
+            },
+        }},
+        upsert=True,
     )
     doc = await db.reimbursement_schemes.find_one(
         {"scheme_code": scheme_code, "fiscal_cycle": fc}, {"_id": 0}

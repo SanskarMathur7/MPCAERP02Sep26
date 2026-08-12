@@ -310,6 +310,10 @@ async def update_player(pid: str, patch: dict):
         "photo_url", "aadhaar_last4", "contact_phone", "contact_email",
         "guardian_name", "guardian_phone", "guest_subtype", "guest_disclosure_signed",
         "court_order_flag", "court_order_ref", "documents",
+        # MPCA-Feb2026 · Registration-form fields hoisted onto the Player.
+        "place_of_birth_city", "place_of_birth_state", "last_season_division_code",
+        "bcci_registered", "bcci_registration_year", "is_employed",
+        "extra_info",
     }
     diff = {}
     to_set = {}

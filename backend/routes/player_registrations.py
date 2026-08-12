@@ -412,7 +412,56 @@ async def mpca_approve(
         aadhaar_last4=(pd.get("aadhaar_no") or "")[-4:] or None,
         guardian_name=pd.get("guardian_name"), address_line=pd.get("address"),
         photo_url=pd.get("photo_url"), status="Active",
+        # MPCA-151 · Feb 2026 · Copy every reg-form field onto the Player so
+        # the profile Overview mirrors what the player originally submitted.
+        place_of_birth_city=pd.get("place_of_birth_city"),
+        place_of_birth_state=pd.get("place_of_birth_state"),
+        last_season_division_code=pd.get("last_season_division_code"),
+        bcci_registered=bool(pd.get("bcci_registered")),
+        bcci_registration_year=pd.get("bcci_registration_year"),
+        is_employed=bool(pd.get("is_employed")),
     )
+    # MPCA-151 · Feb 2026 · Also seed the Player's `documents` list from every
+    # doc URL the player uploaded on the registration form + every "other doc"
+    # they attached. Frees Division/MPCA from re-uploading anything post-approval.
+    from models import PlayerDocument as _PlayerDocument
+    reg_to_kyc = [
+        ("photo",                  pd.get("photo_url")),
+        ("aadhar",                 pd.get("aadhaar_url")),
+        ("aadhaar_history",        pd.get("aadhaar_history_url")),
+        ("pan",                    pd.get("pan_url")),
+        ("passport",               pd.get("passport_url")),
+        ("driving_licence",        pd.get("driving_licence_url")),
+        ("voter_id",               pd.get("voter_id_url")),
+        ("birth_certificate",      pd.get("birth_cert_url")),
+        ("address_proof",          pd.get("address_proof_url")),
+        ("samagra_id_player",      pd.get("samagra_id_player_url")),
+        ("samagra_id_family",      pd.get("samagra_id_family_url")),
+        ("consent_form",           pd.get("consent_form_url")),
+        ("no_study_affidavit",     pd.get("no_study_affidavit_url")),
+        ("bonafide_school_cert",   pd.get("bonafide_school_cert_url")),
+        ("marksheet_3yr",          pd.get("marksheet_3yr_url")),
+        ("appointment_letter",     pd.get("appointment_letter_url")),
+        ("salary_slip",            pd.get("salary_slip_url")),
+        ("bank_statement_1yr",     pd.get("bank_statement_1yr_url")),
+        ("noc_previous_division",  pd.get("noc_previous_division_url")),
+        ("cancelled_cheque",       pd.get("cancelled_cheque_url")),
+        ("gst_certificate",        pd.get("gst_certificate_url")),
+    ]
+    for doc_type, url in reg_to_kyc:
+        if url:
+            player.documents.append(_PlayerDocument(
+                doc_type=doc_type, url=url, uploaded_at=now if False else datetime.now(timezone.utc).isoformat(),
+                uploaded_by=doc.get("body_code") or "MPCA", verified=False,
+            ))
+    for other in (pd.get("other_docs") or []):
+        if isinstance(other, dict) and other.get("url"):
+            player.documents.append(_PlayerDocument(
+                doc_type=f"other:{other.get('label') or 'Other Document'}",
+                url=other["url"], uploaded_at=datetime.now(timezone.utc).isoformat(),
+                uploaded_by=other.get("uploaded_by") or doc.get("body_code") or "MPCA",
+                verified=False,
+            ))
     await db.players.insert_one(player.model_dump())
 
     now = datetime.now(timezone.utc).isoformat()

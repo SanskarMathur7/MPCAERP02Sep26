@@ -786,6 +786,16 @@ class PlayerBase(BaseModel):
     # Phase M1-A: court order flag
     court_order_flag: bool = False
     court_order_ref: Optional[str] = None         # case number / court name
+    # MPCA-151 · Feb 2026 · Fields carried across from the registration form
+    place_of_birth_city: Optional[str] = None
+    place_of_birth_state: Optional[str] = None
+    last_season_division_code: Optional[str] = None
+    bcci_registered: bool = False
+    bcci_registration_year: Optional[int] = None
+    is_employed: bool = False
+    # Additional Division/MPCA notes NOT captured on the registration form.
+    # Free-form key/value pairs so bodies can annotate without a schema change.
+    extra_info: Dict[str, str] = Field(default_factory=dict)
 
 
 class Player(PlayerBase):

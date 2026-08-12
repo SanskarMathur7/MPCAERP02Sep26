@@ -12,6 +12,7 @@ import {
     Ban, Loader2, ExternalLink, Trash2, Edit3, Save, Gavel, ScrollText, Sparkles, ShieldAlert, Award,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
+import DocumentPreview from "@/components/DocumentPreview";
 import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
     Tooltip, Legend, ResponsiveContainer,
@@ -41,35 +42,33 @@ const STATUS_META = {
 };
 
 // Standard KYC / permanent-record document slots
-// MPCA-152 · Feb 2026 — aligned with the extended registration doc set so
-// the Registration form and the Player Profile KYC page ask for the SAME
-// documents. Keys map to `player_documents.doc_type`.
+// MPCA-Feb 2026 — ONLY the docs collected on the public registration form.
+// Legacy Class-10 / Class-12 marksheet / TC / Affidavit / Hospital Cert /
+// Signature Specimen were removed because they are not in the reg form.
+// "Other Documents" (doc_type prefixed with `other:`) are rendered
+// dynamically at the bottom of the KYC page.
 const DOC_SLOTS = [
-    { key: "birth_certificate",         label: "Birth Certificate (with QR)",  required: true,  hint: "Municipal certificate with QR verification code." },
+    { key: "photo",                     label: "Player Photograph",            required: true,  hint: "Recent passport-size photo." },
     { key: "aadhar",                    label: "Aadhaar Card",                 required: true,  hint: "Front + back scan, or e-Aadhaar PDF." },
+    { key: "aadhaar_history",           label: "Aadhaar Update History",       required: false, hint: "UIDAI download." },
     { key: "pan",                       label: "PAN Card",                     required: false, hint: "For players ≥ 18 years." },
     { key: "passport",                  label: "Passport",                     required: false, hint: "For international / out-of-MP guests." },
-    { key: "photo",                     label: "Player Photograph",            required: true,  hint: "Recent passport-size photo." },
+    { key: "driving_licence",           label: "Driving Licence",              required: false },
+    { key: "voter_id",                  label: "Voter ID",                     required: false },
+    { key: "birth_certificate",         label: "Birth Certificate (with QR)",  required: true,  hint: "Municipal certificate with QR verification code." },
     { key: "address_proof",             label: "Current Address Proof",        required: true,  hint: "Utility bill / rent agreement / bank passbook." },
-    // MPCA-151 · Samagra + affidavits + bonafide
     { key: "samagra_id_player",         label: "Samagra ID · Player",          required: true,  hint: "MP state Samagra — player's own ID." },
     { key: "samagra_id_family",         label: "Samagra ID · Family",          required: true,  hint: "MP state Samagra — family SSSM ID." },
-    { key: "consent_form",              label: "Consent Form (Notarized)",     required: true,  hint: "MPCA template · get notarized · then upload." },
+    { key: "consent_form",              label: "Consent Form (Notarized)",     required: true,  hint: "MPCA template — notarized." },
     { key: "no_study_affidavit",        label: "No-Study Affidavit",           required: false, hint: "If not currently studying (U-23 path)." },
-    { key: "bonafide_school_cert",      label: "School Bonafide Certificate",  required: false, hint: "Alternative to marksheet path." },
-    // MPCA-151 · Education or Employment path
+    { key: "bonafide_school_cert",      label: "School Bonafide Certificate",  required: false, hint: "For education-eligible players." },
     { key: "marksheet_3yr",             label: "Marksheets · last 3 yrs",      required: false, hint: "Bundled PDF from previous school." },
-    { key: "appointment_letter",        label: "Appointment Letter",           required: false, hint: "Only for employed players." },
-    { key: "salary_slip",               label: "Salary Slip (latest)",         required: false, hint: "Only for employed players." },
-    { key: "bank_statement_1yr",        label: "1-Year Bank Statement",        required: false, hint: "Only for employed players." },
-    { key: "noc_previous_division",     label: "NOC · Previous Division",      required: false, hint: "Required if player played from different Division last season." },
-    // Legacy slots retained
-    { key: "marksheet_10",              label: "Class-10 Marksheet",           required: false, hint: "For education-eligible guest players." },
-    { key: "marksheet_12",              label: "Class-12 Marksheet",           required: false, hint: "For senior category." },
-    { key: "transfer_certificate",      label: "Transfer Certificate (TC)",    required: false, hint: "From previous institution." },
-    { key: "affidavit",                 label: "Affidavit / Guardian Consent", required: false, hint: "Notarised affidavit if under 18." },
-    { key: "hospital_cert",             label: "Hospital Birth Certificate",   required: false, hint: "Alternative proof of age (TW3 corroboration)." },
-    { key: "signature",                 label: "Signature Specimen",           required: false, hint: "On white paper, scanned." },
+    { key: "appointment_letter",        label: "Appointment Letter",           required: false, hint: "Employed players only." },
+    { key: "salary_slip",               label: "Salary Slip (latest)",         required: false, hint: "Employed players only." },
+    { key: "bank_statement_1yr",        label: "1-Year Bank Statement",        required: false, hint: "Employed players only." },
+    { key: "noc_previous_division",     label: "NOC · Previous Division",      required: false, hint: "Required if player played from a different Division last season." },
+    { key: "cancelled_cheque",          label: "Cancelled Cheque",             required: false, hint: "Bank account verification." },
+    { key: "gst_certificate",           label: "GST Certificate",              required: false, hint: "Only if player provided a GST number." },
 ];
 
 const Pill = ({ tone, label, testId }) => {
@@ -146,11 +145,22 @@ const DocSlot = ({ slot, existing, playerId, persona, locked, onChanged }) => {
 
             {existing ? (
                 <div className="mt-3 flex items-center gap-3 flex-wrap">
-                    <a href={`${API}${existing.url}`} target="_blank" rel="noopener noreferrer"
-                       className="text-xs font-semibold text-mpca-green-dark hover:text-mpca-oxblood inline-flex items-center gap-1"
-                       data-testid={`doc-view-${slot.key}`}>
-                        <ExternalLink size={12} /> {existing.filename || "View document"}
-                    </a>
+                    {/* Feb-2026 · Inline preview (no download) — mirrors review-drawer pattern. */}
+                    <DocumentPreview
+                        url={existing.url?.startsWith("http") ? existing.url : `${API}${existing.url}`}
+                        name={existing.filename || slot.label}
+                        hideExport
+                        renderTrigger={(openPreview) => (
+                            <button
+                                type="button"
+                                onClick={openPreview}
+                                className="text-xs font-semibold text-mpca-green-dark hover:text-mpca-oxblood inline-flex items-center gap-1"
+                                data-testid={`doc-view-${slot.key}`}
+                            >
+                                <ExternalLink size={12} /> {existing.filename || "Preview document"}
+                            </button>
+                        )}
+                    />
                     <span className="text-[10px] font-mono text-mpca-gray-dark">
                         Uploaded {fmtDateTime(existing.uploaded_at)}
                     </span>
@@ -241,20 +251,15 @@ const OverviewTab = ({ player, persona, locked, onChanged }) => {
 
     const startEdit = () => {
         setDraft({
-            mother_name: player.mother_name || "",
-            sibling_names: player.sibling_names || "",
-            club_academy: player.club_academy || "",
-            proficiency: player.proficiency || "Club",
-            height_cm: player.height_cm || "",
-            weight_kg: player.weight_kg || "",
-            employment: player.employment || "",
-            education: player.education || "",
+            father_name: player.father_name || "",
+            guardian_name: player.guardian_name || "",
+            place_of_birth_city: player.place_of_birth_city || "",
+            place_of_birth_state: player.place_of_birth_state || "",
+            last_season_division_code: player.last_season_division_code || "",
+            bcci_registration_year: player.bcci_registration_year || "",
             address_line: player.address_line || "",
-            residency_since: player.residency_since || "",
             contact_phone: player.contact_phone || "",
             contact_email: player.contact_email || "",
-            guardian_name: player.guardian_name || "",
-            guardian_phone: player.guardian_phone || "",
         });
         setEditing(true);
     };
@@ -262,8 +267,7 @@ const OverviewTab = ({ player, persona, locked, onChanged }) => {
         setBusy(true); setError(null);
         try {
             const patch = { ...draft };
-            if (patch.height_cm) patch.height_cm = parseFloat(patch.height_cm);
-            if (patch.weight_kg) patch.weight_kg = parseFloat(patch.weight_kg);
+            if (patch.bcci_registration_year) patch.bcci_registration_year = parseInt(patch.bcci_registration_year, 10);
             const u = await updatePlayer(player.id, patch);
             onChanged(u);
             setEditing(false);
@@ -296,30 +300,26 @@ const OverviewTab = ({ player, persona, locked, onChanged }) => {
 
             {editing ? (
                 <div className="grid sm:grid-cols-2 gap-4">
-                    <OInput draft={draft} setDraft={setDraft} k="mother_name" label="Mother's Name" />
-                    <OInput draft={draft} setDraft={setDraft} k="sibling_names" label="Sibling(s)" />
-                    <OInput draft={draft} setDraft={setDraft} k="club_academy" label="Club / Academy" />
-                    <OInput draft={draft} setDraft={setDraft} k="proficiency" label="Proficiency" options={["Beginner", "Club", "District", "State", "National"]} />
-                    <OInput draft={draft} setDraft={setDraft} k="height_cm" label="Height (cm)" type="number" />
-                    <OInput draft={draft} setDraft={setDraft} k="weight_kg" label="Weight (kg)" type="number" />
-                    <OInput draft={draft} setDraft={setDraft} k="employment" label="Employment" />
-                    <OInput draft={draft} setDraft={setDraft} k="education" label="Education" />
+                    {/* MPCA-Feb2026 · Editable fields mirror the public registration form ONLY */}
+                    <OInput draft={draft} setDraft={setDraft} k="father_name" label="Father's Name" />
+                    <OInput draft={draft} setDraft={setDraft} k="guardian_name" label="Guardian Name (if under 18)" />
+                    <OInput draft={draft} setDraft={setDraft} k="place_of_birth_city" label="Place of Birth · City" />
+                    <OInput draft={draft} setDraft={setDraft} k="place_of_birth_state" label="Place of Birth · State" />
+                    <OInput draft={draft} setDraft={setDraft} k="last_season_division_code" label="Previous Home Division (code)" />
+                    <OInput draft={draft} setDraft={setDraft} k="bcci_registration_year" label="BCCI Registration Year" type="number" />
                     <div className="sm:col-span-2"><OInput draft={draft} setDraft={setDraft} k="address_line" label="Full Address" /></div>
-                    <OInput draft={draft} setDraft={setDraft} k="residency_since" label="Residency Since (MP)" type="date" />
-                    <OInput draft={draft} setDraft={setDraft} k="contact_phone" label="Contact Phone" />
-                    <OInput draft={draft} setDraft={setDraft} k="contact_email" label="Contact Email" type="email" />
-                    <OInput draft={draft} setDraft={setDraft} k="guardian_name" label="Guardian Name" />
-                    <OInput draft={draft} setDraft={setDraft} k="guardian_phone" label="Guardian Phone" />
+                    <OInput draft={draft} setDraft={setDraft} k="contact_phone" label="Mobile" />
+                    <OInput draft={draft} setDraft={setDraft} k="contact_email" label="Email" type="email" />
                     {error && <div className="sm:col-span-2 border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood p-3 text-sm">{error}</div>}
                 </div>
             ) : (
                 <>
+                    {/* MPCA-Feb2026 · Overview surfaces ONLY the fields captured on
+                        the public registration form. Legacy Mother/Siblings/
+                        Height/Weight/Club/Domicile/Residency-Since etc. removed. */}
                     <div className="grid sm:grid-cols-3 gap-6">
                         <Field label="Father" value={player.father_name} />
-                        <Field label="Mother" value={player.mother_name} />
-                        <Field label="Sibling(s)" value={player.sibling_names} />
                         <Field label="Date of Birth" value={`${fmtDate(player.date_of_birth)} (age ${ageYears(player.date_of_birth)})`} />
-                        <Field label="Place of Birth" value={player.place_of_birth} />
                         <Field label="Gender" value={player.gender} />
                     </div>
 
@@ -329,40 +329,46 @@ const OverviewTab = ({ player, persona, locked, onChanged }) => {
                             <Field label="Role" value={player.role?.replace(/_/g, " ")} />
                             <Field label="Batting" value={player.batting_style?.replace("_", "-")} />
                             <Field label="Bowling" value={player.bowling_style?.replace(/_/g, "-")} />
-                            <Field label="Proficiency" value={player.proficiency} />
-                            <Field label="Club / Academy" value={player.club_academy} />
-                            <Field label="Height / Weight" value={`${player.height_cm || "—"} cm · ${player.weight_kg || "—"} kg`} />
                         </div>
                     </div>
 
                     <div>
-                        <div className="overline mb-3">Residence & Eligibility</div>
+                        <div className="overline mb-3">Place of Birth · Cross-Division · BCCI</div>
                         <div className="grid sm:grid-cols-3 gap-6">
-                            <Field label="Domicile" value={player.domicile_state} />
-                            <Field label="Address District" value={player.address_district} />
-                            <Field label="Residency Since" value={fmtDate(player.residency_since)} />
+                            <Field label="Place of Birth · City" value={player.place_of_birth_city} />
+                            <Field label="Place of Birth · State" value={player.place_of_birth_state} />
+                            <Field label="Previous Home Division" value={player.last_season_division_code} />
+                            <Field label="BCCI Registered?" value={player.bcci_registered ? "Yes" : "No"} />
+                            {player.bcci_registered && (
+                                <Field label="BCCI Registration Year" value={player.bcci_registration_year} />
+                            )}
+                            <Field label="Currently Employed?" value={player.is_employed ? "Yes" : "No"} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <div className="overline mb-3">Residence & Category</div>
+                        <div className="grid sm:grid-cols-3 gap-6">
                             <div className="sm:col-span-3"><Field label="Full Address" value={player.address_line} /></div>
                             <Field label="Category" value={<Pill tone={CATEGORY_META[player.category]?.tone} label={CATEGORY_META[player.category]?.label} />} />
-                            {player.guest_subtype && <Field label="Guest Sub-Type" value={player.guest_subtype.replace(/_/g, " ")} />}
-                            {player.category === "Guest" && (
-                                <Field label="TW3 / Disclosure" value={`${player.tw3_verified ? "✓ TW3" : "✗ TW3"} · ${player.guest_disclosure_signed ? "✓ Disclosure" : "✗ Disclosure"}`} />
-                            )}
-                            <Field label="Employment" value={player.employment} />
-                            <Field label="Education" value={player.education} />
+                            <Field label="Home Division" value={`${player.division_folder || "—"} · ${player.season_year || "—"}`} />
                         </div>
                     </div>
 
                     <div>
                         <div className="overline mb-3">Contact</div>
                         <div className="grid sm:grid-cols-3 gap-6">
-                            <Field label="Phone" value={player.contact_phone} />
+                            <Field label="Mobile" value={player.contact_phone} />
                             <Field label="Email" value={player.contact_email} />
-                            <Field label="Guardian" value={player.guardian_name ? `${player.guardian_name} · ${player.guardian_phone || "—"}` : "—"} />
+                            <Field label="Guardian" value={player.guardian_name || "—"} />
                             <Field label="Aadhaar (last 4)" value={player.aadhaar_last4} />
                             <Field label="Registered On" value={fmtDateTime(player.registered_on)} />
-                            <Field label="Division Folder" value={`${player.division_folder || "—"} · ${player.season_year || "—"}`} />
                         </div>
                     </div>
+
+                    {/* MPCA-Feb2026 · Other Information — Division/MPCA can annotate
+                        with anything NOT captured on the reg form (free-form kv). */}
+                    <OtherInfoSection player={player} canEdit={canEdit} onChanged={onChanged} />
 
                     {player.court_order_flag && (
                         <div className="border border-mpca-burgundy-dark/40 bg-mpca-burgundy-dark/5 p-4">
@@ -494,6 +500,76 @@ const AIReportCard = ({ player, onRerun, running }) => {
     );
 };
 
+/** MPCA-Feb2026 · Other Information — Division/MPCA appends free-form key/value
+ * pairs (e.g. Sponsor, Nickname, Coach's Notes) that were NOT part of the
+ * public registration form. Persisted to `player.extra_info` (Dict[str,str]). */
+const OtherInfoSection = ({ player, canEdit, onChanged }) => {
+    const extra = player.extra_info || {};
+    const [addKey, setAddKey] = useState("");
+    const [addVal, setAddVal] = useState("");
+    const [busy, setBusy] = useState(false);
+
+    const persist = async (nextExtra) => {
+        setBusy(true);
+        try {
+            const u = await updatePlayer(player.id, { extra_info: nextExtra });
+            onChanged(u);
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
+    const addRow = async () => {
+        if (!addKey.trim() || !addVal.trim()) return;
+        const next = { ...extra, [addKey.trim()]: addVal.trim() };
+        await persist(next);
+        setAddKey(""); setAddVal("");
+    };
+    const removeRow = async (k) => {
+        const next = { ...extra }; delete next[k];
+        await persist(next);
+    };
+
+    return (
+        <div data-testid="other-info-section">
+            <div className="overline mb-3">Other Information</div>
+            {Object.keys(extra).length === 0 ? (
+                <div className="text-[11px] italic text-mpca-gray-dark mb-3">
+                    No extra information yet. Division/MPCA can add anything the player didn&apos;t include on the registration form.
+                </div>
+            ) : (
+                <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                    {Object.entries(extra).map(([k, v]) => (
+                        <div key={k} className="border border-mpca-brass/30 bg-mpca-parchment px-3 py-2 flex items-center gap-3" data-testid={`extra-info-${k}`}>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-[10px] font-semibold uppercase tracking-widest text-mpca-brass">{k}</div>
+                                <div className="text-[13px] text-mpca-charcoal truncate">{v}</div>
+                            </div>
+                            {canEdit && (
+                                <button onClick={() => removeRow(k)} disabled={busy} className="text-[10px] uppercase tracking-widest text-mpca-oxblood" data-testid={`extra-info-remove-${k}`}>Remove</button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+            {canEdit && (
+                <div className="border border-dashed border-mpca-brass/40 bg-mpca-cream/40 px-3 py-3 grid grid-cols-1 sm:grid-cols-[1fr_2fr_auto] gap-2 items-end" data-testid="extra-info-add">
+                    <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-1">Field</div>
+                        <input value={addKey} onChange={(e) => setAddKey(e.target.value)} placeholder="e.g. Sponsor" className="input-heritage !py-1.5 !text-xs w-full" data-testid="extra-info-key" />
+                    </div>
+                    <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-1">Value</div>
+                        <input value={addVal} onChange={(e) => setAddVal(e.target.value)} placeholder="e.g. Aditya Birla" className="input-heritage !py-1.5 !text-xs w-full" data-testid="extra-info-value" />
+                    </div>
+                    <button onClick={addRow} disabled={busy || !addKey.trim() || !addVal.trim()} className="btn-heritage-primary !py-1.5 !px-3 !text-xs" data-testid="extra-info-add-btn">
+                        Add
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
 /** KYC / permanent document repository. */
 const DocumentsTab = ({ player, persona, onChanged }) => {
     const [aiRunning, setAiRunning] = useState(false);
@@ -589,6 +665,32 @@ const DocumentsTab = ({ player, persona, onChanged }) => {
                     />
                 ))}
             </div>
+
+            {/* MPCA-Feb2026 · Other Documents — free-form uploads with a
+                label prefix `other:*`, carried over from the reg form. Not
+                part of the fixed DOC_SLOTS list. */}
+            {(() => {
+                const otherDocs = (player.documents || []).filter((d) => (d.doc_type || "").startsWith("other:"));
+                if (otherDocs.length === 0) return null;
+                return (
+                    <div className="mt-8" data-testid="doc-other-list">
+                        <div className="overline mb-3">Other Documents (from registration)</div>
+                        <div className="grid sm:grid-cols-2 gap-4">
+                            {otherDocs.map((d, i) => (
+                                <DocSlot
+                                    key={`other-${i}`}
+                                    slot={{ key: d.doc_type, label: d.doc_type.replace(/^other:/, "Other · "), required: false }}
+                                    existing={d}
+                                    playerId={player.id}
+                                    persona={persona}
+                                    locked={locked}
+                                    onChanged={onChanged}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 };

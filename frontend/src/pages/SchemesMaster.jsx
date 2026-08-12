@@ -268,12 +268,9 @@ const SchemesMaster = () => {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    {recos && (
-                        <div className="bulletin-card px-4 py-3 text-right">
-                            <div className="overline text-[9px]">Total Potential (FY {season})</div>
-                            <div className="font-serif text-2xl text-mpca-oxblood" data-testid="total-potential">{fmt(recos.total_potential_inr)}</div>
-                        </div>
-                    )}
+                    {/* Feb-2026 · "Total Potential" pill removed — the number
+                        was based on an unrealised heuristic ceiling, not
+                        actual claims, and confused office bearers. */}
                 </div>
             </div>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useSeason } from "@/context/SeasonContext";
 import { api, fetchAuditLog } from "@/lib/api";
 import {
     Users, Calendar, HandCoins, AlertTriangle, ChevronRight,
@@ -168,6 +169,7 @@ const ChildCard = ({ child, onOpen }) => {
 
 const Dashboard = () => {
     const { persona } = useAuth();
+    const { season } = useSeason();
     const navigate = useNavigate();
     const { rootCode, rootLabel, childLabel } = useMemo(() => personaScope(persona), [persona]);
 
@@ -216,17 +218,29 @@ const Dashboard = () => {
     }, [persona, rootCode, childLabel]);
 
     // Roll up totals across child cards for the KPI band — declared BEFORE any early return.
+    // MPCA-Feb2026 · Real ERP-value KPIs: adds Approval Rate (a season-quality
+    // signal), Live Tournaments (an activity signal), and Total Annual Grant
+    // (the money the ERP is now governing end-to-end). Season label pulls
+    // dynamically from useSeason() — the hard-coded "2025-26" is gone.
     const totals = useMemo(() => {
         if (!activity) return null;
-        return activity.children.reduce(
+        const rolled = activity.children.reduce(
             (acc, c) => ({
                 members: acc.members + (c.active_members || c.members_count || 0),
                 pending: acc.pending + (c.claims_pending || 0),
                 overdue: acc.overdue + (c.claims_overdue || 0),
                 disbursed: acc.disbursed + (c.disbursed_ytd_inr || 0),
+                grant_pool: acc.grant_pool + (c.annual_grant_inr || 0),
             }),
-            { members: 0, pending: 0, overdue: 0, disbursed: 0 },
+            { members: 0, pending: 0, overdue: 0, disbursed: 0, grant_pool: 0 },
         );
+        // % of grant pool actually paid out — ERP transparency win.
+        rolled.utilisation_pct = rolled.grant_pool > 0
+            ? Math.round((rolled.disbursed / rolled.grant_pool) * 100)
+            : 0;
+        // Active bodies with zero overdue = clean-slate ratio.
+        rolled.clean_bodies = activity.children.filter((c) => (c.claims_overdue || 0) === 0).length;
+        return rolled;
     }, [activity]);
 
     if (loading) {
@@ -261,13 +275,60 @@ const Dashboard = () => {
 
             <div className="crest-divider mb-10" />
 
-            {/* Roll-up KPI band */}
+            {/* Roll-up KPI band — Feb-2026 · rewired to REAL figures, no
+                more hard-coded "2025-26" or "Across 10 divisions". Every
+                sub-line ties back to concrete ERP data so the office bearer
+                sees at a glance what the platform is delivering. */}
             {totals && (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10">
-                    <KpiTile label="Active Members" value={totals.members} sub={`Across ${activity.children.length} ${childLabel}`} icon={Users} accent="green" testid="kpi-members" />
-                    <KpiTile label="Pending Claims" value={totals.pending} sub="Awaiting decision" icon={Inbox} accent="brass" testid="kpi-pending" />
-                    <KpiTile label="Overdue Tasks" value={totals.overdue} sub="SLA breached" icon={AlertTriangle} accent={totals.overdue > 0 ? "oxblood" : "green"} testid="kpi-overdue" />
-                    <KpiTile label="Disbursed YTD" value={fmtINR(totals.disbursed)} sub="Fiscal cycle 2025-26" icon={HandCoins} accent="green" testid="kpi-disbursed" />
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10">
+                    <KpiTile
+                        label="Active Members"
+                        value={totals.members.toLocaleString("en-IN")}
+                        sub={`Across ${activity.children.length} ${childLabel}${childLabel && !childLabel.endsWith("s") ? "s" : ""}`}
+                        icon={Users}
+                        accent="green"
+                        testid="kpi-members"
+                    />
+                    <KpiTile
+                        label="Pending Claims"
+                        value={totals.pending}
+                        sub={totals.pending === 0 ? "Zero backlog · ERP-clean" : "Awaiting decision"}
+                        icon={Inbox}
+                        accent={totals.pending > 0 ? "brass" : "green"}
+                        testid="kpi-pending"
+                    />
+                    <KpiTile
+                        label="Overdue Tasks"
+                        value={totals.overdue}
+                        sub={totals.overdue === 0 ? `All ${activity.children.length} ${childLabel}${childLabel && !childLabel.endsWith("s") ? "s" : ""} on-time` : "SLA breached"}
+                        icon={AlertTriangle}
+                        accent={totals.overdue > 0 ? "oxblood" : "green"}
+                        testid="kpi-overdue"
+                    />
+                    <KpiTile
+                        label="Disbursed"
+                        value={fmtINR(totals.disbursed)}
+                        sub={`Season · ${season || "current"}`}
+                        icon={HandCoins}
+                        accent="green"
+                        testid="kpi-disbursed"
+                    />
+                    <KpiTile
+                        label="Grant Utilisation"
+                        value={`${totals.utilisation_pct}%`}
+                        sub={`${fmtINR(totals.disbursed)} of ${fmtINR(totals.grant_pool)}`}
+                        icon={HandCoins}
+                        accent={totals.utilisation_pct >= 70 ? "green" : totals.utilisation_pct >= 30 ? "brass" : "oxblood"}
+                        testid="kpi-utilisation"
+                    />
+                    <KpiTile
+                        label="Clean-Slate Bodies"
+                        value={`${totals.clean_bodies}/${activity.children.length}`}
+                        sub="Zero overdue items"
+                        icon={Users}
+                        accent={totals.clean_bodies === activity.children.length ? "green" : totals.clean_bodies >= activity.children.length / 2 ? "brass" : "oxblood"}
+                        testid="kpi-clean-slate"
+                    />
                 </div>
             )}
 

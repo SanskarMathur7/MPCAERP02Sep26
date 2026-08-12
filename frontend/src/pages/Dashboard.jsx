@@ -36,16 +36,27 @@ const personaScope = (persona) => {
     return { rootCode: "MPCA", rootLabel: "MPCA", childLabel: "Divisions" };
 };
 
-const KpiTile = ({ label, value, sub, icon: Icon, accent = "green", testid }) => {
+const KpiTile = ({ label, value, sub, icon: Icon, accent = "green", testid, source, formula, meaning }) => {
     const colorMap = {
         green: "text-mpca-green-dark",
         oxblood: "text-mpca-oxblood",
         brass: "text-mpca-brass",
     };
+    // Feb-2026 · Hover tooltip explains WHERE the number comes from,
+    // HOW it's computed, and WHAT it means — one-liner each. Uses the
+    // built-in `title` attribute so it works everywhere without extra deps.
+    const tooltip = [
+        meaning && `${meaning}`,
+        source && `\nSource · ${source}`,
+        formula && `\nFormula · ${formula}`,
+    ].filter(Boolean).join("");
     return (
-        <div className="bulletin-card p-6 relative" data-testid={testid}>
+        <div className="bulletin-card p-6 relative cursor-help" data-testid={testid} title={tooltip || undefined}>
             <div className="flex items-start justify-between mb-4">
                 <Icon className={colorMap[accent]} size={18} strokeWidth={1.5} />
+                {tooltip && (
+                    <span className="text-[9px] uppercase tracking-widest text-mpca-brass/70" aria-hidden="true">?</span>
+                )}
             </div>
             <div className="font-serif text-4xl text-mpca-green-dark leading-none">{value}</div>
             <div className="mt-2 text-sm text-mpca-charcoal">{label}</div>
@@ -288,6 +299,9 @@ const Dashboard = () => {
                         icon={Users}
                         accent="green"
                         testid="kpi-members"
+                        meaning="People on record — MPCA members + registered players — under your scope."
+                        source={`db.members + db.players (status=Active) · scoped to ${persona?.body_code || "your body"} and its child bodies`}
+                        formula="Σ (active members) + Σ (active players) across every direct child body"
                     />
                     <KpiTile
                         label="Pending Claims"
@@ -296,6 +310,9 @@ const Dashboard = () => {
                         icon={Inbox}
                         accent={totals.pending > 0 ? "brass" : "green"}
                         testid="kpi-pending"
+                        meaning="Reimbursement claims still moving through the maker-checker workflow."
+                        source="db.claims"
+                        formula="COUNT status IN [Submitted, Division_Recommended, MPCA_Sanctioned, Returned]"
                     />
                     <KpiTile
                         label="Overdue Tasks"
@@ -304,6 +321,9 @@ const Dashboard = () => {
                         icon={AlertTriangle}
                         accent={totals.overdue > 0 ? "oxblood" : "green"}
                         testid="kpi-overdue"
+                        meaning="Claims that have breached their status-level SLA."
+                        source="db.claims + SLA_HOURS_BY_STATUS table"
+                        formula="Pending claims WHERE (now − last approval-chain timestamp) > SLA-hours-for-status"
                     />
                     <KpiTile
                         label="Disbursed"
@@ -312,6 +332,9 @@ const Dashboard = () => {
                         icon={HandCoins}
                         accent="green"
                         testid="kpi-disbursed"
+                        meaning="Money actually paid out to Divisions / Districts this season."
+                        source={`db.claims WHERE status='Disbursed' AND fiscal_cycle='${season || "current"}'`}
+                        formula="Σ approved_amount_inr (fallback amount_inr)"
                     />
                     <KpiTile
                         label="Grant Utilisation"
@@ -320,6 +343,9 @@ const Dashboard = () => {
                         icon={HandCoins}
                         accent={totals.utilisation_pct >= 70 ? "green" : totals.utilisation_pct >= 30 ? "brass" : "oxblood"}
                         testid="kpi-utilisation"
+                        meaning="What fraction of the annual grant pool has already been paid out."
+                        source="db.claims (Disbursed) ÷ db.bodies.annual_grant_inr"
+                        formula="(Σ disbursed claims this season) ÷ (Σ annual_grant_inr across all child bodies) × 100"
                     />
                     <KpiTile
                         label="Clean-Slate Bodies"
@@ -328,6 +354,9 @@ const Dashboard = () => {
                         icon={Users}
                         accent={totals.clean_bodies === activity.children.length ? "green" : totals.clean_bodies >= activity.children.length / 2 ? "brass" : "oxblood"}
                         testid="kpi-clean-slate"
+                        meaning="Bodies with ZERO overdue claims — the ERP-value flywheel metric."
+                        source="derived from Overdue Tasks per child"
+                        formula="COUNT child bodies WHERE claims_overdue = 0"
                     />
                 </div>
             )}

@@ -91,10 +91,18 @@ async def body_children_activity(code: str):
     cards = []
     for child in direct_children:
         child_code = child["code"]
-        # Members count
+        # Members count — counts both `members` (registered adult members
+        # like Presidents/Secretaries) and `players` (active cricketers).
+        # Feb-2026 · Prior code only summed `db.members`, which meant every
+        # body showed 0 — the KPI is really about people the body has on
+        # record so we combine both collections.
         members_q = {"body_id": child_code}
         members_count = await db.members.count_documents(members_q)
         active_members = await db.members.count_documents({**members_q, "status": "Active"})
+        players_q_scope = {"body_id": {"$in": [child_code]}}
+        active_players = await db.players.count_documents({**players_q_scope, "status": "Active"})
+        members_count += await db.players.count_documents(players_q_scope)
+        active_members += active_players
 
         # Aggregate scope: for a Division card, include all its descendant Districts too
         scope_codes = [child_code]
@@ -133,8 +141,11 @@ async def body_children_activity(code: str):
             if now > anchor_dt + _td(hours=sla_h):
                 overdue_count += 1
 
-        # YTD disbursed
-        cycle = "2025-26"
+        # YTD disbursed — Feb-2026 · fiscal_cycle no longer hard-coded to
+        # 2025-26; it now follows the active season configured in the
+        # schemes route so KPIs stay in sync across the app.
+        from routes.reimbursement_schemes import CURRENT_FISCAL_CYCLE
+        cycle = CURRENT_FISCAL_CYCLE
         disbursed_docs = await db.claims.find(
             {**claim_q_base, "status": "Disbursed", "fiscal_cycle": cycle},
             {"_id": 0, "amount_inr": 1, "approved_amount_inr": 1, "updated_at": 1},

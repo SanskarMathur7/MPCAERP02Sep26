@@ -101,40 +101,110 @@ const SchemesMaster = () => {
     };
 
     const downloadExport = () => {
-        // Print-to-PDF the current schemes list via a new window (matches the
-        // existing dynamic-PDF pattern used elsewhere in the app).
+        // MPCA-Feb2026 · Print-to-PDF the full scheme dossier (Members'
+        // signing copy). Every scheme now renders as its own card with
+        // description, budget heads, REQUIRED DOCUMENTS and ELIGIBILITY
+        // CONDITIONS — matching the on-screen detail panel so office
+        // bearers can sign against exactly what Divisions will apply for.
         const w = window.open("", "_blank");
         if (!w) return;
-        const rows = schemes.map((s) => `
-            <tr>
-                <td>${s.scheme_code}</td>
-                <td>${s.name}</td>
-                <td>${(s.scheme_type || "").replace(/_/g, " ")}</td>
-                <td>${s.frequency || ""}</td>
-                <td>${(s.eligible_bodies || []).join(", ")}</td>
-                <td>${(s.heads || []).map((h) => `${h.label} — ${h.rate_display || h.rate_inr}`).join("<br/>")}</td>
-            </tr>`).join("");
-        w.document.write(`<!doctype html><html><head><title>MPCA Schemes Register · ${season}</title>
+        const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+        const sortedSchemes = [...schemes].sort((a, b) => (a.scheme_code || "").localeCompare(b.scheme_code || ""));
+        const cards = sortedSchemes.map((s) => `
+            <section class="scheme">
+                <div class="hdr">
+                    <span class="code">${esc(s.scheme_code)}</span>
+                    <span class="name">${esc(s.name)}</span>
+                    <span class="badges">
+                        <span class="badge">${esc((s.scheme_type || "").replace(/_/g, " "))}</span>
+                        ${s.frequency ? `<span class="badge">${esc(s.frequency)}</span>` : ""}
+                        ${s.is_active === false ? `<span class="badge inactive">Inactive</span>` : ""}
+                    </span>
+                </div>
+                ${s.description ? `<div class="desc">${esc(s.description)}</div>` : ""}
+                ${(s.eligible_bodies || []).length ? `<div class="meta"><b>Eligible bodies:</b> ${esc(s.eligible_bodies.join(", "))}</div>` : ""}
+                ${(s.categories || []).length ? `<div class="meta"><b>Categories:</b> ${esc(s.categories.join(", "))}</div>` : ""}
+                ${(s.heads || []).length ? `
+                    <div class="section-title">Budget Heads (${s.heads.length})</div>
+                    <table class="heads">
+                        <thead><tr><th>Head</th><th>Unit</th><th>Rate</th></tr></thead>
+                        <tbody>
+                            ${s.heads.map((h) => `<tr>
+                                <td>${esc(h.label)}</td>
+                                <td>${esc((h.unit || "").replace(/_/g, " "))}</td>
+                                <td class="rate">${esc(h.rate_display || (h.rate_inr ? `\u20B9${Number(h.rate_inr).toLocaleString("en-IN")}` : "—"))}</td>
+                            </tr>`).join("")}
+                        </tbody>
+                    </table>
+                ` : ""}
+                ${(s.required_documents || []).length ? `
+                    <div class="section-title">Required Documents (${s.required_documents.length})</div>
+                    <ul class="bullets">
+                        ${s.required_documents.map((d) => `<li>${esc(d)}</li>`).join("")}
+                    </ul>
+                ` : ""}
+                ${(s.conditions || []).length ? `
+                    <div class="section-title">Eligibility Conditions (${s.conditions.length})</div>
+                    <ul class="bullets">
+                        ${s.conditions.map((c) => `<li>${esc(c)}</li>`).join("")}
+                    </ul>
+                ` : ""}
+            </section>
+        `).join("");
+        w.document.write(`<!doctype html><html><head><title>MPCA Schemes Register · ${esc(season)}</title>
             <style>
-                body { font-family: 'Georgia', serif; padding: 24px; color: #1a1a1a; }
-                h1 { color: #0f2818; font-size: 22px; margin: 0 0 4px; }
-                .sub { color: #a67c3a; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px; }
-                table { width: 100%; border-collapse: collapse; font-size: 10px; }
-                th, td { border: 1px solid #d4c9b5; padding: 6px; vertical-align: top; text-align: left; }
-                th { background: #f5efe3; color: #0f2818; text-transform: uppercase; letter-spacing: 1px; font-size: 9px; }
-                .sig { margin-top: 60px; display: flex; justify-content: space-between; }
-                .sig div { border-top: 1px solid #1a1a1a; padding-top: 6px; width: 30%; font-size: 10px; text-align: center; }
+                @page { size: A4; margin: 18mm 14mm 20mm 14mm; }
+                body { font-family: 'Georgia', 'Times New Roman', serif; padding: 0; color: #1a1a1a; font-size: 11px; line-height: 1.45; }
+                h1 { color: #0f2818; font-size: 24px; margin: 0 0 4px; }
+                .cover-sub { color: #a67c3a; font-size: 10px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px; border-bottom: 2px solid #a67c3a; padding-bottom: 12px; }
+                .toc { margin-bottom: 32px; page-break-after: always; }
+                .toc h2 { font-size: 14px; color: #7c1e26; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 12px; }
+                .toc-row { display: flex; justify-content: space-between; border-bottom: 1px dotted #d4c9b5; padding: 4px 0; }
+                .toc-row .c { font-family: 'Courier New', monospace; color: #7c1e26; margin-right: 12px; min-width: 60px; }
+
+                .scheme { break-inside: avoid; page-break-inside: avoid; margin-bottom: 20px; border: 1px solid #d4c9b5; padding: 12px 14px; background: #faf7f0; }
+                .hdr { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid #d4c9b5; padding-bottom: 6px; margin-bottom: 8px; }
+                .hdr .code { font-family: 'Courier New', monospace; color: #7c1e26; font-weight: bold; font-size: 13px; }
+                .hdr .name { font-size: 14px; color: #0f2818; font-weight: bold; flex: 1; }
+                .hdr .badges { display: flex; gap: 4px; }
+                .badge { background: #a67c3a; color: #fff; padding: 2px 6px; font-size: 8px; text-transform: uppercase; letter-spacing: 1px; }
+                .badge.inactive { background: #7c1e26; }
+                .desc { color: #444; font-style: italic; margin: 6px 0; }
+                .meta { font-size: 10px; color: #555; margin: 2px 0; }
+                .meta b { color: #0f2818; }
+
+                .section-title { color: #a67c3a; font-size: 10px; text-transform: uppercase; letter-spacing: 2px; margin: 10px 0 4px; font-weight: bold; }
+                table.heads { width: 100%; border-collapse: collapse; margin-top: 2px; }
+                table.heads th, table.heads td { border: 1px solid #d4c9b5; padding: 4px 6px; text-align: left; font-size: 10px; vertical-align: top; }
+                table.heads th { background: #f5efe3; color: #0f2818; text-transform: uppercase; letter-spacing: 1px; font-size: 9px; }
+                table.heads td.rate { font-family: 'Courier New', monospace; text-align: right; color: #7c1e26; font-weight: bold; white-space: nowrap; }
+
+                ul.bullets { margin: 4px 0 4px 20px; padding: 0; }
+                ul.bullets li { margin: 2px 0; }
+
+                .sig { margin-top: 40px; padding-top: 20px; border-top: 2px solid #0f2818; display: flex; justify-content: space-between; page-break-inside: avoid; }
+                .sig div { border-top: 1px solid #1a1a1a; padding-top: 6px; width: 30%; font-size: 10px; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
+                .footer-note { margin-top: 24px; font-size: 9px; color: #555; font-style: italic; text-align: center; }
             </style></head><body>
-            <h1>MPCA Schemes Register · ${season}</h1>
-            <div class="sub">Master Reimbursement / Grant / Camp Schemes — awaiting activation</div>
-            <table>
-                <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Frequency</th><th>Eligible</th><th>Budget Heads</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
+            <h1>MPCA Schemes Register</h1>
+            <div class="cover-sub">Master Reimbursement / Grant / Camp Schemes · Season ${esc(season)} · ${sortedSchemes.length} schemes</div>
+
+            <div class="toc">
+                <h2>Table of Contents</h2>
+                ${sortedSchemes.map((s) => `<div class="toc-row"><span><span class="c">${esc(s.scheme_code)}</span>${esc(s.name)}</span><span>${esc((s.scheme_type || "").replace(/_/g, " "))}</span></div>`).join("")}
+            </div>
+
+            ${cards}
+
             <div class="sig">
                 <div>President</div>
                 <div>Hon. Secretary</div>
                 <div>Hon. Treasurer</div>
+            </div>
+            <div class="footer-note">
+                By signing above, the office bearers approve the ${sortedSchemes.length} schemes listed for Season ${esc(season)}
+                including all budget heads, required documents and eligibility conditions.
+                Any mid-year revision will require a fresh signature and re-upload to the ERP.
             </div>
             <script>window.onload = () => window.print();</script>
             </body></html>`);

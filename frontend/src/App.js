@@ -71,6 +71,7 @@ const MyDAForms = lazy(() => import("@/pages/MyDAForms"));
 const SquadReview = lazy(() => import("@/pages/SquadReview"));
 const SquadDetail = lazy(() => import("@/pages/SquadDetail"));
 const SquadNominationForm = lazy(() => import("@/pages/SquadNominationForm"));
+const SquadMPCAReviewForm = lazy(() => import("@/pages/SquadMPCAReviewForm"));
 const DAReview = lazy(() => import("@/pages/DAReview"));
 const MatchOfficialDetail = lazy(() => import("@/pages/MatchOfficialDetail"));
 const ActionCenter = lazy(() => import("@/pages/ActionCenter"));
@@ -212,6 +213,7 @@ function App() {
                             <Route path="/squads/:sid/review" element={<Protected><SquadReview /></Protected>} />
                             <Route path="/squads/:sid" element={<Protected><SquadDetail /></Protected>} />
                             <Route path="/squads/:id/nomination-form" element={<Protected><SquadNominationForm /></Protected>} />
+                            <Route path="/squads/:id/mpca-review-form" element={<Protected><SquadMPCAReviewForm /></Protected>} />
                             <Route path="/tournaments/:tid/squads/new" element={<Protected><SquadDetail /></Protected>} />
                             <Route path="/player-registrations" element={<Protected><PlayerRegistrations /></Protected>} />
                             <Route path="/camps" element={<Protected><CampsPage /></Protected>} />

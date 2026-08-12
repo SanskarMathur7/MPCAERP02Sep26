@@ -53,12 +53,21 @@ const SquadNominationForm = () => {
                 </button>
             </div>
 
-            {/* Header */}
-            <div className="text-center border-b-4 border-black pb-3 mb-6">
-                <div className="text-[9px] uppercase tracking-widest">Form FMPCA · SQ-01</div>
-                <h1 className="font-serif text-3xl mt-1">MADHYA PRADESH CRICKET ASSOCIATION</h1>
-                <div className="text-[11px] italic">(Affiliated to Board of Control for Cricket in India)</div>
-                <div className="font-serif text-lg mt-2 border-t border-b border-black py-1 uppercase tracking-widest">Squad Nomination Form</div>
+            {/* Header · MPCA official letterhead */}
+            <div className="text-center border-b-4 border-double border-black pb-4 mb-6">
+                <div className="flex items-center justify-center gap-4 mb-2">
+                    <div className="w-16 h-16 rounded-full border-2 border-black flex items-center justify-center text-[9px] text-center leading-tight font-serif">
+                        MPCA<br/>EST<br/>1957
+                    </div>
+                    <div>
+                        <h1 className="font-serif text-3xl uppercase tracking-widest">Madhya Pradesh</h1>
+                        <h1 className="font-serif text-3xl uppercase tracking-widest">Cricket Association</h1>
+                        <div className="text-[10px] italic mt-1">(Affiliated to the Board of Control for Cricket in India)</div>
+                        <div className="text-[9px] uppercase tracking-widest mt-0.5">Holkar Stadium, Race Course Road, Indore — 452001 · Madhya Pradesh</div>
+                    </div>
+                </div>
+                <div className="text-[9px] uppercase tracking-widest mt-3">Form FMPCA · SQ-01</div>
+                <div className="font-serif text-lg mt-1 border-t border-b border-black py-1 uppercase tracking-widest">Squad Nomination Form</div>
             </div>
 
             {/* Meta */}

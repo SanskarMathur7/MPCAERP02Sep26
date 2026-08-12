@@ -1047,6 +1047,22 @@ class SquadWaiver(BaseModel):
     recorded_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+# MPCA-140 · Per-player decision recorded by MPCA during squad review.
+# When MPCA reviews a Division-submitted squad, they mark each player
+# Approved or Rejected with a reason. All players must have a decision
+# before the whole list can be finalised.
+MemberDecisionValue = Literal["Approved", "Rejected"]
+
+
+class MemberDecision(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    player_id: str
+    decision: MemberDecisionValue
+    reason: Optional[str] = None
+    decided_by: Optional[str] = None
+    decided_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class Squad(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -1062,6 +1078,11 @@ class Squad(BaseModel):
     voters: List[str] = []                       # committee member role ids present
     match_officials: MatchOfficials = Field(default_factory=MatchOfficials)
     waivers: List[SquadWaiver] = []
+    # MPCA-140 · Per-player review decisions captured by MPCA. Empty list until
+    # MPCA opens review. When populated, every nominated member must have an
+    # entry before the squad may be Approved (whole-list). Rejected members
+    # are dropped from `members` at Approve-time and archived in this list.
+    member_decisions: List[MemberDecision] = []
     notes: Optional[str] = None
     submission_status: SquadSubmissionStatus = "Draft"
     submitted_at: Optional[str] = None

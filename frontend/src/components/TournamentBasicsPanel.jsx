@@ -118,6 +118,22 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
 
     const setField = (k, v) => { setMeta((m) => ({ ...m, [k]: v })); setDirty(true); };
 
+    // MPCA-137 · Sync numeric age_cap_years / age_floor_years to the age_group
+    // label so downstream code (Squad Selection age filter · Player age
+    // eligibility · Participation basics) always sees one consistent truth.
+    // Numeric fields live on the Tournament model itself (not setup_meta).
+    const AGE_GROUP_TO_CAP = {
+        "Senior": null, "U-25": 25, "U-23": 23, "U-22": 22,
+        "U-19": 19, "U-18": 18, "U-16": 16, "U-15": 15, "U-14": 14,
+    };
+    const setAgeGroup = (label) => {
+        setField("age_group", label);
+        const cap = AGE_GROUP_TO_CAP[label] ?? null;
+        setTournamentField("age_cap_years", cap);
+        // Floor stays None unless the user explicitly sets it — U-groups are
+        // typically OPEN below the cap, so we don't guess a floor.
+    };
+
     // ─── Body Pools helpers (Division or District) ──────────
     const dpools = meta[poolKey] || [];
     const usedBodyCodes = useMemo(
@@ -262,7 +278,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                 </label>
                 <label className="block">
                     <div className="overline text-[9px] mb-1">Age Group</div>
-                    <select className={inputCls} value={meta.age_group} onChange={(e) => setField("age_group", e.target.value)} disabled={!canEdit} data-testid="basics-age">
+                    <select className={inputCls} value={meta.age_group} onChange={(e) => setAgeGroup(e.target.value)} disabled={!canEdit} data-testid="basics-age">
                         <option>Senior</option>
                         <option>U-25</option>
                         <option>U-23</option>

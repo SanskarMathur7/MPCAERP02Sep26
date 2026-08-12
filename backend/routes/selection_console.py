@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from core.infra import db, api_router
 from core.scoping import get_scope
 from core.helpers import _create_notification
-from models import Squad, SquadMember, MatchOfficials, SquadWaiver
+from models import Squad, SquadMember, MatchOfficials, SquadWaiver, MemberDecision
 
 _DIVISION_ROLES = {"division-secretary", "district-secretary", "president", "secretary"}
 _MPCA_APPROVER_ROLES = {"secretary", "president"}
@@ -336,6 +336,28 @@ async def review_squad_by_mpca(
     if payload.action == "reject" and doc.get("submission_status") != "Awaiting_MPCA_Approval":
         raise HTTPException(400, f"Squad is not awaiting approval (status={doc.get('submission_status')}).")
 
+    # MPCA-140 · Whole-list approval requires a per-player decision on every
+    # nominated member. Rejected members are dropped from the roster at
+    # Approve-time; the decision log is archived on the squad for audit + PDF.
+    dropped_members: List[dict] = []
+    if payload.action == "approve":
+        members = doc.get("members") or []
+        decisions_by_id = {d.get("player_id"): d for d in (doc.get("member_decisions") or [])}
+        missing = [m for m in members if m.get("player_id") not in decisions_by_id]
+        if missing:
+            raise HTTPException(
+                400,
+                f"{len(missing)} player(s) still need a per-player decision before the "
+                f"whole squad can be approved. Please Approve or Reject every nominated "
+                f"player first.",
+            )
+        # Filter down to only Approved members; Rejected members go into an
+        # archive on the squad so the MPCA-Review PDF can still enumerate them.
+        approved_members = [m for m in members if decisions_by_id[m["player_id"]].get("decision") == "Approved"]
+        dropped_members = [m for m in members if decisions_by_id[m["player_id"]].get("decision") == "Rejected"]
+        if not approved_members:
+            raise HTTPException(400, "At least one player must be Approved to finalise the squad.")
+
     # ── Enforce a valid XV before finalize
     if payload.action == "finalize":
         members = doc.get("members") or []
@@ -346,13 +368,18 @@ async def review_squad_by_mpca(
 
     now = datetime.now(timezone.utc).isoformat()
     new_status = "Approved" if payload.action in ("approve", "finalize") else "Rejected"
-    await db.squads.update_one({"id": sid}, {"$set": {
+    review_update = {
         "submission_status": new_status,
         "reviewed_at": now,
         "reviewed_by": x_user_name or x_role_id,
         "review_note": payload.note,
         "finalized_by_mpca": payload.action == "finalize",
-    }})
+    }
+    if payload.action == "approve" and dropped_members:
+        # Persist the pruned roster + archive of rejected members for the PDF.
+        review_update["members"] = approved_members
+        review_update["dropped_members"] = dropped_members
+    await db.squads.update_one({"id": sid}, {"$set": review_update})
 
     # MPCA-141 · Notify the squad's owning body (Division/District Secretary)
     # so they see the outcome in their action centre + bell.
@@ -399,6 +426,72 @@ async def review_squad_by_mpca(
         )
 
     return await db.squads.find_one({"id": sid}, {"_id": 0})
+
+
+# ─────────────── MPCA-140 · Per-Player Decision ───────────────
+
+class MemberDecisionPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    decision: str            # "Approved" | "Rejected"
+    reason: Optional[str] = None
+
+
+@api_router.post("/squads/{sid}/members/{pid}/decision", response_model=Squad)
+async def set_member_decision(
+    sid: str,
+    pid: str,
+    payload: MemberDecisionPayload,
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+):
+    """MPCA records an Approved / Rejected verdict on a single nominated player.
+    Every player must have a decision before the whole squad can be Approved
+    (see review_squad_by_mpca)."""
+    if x_role_id not in _MPCA_APPROVER_ROLES:
+        raise HTTPException(403, "Only MPCA Hon. Secretary or President may set player decisions.")
+    if payload.decision not in ("Approved", "Rejected"):
+        raise HTTPException(400, "decision must be 'Approved' or 'Rejected'")
+
+    doc = await db.squads.find_one({"id": sid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Squad not found")
+    if doc.get("submission_status") != "Awaiting_MPCA_Approval":
+        raise HTTPException(
+            409,
+            f"Per-player decisions can only be recorded on a squad Awaiting MPCA Approval "
+            f"(current: {doc.get('submission_status')}).",
+        )
+    members = doc.get("members") or []
+    if not any(m.get("player_id") == pid for m in members):
+        raise HTTPException(404, "That player is not on this squad's roster.")
+
+    decisions = list(doc.get("member_decisions") or [])
+    decisions = [d for d in decisions if d.get("player_id") != pid]
+    decisions.append(MemberDecision(
+        player_id=pid,
+        decision=payload.decision,
+        reason=(payload.reason or "").strip() or None,
+        decided_by=x_user_name or x_role_id,
+    ).model_dump())
+    await db.squads.update_one({"id": sid}, {"$set": {"member_decisions": decisions}})
+    return await db.squads.find_one({"id": sid}, {"_id": 0})
+
+
+@api_router.delete("/squads/{sid}/members/{pid}/decision", response_model=Squad)
+async def clear_member_decision(
+    sid: str,
+    pid: str,
+    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+):
+    if x_role_id not in _MPCA_APPROVER_ROLES:
+        raise HTTPException(403, "Only MPCA may clear a player decision.")
+    doc = await db.squads.find_one({"id": sid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Squad not found")
+    decisions = [d for d in (doc.get("member_decisions") or []) if d.get("player_id") != pid]
+    await db.squads.update_one({"id": sid}, {"$set": {"member_decisions": decisions}})
+    return await db.squads.find_one({"id": sid}, {"_id": 0})
+
 
 
 @api_router.post("/squads/{sid}/reopen")

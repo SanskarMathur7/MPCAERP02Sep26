@@ -1,0 +1,32 @@
+{
+  "summary": "MPCA Squad Selection Sprint · Iteration B fully validated. Backend pytest: 11/12 PASS (1 skipped — no candidate PR registration in DB). Frontend UI validated for MPCA-140 (per-player decision buttons + all-decided gating), MPCA-142 (MPCA Review PDF renders with letterhead + counts + decisions table), MPCA-127 (nomination PDF has MPCA/EST/1957 emblem + Holkar Stadium letterhead). MPCA-137 age-sync verified in code + backend (age_cap_years=19 persists; tournament overview now labels 'U-19'). PR return-to-division button confirmed in code (correctly gated to MPCA persona + non-terminal status).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mpca_squad_iter_b.py",
+    "/app/test_reports/pytest/mpca_squad_iter_b.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PlayerRegistrations.jsx line 623 — the new 'Send back to Division' button reuses the /return-to-player endpoint. The button label + prompt talk about 'Division', but under the hood the endpoint is the same one used by the existing 'Return to Player' flow. Consider adding a distinguishing `return_type` field on the payload so future audit-trail entries can differentiate Division-bounce vs Player-bounce.",
+    "SquadDetail.jsx — the age-filter helpers `_seasonAgeCutoff`/`_ageOnDate` filter the player pool client-side only. If MPCA overrides via URL/DevTools they could pick over-age players. Consider a server-side guard on POST /tournaments/{tid}/selection that rejects members exceeding age_cap_years.",
+    "TournamentBasicsPanel.jsx AGE_GROUP_TO_CAP is a local const inside the component — it would be better exported from a shared constants module so the same mapping applies to any age filter/label derived elsewhere (e.g., PlayerRegistrations, PlayerRegister)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mpca_squad_iter_b.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 executed, 1 skipped due to data — endpoint code-verified)",
+    "frontend": "100% (MPCA-140/142/127/137 UI assertions all passed)"
+  },
+  "test_credentials": "persona-chip-secretary (MPCA · Shri Sanjeev Dua). Backend tests used raw X-Role-Id/X-User-Body-Code headers (secretary / MPCA).",
+  "seed_data_creation": "Added one filler player 'TEST_IterB Extra' (player_id 6add4a04-a9f7-475c-878c-2d3761b1d65e) to the reference squad 93a7fa22-9c1f-4740-b1e6-9feb331046d1 to bring it back to 11 members after Iter B backend tests dropped one via the new reject flow. Squad left in Awaiting_MPCA_Approval status with per-player decisions populated (11 Approved).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reference squad 93a7fa22-9c1f-4740-b1e6-9feb331046d1 (Madhavrao Scindia Trophy · DIV-IND) is currently in Awaiting_MPCA_Approval with all 11 members decided (post frontend test click-through). Tournament 1c8e8e70-9338-4387-93a4-8f229462f2fa has age_cap_years=19 set. Frontend routes: /squads/{sid}/mpca-review-form and /squads/{sid}/nomination-form both work as MPCA-branded printable pages. Only one PlayerRegistration exists (status=Approved) so the pr-return-to-division-btn can't be exercised via UI without creating a new submission — flag for next agent if they need to test that button visually.",
+  "rca of the issue": "No new bugs found in Iteration B. The only skipped test (return-to-player) is a data-availability skip, not a code defect — the endpoint accepts remark & flips status to Returned per the source (routes/player_registrations.py line 507)."
+}

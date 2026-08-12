@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import {
     UserPlus, Plus, Copy, Loader2, Check, X, Inbox, ExternalLink, ShieldAlert,
     RotateCcw, CheckCircle2, XCircle, Send, Mail, Phone, Calendar, ChevronRight,
-    Sparkles, FileText, Upload, Edit3, History, AlertTriangle,
+    Sparkles, FileText, Upload, Edit3, History, AlertTriangle, ArrowLeft,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useSeason } from "@/context/SeasonContext";
@@ -613,6 +613,29 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                         </button>
                     )}
                     {/* MPCA-153 · "Return to Player" removed — amendments happen inline via the modal above */}
+                    {/* Feb-2026 · Send back to Division for missing docs.
+                        MPCA persona only, visible when reg is with MPCA
+                        (Division_Approved / Submitted / Under_MPCA_Review).
+                        Reuses the existing /return-to-player endpoint which
+                        already accepts MPCA callers — the semantic label
+                        matches what MPCA actually wants: bounce the row back
+                        to the Division for a missing document. */}
+                    {isMPCA && !["Approved", "Rejected"].includes(reg.status) && (
+                        <button
+                            onClick={() => {
+                                const n = window.prompt(
+                                    "Send this registration back to the Division. Please list the missing / incorrect document(s) so they know what to fix:",
+                                );
+                                if (n && n.trim()) onAction(reg.id, "return-to-player", n.trim());
+                            }}
+                            disabled={busy}
+                            className="text-[11px] uppercase tracking-widest border border-mpca-brass text-mpca-brass px-3 py-1.5 flex items-center gap-1 disabled:opacity-40"
+                            data-testid="pr-return-to-division-btn"
+                            title="Bounce this registration back to the home Division to fix missing documents"
+                        >
+                            <ArrowLeft size={11} /> Send back to Division
+                        </button>
+                    )}
                     {canReturn && (
                         <button onClick={() => { const n = window.prompt("Rejection reason (required):"); if (n) onAction(reg.id, "reject", n); }} disabled={busy} className="text-[11px] uppercase tracking-widest border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-reject-btn">
                             <XCircle size={11} /> Reject

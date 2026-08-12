@@ -19,6 +19,25 @@ import {
 
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
 const CATEGORY_LABEL = { Local_MP: "Local MP", Guest: "Guest", Foreign: "Foreign" };
+
+// MPCA-136 · Age filter helpers. Season cutoff = 1 September of the season's
+// start year (matches BCCI cricketing-age convention). Falls back to today if
+// the season cycle is unparseable.
+const _seasonAgeCutoff = (cycle) => {
+    if (!cycle || typeof cycle !== "string") return new Date();
+    const startYear = parseInt(cycle.slice(0, 4), 10);
+    if (!Number.isFinite(startYear)) return new Date();
+    return new Date(`${startYear}-09-01`);
+};
+const _ageOnDate = (dobIso, refDate) => {
+    if (!dobIso) return null;
+    const dob = new Date(dobIso);
+    if (Number.isNaN(+dob)) return null;
+    let age = refDate.getFullYear() - dob.getFullYear();
+    const m = refDate.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && refDate.getDate() < dob.getDate())) age -= 1;
+    return age;
+};
 const STATUS_TONE = {
     Draft: "bg-mpca-brass/20 text-mpca-brass border-mpca-brass/40",
     Submitted: "bg-mpca-navy/20 text-mpca-navy border-mpca-navy/40",
@@ -209,6 +228,32 @@ const SquadDetail = () => {
         });
     };
 
+    // MPCA-140 · Per-player decision handler. Reviewer marks each nominated
+    // player Approved / Rejected with an optional (Approved) or mandatory
+    // (Rejected reason free-text) note.
+    const handleMemberDecision = async (playerId, decision) => {
+        const isReject = decision === "Rejected";
+        const reason = window.prompt(
+            isReject
+                ? "Reason for rejecting this player (required):"
+                : "Optional note for approving this player:",
+        );
+        if (isReject && !reason) return;
+        await guardAsync(async () => {
+            const { data: updated } = await api.post(
+                `/squads/${squad.id}/members/${playerId}/decision`,
+                { decision, reason: reason || null },
+            );
+            setSquad(updated);
+        });
+    };
+    const handleClearDecision = async (playerId) => {
+        await guardAsync(async () => {
+            const { data: updated } = await api.delete(`/squads/${squad.id}/members/${playerId}/decision`);
+            setSquad(updated);
+        });
+    };
+
     // ── Derived state
     const members = squad?.members || [];
     const memberIds = useMemo(() => new Set(members.map((m) => m.player_id)), [members]);
@@ -226,10 +271,27 @@ const SquadDetail = () => {
 
     const filteredPool = useMemo(() => {
         const query = q.trim().toLowerCase();
+        // MPCA-136 · Age filter — tournament.age_cap_years / age_floor_years are
+        // numeric caps derived from the tournament's category/age group. When a
+        // cap is set (e.g. U-19 → age_cap_years=19), players born too early
+        // (i.e. would be > cap at 1-Sept of the season year) are hidden from
+        // the pool so Divisions can't accidentally pick over-age players.
+        const seasonCutoff = _seasonAgeCutoff(tournament?.fiscal_cycle);
+        const capYears = Number(tournament?.age_cap_years) || null;
+        const floorYears = Number(tournament?.age_floor_years) || null;
+        const inAgeBand = (dobIso) => {
+            if (!dobIso) return !capYears && !floorYears; // no DOB → only ok if no cap
+            const age = _ageOnDate(dobIso, seasonCutoff);
+            if (age == null) return true;
+            if (capYears && age > capYears) return false;
+            if (floorYears && age < floorYears) return false;
+            return true;
+        };
         return players
             .filter((p) => !memberIds.has(p.id))
             .filter((p) => roleFilter === "all" || p.role === roleFilter)
             .filter((p) => catFilter === "all" || p.category === catFilter)
+            .filter((p) => inAgeBand(p.date_of_birth || p.dob))
             .filter((p) => {
                 if (!query) return true;
                 // MPCA-126 · null-safe search — some legacy player rows had
@@ -238,7 +300,7 @@ const SquadDetail = () => {
                 const code = (p.player_id || "").toLowerCase();
                 return name.includes(query) || code.includes(query);
             });
-    }, [players, memberIds, q, roleFilter, catFilter]);
+    }, [players, memberIds, q, roleFilter, catFilter, tournament?.age_cap_years, tournament?.age_floor_years, tournament?.fiscal_cycle]);
 
     // Role breakdown for header stats
     const roleBreakdown = useMemo(() => {
@@ -246,6 +308,17 @@ const SquadDetail = () => {
         members.forEach((m) => { if (b[m.role] !== undefined) b[m.role] += 1; });
         return b;
     }, [members]);
+
+    // MPCA-140 · Decision map for per-player review UI + Approve-Whole-List
+    // gating. Keyed by player_id → { decision, reason, decided_by, decided_at }.
+    const decisionByPid = useMemo(() => {
+        const map = {};
+        (squad?.member_decisions || []).forEach((d) => { map[d.player_id] = d; });
+        return map;
+    }, [squad?.member_decisions]);
+    const decidedCount = members.filter((m) => decisionByPid[m.player_id]).length;
+    const undecidedCount = members.length - decidedCount;
+    const allMembersDecided = members.length > 0 && undecidedCount === 0;
 
     if (loading) return (
         <div className="p-16" data-testid="squad-detail-loading">
@@ -341,12 +414,28 @@ const SquadDetail = () => {
                         )}
                         {canReview && (
                             <>
-                                <button onClick={() => handleReview("approve")} disabled={busy} className="text-[11px] uppercase tracking-widest bg-mpca-green-light text-mpca-green-dark px-3 py-2 flex items-center gap-1 disabled:opacity-40" data-testid="squad-approve-btn">
-                                    <CheckCircle2 size={12} /> Approve
+                                <button
+                                    onClick={() => handleReview("approve")}
+                                    disabled={busy || !allMembersDecided}
+                                    title={!allMembersDecided ? `Decide every player first — ${undecidedCount} pending.` : "Approve the whole squad"}
+                                    className="text-[11px] uppercase tracking-widest bg-mpca-green-light text-mpca-green-dark px-3 py-2 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    data-testid="squad-approve-btn"
+                                >
+                                    <CheckCircle2 size={12} /> Approve Whole List
+                                    {!allMembersDecided && <span className="text-[9px] font-mono ml-1">({decidedCount}/{members.length})</span>}
                                 </button>
                                 <button onClick={() => handleReview("reject")} disabled={busy} className="text-[11px] uppercase tracking-widest bg-mpca-brass/40 text-mpca-ivory px-3 py-2 flex items-center gap-1 disabled:opacity-40" data-testid="squad-reject-btn">
-                                    <XCircle size={12} /> Reject
+                                    <XCircle size={12} /> Reject Whole Squad
                                 </button>
+                                <a
+                                    href={`/squads/${squad.id}/mpca-review-form`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-[11px] uppercase tracking-widest bg-mpca-ivory text-mpca-green-dark px-3 py-2 flex items-center gap-1 hover:bg-mpca-gold-light transition-colors"
+                                    data-testid="squad-mpca-review-pdf-btn"
+                                >
+                                    <Download size={12} /> MPCA Review PDF
+                                </a>
                             </>
                         )}
                         {/* MPCA-130 · "Finalize XV" button removed — Approve
@@ -562,8 +651,10 @@ const SquadDetail = () => {
                         </div>
                     ) : (
                         <div className="divide-y divide-mpca-brass/15 max-h-[600px] overflow-y-auto">
-                            {members.map((m, idx) => (
-                                <div key={m.player_id} className="px-5 py-2.5 flex items-center gap-3" data-testid={`squad-member-${m.player_id}`}>
+                            {members.map((m, idx) => {
+                                const dec = decisionByPid[m.player_id];
+                                return (
+                                <div key={m.player_id} className={"px-5 py-2.5 flex items-center gap-3 " + (dec?.decision === "Rejected" ? "bg-mpca-oxblood/5" : dec?.decision === "Approved" ? "bg-mpca-green-dark/5" : "")} data-testid={`squad-member-${m.player_id}`}>
                                     <div className="text-[10px] text-mpca-brass font-mono w-5">#{idx + 1}</div>
                                     <div className="flex-1 min-w-0">
                                         <div className="font-serif text-sm text-mpca-green-dark flex items-center gap-1.5 truncate">
@@ -572,14 +663,52 @@ const SquadDetail = () => {
                                             {m.is_keeper && <span title="Wicket-keeper"><BadgeCheck size={12} className="text-mpca-gold" /></span>}
                                         </div>
                                         <div className="text-[9px] text-mpca-gray-dark font-mono">{m.player_no} · {ROLE_LABEL[m.role] || m.role}</div>
+                                        {dec && (
+                                            <div className={"text-[10px] mt-0.5 " + (dec.decision === "Approved" ? "text-mpca-green-dark" : "text-mpca-oxblood")} data-testid={`squad-member-decision-${m.player_id}`}>
+                                                {dec.decision === "Approved" ? "✓" : "✗"} {dec.decision}
+                                                {dec.reason && <span className="italic"> — {dec.reason}</span>}
+                                            </div>
+                                        )}
                                     </div>
-                                    {canEdit && !busy && (
+                                    {canReview && !busy && (
+                                        <div className="flex flex-col gap-1 items-end">
+                                            <div className="flex gap-1">
+                                                <button
+                                                    onClick={() => handleMemberDecision(m.player_id, "Approved")}
+                                                    className={"text-[9px] uppercase px-1.5 py-0.5 border " + (dec?.decision === "Approved" ? "bg-mpca-green-dark text-mpca-ivory border-mpca-green-dark" : "border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory")}
+                                                    title="Approve this player"
+                                                    data-testid={`squad-member-approve-${m.player_id}`}
+                                                >
+                                                    <CheckCircle2 size={10} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleMemberDecision(m.player_id, "Rejected")}
+                                                    className={"text-[9px] uppercase px-1.5 py-0.5 border " + (dec?.decision === "Rejected" ? "bg-mpca-oxblood text-mpca-ivory border-mpca-oxblood" : "border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory")}
+                                                    title="Reject this player"
+                                                    data-testid={`squad-member-reject-${m.player_id}`}
+                                                >
+                                                    <XCircle size={10} />
+                                                </button>
+                                            </div>
+                                            {dec && (
+                                                <button
+                                                    onClick={() => handleClearDecision(m.player_id)}
+                                                    className="text-[8px] uppercase text-mpca-brass hover:underline"
+                                                    data-testid={`squad-member-clear-${m.player_id}`}
+                                                >
+                                                    reset
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                    {canEdit && !canReview && !busy && (
                                         <button onClick={() => handleRemove(m.player_id)} className="text-mpca-burgundy-dark hover:text-mpca-oxblood disabled:opacity-40" data-testid={`squad-remove-${m.player_id}`} title="Remove">
                                             <X size={13} />
                                         </button>
                                     )}
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
 

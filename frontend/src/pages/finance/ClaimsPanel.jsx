@@ -399,7 +399,7 @@ const ClaimRow = ({ claim, isMPCA, busy, onUploadSigned, onSubmit, onOpen }) => 
                     <label className="text-[10px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-green-dark hover:bg-mpca-green-dark/90 px-2.5 py-1.5 cursor-pointer">
                         {hasSigned ? "Replace signed PDF" : "Upload signed PDF"}
                         <input
-                            type="file" accept="application/pdf" className="hidden"
+                            type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" className="hidden"
                             disabled={busy}
                             onChange={(e) => onUploadSigned(e.target.files?.[0])}
                             data-testid={`claims-upload-signed-${c.id}`}

@@ -24,6 +24,8 @@ from core.infra import UPLOAD_ROOT
 ALLOWED_MIMES = {
     "application/pdf",
     "image/jpeg",
+    "image/jpg",              # non-standard but some browsers/OSes send this
+    "image/pjpeg",            # legacy progressive JPEG variant
     "image/png",
     "image/webp",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -56,7 +58,7 @@ async def upload_file(
     if file.content_type not in ALLOWED_MIMES:
         raise HTTPException(
             400,
-            f"Unsupported file type {file.content_type}. Allowed: PDF, JPEG/PNG/WebP, DOCX, XLSX, DOC, XLS.",
+            f"Unsupported file type {file.content_type}. Allowed: PDF, JPG/JPEG/PNG/WebP images, DOCX, XLSX, DOC, XLS.",
         )
     ext = EXT_BY_MIME.get(file.content_type, "")
     file_id = str(uuid.uuid4())

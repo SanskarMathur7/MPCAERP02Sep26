@@ -318,7 +318,7 @@ const SchemesMaster = () => {
                         <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="btn-heritage-primary disabled:opacity-60" data-testid="upload-signed-pdf-btn">
                             <Upload size={12} /> {uploading ? "Uploading…" : isActivated ? "Re-upload Signed" : "Upload Signed PDF"}
                         </button>
-                        <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
+                        <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" className="hidden"
                                onChange={(e) => uploadSignedPdf(e.target.files?.[0])} data-testid="signed-pdf-input" />
                         {isActivated && !activation?.bootstrap && (
                             <button onClick={resetActivation} className="text-[10px] uppercase tracking-widest text-mpca-oxblood/70 hover:text-mpca-oxblood inline-flex items-center gap-1" data-testid="reset-activation-btn">

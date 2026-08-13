@@ -160,14 +160,28 @@ const DivisionReimbursementClaimForm = () => {
 
             {/* Summary of claim */}
             <h3 className="font-serif text-lg border-b border-black mb-2 mt-6">3. Summary of Claim</h3>
-            <table className="w-full text-[11px] border-collapse mb-6">
-                <tbody>
-                    <TRow label="Invoices Submitted" value={String(claim.invoice_ids?.length || 0)} />
-                    <TRow label="Total Invoiced" value={fmtINR((claim.summary || {}).invoiced_total_inr)} />
-                    <TRow label="Eligible for Reimbursement" value={<b>{fmtINR((claim.summary || {}).eligible_total_inr)}</b>} />
-                    <TRow label="Over-Budget (Ineligible)" value={fmtINR((claim.summary || {}).over_budget_inr)} />
-                </tbody>
-            </table>
+            {(() => {
+                // Prefer the claim's frozen summary once it's Submitted; fall
+                // back to the LIVE invoice totals from review-summary for a
+                // Draft claim so the letter never shows zeros.
+                const live = summary?.live_invoice_totals || {};
+                const claimSum = claim.summary || {};
+                const isDraft = ["Draft", "Rejected"].includes(claim.status);
+                const invCount = isDraft ? (live.invoice_count ?? (claim.invoice_ids?.length || 0)) : (claim.invoice_ids?.length || 0);
+                const invoiced = isDraft ? (live.invoiced_total_inr ?? claimSum.invoiced_total_inr) : claimSum.invoiced_total_inr;
+                const eligible = isDraft ? (live.eligible_total_inr ?? claimSum.eligible_total_inr) : claimSum.eligible_total_inr;
+                const over = isDraft ? (live.over_budget_inr ?? claimSum.over_budget_inr) : claimSum.over_budget_inr;
+                return (
+                    <table className="w-full text-[11px] border-collapse mb-6">
+                        <tbody>
+                            <TRow label="Invoices Submitted" value={String(invCount)} />
+                            <TRow label="Total Invoiced" value={fmtINR(invoiced)} />
+                            <TRow label="Eligible for Reimbursement" value={<b>{fmtINR(eligible)}</b>} />
+                            <TRow label="Over-Budget (Ineligible)" value={fmtINR(over)} />
+                        </tbody>
+                    </table>
+                );
+            })()}
 
             {/* Signing-off language */}
             <div className="border border-black p-4 text-[11px] mb-8" data-testid="reimb-signing-language">
@@ -177,7 +191,11 @@ const DivisionReimbursementClaimForm = () => {
                     <li>All invoices submitted are true, correct, and pertain solely to the said tournament.</li>
                     <li>The claimed amount does not include any expenditure recovered from another source.</li>
                     <li>The physical vouchers / invoices are preserved with us and shall be produced for MPCA audit on demand.</li>
-                    <li>We request MPCA to sanction and disburse the eligible reimbursement of <b>{fmtINR((claim.summary || {}).eligible_total_inr)}</b> under the {claim.fiscal_cycle} reimbursement scheme.</li>
+                    <li>We request MPCA to sanction and disburse the eligible reimbursement of <b>{fmtINR(
+                        (["Draft","Rejected"].includes(claim.status)
+                            ? summary?.live_invoice_totals?.eligible_total_inr
+                            : (claim.summary || {}).eligible_total_inr) ?? 0
+                    )}</b> under the {claim.fiscal_cycle} reimbursement scheme.</li>
                 </ul>
             </div>
 

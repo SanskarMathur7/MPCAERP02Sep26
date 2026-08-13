@@ -630,15 +630,22 @@ async def get_review_summary(cid: str):
         row["budget_inr"] = float(h.get("limit_inr") or 0)
 
     heads = sorted(per_head.values(), key=lambda x: x.get("head") or "")
+    # MPCA-168 · Also surface invoice-level totals so the Division PDF's
+    # "Summary of Claim" block reflects the LIVE spending on a Draft claim
+    # (before the invoice_ids array on the claim doc has been populated).
+    live_invoiced_total = round(sum(float(i.get("total_inr") or 0) for i in invoices), 2)
+    live_eligible_total = round(sum(float(i.get("eligible_for_grant_inr") or 0) for i in invoices), 2)
+    live_over_total = round(sum(float(i.get("ineligible_for_grant_inr") or 0) for i in invoices), 2)
+
     return {
         "claim_id": cid,
         "claim_ref": doc.get("claim_ref"),
         "tournament_name": doc.get("tournament_name"),
         "body_id": doc.get("body_id"),
         "body_name": doc.get("body_name"),
-        "invoice_count": len(invoice_ids),
+        "invoice_count": len(invoices),
         "invoices_reviewed": sum(1 for i in invoice_lines if i["reviewed"]),
-        "all_reviewed": all_reviewed and bool(invoice_ids),
+        "all_reviewed": all_reviewed and bool(invoices),
         "heads": [
             {**h, "difference_inr": round((h.get("budget_inr") or 0) - (h.get("spent_inr") or 0), 2)}
             for h in heads
@@ -647,6 +654,12 @@ async def get_review_summary(cid: str):
             "budget_inr": round(sum(h.get("budget_inr") or 0 for h in heads), 2),
             "spent_inr": round(sum(h.get("spent_inr") or 0 for h in heads), 2),
             "accepted_inr": round(sum(h.get("accepted_inr") or 0 for h in heads), 2),
+        },
+        "live_invoice_totals": {
+            "invoiced_total_inr": live_invoiced_total,
+            "eligible_total_inr": live_eligible_total,
+            "over_budget_inr": live_over_total,
+            "invoice_count": len(invoices),
         },
         "invoices": invoice_lines,
         "mpca_signed_pdf_url": doc.get("mpca_signed_pdf_url"),

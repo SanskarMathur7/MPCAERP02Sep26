@@ -391,6 +391,15 @@ class TestPhaseELock:
 class TestDivisionHeadRemarks:
     """Feb 2026 additions on top of MPCA-168 Phase A."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_status(self, seed, db, loop):
+        """Approve/reject tests earlier in the module may have moved the seed
+        claim to a terminal state. Reset to Submitted so remark edits are allowed."""
+        async def reset():
+            await db.tournament_reimbursement_claims.update_one(
+                {"id": seed["cid"]}, {"$set": {"status": "Submitted"}})
+        loop.run_until_complete(reset())
+
     def test_set_remark(self, seed):
         r = requests.post(
             f"{API}/reimbursement-claims/{seed['cid']}/head-remark",

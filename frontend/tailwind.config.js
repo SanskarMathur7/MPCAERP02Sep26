@@ -19,6 +19,13 @@ module.exports = {
                 // Tokens keep their existing names for backward-compat across the codebase,
                 // but now resolve to BCCI-inspired colours (navy / saffron / marigold / maroon / cream).
                 "mpca-green-dark": "#0a1f3d",     // BCCI Navy (dominant)
+                "mpca-navy": "#0a1f3d",           // Alias — used widely across the app
+                "mpca-cream": "#f1ead7",          // Alias for parchment (used in older pages)
+                "mpca-cream-dark": "#e6dcc0",     // Slightly darker cream for chip badges
+                "mpca-gray-light": "#a2b0c4",     // Muted grey for upcoming/disabled states
+                "mpca-green-deep": "#0a3d1f",     // Deep forest green — Payroll/Budget-vs-Actual on-track
+                "mpca-gold-dark": "#7a5a0b",      // Dark goldenrod for tokens/badges (legible on cream)
+                "mpca-saffron": "#ff6a13",        // Alias for the saffron accent
                 "mpca-green": "#0e2747",          // Navy-2
                 "mpca-green-light": "#163558",    // Navy-3
                 "mpca-oxblood": "#ff6a13",        // Indian Saffron (high-pop accent)

@@ -348,6 +348,7 @@ export const ReimbursementClaimDetail = () => {
     const [approveOpen, setApproveOpen] = useState(false);
     const [approveAmt, setApproveAmt] = useState(0);
     const [liveSpent, setLiveSpent] = useState(0);
+    const [reviewSummary, setReviewSummary] = useState(null);
     const [rejectOpen, setRejectOpen] = useState(false);
     const [rejectReason, setRejectReason] = useState("");
 
@@ -360,6 +361,7 @@ export const ReimbursementClaimDetail = () => {
             let spent = Number(data.summary?.spent_inr || 0);
             try {
                 const rs = await api.get(`/reimbursement-claims/${id}/review-summary`);
+                setReviewSummary(rs?.data || null);
                 if (rs?.data?.totals?.spent_inr != null) spent = Number(rs.data.totals.spent_inr);
             } catch { /* ignore — fall back to summary */ }
             const ded = (data.mpca_deductions || []).reduce((t, d) => t + Number(d.amount_inr || 0), 0);
@@ -561,15 +563,85 @@ export const ReimbursementClaimDetail = () => {
                 />
             )}
 
+            {/* MPCA Decision — visible to everyone once claim is Approved/Rejected */}
+            {(claim.status === "Approved" || claim.status === "Rejected") && (
+                <div className="bulletin-card p-0 overflow-hidden mb-6 border-mpca-green-dark" data-testid="mpca-decision-panel">
+                    <div className="p-4 bg-mpca-green-dark/10 border-b border-mpca-brass/30 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <div className="overline text-[9px] text-mpca-oxblood">MPCA-168 · Final Decision</div>
+                            <div className="font-serif text-xl text-mpca-green-dark mt-1">
+                                {claim.status === "Approved" ? "Approved by MPCA" : "Rejected by MPCA"}
+                                {claim.status === "Approved" && (
+                                    <span className="ml-3 font-mono text-mpca-oxblood" data-testid="decision-approved-amount">{fmt(claim.approved_amount_inr || 0)}</span>
+                                )}
+                            </div>
+                        </div>
+                        {claim.mpca_signed_pdf_url && (
+                            <a href={`${BACKEND_URL}${claim.mpca_signed_pdf_url}`} target="_blank" rel="noreferrer"
+                                className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-parchment px-3 py-1.5 flex items-center gap-1"
+                                data-testid="decision-signed-pdf-link">
+                                <FileText size={12} /> MPCA-Signed Review PDF
+                            </a>
+                        )}
+                    </div>
+                    {(reviewSummary?.heads || []).length > 0 && (
+                        <>
+                            <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-mpca-navy text-mpca-gold-light text-[9px] uppercase tracking-widest">
+                                <div className="col-span-4">Head</div>
+                                <div className="col-span-2 text-right">Budget</div>
+                                <div className="col-span-2 text-right">Spent by Division</div>
+                                <div className="col-span-2 text-right">Deducted</div>
+                                <div className="col-span-2 text-right">Accepted by MPCA</div>
+                            </div>
+                            {reviewSummary.heads.map((h, i) => (
+                                <div key={h.head + i} className="grid grid-cols-12 gap-2 px-3 py-2 items-center border-b border-mpca-brass/10 text-xs" data-testid={`decision-head-row-${i}`}>
+                                    <div className="col-span-4">{h.head}</div>
+                                    <div className="col-span-2 text-right font-mono">{fmt(h.budget_inr || 0)}</div>
+                                    <div className="col-span-2 text-right font-mono text-mpca-navy">{fmt(h.spent_inr || 0)}</div>
+                                    <div className="col-span-2 text-right font-mono text-mpca-oxblood">{(h.deducted_inr || 0) > 0 ? `−${fmt(h.deducted_inr)}` : "—"}</div>
+                                    <div className="col-span-2 text-right font-mono font-semibold text-mpca-green-dark">{fmt(h.accepted_inr || 0)}</div>
+                                </div>
+                            ))}
+                            <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-mpca-parchment font-semibold border-y-2 border-mpca-brass/40 text-xs">
+                                <div className="col-span-4 uppercase tracking-widest text-[10px]">Total</div>
+                                <div className="col-span-2 text-right font-mono">{fmt(reviewSummary.totals?.budget_inr || 0)}</div>
+                                <div className="col-span-2 text-right font-mono text-mpca-navy">{fmt(reviewSummary.totals?.spent_inr || 0)}</div>
+                                <div className="col-span-2 text-right font-mono text-mpca-oxblood">{(reviewSummary.mpca_deductions || []).reduce((t, d) => t + Number(d.amount_inr || 0), 0) > 0 ? `−${fmt((reviewSummary.mpca_deductions || []).reduce((t, d) => t + Number(d.amount_inr || 0), 0))}` : "—"}</div>
+                                <div className="col-span-2 text-right font-mono text-mpca-green-dark">{fmt(reviewSummary.totals?.accepted_inr || 0)}</div>
+                            </div>
+                        </>
+                    )}
+                    {(reviewSummary?.mpca_deductions || []).length > 0 && (
+                        <div className="p-4 bg-mpca-oxblood/5 border-t border-mpca-brass/20">
+                            <div className="overline text-[9px] mb-2 text-mpca-oxblood">Deductions Recorded ({reviewSummary.mpca_deductions.length})</div>
+                            {reviewSummary.mpca_deductions.map((d, i) => (
+                                <div key={d.id || i} className="grid grid-cols-12 gap-2 text-[11px] py-1 border-b border-mpca-brass/10 last:border-0" data-testid={`decision-deduction-row-${i}`}>
+                                    <div className="col-span-5 text-mpca-green-dark">{d.head}</div>
+                                    <div className="col-span-2 text-right font-mono text-mpca-oxblood">−{fmt(d.amount_inr || 0)}</div>
+                                    <div className="col-span-5 italic text-mpca-gray-dark">{d.reason || "—"}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Approval trail */}
             {(claim.approval_chain || []).length > 0 && (
                 <div className="bulletin-card p-4">
                     <div className="overline text-[9px] mb-3">Approval Trail</div>
-                    {claim.approval_chain.map((s, i) => (
-                        <div key={i} className="text-[11px] mb-2 pb-2 border-b border-mpca-brass/10 last:border-0">
-                            <div className="font-mono text-mpca-brass">{s.stage}</div>
-                            <div className="text-mpca-green-dark">{s.actor_name} · {s.actor_post}</div>
-                            {s.notes && <div className="text-mpca-gray-dark italic">{s.notes}</div>}
+                    {claim.approval_chain.map((step, i) => (
+                        <div key={i} className="text-[11px] mb-2 pb-2 border-b border-mpca-brass/10 last:border-0" data-testid={`approval-step-${i}`}>
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <div className="font-mono text-mpca-brass">{step.stage}</div>
+                                {step.timestamp && (
+                                    <div className="text-[10px] text-mpca-gray-dark font-mono" data-testid={`approval-step-time-${i}`}>
+                                        {new Date(step.timestamp).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="text-mpca-green-dark">{step.actor_name} · {step.actor_post}</div>
+                            {step.notes && <div className="text-mpca-gray-dark italic">{step.notes}</div>}
                         </div>
                     ))}
                 </div>

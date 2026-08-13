@@ -347,6 +347,7 @@ export const ReimbursementClaimDetail = () => {
     const [loading, setLoading] = useState(true);
     const [approveOpen, setApproveOpen] = useState(false);
     const [approveAmt, setApproveAmt] = useState(0);
+    const [liveSpent, setLiveSpent] = useState(0);
     const [rejectOpen, setRejectOpen] = useState(false);
     const [rejectReason, setRejectReason] = useState("");
 
@@ -355,7 +356,15 @@ export const ReimbursementClaimDetail = () => {
         try {
             const { data } = await api.get(`/reimbursement-claims/${id}`);
             setClaim(data);
-            setApproveAmt(data.summary?.eligible_total_inr || 0);
+            // Live spent from review-summary (top-level claim.summary.spent_inr is stale-at-submit).
+            let spent = Number(data.summary?.spent_inr || 0);
+            try {
+                const rs = await api.get(`/reimbursement-claims/${id}/review-summary`);
+                if (rs?.data?.totals?.spent_inr != null) spent = Number(rs.data.totals.spent_inr);
+            } catch { /* ignore — fall back to summary */ }
+            const ded = (data.mpca_deductions || []).reduce((t, d) => t + Number(d.amount_inr || 0), 0);
+            setApproveAmt(Math.max(spent - ded, 0));
+            setLiveSpent(spent);
             // Load referenced invoices + extras
             if (data.invoice_ids?.length) {
                 const invRes = await Promise.all(data.invoice_ids.map((iid) => api.get(`/tournament-invoices/${iid}`).catch(() => ({ data: null }))));
@@ -578,11 +587,15 @@ export const ReimbursementClaimDetail = () => {
                     <div className="bulletin-card p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()} data-testid="approve-modal">
                         <div className="font-serif text-xl text-mpca-green-dark mb-3">Approve Reimbursement</div>
                         <div className="text-[11px] text-mpca-gray-dark mb-3">
-                            Eligible: {fmt(s.eligible_total_inr)} — you may approve any amount up to this eligible cap.
+                            Spent by Division {fmt(liveSpent)}
+                            {(claim.mpca_deductions || []).length > 0 && (
+                                <> − Deductions {fmt((claim.mpca_deductions || []).reduce((t, d) => t + Number(d.amount_inr || 0), 0))}</>
+                            )}
+                            {" "}= <span className="font-mono text-mpca-green-dark">{fmt(Math.max(liveSpent - (claim.mpca_deductions || []).reduce((t, d) => t + Number(d.amount_inr || 0), 0), 0))}</span> proposed for approval.
                         </div>
                         <label className="block mb-4">
                             <div className="overline text-[9px] mb-1">Approved Amount (₹)</div>
-                            <input type="number" className="input-heritage" value={approveAmt} onChange={(e) => setApproveAmt(e.target.value)} max={s.eligible_total_inr} data-testid="approve-amt-input" />
+                            <input type="number" className="input-heritage" value={approveAmt} onChange={(e) => setApproveAmt(e.target.value)} data-testid="approve-amt-input" />
                         </label>
                         <div className="flex justify-end gap-2">
                             <button className="btn-heritage-secondary" onClick={() => setApproveOpen(false)}>Cancel</button>

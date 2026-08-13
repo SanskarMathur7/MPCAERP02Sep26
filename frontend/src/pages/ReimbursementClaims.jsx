@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, MessageSquare, CheckCircle2, XCircle, Send, ClipboardList } from "lucide-react";
+import { ArrowLeft, FileText, CheckCircle2, XCircle, ClipboardList } from "lucide-react";
 import { api, BACKEND_URL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
@@ -280,7 +280,7 @@ const MpcaLineItemReviewPanel = ({ claim, invoices, persona, onChange }) => {
                                         ? `${h.head} · spent ${fmt(spent)}`
                                         : `${h.head} · budget ${fmt(h.budget_inr || 0)} · no spend yet`;
                                     return (
-                                        <option key={h.head} value={h.head} disabled={spent <= 0}>{label}</option>
+                                        <option key={h.head} value={h.head}>{label}</option>
                                     );
                                 })}
                             </select>
@@ -345,7 +345,6 @@ export const ReimbursementClaimDetail = () => {
     const [invoices, setInvoices] = useState([]);
     const [extras, setExtras] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [commentText, setCommentText] = useState("");
     const [approveOpen, setApproveOpen] = useState(false);
     const [approveAmt, setApproveAmt] = useState(0);
     const [rejectOpen, setRejectOpen] = useState(false);
@@ -380,18 +379,6 @@ export const ReimbursementClaimDetail = () => {
                 actor_name: persona?.name, actor_role: persona?.post || "MPCA Secretary",
                 actor_body_id: "MPCA", notes: "Opening for review",
             });
-            await load();
-        } catch (e) { alert(e?.response?.data?.detail || e.message); }
-    };
-    const addComment = async () => {
-        if (!commentText.trim()) return;
-        try {
-            await api.post(`/reimbursement-claims/${id}/comment`, {
-                actor_name: persona?.name, actor_role: persona?.post || "Reviewer",
-                actor_body_id: persona?.body_code || "MPCA",
-                comment_text: commentText,
-            });
-            setCommentText("");
             await load();
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
@@ -570,21 +557,6 @@ export const ReimbursementClaimDetail = () => {
                     onChange={load}
                 />
             )}
-
-            {/* Comments */}
-            <div className="bulletin-card p-4 mb-6" data-testid="comments-section">
-                <div className="overline text-[9px] mb-3 flex items-center gap-2"><MessageSquare size={11} /> Discussion ({(claim.comments || []).length})</div>
-                {(claim.comments || []).map((c) => (
-                    <div key={c.id} className="mb-3 pb-3 border-b border-mpca-brass/10 last:border-0" data-testid={`comment-${c.id}`}>
-                        <div className="text-[10px] text-mpca-brass">{c.author_name} · <span className="text-mpca-gray-dark">{c.author_role}</span> · {new Date(c.created_at).toLocaleString()}</div>
-                        <div className="text-sm text-mpca-green-dark mt-1 whitespace-pre-wrap">{c.text}</div>
-                    </div>
-                ))}
-                <div className="mt-4 flex gap-2">
-                    <textarea rows={2} className="input-heritage flex-1" value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Add a comment..." data-testid="comment-input" />
-                    <button className="btn-heritage-secondary" onClick={addComment} disabled={!commentText.trim()} data-testid="add-comment-btn"><Send size={12} /></button>
-                </div>
-            </div>
 
             {/* Approval trail */}
             {(claim.approval_chain || []).length > 0 && (

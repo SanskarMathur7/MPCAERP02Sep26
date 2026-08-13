@@ -69,7 +69,7 @@ const TournamentFinanceConsole = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [persona?.body_type]);
     const [perBodyOverrides, setPerBodyOverrides] = useState({});   // M39w · MPCA per-body head overrides
-    const [showOverrides, setShowOverrides] = useState(false);
+    const [showOverrides, setShowOverrides] = useState(true);  // Sprint FIN-CustomHead · default OPEN so MPCA sets the budget straight-away
     // MPCA-120 · District filter for Division supervisors.
     const [districtScope, setDistrictScope] = useState("all");
 
@@ -859,7 +859,11 @@ const PreparePanel = ({ tournament, schemeSpec, visitorSchemeSpec, ivDraft, setI
                                 return ["travel", "da", "ta", "food", "stay", "hotel", "lodging", "boarding", "meal", "conveyance", "transport", "contingency"].some((k) => l.includes(k));
                             });
                             const bodyOv = perBodyOverrides[r.body_code] || {};
-                            const rowTotal = roleHeads.reduce((s, h) => s + (bodyOv[h.head] ?? h.limit_inr), 0);
+                            const schemeHeadLabels = new Set(roleHeads.map((h) => h.head));
+                            // Any override key that is NOT a scheme head is a MPCA-added custom row.
+                            const customRows = Object.entries(bodyOv).filter(([k]) => !schemeHeadLabels.has(k));
+                            const rowTotal = roleHeads.reduce((s, h) => s + (Number(bodyOv[h.head] ?? h.limit_inr) || 0), 0)
+                                            + customRows.reduce((s, [, v]) => s + (Number(v) || 0), 0);
                             const hasOverride = Object.keys(bodyOv).length > 0;
                             return (
                                 <div
@@ -877,7 +881,7 @@ const PreparePanel = ({ tournament, schemeSpec, visitorSchemeSpec, ivDraft, setI
                                                 type="button"
                                                 onClick={() => setPerBodyOverrides((d) => { const next = { ...d }; delete next[r.body_code]; return next; })}
                                                 className="text-[9px] uppercase tracking-widest text-mpca-oxblood hover:underline"
-                                                title="Reset all overrides for this body back to scheme defaults"
+                                                title="Reset all overrides + custom rows for this body back to scheme defaults"
                                                 data-testid={`fc-override-reset-${r.body_code}`}
                                             >
                                                 Reset
@@ -913,7 +917,62 @@ const PreparePanel = ({ tournament, schemeSpec, visitorSchemeSpec, ivDraft, setI
                                                 </div>
                                             );
                                         })}
+                                        {/* Sprint FIN-CustomHead · MPCA-added custom rows (persist as keys not present in scheme heads) */}
+                                        {customRows.map(([label, amt]) => (
+                                            <div key={label} className="grid grid-cols-[1fr_120px_16px] gap-2 items-center" data-testid={`fc-custom-row-${r.body_code}-${label.slice(0, 12)}`}>
+                                                <label className="text-[11px] text-mpca-oxblood truncate italic" title={`Custom head added by MPCA · ${label}`}>+ {label}</label>
+                                                <input
+                                                    type="number"
+                                                    value={amt}
+                                                    onChange={(e) => {
+                                                        const v = e.target.value;
+                                                        setPerBodyOverrides((d) => {
+                                                            const next = { ...d };
+                                                            const bodyMap = { ...(next[r.body_code] || {}) };
+                                                            if (v === "" || v === null) delete bodyMap[label];
+                                                            else bodyMap[label] = parseFloat(v) || 0;
+                                                            if (Object.keys(bodyMap).length) next[r.body_code] = bodyMap;
+                                                            else delete next[r.body_code];
+                                                            return next;
+                                                        });
+                                                    }}
+                                                    className="text-right font-mono text-[11px] px-1.5 py-1 border border-mpca-oxblood/60 text-mpca-oxblood font-semibold bg-mpca-parchment focus:outline-none focus:border-mpca-oxblood"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPerBodyOverrides((d) => {
+                                                        const next = { ...d };
+                                                        const bodyMap = { ...(next[r.body_code] || {}) };
+                                                        delete bodyMap[label];
+                                                        if (Object.keys(bodyMap).length) next[r.body_code] = bodyMap;
+                                                        else delete next[r.body_code];
+                                                        return next;
+                                                    })}
+                                                    className="text-mpca-oxblood hover:text-mpca-oxblood/70"
+                                                    title="Remove this custom head"
+                                                    data-testid={`fc-custom-row-remove-${r.body_code}-${label.slice(0, 8)}`}
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                        ))}
                                     </div>
+
+                                    {/* Add-row form */}
+                                    <AddCustomHeadForm bodyCode={r.body_code} onAdd={(headName, amount) => {
+                                        setPerBodyOverrides((d) => {
+                                            const next = { ...d };
+                                            const bodyMap = { ...(next[r.body_code] || {}) };
+                                            // Don't clobber an existing scheme head or existing custom head with same label.
+                                            if (schemeHeadLabels.has(headName) || bodyMap[headName] !== undefined) {
+                                                return next;
+                                            }
+                                            bodyMap[headName] = amount;
+                                            next[r.body_code] = bodyMap;
+                                            return next;
+                                        });
+                                    }} />
+
                                     <div className="mt-2 pt-2 border-t border-mpca-brass/30 flex items-center justify-between text-[11px]">
                                         <span className="text-mpca-gray-dark uppercase tracking-widest text-[9px]">Body Total</span>
                                         <span className="font-mono text-mpca-oxblood font-semibold">{fmt(rowTotal)}</span>
@@ -924,6 +983,74 @@ const PreparePanel = ({ tournament, schemeSpec, visitorSchemeSpec, ivDraft, setI
                     </div>
                 </div>
             )}
+        </div>
+    );
+};
+
+// Sprint FIN-CustomHead · Tiny inline form used inside every per-body card
+// to let MPCA add a completely new expense head (label + amount) that isn't
+// part of the scheme master — useful for one-off Division-specific costs
+// (e.g. "Referee travel — chartered bus", "Ground preparation — extra roll").
+const AddCustomHeadForm = ({ bodyCode, onAdd }) => {
+    const [open, setOpen] = useState(false);
+    const [head, setHead] = useState("");
+    const [amount, setAmount] = useState("");
+    const disabled = !head.trim() || !(parseFloat(amount) > 0);
+    const submit = () => {
+        if (disabled) return;
+        onAdd(head.trim(), parseFloat(amount));
+        setHead(""); setAmount(""); setOpen(false);
+    };
+    if (!open) {
+        return (
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="mt-2 w-full text-[10px] uppercase tracking-widest text-mpca-navy hover:text-mpca-oxblood border border-dashed border-mpca-navy/40 hover:border-mpca-oxblood py-1.5 flex items-center justify-center gap-1"
+                data-testid={`fc-add-head-btn-${bodyCode}`}
+            >
+                + Add Head
+            </button>
+        );
+    }
+    return (
+        <div className="mt-2 border border-mpca-navy/40 bg-mpca-navy/5 p-2 space-y-1.5" data-testid={`fc-add-head-form-${bodyCode}`}>
+            <input
+                type="text"
+                autoFocus
+                placeholder="Expense head (e.g. Chartered Bus)"
+                value={head}
+                onChange={(e) => setHead(e.target.value)}
+                className="w-full text-[11px] px-1.5 py-1 border border-mpca-brass/40 bg-mpca-parchment focus:outline-none focus:border-mpca-navy"
+                data-testid={`fc-add-head-label-${bodyCode}`}
+            />
+            <div className="grid grid-cols-[1fr_60px_60px] gap-1.5">
+                <input
+                    type="number"
+                    placeholder="Amount ₹"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+                    className="text-right font-mono text-[11px] px-1.5 py-1 border border-mpca-brass/40 bg-mpca-parchment focus:outline-none focus:border-mpca-navy"
+                    data-testid={`fc-add-head-amt-${bodyCode}`}
+                />
+                <button
+                    type="button"
+                    onClick={submit}
+                    disabled={disabled}
+                    className="text-[10px] uppercase tracking-widest bg-mpca-navy text-mpca-parchment disabled:opacity-30 disabled:cursor-not-allowed"
+                    data-testid={`fc-add-head-save-${bodyCode}`}
+                >
+                    Add
+                </button>
+                <button
+                    type="button"
+                    onClick={() => { setOpen(false); setHead(""); setAmount(""); }}
+                    className="text-[10px] uppercase tracking-widest border border-mpca-brass/50 text-mpca-brass"
+                >
+                    Cancel
+                </button>
+            </div>
         </div>
     );
 };

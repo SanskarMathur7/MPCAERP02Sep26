@@ -259,8 +259,14 @@ async def prepare_budgets(tid: str, payload: PreparePayload):
             ) for h in heads_for_this]
 
             # M39w · Apply MPCA per-body head overrides on top of scheme values.
+            # Sprint FIN-CustomHead · MPCA can also add ENTIRELY NEW heads that
+            # aren't in the scheme master (e.g. a Division-specific reimbursement
+            # like "Referee travel — chartered bus"). Any override key that
+            # matches a scheme head is treated as an override; any key that
+            # doesn't match is appended as an extra head allocation.
             body_overrides = ((payload.per_body_head_overrides or {}).get(body_code) or {})
             if body_overrides:
+                scheme_head_labels = {h.head for h in head_allocs}
                 for h in head_allocs:
                     if h.head in body_overrides:
                         try:
@@ -269,6 +275,21 @@ async def prepare_budgets(tid: str, payload: PreparePayload):
                             h.limit_inr = new_amt
                         except (TypeError, ValueError):
                             pass
+                # Extras (custom rows added by MPCA)
+                for label, amt in body_overrides.items():
+                    if label in scheme_head_labels:
+                        continue
+                    try:
+                        amt_f = float(amt)
+                        if amt_f <= 0:
+                            continue
+                    except (TypeError, ValueError):
+                        continue
+                    head_allocs.append(BudgetHeadAllocation(
+                        head=label,
+                        limit_inr=amt_f,
+                        notes=f"MPCA custom head ₹{amt_f:,.0f}",
+                    ))
             total = round(sum(h.limit_inr for h in head_allocs), 2)
 
             body = await db.bodies.find_one({"code": body_code}, {"_id": 0})

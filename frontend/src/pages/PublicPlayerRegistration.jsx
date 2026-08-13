@@ -195,10 +195,14 @@ const PublicPlayerRegistration = () => {
             <div className="max-w-2xl mx-auto px-4">
                 <div className="bulletin-card overflow-hidden">
                     {/* Header */}
-                    <div className="bg-mpca-green-dark text-mpca-ivory px-6 py-5 border-b-4 border-mpca-oxblood">
-                        <div className="overline !text-mpca-gold-light">Madhya Pradesh Cricket Association · {env.body_name || env.body_code}</div>
-                        <div className="font-serif text-2xl mt-1">{env.campaign_title}</div>
-                        <div className="text-[11px] text-mpca-ivory/70 mt-1">Season {env.cycle_code}{env.expires_on ? ` · closes ${env.expires_on}` : ""}</div>
+                    <div className="bg-mpca-green-dark text-mpca-ivory px-6 py-5 border-b-4 border-mpca-oxblood flex items-center gap-4">
+                        <img src="/assets/mpca-logo.png" alt="MPCA"
+                             className="w-14 h-16 object-contain bg-white/95 rounded p-1 shrink-0" />
+                        <div className="min-w-0">
+                            <div className="overline !text-mpca-gold-light">Madhya Pradesh Cricket Association · {env.body_name || env.body_code}</div>
+                            <div className="font-serif text-2xl mt-1">{env.campaign_title}</div>
+                            <div className="text-[11px] text-mpca-ivory/70 mt-1">Season {env.cycle_code}{env.expires_on ? ` · closes ${env.expires_on}` : ""}</div>
+                        </div>
                     </div>
 
                     <form onSubmit={submit} className="p-6 space-y-4" data-testid="pr-public-form">

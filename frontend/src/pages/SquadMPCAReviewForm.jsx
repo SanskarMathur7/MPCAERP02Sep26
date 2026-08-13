@@ -76,9 +76,8 @@ const SquadMPCAReviewForm = () => {
             {/* Letterhead */}
             <div className="text-center border-b-4 border-double border-black pb-4 mb-6">
                 <div className="flex items-center justify-center gap-4 mb-2">
-                    <div className="w-16 h-16 rounded-full border-2 border-black flex items-center justify-center text-[9px] text-center leading-tight font-serif">
-                        MPCA<br/>EST<br/>1957
-                    </div>
+                    <img src="/assets/mpca-logo.png" alt="Madhya Pradesh Cricket Association"
+                         className="w-20 h-24 object-contain" />
                     <div>
                         <h1 className="font-serif text-3xl uppercase tracking-widest">Madhya Pradesh</h1>
                         <h1 className="font-serif text-3xl uppercase tracking-widest">Cricket Association</h1>

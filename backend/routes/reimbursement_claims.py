@@ -5,7 +5,7 @@ sheet aggregating all approved invoices vs budget heads. MPCA Secretary reviews,
 comments, approves (with optional lowered amount) or rejects.
 """
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
@@ -484,6 +484,192 @@ async def start_review(cid: str, action: TournamentReimbursementAction):
     return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
 
 
+# ═══════════════════ MPCA-168 · Line-item review ═══════════════════
+
+class InvoiceReviewPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    invoice_id: str
+    accepted_inr: float
+    reason: Optional[str] = None
+    reviewed_by: Optional[str] = None
+
+
+@api_router.post("/reimbursement-claims/{cid}/invoice-review", response_model=TournamentReimbursementClaim)
+async def set_invoice_review(cid: str, payload: InvoiceReviewPayload, request: Request):
+    """MPCA marks how much they accept from a single invoice on the claim.
+    Called repeatedly (one call per invoice) as MPCA walks the review."""
+    doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    scope = get_scope(request)
+    if not scope.is_state:
+        raise HTTPException(403, "Only MPCA may record invoice acceptance decisions.")
+    if doc["status"] not in ("Submitted", "Under_Review"):
+        raise HTTPException(
+            409,
+            f"Line-item review is available only on Submitted / Under_Review claims (current: {doc['status']}).",
+        )
+    if payload.invoice_id not in (doc.get("invoice_ids") or []):
+        raise HTTPException(404, "That invoice is not on this claim.")
+    if payload.accepted_inr < 0:
+        raise HTTPException(422, "Accepted amount cannot be negative.")
+
+    # Cap: MPCA cannot accept more than what the invoice actually totals.
+    inv = await db.tournament_invoices.find_one({"id": payload.invoice_id}, {"_id": 0})
+    inv_total = float((inv or {}).get("total_inr") or 0)
+    if payload.accepted_inr > inv_total + 0.5:
+        raise HTTPException(
+            422,
+            f"Accepted amount ₹{payload.accepted_inr:,.0f} exceeds invoice total ₹{inv_total:,.0f}.",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    reviews = list(doc.get("mpca_invoice_reviews") or [])
+    reviews = [r for r in reviews if r.get("invoice_id") != payload.invoice_id]
+    reviews.append({
+        "invoice_id": payload.invoice_id,
+        "accepted_inr": round(float(payload.accepted_inr), 2),
+        "reason": (payload.reason or "").strip() or None,
+        "reviewed_by": payload.reviewed_by,
+        "reviewed_at": now,
+    })
+    await db.tournament_reimbursement_claims.update_one({"id": cid}, {"$set": {
+        "mpca_invoice_reviews": reviews,
+        "status": "Under_Review" if doc["status"] == "Submitted" else doc["status"],
+        "updated_at": now,
+    }})
+    return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.delete("/reimbursement-claims/{cid}/invoice-review/{invoice_id}", response_model=TournamentReimbursementClaim)
+async def clear_invoice_review(cid: str, invoice_id: str, request: Request):
+    scope = get_scope(request)
+    if not scope.is_state:
+        raise HTTPException(403, "Only MPCA may clear invoice acceptance decisions.")
+    doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    reviews = [r for r in (doc.get("mpca_invoice_reviews") or []) if r.get("invoice_id") != invoice_id]
+    await db.tournament_reimbursement_claims.update_one({"id": cid}, {"$set": {
+        "mpca_invoice_reviews": reviews,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.get("/reimbursement-claims/{cid}/review-summary")
+async def get_review_summary(cid: str):
+    """Per-head summary: Budget / Spent by Division / Accepted by MPCA.
+    Used by the ClaimsPanel MPCA review table AND the MPCA Review PDF."""
+    doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+
+    # Group invoices by head allocation → sum spent + accepted per head
+    invoice_ids = doc.get("invoice_ids") or []
+    invoices = await db.tournament_invoices.find({"id": {"$in": invoice_ids}}, {"_id": 0}).to_list(500)
+    reviews_by_iid = {r["invoice_id"]: r for r in (doc.get("mpca_invoice_reviews") or [])}
+
+    per_head: Dict[str, Dict[str, float]] = {}
+    def _bump(head_label, spent, accepted):
+        row = per_head.setdefault(head_label, {"head": head_label, "budget_inr": 0.0, "spent_inr": 0.0, "accepted_inr": 0.0, "reviewed": True})
+        row["spent_inr"] += float(spent or 0)
+        row["accepted_inr"] += float(accepted or 0)
+
+    invoice_lines: List[dict] = []
+    all_reviewed = True
+    for inv in invoices:
+        r = reviews_by_iid.get(inv["id"])
+        accepted_full = float(r["accepted_inr"]) if r else 0.0
+        if not r:
+            all_reviewed = False
+        allocs = inv.get("allocations") or []
+        if allocs:
+            inv_total = sum(float(a.get("amount_inr") or 0) for a in allocs) or 1.0
+            for a in allocs:
+                head_label = a.get("head_label") or a.get("head_code") or "—"
+                spent_here = float(a.get("amount_inr") or 0)
+                acc_here = round(accepted_full * (spent_here / inv_total), 2) if r else 0.0
+                _bump(head_label, spent_here, acc_here)
+        else:
+            _bump(inv.get("budget_head_code") or "—", inv.get("total_inr"), accepted_full)
+        invoice_lines.append({
+            "invoice_id": inv["id"],
+            "invoice_ref": inv.get("invoice_ref"),
+            "vendor_name": inv.get("vendor_name"),
+            "invoice_date": inv.get("invoice_date"),
+            "total_inr": float(inv.get("total_inr") or 0),
+            "eligible_for_grant_inr": float(inv.get("eligible_for_grant_inr") or 0),
+            "allocations": allocs,
+            "accepted_inr": accepted_full if r else None,
+            "reason": (r or {}).get("reason"),
+            "reviewed": bool(r),
+        })
+
+    # Overlay budget totals per head from the approved budget
+    try:
+        tb = await db.tournament_budgets.find_one({
+            "tournament_id": doc["tournament_id"],
+            "body_id": doc["body_id"],
+            "status": "Approved",
+        }, {"_id": 0}, sort=[("created_at", -1)])
+    except Exception:
+        tb = None
+    for h in ((tb or {}).get("approved_head_allocations") or (tb or {}).get("head_allocations") or []):
+        row = per_head.setdefault(h.get("head") or "—", {"head": h.get("head") or "—", "budget_inr": 0.0, "spent_inr": 0.0, "accepted_inr": 0.0})
+        row["budget_inr"] = float(h.get("limit_inr") or 0)
+
+    heads = sorted(per_head.values(), key=lambda x: x.get("head") or "")
+    return {
+        "claim_id": cid,
+        "claim_ref": doc.get("claim_ref"),
+        "tournament_name": doc.get("tournament_name"),
+        "body_id": doc.get("body_id"),
+        "body_name": doc.get("body_name"),
+        "invoice_count": len(invoice_ids),
+        "invoices_reviewed": sum(1 for i in invoice_lines if i["reviewed"]),
+        "all_reviewed": all_reviewed and bool(invoice_ids),
+        "heads": [
+            {**h, "difference_inr": round((h.get("budget_inr") or 0) - (h.get("spent_inr") or 0), 2)}
+            for h in heads
+        ],
+        "totals": {
+            "budget_inr": round(sum(h.get("budget_inr") or 0 for h in heads), 2),
+            "spent_inr": round(sum(h.get("spent_inr") or 0 for h in heads), 2),
+            "accepted_inr": round(sum(h.get("accepted_inr") or 0 for h in heads), 2),
+        },
+        "invoices": invoice_lines,
+        "mpca_signed_pdf_url": doc.get("mpca_signed_pdf_url"),
+    }
+
+
+class MpcaSignedPdfPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    signed_pdf_url: str
+    uploaded_by: Optional[str] = None
+
+
+@api_router.post("/reimbursement-claims/{cid}/mpca-signed-pdf", response_model=TournamentReimbursementClaim)
+async def upload_mpca_signed_pdf(cid: str, payload: MpcaSignedPdfPayload, request: Request):
+    scope = get_scope(request)
+    if not scope.is_state:
+        raise HTTPException(403, "Only MPCA may upload the MPCA-signed decision PDF.")
+    doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if doc["status"] not in ("Submitted", "Under_Review"):
+        raise HTTPException(409, f"Cannot upload MPCA-signed PDF from status '{doc['status']}'")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.tournament_reimbursement_claims.update_one({"id": cid}, {"$set": {
+        "mpca_signed_pdf_url": payload.signed_pdf_url,
+        "mpca_signed_pdf_uploaded_at": now,
+        "mpca_signed_pdf_uploaded_by": payload.uploaded_by,
+        "status": "Under_Review" if doc["status"] == "Submitted" else doc["status"],
+        "updated_at": now,
+    }})
+    return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+
+
 @api_router.post("/reimbursement-claims/{cid}/approve", response_model=TournamentReimbursementClaim)
 async def approve_claim(cid: str, action: TournamentReimbursementAction, request: Request):
     doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
@@ -505,12 +691,48 @@ async def approve_claim(cid: str, action: TournamentReimbursementAction, request
             f"You are scoped to {scope.body_code} and cannot approve it.",
         )
 
+    # MPCA-168 · Approved amount = sum of per-invoice accepted amounts when
+    # MPCA has recorded line-item reviews. Falls back to legacy behavior
+    # (eligible total or explicit action.approved_amount_inr) when no
+    # invoice reviews exist — keeps district-claim + old flows working.
     eligible = float((doc.get("summary") or {}).get("eligible_total_inr") or 0)
-    approved = float(action.approved_amount_inr) if action.approved_amount_inr is not None else eligible
+    invoice_reviews = doc.get("mpca_invoice_reviews") or []
+    if invoice_reviews and route_to == "MPCA":
+        # Enforce that every invoice on the claim has a review, and the
+        # signed MPCA PDF is uploaded before final approve.
+        invoice_ids = set(doc.get("invoice_ids") or [])
+        reviewed_ids = {r.get("invoice_id") for r in invoice_reviews}
+        missing = invoice_ids - reviewed_ids
+        if missing:
+            raise HTTPException(
+                400,
+                f"{len(missing)} invoice(s) still need MPCA acceptance before the "
+                f"claim can be approved.",
+            )
+        if not doc.get("mpca_signed_pdf_url"):
+            raise HTTPException(
+                400,
+                "Please sign the MPCA Review PDF and upload it back before approving.",
+            )
+        approved = round(sum(float(r.get("accepted_inr") or 0) for r in invoice_reviews), 2)
+    else:
+        approved = float(action.approved_amount_inr) if action.approved_amount_inr is not None else eligible
+
     if approved < 0:
         raise HTTPException(422, "Approved amount cannot be negative")
-    if approved > eligible:
+    if approved > eligible and not invoice_reviews:
         raise HTTPException(422, f"Approved amount ₹{approved:,.0f} exceeds eligible ₹{eligible:,.0f}")
+    # MPCA-168 · Belt-and-braces guard when line-item review is active — the
+    # sum of accepted amounts should also not exceed the eligible total.
+    # This should be impossible via the UI (Partial button caps at invoice
+    # total which is already eligible-bounded) but protect against direct
+    # API abuse.
+    if invoice_reviews and eligible > 0 and approved > eligible + 0.5:
+        raise HTTPException(
+            422,
+            f"Sum of MPCA-accepted amounts ₹{approved:,.2f} exceeds the eligible ceiling ₹{eligible:,.2f}. "
+            f"Please reduce one or more per-invoice accepted amounts.",
+        )
 
     now = datetime.now(timezone.utc).isoformat()
     step = ApprovalStep(

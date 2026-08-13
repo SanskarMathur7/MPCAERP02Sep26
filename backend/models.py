@@ -2140,6 +2140,20 @@ class ReimbursementComment(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+class MpcaInvoiceReview(BaseModel):
+    """MPCA-168 · One line-item decision by MPCA on a single invoice inside a
+    tournament reimbursement claim. MPCA records how much they ACCEPT from
+    the invoice (default = full amount) and an optional reason. The claim's
+    approved_amount_inr is computed as the sum of accepted amounts across
+    every invoice review at approve-time."""
+    model_config = ConfigDict(extra="ignore")
+    invoice_id: str
+    accepted_inr: float = 0.0
+    reason: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class TournamentReimbursementClaimBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     tournament_id: str
@@ -2192,6 +2206,14 @@ class TournamentReimbursementClaim(TournamentReimbursementClaimBase):
     reviewed_at: Optional[str] = None
     rejection_reason: Optional[str] = None
     approved_amount_inr: Optional[float] = None   # MPCA can sanction lower than eligible
+    # MPCA-168 · Per-invoice line-item review by MPCA (Phase A).
+    # Each entry records how much MPCA has accepted from that invoice.
+    # `approved_amount_inr` at Approve-time = sum of accepted_inr across all reviews.
+    mpca_invoice_reviews: List[MpcaInvoiceReview] = []
+    # MPCA's signed decision PDF — Sign & upload gate before final approve.
+    mpca_signed_pdf_url: Optional[str] = None
+    mpca_signed_pdf_uploaded_at: Optional[str] = None
+    mpca_signed_pdf_uploaded_by: Optional[str] = None
     comments: List[ReimbursementComment] = []
     approval_chain: List[ApprovalStep] = []
 

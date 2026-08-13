@@ -169,6 +169,20 @@ async def create_invoice(payload: TournamentInvoiceCreate):
     t = await db.tournaments.find_one({"id": payload.tournament_id}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
+    # MPCA-168 · Phase E · Once the Division has submitted a reimbursement
+    # claim for this tournament, no new invoices can be added — the claim
+    # must be rejected by MPCA first.
+    active_claim = await db.tournament_reimbursement_claims.find_one({
+        "tournament_id": payload.tournament_id,
+        "body_id": payload.body_id,
+        "status": {"$in": ["Submitted", "Under_Review", "Approved"]},
+    }, {"_id": 0, "claim_ref": 1, "status": 1})
+    if active_claim:
+        raise HTTPException(
+            409,
+            f"Cannot add new invoice — reimbursement claim {active_claim.get('claim_ref')} "
+            f"is already {active_claim.get('status').lower().replace('_', ' ')}.",
+        )
     cycle = t.get("fiscal_cycle") or "2025-26"
     body = payload.model_dump()
 
@@ -234,6 +248,22 @@ async def update_invoice(iid: str, patch: TournamentInvoicePatch):
         raise HTTPException(404, "Invoice not found")
     if doc["status"] not in ("Draft", "Rejected"):
         raise HTTPException(409, f"Cannot edit an invoice in status {doc['status']}")
+    # MPCA-168 · Phase E · Post-Submission lock. Once the Division has
+    # submitted its reimbursement claim, all attached invoices freeze —
+    # otherwise a Division could quietly retouch expenses after MPCA has
+    # already opened line-item review.
+    active_claim = await db.tournament_reimbursement_claims.find_one({
+        "tournament_id": doc["tournament_id"],
+        "body_id": doc["body_id"],
+        "status": {"$in": ["Submitted", "Under_Review", "Approved"]},
+    }, {"_id": 0, "claim_ref": 1, "status": 1})
+    if active_claim:
+        raise HTTPException(
+            409,
+            f"This invoice is locked because reimbursement claim {active_claim.get('claim_ref')} "
+            f"is already {active_claim.get('status').lower().replace('_', ' ')}. Ask MPCA to reject the claim "
+            f"if edits are required.",
+        )
     updates = patch.model_dump(exclude_unset=True)  # M3 · only client-provided, validated fields
     if updates:
         updates["manually_overridden"] = True
@@ -290,6 +320,18 @@ async def delete_invoice(iid: str):
         raise HTTPException(404, "Invoice not found")
     if doc["status"] != "Draft":
         raise HTTPException(409, "Only Draft invoices can be deleted.")
+    # MPCA-168 · Phase E · lock deletes too once a claim is Submitted+.
+    active_claim = await db.tournament_reimbursement_claims.find_one({
+        "tournament_id": doc["tournament_id"],
+        "body_id": doc["body_id"],
+        "status": {"$in": ["Submitted", "Under_Review", "Approved"]},
+    }, {"_id": 0, "claim_ref": 1, "status": 1})
+    if active_claim:
+        raise HTTPException(
+            409,
+            f"Invoice locked — reimbursement claim {active_claim.get('claim_ref')} is "
+            f"{active_claim.get('status').lower().replace('_', ' ')}.",
+        )
     await db.tournament_invoices.delete_one({"id": iid})
     return {"ok": True}
 

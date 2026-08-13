@@ -374,6 +374,18 @@ const ClaimRow = ({ claim, isMPCA, busy, onUploadSigned, onSubmit, onOpen }) => 
                     )}
                 </div>
                 <div className="col-span-3 text-right flex justify-end gap-1.5 flex-wrap">
+                    {!isMPCA && (isDraft || c.status === "Submitted") && (
+                        <a
+                            href={`/reimbursement-claims/${c.id}/division-form`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] font-semibold uppercase tracking-widest text-mpca-navy hover:text-mpca-parchment hover:bg-mpca-navy px-2.5 py-1.5 border-2 border-mpca-navy transition-colors"
+                            data-testid={`claims-division-pdf-${c.id}`}
+                            title="Open on Division letterhead for signing"
+                        >
+                            Print PDF
+                        </a>
+                    )}
                     <button onClick={onOpen}
                         className="text-[10px] font-semibold uppercase tracking-widest text-mpca-oxblood hover:text-mpca-parchment hover:bg-mpca-oxblood px-2.5 py-1.5 border-2 border-mpca-oxblood transition-colors"
                         data-testid={`claims-open-${c.id}`}>
@@ -388,7 +400,7 @@ const ClaimRow = ({ claim, isMPCA, busy, onUploadSigned, onSubmit, onOpen }) => 
                     <div className="text-[11px] text-mpca-charcoal/85 flex-1 min-w-[200px]">
                         {hasSigned
                             ? <>Signed PDF uploaded on {new Date(c.signed_pdf_uploaded_at || Date.now()).toLocaleDateString("en-IN")} — ready to submit to <strong className="text-mpca-oxblood">{submitTargetLabel}</strong>.</>
-                            : <>Download the summary PDF from <em>Open detail</em>, get it signed by the Secretary + Treasurer, then upload below.</>}
+                            : <>Click <strong>Print PDF</strong> above to open the letter on {c.body_name || c.body_id} letterhead, get it signed by Secretary + Treasurer, then upload below.</>}
                     </div>
                     {hasSigned && c.signed_pdf_url && (
                         <a href={c.signed_pdf_url} target="_blank" rel="noreferrer"

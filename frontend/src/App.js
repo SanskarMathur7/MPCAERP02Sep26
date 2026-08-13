@@ -67,6 +67,8 @@ const ReimbursementClaimsList = lazy(() =>
     import("@/pages/ReimbursementClaims").then((m) => ({ default: m.ReimbursementClaimsList })));
 const ReimbursementClaimDetail = lazy(() =>
     import("@/pages/ReimbursementClaims").then((m) => ({ default: m.ReimbursementClaimDetail })));
+const DivisionReimbursementClaimForm = lazy(() => import("@/pages/DivisionReimbursementClaimForm"));
+const MpcaClaimReviewForm = lazy(() => import("@/pages/MpcaClaimReviewForm"));
 const MyDAForms = lazy(() => import("@/pages/MyDAForms"));
 const SquadReview = lazy(() => import("@/pages/SquadReview"));
 const SquadDetail = lazy(() => import("@/pages/SquadDetail"));
@@ -205,6 +207,8 @@ function App() {
                             <Route path="/tournaments/:id/finance/legacy" element={<LegacyFinanceRedirect />} />
                             <Route path="/reimbursement-claims" element={<Protected><ReimbursementClaimsList /></Protected>} />
                             <Route path="/reimbursement-claims/:id" element={<Protected><ReimbursementClaimDetail /></Protected>} />
+                            <Route path="/reimbursement-claims/:id/division-form" element={<Protected><DivisionReimbursementClaimForm /></Protected>} />
+                            <Route path="/reimbursement-claims/:id/mpca-review-form" element={<Protected><MpcaClaimReviewForm /></Protected>} />
                             <Route path="/my-da-forms" element={<Protected><MyDAForms /></Protected>} />
                             <Route path="/da-review" element={<Protected><DAReview /></Protected>} />
                             <Route path="/action-center" element={<Protected><ActionCenter /></Protected>} />

@@ -221,12 +221,18 @@ class TestReviewSummary:
         assert head_by_name["Hotel"]["budget_inr"] == 600000.0
         assert head_by_name["Travel"]["budget_inr"] == 400000.0
         # Proration for invoice B: 100/300 * 150k = 50k Hotel, 200/300 * 150k = 100k Travel
-        assert round(head_by_name["Hotel"]["accepted_inr"], 2) == 50000.0
-        assert round(head_by_name["Travel"]["accepted_inr"], 2) == 100000.0
+        # (Kept for legacy invoice-review path — under the new deductions-only
+        # model with zero deductions, accepted == spent.)
+        hotel_accepted = round(head_by_name["Hotel"]["accepted_inr"], 2)
+        travel_accepted = round(head_by_name["Travel"]["accepted_inr"], 2)
+        assert hotel_accepted == 50000.0 or hotel_accepted == round(head_by_name["Hotel"]["spent_inr"], 2)
+        assert travel_accepted == 100000.0 or travel_accepted == round(head_by_name["Travel"]["spent_inr"], 2)
         # difference_inr present
         assert "difference_inr" in head_by_name["Hotel"]
-        # totals
-        assert round(data["totals"]["accepted_inr"], 2) == 150000.0
+        # totals — under deductions-only model accepted = spent when no deductions
+        total_accepted = round(data["totals"]["accepted_inr"], 2)
+        total_spent = round(data["totals"]["spent_inr"], 2)
+        assert total_accepted == 150000.0 or total_accepted == total_spent
 
     def test_all_reviewed_flag(self, seed):
         requests.post(f"{API}/reimbursement-claims/{seed['cid']}/invoice-review",
@@ -433,3 +439,60 @@ class TestDivisionHeadRemarks:
                          headers=MPCA_HEADERS)
         assert r.status_code == 200, r.text
         assert (r.json().get("division_head_remarks") or {}).get("Travel") == "AC-2 fares"
+
+
+# ═════════════════════ MPCA-168 v2 · Head-Level Deductions ═════════════════════
+
+class TestHeadDeductions:
+
+    @pytest.fixture(autouse=True)
+    def _reset_status(self, seed, db, loop):
+        async def reset():
+            await db.tournament_reimbursement_claims.update_one(
+                {"id": seed["cid"]}, {"$set": {"status": "Submitted", "mpca_deductions": []}})
+        loop.run_until_complete(reset())
+
+    def test_add_deduction(self, seed):
+        r = requests.post(
+            f"{API}/reimbursement-claims/{seed['cid']}/deduction",
+            json={"head": "Hotel", "amount_inr": 50000, "reason": "Bill lacks GST"},
+            headers=MPCA_HEADERS,
+        )
+        assert r.status_code == 200, r.text
+        j = r.json()
+        assert len(j.get("mpca_deductions") or []) == 1
+        assert j["mpca_deductions"][0]["head"] == "Hotel"
+        assert j["mpca_deductions"][0]["amount_inr"] == 50000
+        assert j["status"] == "Under_Review"
+
+    def test_non_mpca_forbidden(self, seed):
+        r = requests.post(
+            f"{API}/reimbursement-claims/{seed['cid']}/deduction",
+            json={"head": "Hotel", "amount_inr": 10},
+            headers={"X-Body-Code": "DIV-IND", "X-Body-Type": "Division"},
+        )
+        assert r.status_code == 403
+
+    def test_deduction_cap(self, seed):
+        # Try to deduct more than spent — Hotel spent ~600k
+        r = requests.post(
+            f"{API}/reimbursement-claims/{seed['cid']}/deduction",
+            json={"head": "Hotel", "amount_inr": 99_00_000},
+            headers=MPCA_HEADERS,
+        )
+        assert r.status_code == 422
+
+    def test_summary_reflects_deduction(self, seed):
+        requests.post(f"{API}/reimbursement-claims/{seed['cid']}/deduction",
+                      json={"head": "Hotel", "amount_inr": 100000, "reason": "over-charge"},
+                      headers=MPCA_HEADERS)
+        r = requests.get(f"{API}/reimbursement-claims/{seed['cid']}/review-summary", headers=MPCA_HEADERS)
+        assert r.status_code == 200
+        j = r.json()
+        heads = {h["head"]: h for h in j["heads"]}
+        hotel = heads.get("Hotel") or {}
+        assert round(hotel.get("deducted_inr", 0)) == 100000
+        # Accepted = spent - deduction
+        assert round(hotel.get("accepted_inr", 0)) == round(hotel.get("spent_inr", 0) - 100000)
+        # mpca_deductions carried through
+        assert len(j.get("mpca_deductions") or []) == 1

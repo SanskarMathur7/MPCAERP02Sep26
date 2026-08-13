@@ -2140,6 +2140,19 @@ class ReimbursementComment(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+class MpcaHeadDeduction(BaseModel):
+    """MPCA-168 (v2) · A deduction MPCA applies against a single budget head
+    on a Division's reimbursement claim. Multiple deductions can hit the
+    same head. Total accepted for a head = spent_by_division − Σ deductions."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    head: str
+    amount_inr: float
+    reason: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class MpcaInvoiceReview(BaseModel):
     """MPCA-168 · One line-item decision by MPCA on a single invoice inside a
     tournament reimbursement claim. MPCA records how much they ACCEPT from
@@ -2210,6 +2223,8 @@ class TournamentReimbursementClaim(TournamentReimbursementClaimBase):
     # Each entry records how much MPCA has accepted from that invoice.
     # `approved_amount_inr` at Approve-time = sum of accepted_inr across all reviews.
     mpca_invoice_reviews: List[MpcaInvoiceReview] = []
+    # MPCA-168 v2 · Head-level deduction rows (replaces per-invoice review flow).
+    mpca_deductions: List[MpcaHeadDeduction] = []
     # MPCA's signed decision PDF — Sign & upload gate before final approve.
     mpca_signed_pdf_url: Optional[str] = None
     mpca_signed_pdf_uploaded_at: Optional[str] = None

@@ -47,6 +47,15 @@ const MpcaClaimReviewForm = () => {
     const heads = (summary.heads || []).filter((h) => (h.budget_inr || 0) > 0 || (h.spent_inr || 0) > 0 || (h.accepted_inr || 0) > 0);
     const totals = summary.totals || {};
     const bodyName = body?.name || claim.body_name || claim.body_id;
+    const deductions = summary.mpca_deductions || claim.mpca_deductions || [];
+    const remarks = summary.division_head_remarks || claim.division_head_remarks || {};
+    // Aggregate deductions per head for the head-wise table
+    const dedByHead = {};
+    for (const d of deductions) {
+        const h = (d.head || "").trim();
+        dedByHead[h] = (dedByHead[h] || 0) + Number(d.amount_inr || 0);
+    }
+    const totalDeducted = deductions.reduce((s, d) => s + Number(d.amount_inr || 0), 0);
 
     return (
         <div className="min-h-screen bg-white text-black px-8 md:px-16 py-10 max-w-4xl mx-auto print:px-0 print:py-4" data-testid="mpca-claim-review-form">
@@ -85,71 +94,88 @@ const MpcaClaimReviewForm = () => {
                 <TRow label="Invoices" value={`${summary.invoices_reviewed}/${summary.invoice_count} reviewed`} />
             </div>
 
-            {/* Head-wise Budget / Spent / Accepted */}
-            <h3 className="font-serif text-lg border-b border-black mb-2 mt-6">A. Head-wise Budget vs. Spent vs. Accepted by MPCA</h3>
+            {/* Head-wise Budget / Spent / Deducted / Accepted */}
+            <h3 className="font-serif text-lg border-b border-black mb-2 mt-6">A. Head-wise Budget · Spent · Deducted · Accepted</h3>
             <table className="w-full text-[10.5px] border-collapse mb-6">
                 <thead>
                     <tr className="border-y border-black">
                         <th className="text-left py-1 px-2 w-6">#</th>
                         <th className="text-left py-1 px-2">Head</th>
-                        <th className="text-right py-1 px-2 w-28">Sanctioned Budget</th>
-                        <th className="text-right py-1 px-2 w-28">Spent by Division</th>
-                        <th className="text-right py-1 px-2 w-28">Accepted by MPCA</th>
+                        <th className="text-right py-1 px-2 w-24">Sanctioned</th>
+                        <th className="text-right py-1 px-2 w-24">Spent by Division</th>
+                        <th className="text-right py-1 px-2 w-24">Deducted</th>
+                        <th className="text-right py-1 px-2 w-24">Accepted by MPCA</th>
+                        <th className="text-left py-1 px-2">Division Remark</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {heads.map((h, i) => (
-                        <tr key={h.head + i} className="border-b border-gray-300">
-                            <td className="py-1.5 px-2">{i + 1}</td>
-                            <td className="py-1.5 px-2">{h.head}</td>
-                            <td className="py-1.5 px-2 text-right font-mono">{fmtINR(h.budget_inr)}</td>
-                            <td className="py-1.5 px-2 text-right font-mono">{fmtINR(h.spent_inr)}</td>
-                            <td className="py-1.5 px-2 text-right font-mono font-semibold text-green-700">{fmtINR(h.accepted_inr)}</td>
-                        </tr>
-                    ))}
+                    {heads.map((h, i) => {
+                        const dh = dedByHead[h.head] || 0;
+                        const accepted = Math.max((h.spent_inr || 0) - dh, 0);
+                        return (
+                            <tr key={h.head + i} className="border-b border-gray-300">
+                                <td className="py-1.5 px-2">{i + 1}</td>
+                                <td className="py-1.5 px-2">{h.head}</td>
+                                <td className="py-1.5 px-2 text-right font-mono">{fmtINR(h.budget_inr)}</td>
+                                <td className="py-1.5 px-2 text-right font-mono">{fmtINR(h.spent_inr)}</td>
+                                <td className={"py-1.5 px-2 text-right font-mono " + (dh > 0 ? "text-red-700" : "text-gray-400")}>
+                                    {dh > 0 ? "−" + fmtINR(dh) : "—"}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono font-semibold text-green-700">{fmtINR(accepted)}</td>
+                                <td className="py-1.5 px-2 text-[10px] italic">{remarks[h.head] || "—"}</td>
+                            </tr>
+                        );
+                    })}
                     <tr className="border-y-2 border-black bg-gray-50 font-semibold">
                         <td />
                         <td className="py-2 px-2 uppercase text-[10px] tracking-widest">Total</td>
                         <td className="py-2 px-2 text-right font-mono">{fmtINR(totals.budget_inr)}</td>
                         <td className="py-2 px-2 text-right font-mono">{fmtINR(totals.spent_inr)}</td>
-                        <td className="py-2 px-2 text-right font-mono text-green-800">{fmtINR(totals.accepted_inr)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-red-700">{totalDeducted > 0 ? "−" + fmtINR(totalDeducted) : "—"}</td>
+                        <td className="py-2 px-2 text-right font-mono text-green-800">{fmtINR(Math.max((totals.spent_inr || 0) - totalDeducted, 0))}</td>
+                        <td />
                     </tr>
                 </tbody>
             </table>
 
-            {/* Per-invoice review */}
-            <h3 className="font-serif text-lg border-b border-black mb-2 mt-6">B. Per-Invoice Acceptance</h3>
-            <table className="w-full text-[10px] border-collapse mb-6">
-                <thead>
-                    <tr className="border-y border-black">
-                        <th className="text-left py-1 px-2 w-6">#</th>
-                        <th className="text-left py-1 px-2 w-28">Invoice Ref</th>
-                        <th className="text-left py-1 px-2">Vendor</th>
-                        <th className="text-right py-1 px-2 w-20">Total (₹)</th>
-                        <th className="text-right py-1 px-2 w-20">Accepted (₹)</th>
-                        <th className="text-left py-1 px-2">Remark</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {(summary.invoices || []).map((inv, i) => (
-                        <tr key={inv.invoice_id + i} className="border-b border-gray-300">
-                            <td className="py-1.5 px-2">{i + 1}</td>
-                            <td className="py-1.5 px-2 font-mono">{inv.invoice_ref || "—"}</td>
-                            <td className="py-1.5 px-2">{inv.vendor_name || "—"}<div className="text-[9px] text-gray-500">{inv.invoice_date}</div></td>
-                            <td className="py-1.5 px-2 text-right font-mono">{fmtINR(inv.total_inr)}</td>
-                            <td className={"py-1.5 px-2 text-right font-mono font-semibold " + (inv.reviewed ? (inv.accepted_inr < inv.total_inr ? "text-red-700" : "text-green-700") : "text-gray-400")}>
-                                {inv.reviewed ? fmtINR(inv.accepted_inr) : "PENDING"}
-                            </td>
-                            <td className="py-1.5 px-2 text-[10px] italic">{inv.reason || (inv.reviewed && inv.accepted_inr === inv.total_inr ? "Accepted in full" : "—")}</td>
+            {/* Deduction rows */}
+            <h3 className="font-serif text-lg border-b border-black mb-2 mt-6">B. Deductions Applied by MPCA ({deductions.length})</h3>
+            {deductions.length === 0 ? (
+                <div className="text-[11px] italic text-gray-500 mb-6">No deductions applied — MPCA accepts the full amount spent by Division.</div>
+            ) : (
+                <table className="w-full text-[10.5px] border-collapse mb-6">
+                    <thead>
+                        <tr className="border-y border-black">
+                            <th className="text-left py-1 px-2 w-6">#</th>
+                            <th className="text-left py-1 px-2">Budget Head</th>
+                            <th className="text-right py-1 px-2 w-28">Deducted (₹)</th>
+                            <th className="text-left py-1 px-2">Reason</th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {deductions.map((d, i) => (
+                            <tr key={d.id + i} className="border-b border-gray-300">
+                                <td className="py-1.5 px-2">{i + 1}</td>
+                                <td className="py-1.5 px-2">{d.head}</td>
+                                <td className="py-1.5 px-2 text-right font-mono text-red-700">−{fmtINR(d.amount_inr)}</td>
+                                <td className="py-1.5 px-2 text-[10px] italic">{d.reason || "—"}</td>
+                            </tr>
+                        ))}
+                        <tr className="border-y-2 border-black bg-gray-50 font-semibold">
+                            <td />
+                            <td className="py-2 px-2 uppercase text-[10px] tracking-widest">Total Deducted</td>
+                            <td className="py-2 px-2 text-right font-mono text-red-800">−{fmtINR(totalDeducted)}</td>
+                            <td />
+                        </tr>
+                    </tbody>
+                </table>
+            )}
 
             {/* Declaration */}
             <div className="border border-black p-4 text-[11px] mb-8">
-                <b>MPCA DECISION —</b> The MPCA Selection &amp; Reimbursement Committee has reviewed the reimbursement claim <b className="font-mono">{claim.claim_ref}</b> submitted by <b>{bodyName}</b> for <b>{tournament.name}</b>. The total amount accepted for reimbursement is <b>{fmtINR(totals.accepted_inr)}</b> against the invoiced ₹{Number(totals.spent_inr || 0).toLocaleString("en-IN")}. Any variance between spent and accepted is explained per invoice under Section B above.
+                <b>MPCA DECISION —</b> The MPCA Reimbursement Committee has reviewed the claim <b className="font-mono">{claim.claim_ref}</b> submitted by <b>{bodyName}</b> for <b>{tournament.name}</b>. Of the total ₹{Number(totals.spent_inr || 0).toLocaleString("en-IN")} spent by the Division, MPCA has recorded deductions of <b>₹{totalDeducted.toLocaleString("en-IN")}</b> against specific budget heads (as itemised in Section B) and hereby accepts <b>₹{Math.max((totals.spent_inr || 0) - totalDeducted, 0).toLocaleString("en-IN")}</b> for reimbursement.
             </div>
+
 
             {/* Signature block */}
             <div className="grid grid-cols-3 gap-6 mt-16">

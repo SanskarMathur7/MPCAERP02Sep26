@@ -484,7 +484,83 @@ async def start_review(cid: str, action: TournamentReimbursementAction):
     return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
 
 
-# ═══════════════════ MPCA-168 · Line-item review ═══════════════════
+# ═══════════════════ MPCA-168 v2 · Head-Level Deductions ═══════════════════
+
+class DeductionPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    head: str
+    amount_inr: float
+    reason: Optional[str] = None
+
+
+@api_router.post("/reimbursement-claims/{cid}/deduction", response_model=TournamentReimbursementClaim)
+async def add_deduction(cid: str, payload: DeductionPayload, request: Request):
+    """MPCA adds a deduction row against a budget head."""
+    doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    scope = get_scope(request)
+    if not scope.is_state:
+        raise HTTPException(403, "Only MPCA may add deductions.")
+    if doc["status"] not in ("Submitted", "Under_Review"):
+        raise HTTPException(409, f"Deductions available only on Submitted/Under_Review claims (current: {doc['status']}).")
+    if payload.amount_inr <= 0:
+        raise HTTPException(422, "Deduction amount must be greater than zero.")
+    head = (payload.head or "").strip()
+    if not head:
+        raise HTTPException(422, "Head is required.")
+
+    # Prevent Accepted from going negative — cap total deductions by spent-on-head.
+    invoices = await db.tournament_invoices.find({
+        "tournament_id": doc["tournament_id"],
+        "body_id": doc["body_id"],
+        "status": {"$in": ["Draft", "Submitted", "Approved"]},
+    }, {"_id": 0}).to_list(500)
+    spent_on_head = 0.0
+    for inv in invoices:
+        for a in (inv.get("allocations") or []):
+            if (a.get("head_label") or "").strip() == head:
+                spent_on_head += float(a.get("amount_inr") or 0)
+    existing = sum(float(d.get("amount_inr") or 0) for d in (doc.get("mpca_deductions") or []) if (d.get("head") or "").strip() == head)
+    if existing + float(payload.amount_inr) > spent_on_head + 0.5:
+        raise HTTPException(
+            422,
+            f"Total deductions on '{head}' (₹{existing + payload.amount_inr:,.0f}) would exceed the Division's spend of ₹{spent_on_head:,.0f}. Accepted amount cannot go negative.",
+        )
+
+    from models import MpcaHeadDeduction
+    row = MpcaHeadDeduction(
+        head=head,
+        amount_inr=round(float(payload.amount_inr), 2),
+        reason=(payload.reason or "").strip() or None,
+    ).model_dump()
+    now = datetime.now(timezone.utc).isoformat()
+    await db.tournament_reimbursement_claims.update_one({"id": cid}, {
+        "$push": {"mpca_deductions": row},
+        "$set": {"status": "Under_Review" if doc["status"] == "Submitted" else doc["status"], "updated_at": now},
+    })
+    return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.delete("/reimbursement-claims/{cid}/deduction/{ded_id}", response_model=TournamentReimbursementClaim)
+async def remove_deduction(cid: str, ded_id: str, request: Request):
+    scope = get_scope(request)
+    if not scope.is_state:
+        raise HTTPException(403, "Only MPCA may remove deductions.")
+    doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    remaining = [d for d in (doc.get("mpca_deductions") or []) if d.get("id") != ded_id]
+    if len(remaining) == len(doc.get("mpca_deductions") or []):
+        raise HTTPException(404, "Deduction not found on this claim.")
+    await db.tournament_reimbursement_claims.update_one({"id": cid}, {"$set": {
+        "mpca_deductions": remaining,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+
+
+# ═══════════════════ MPCA-168 · Line-item review (LEGACY) ═══════════════════
 
 class InvoiceReviewPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -588,6 +664,15 @@ async def get_review_summary(cid: str):
 
     invoice_lines: List[dict] = []
     all_reviewed = True
+
+    # MPCA-168 v2 · Aggregate deductions per head (case/whitespace tolerant).
+    ded_by_head: Dict[str, float] = {}
+    for d in (doc.get("mpca_deductions") or []):
+        key = (d.get("head") or "").strip()
+        if not key:
+            continue
+        ded_by_head[key] = ded_by_head.get(key, 0.0) + float(d.get("amount_inr") or 0)
+
     for inv in invoices:
         r = reviews_by_iid.get(inv["id"])
         accepted_full = float(r["accepted_inr"]) if r else 0.0
@@ -629,6 +714,13 @@ async def get_review_summary(cid: str):
         row = per_head.setdefault(h.get("head") or "—", {"head": h.get("head") or "—", "budget_inr": 0.0, "spent_inr": 0.0, "accepted_inr": 0.0})
         row["budget_inr"] = float(h.get("limit_inr") or 0)
 
+    # MPCA-168 v2 · Overlay deductions → recompute accepted_inr per head.
+    # New model: accepted = spent − Σ deductions (invoice-level reviews ignored).
+    for row in per_head.values():
+        deducted = ded_by_head.get(row["head"], 0.0)
+        row["deducted_inr"] = round(deducted, 2)
+        row["accepted_inr"] = round(max((row.get("spent_inr") or 0) - deducted, 0.0), 2)
+
     heads = sorted(per_head.values(), key=lambda x: x.get("head") or "")
     # MPCA-168 · Also surface invoice-level totals so the Division PDF's
     # "Summary of Claim" block reflects the LIVE spending on a Draft claim
@@ -662,6 +754,7 @@ async def get_review_summary(cid: str):
             "invoice_count": len(invoices),
         },
         "invoices": invoice_lines,
+        "mpca_deductions": doc.get("mpca_deductions") or [],
         "mpca_signed_pdf_url": doc.get("mpca_signed_pdf_url"),
         "division_head_remarks": doc.get("division_head_remarks") or {},
     }
@@ -748,42 +841,42 @@ async def approve_claim(cid: str, action: TournamentReimbursementAction, request
             f"You are scoped to {scope.body_code} and cannot approve it.",
         )
 
-    # MPCA-168 · Approved amount = sum of per-invoice accepted amounts when
-    # MPCA has recorded line-item reviews. Falls back to legacy behavior
-    # (eligible total or explicit action.approved_amount_inr) when no
-    # invoice reviews exist — keeps district-claim + old flows working.
+    # MPCA-168 v2 · Approved amount = spent − Σ deductions (from summary).
+    # Falls back to legacy invoice-review math when no deductions and no reviews
+    # exist (i.e. explicit action.approved_amount_inr wins).
     eligible = float((doc.get("summary") or {}).get("eligible_total_inr") or 0)
+    deductions = doc.get("mpca_deductions") or []
     invoice_reviews = doc.get("mpca_invoice_reviews") or []
-    if invoice_reviews and route_to == "MPCA":
-        # Enforce that every invoice on the claim has a review, and the
-        # signed MPCA PDF is uploaded before final approve.
+    if deductions and route_to == "MPCA":
+        # Compute total spent live from invoices
+        invoices = await db.tournament_invoices.find({
+            "tournament_id": doc["tournament_id"],
+            "body_id": doc["body_id"],
+            "status": {"$in": ["Draft", "Submitted", "Approved"]},
+        }, {"_id": 0}).to_list(500)
+        total_spent = round(sum(float(i.get("total_inr") or 0) for i in invoices), 2)
+        total_deducted = round(sum(float(d.get("amount_inr") or 0) for d in deductions), 2)
+        approved = round(max(total_spent - total_deducted, 0.0), 2)
+        if not doc.get("mpca_signed_pdf_url"):
+            raise HTTPException(400, "Please sign the MPCA Review PDF and upload it back before approving.")
+    elif invoice_reviews and route_to == "MPCA":
+        # Legacy path — kept for backward compat with earlier claims.
         invoice_ids = set(doc.get("invoice_ids") or [])
         reviewed_ids = {r.get("invoice_id") for r in invoice_reviews}
         missing = invoice_ids - reviewed_ids
         if missing:
-            raise HTTPException(
-                400,
-                f"{len(missing)} invoice(s) still need MPCA acceptance before the "
-                f"claim can be approved.",
-            )
+            raise HTTPException(400, f"{len(missing)} invoice(s) still need MPCA acceptance before the claim can be approved.")
         if not doc.get("mpca_signed_pdf_url"):
-            raise HTTPException(
-                400,
-                "Please sign the MPCA Review PDF and upload it back before approving.",
-            )
+            raise HTTPException(400, "Please sign the MPCA Review PDF and upload it back before approving.")
         approved = round(sum(float(r.get("accepted_inr") or 0) for r in invoice_reviews), 2)
     else:
         approved = float(action.approved_amount_inr) if action.approved_amount_inr is not None else eligible
 
     if approved < 0:
         raise HTTPException(422, "Approved amount cannot be negative")
-    if approved > eligible and not invoice_reviews:
+    if approved > eligible and not invoice_reviews and not deductions:
         raise HTTPException(422, f"Approved amount ₹{approved:,.0f} exceeds eligible ₹{eligible:,.0f}")
-    # MPCA-168 · Belt-and-braces guard when line-item review is active — the
-    # sum of accepted amounts should also not exceed the eligible total.
-    # This should be impossible via the UI (Partial button caps at invoice
-    # total which is already eligible-bounded) but protect against direct
-    # API abuse.
+    # MPCA-168 · Belt-and-braces cap when line-item review is active.
     if invoice_reviews and eligible > 0 and approved > eligible + 0.5:
         raise HTTPException(
             422,

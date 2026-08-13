@@ -109,16 +109,15 @@ export const ReimbursementClaimsList = () => {
     );
 };
 
-// ═══════════════════ MPCA-168 · Line-Item Review Panel ═══════════════════
-// MPCA walks every attached invoice and records the accepted amount +
-// reason. Sum of accepted becomes the final `approved_amount_inr` at
-// approve-time. MPCA must sign & upload their review PDF before the
-// Approve button on the parent page is unlocked.
+// ═══════════════════ MPCA-168 v2 · Head-Level Deductions Panel ═══════════════════
+// MPCA reviews the Division's claim by adding DEDUCTIONS against budget heads
+// (instead of per-invoice accept/reject). Accepted-by-MPCA per head =
+// Spent by Division − Σ deductions on that head. MPCA still signs & uploads
+// the review PDF; Approve button unlocks after upload.
 const MpcaLineItemReviewPanel = ({ claim, invoices, persona, onChange }) => {
     const [summary, setSummary] = useState(null);
-    const [editing, setEditing] = useState(null);      // invoice_id being edited
-    const [editAmt, setEditAmt] = useState("");
-    const [editReason, setEditReason] = useState("");
+    const [adding, setAdding] = useState(false);
+    const [form, setForm] = useState({ head: "", amount_inr: "", reason: "" });
     const [busy, setBusy] = useState(false);
     const [uploadingPdf, setUploadingPdf] = useState(false);
 
@@ -128,48 +127,39 @@ const MpcaLineItemReviewPanel = ({ claim, invoices, persona, onChange }) => {
             setSummary(data);
         } catch { /* ignore */ }
     };
-    useEffect(() => { load(); }, [claim.id, claim.mpca_invoice_reviews?.length, claim.updated_at]);
+    useEffect(() => { load(); }, [claim.id, claim.mpca_deductions?.length, claim.updated_at]);
 
-    const reviewsByIid = Object.fromEntries((claim.mpca_invoice_reviews || []).map((r) => [r.invoice_id, r]));
+    const deductions = summary?.mpca_deductions || claim.mpca_deductions || [];
+    const heads = summary?.heads || [];
+    const totals = summary?.totals || {};
+    const remarks = summary?.division_head_remarks || claim.division_head_remarks || {};
+    const totalSpent = totals.spent_inr || 0;
+    const totalDeducted = deductions.reduce((s, d) => s + Number(d.amount_inr || 0), 0);
+    const totalAccepted = Math.max(totalSpent - totalDeducted, 0);
+    const hasMpcaSigned = !!claim.mpca_signed_pdf_url;
+    // Heads eligible for a new deduction — anything Division spent something on.
+    const deductibleHeads = heads.filter((h) => (h.spent_inr || 0) > 0);
 
-    const openEdit = (inv) => {
-        const prev = reviewsByIid[inv.id];
-        setEditing(inv.id);
-        setEditAmt(prev?.accepted_inr ?? inv.total_inr ?? 0);
-        setEditReason(prev?.reason || "");
-    };
-    const acceptFull = async (inv) => {
+    const addDeduction = async () => {
+        if (!form.head || !(parseFloat(form.amount_inr) > 0)) return;
         setBusy(true);
         try {
-            await api.post(`/reimbursement-claims/${claim.id}/invoice-review`, {
-                invoice_id: inv.id,
-                accepted_inr: Number(inv.total_inr) || 0,
-                reason: null,
-                reviewed_by: persona?.name,
+            await api.post(`/reimbursement-claims/${claim.id}/deduction`, {
+                head: form.head,
+                amount_inr: parseFloat(form.amount_inr),
+                reason: form.reason.trim() || null,
             });
+            setForm({ head: "", amount_inr: "", reason: "" });
+            setAdding(false);
             await onChange();
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
         finally { setBusy(false); }
     };
-    const saveEdit = async () => {
+    const removeDeduction = async (ded_id) => {
+        if (!window.confirm("Remove this deduction row?")) return;
         setBusy(true);
         try {
-            await api.post(`/reimbursement-claims/${claim.id}/invoice-review`, {
-                invoice_id: editing,
-                accepted_inr: parseFloat(editAmt) || 0,
-                reason: editReason.trim() || null,
-                reviewed_by: persona?.name,
-            });
-            setEditing(null); setEditAmt(""); setEditReason("");
-            await onChange();
-        } catch (e) { alert(e?.response?.data?.detail || e.message); }
-        finally { setBusy(false); }
-    };
-    const clearReview = async (invId) => {
-        if (!window.confirm("Reset MPCA acceptance for this invoice?")) return;
-        setBusy(true);
-        try {
-            await api.delete(`/reimbursement-claims/${claim.id}/invoice-review/${invId}`);
+            await api.delete(`/reimbursement-claims/${claim.id}/deduction/${ded_id}`);
             await onChange();
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
         finally { setBusy(false); }
@@ -194,170 +184,145 @@ const MpcaLineItemReviewPanel = ({ claim, invoices, persona, onChange }) => {
         finally { setUploadingPdf(false); }
     };
 
-    const totalTotal = invoices.reduce((s, i) => s + Number(i.total_inr || 0), 0);
-    const totalAccepted = (claim.mpca_invoice_reviews || []).reduce((s, r) => s + Number(r.accepted_inr || 0), 0);
-    const totalBudget = summary?.totals?.budget_inr ?? claim.summary?.budget_total_inr ?? 0;
-    const totalSpent = summary?.totals?.spent_inr ?? claim.summary?.invoiced_total_inr ?? 0;
-    const allReviewed = summary?.all_reviewed;
-    const hasMpcaSigned = !!claim.mpca_signed_pdf_url;
+    // Aggregate deductions per head for the summary table.
+    const dedByHead = {};
+    for (const d of deductions) {
+        const h = (d.head || "").trim();
+        dedByHead[h] = (dedByHead[h] || 0) + Number(d.amount_inr || 0);
+    }
 
     return (
         <div className="bulletin-card p-0 overflow-hidden mb-6 border-mpca-navy" data-testid="mpca-line-item-review-panel">
             <div className="p-4 bg-mpca-navy/10 border-b border-mpca-navy/40">
-                <div className="overline text-[9px] text-mpca-navy">MPCA-168 · Line-Item Review</div>
-                <div className="font-serif text-lg text-mpca-green-dark mt-1">Accept each invoice · Sign the decision PDF · Approve</div>
+                <div className="overline text-[9px] text-mpca-navy">MPCA-168 · Head-Level Deductions</div>
+                <div className="font-serif text-lg text-mpca-green-dark mt-1">Add deductions per budget head · Sign PDF · Approve</div>
                 <div className="text-[11px] text-mpca-gray-dark mt-1">
-                    Reviewed {summary?.invoices_reviewed || 0} of {invoices.length} invoices.
-                    Total accepted so far: <b className="text-mpca-green-dark">{fmt(totalAccepted)}</b>
-                    {" "}(of ₹{totalTotal.toLocaleString("en-IN")} invoiced).
+                    {deductions.length} deduction(s) recorded · Total accepted so far:
+                    <b className="text-mpca-green-dark"> ₹{totalAccepted.toLocaleString("en-IN")}</b>
+                    {" "}(Spent ₹{totalSpent.toLocaleString("en-IN")} − Deducted ₹{totalDeducted.toLocaleString("en-IN")})
                 </div>
             </div>
 
-            {/* Per-head Budget / Spent / Accepted table */}
-            {summary?.heads?.length > 0 && (
-                <div>
-                    <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-mpca-green-dark text-mpca-gold-light text-[9px] uppercase tracking-widest">
-                        <div className="col-span-6">Head</div>
-                        <div className="col-span-2 text-right">Budget</div>
-                        <div className="col-span-2 text-right">Spent by Division</div>
-                        <div className="col-span-2 text-right">Accepted by MPCA</div>
-                    </div>
-                    {summary.heads.map((h, i) => (
+            {/* Head-wise Budget / Spent / Deducted / Accepted table (+ Division Remarks) */}
+            <div>
+                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-mpca-green-dark text-mpca-gold-light text-[9px] uppercase tracking-widest">
+                    <div className="col-span-3">Head</div>
+                    <div className="col-span-1 text-right">Budget</div>
+                    <div className="col-span-2 text-right">Spent by Division</div>
+                    <div className="col-span-1 text-right">Deducted</div>
+                    <div className="col-span-2 text-right">Accepted by MPCA</div>
+                    <div className="col-span-3">Division Remark</div>
+                </div>
+                {heads.map((h, i) => {
+                    const dh = dedByHead[h.head] || 0;
+                    const accepted = Math.max((h.spent_inr || 0) - dh, 0);
+                    return (
                         <div key={h.head + i} className="grid grid-cols-12 gap-2 px-3 py-2 items-center border-b border-mpca-brass/10 text-xs" data-testid={`mpca-head-row-${i}`}>
-                            <div className="col-span-6">{h.head}</div>
-                            <div className="col-span-2 text-right font-mono">{fmt(h.budget_inr)}</div>
-                            <div className="col-span-2 text-right font-mono text-mpca-oxblood">{fmt(h.spent_inr)}</div>
-                            <div className="col-span-2 text-right font-mono text-mpca-green-dark font-semibold">{fmt(h.accepted_inr)}</div>
+                            <div className="col-span-3">{h.head}</div>
+                            <div className="col-span-1 text-right font-mono">{fmt(h.budget_inr)}</div>
+                            <div className="col-span-2 text-right font-mono text-mpca-navy">{fmt(h.spent_inr)}</div>
+                            <div className="col-span-1 text-right font-mono text-mpca-oxblood">{dh ? "−" + fmt(dh) : "—"}</div>
+                            <div className="col-span-2 text-right font-mono text-mpca-green-dark font-semibold">{fmt(accepted)}</div>
+                            <div className="col-span-3 text-[10px] italic text-mpca-brass truncate" title={remarks[h.head] || ""}>
+                                {remarks[h.head] || "—"}
+                            </div>
                         </div>
-                    ))}
-                    <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-mpca-parchment font-semibold border-y-2 border-mpca-brass/40 text-xs" data-testid="mpca-head-totals">
-                        <div className="col-span-6 uppercase text-[10px] tracking-widest">Total</div>
-                        <div className="col-span-2 text-right font-mono">{fmt(totalBudget)}</div>
-                        <div className="col-span-2 text-right font-mono text-mpca-oxblood">{fmt(totalSpent)}</div>
-                        <div className="col-span-2 text-right font-mono text-mpca-green-dark">{fmt(totalAccepted)}</div>
+                    );
+                })}
+                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-mpca-parchment font-semibold border-y-2 border-mpca-brass/40 text-xs" data-testid="mpca-head-totals">
+                    <div className="col-span-3 uppercase text-[10px] tracking-widest">Total</div>
+                    <div className="col-span-1 text-right font-mono">{fmt(totals.budget_inr)}</div>
+                    <div className="col-span-2 text-right font-mono text-mpca-navy">{fmt(totalSpent)}</div>
+                    <div className="col-span-1 text-right font-mono text-mpca-oxblood">{totalDeducted ? "−" + fmt(totalDeducted) : "—"}</div>
+                    <div className="col-span-2 text-right font-mono text-mpca-green-dark">{fmt(totalAccepted)}</div>
+                    <div className="col-span-3" />
+                </div>
+            </div>
+
+            {/* Deduction rows + Add form */}
+            <div className="p-3 border-b border-mpca-brass/20 flex items-center justify-between">
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-brass">Deductions ({deductions.length})</div>
+                {!adding && (
+                    <button onClick={() => setAdding(true)} disabled={busy}
+                        className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-parchment px-3 py-1.5 disabled:opacity-40"
+                        data-testid="mpca-add-deduction-btn">
+                        + Add Deduction
+                    </button>
+                )}
+            </div>
+            {deductions.length === 0 && !adding && (
+                <div className="px-4 py-3 text-xs italic text-mpca-gray-dark">No deductions recorded — the full amount spent by Division will be accepted on approval.</div>
+            )}
+            {deductions.map((d) => (
+                <div key={d.id} className="grid grid-cols-12 gap-2 px-3 py-2 items-center border-b border-mpca-brass/10 text-xs bg-mpca-oxblood/5" data-testid={`mpca-deduction-row-${d.id}`}>
+                    <div className="col-span-3 text-mpca-oxblood font-semibold">{d.head}</div>
+                    <div className="col-span-2 text-right font-mono text-mpca-oxblood">−{fmt(d.amount_inr)}</div>
+                    <div className="col-span-6 text-[10px] italic text-mpca-brass">{d.reason || "—"}</div>
+                    <div className="col-span-1 text-right">
+                        <button onClick={() => removeDeduction(d.id)} disabled={busy}
+                            className="text-mpca-oxblood hover:text-mpca-oxblood/70 text-[10px] uppercase" title="Remove">×</button>
+                    </div>
+                </div>
+            ))}
+            {adding && (
+                <div className="p-3 bg-mpca-oxblood/5 border-b border-mpca-brass/20 space-y-2" data-testid="mpca-add-deduction-form">
+                    <div className="grid grid-cols-12 gap-2 items-end">
+                        <label className="col-span-4">
+                            <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-1">Budget Head</div>
+                            <select value={form.head} onChange={(e) => setForm((f) => ({ ...f, head: e.target.value }))}
+                                className="input-heritage !py-1.5 !text-xs" data-testid="ded-form-head">
+                                <option value="">— Select head —</option>
+                                {deductibleHeads.map((h) => (
+                                    <option key={h.head} value={h.head}>{h.head} · spent {fmt(h.spent_inr)}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="col-span-3">
+                            <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-1">Deduction ₹</div>
+                            <input type="number" min="1" value={form.amount_inr}
+                                onChange={(e) => setForm((f) => ({ ...f, amount_inr: e.target.value }))}
+                                className="input-heritage !py-1.5 !text-xs font-mono text-right" data-testid="ded-form-amount" />
+                        </label>
+                        <label className="col-span-4">
+                            <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-1">Reason</div>
+                            <input type="text" value={form.reason}
+                                onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
+                                placeholder="e.g. Hotel bill lacks GST invoice"
+                                className="input-heritage !py-1.5 !text-xs" data-testid="ded-form-reason" />
+                        </label>
+                        <div className="col-span-1 flex flex-col gap-1">
+                            <button onClick={addDeduction} disabled={busy || !form.head || !(parseFloat(form.amount_inr) > 0)}
+                                className="text-[9px] uppercase tracking-widest bg-mpca-oxblood text-mpca-parchment px-2 py-1.5 disabled:opacity-40"
+                                data-testid="ded-form-save">Save</button>
+                            <button onClick={() => { setAdding(false); setForm({ head: "", amount_inr: "", reason: "" }); }}
+                                className="text-[9px] uppercase tracking-widest border border-mpca-brass/40 px-2 py-1">Cancel</button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* Per-invoice review rows */}
-            <div className="p-3 border-b border-mpca-brass/20 text-[11px] font-semibold uppercase tracking-widest text-mpca-brass">Invoices — Accept per line</div>
-            {invoices.map((inv) => {
-                const r = reviewsByIid[inv.id];
-                const reviewed = !!r;
-                const isEditingThis = editing === inv.id;
-                return (
-                    <div key={inv.id} className={"px-3 py-2.5 border-b border-mpca-brass/10 " + (reviewed ? "bg-mpca-green-dark/5" : "")} data-testid={`mpca-inv-review-${inv.id}`}>
-                        <div className="grid grid-cols-12 gap-2 items-center text-xs">
-                            <div className="col-span-4">
-                                <div className="font-mono text-[10px] text-mpca-brass">{inv.invoice_ref || inv.invoice_no}</div>
-                                <div className="text-mpca-green-dark">{inv.vendor_name || "—"}</div>
-                            </div>
-                            <div className="col-span-2 text-right font-mono">{fmt(inv.total_inr)}</div>
-                            <div className="col-span-3 text-right">
-                                {reviewed ? (
-                                    <div>
-                                        <div className="font-mono text-mpca-green-dark font-semibold">{fmt(r.accepted_inr)}</div>
-                                        <div className="text-[9px] uppercase tracking-widest text-mpca-brass">Accepted</div>
-                                    </div>
-                                ) : <div className="text-[10px] italic text-mpca-gray-dark">Pending review</div>}
-                            </div>
-                            <div className="col-span-3 text-right flex justify-end gap-1.5">
-                                {!isEditingThis && (
-                                    <>
-                                        <button onClick={() => acceptFull(inv)} disabled={busy}
-                                            className="text-[9px] uppercase tracking-widest bg-mpca-green-dark text-mpca-parchment px-2 py-1 disabled:opacity-40"
-                                            data-testid={`mpca-inv-accept-full-${inv.id}`}
-                                            title="Accept the full invoice amount">
-                                            Accept full
-                                        </button>
-                                        <button onClick={() => openEdit(inv)} disabled={busy}
-                                            className="text-[9px] uppercase tracking-widest border border-mpca-oxblood text-mpca-oxblood px-2 py-1 disabled:opacity-40"
-                                            data-testid={`mpca-inv-partial-${inv.id}`}
-                                            title="Accept a partial amount + record a reason">
-                                            {reviewed ? "Edit" : "Partial"}
-                                        </button>
-                                        {reviewed && (
-                                            <button onClick={() => clearReview(inv.id)} disabled={busy}
-                                                className="text-[9px] uppercase tracking-widest text-mpca-brass" data-testid={`mpca-inv-clear-${inv.id}`}>
-                                                reset
-                                            </button>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                        {isEditingThis && (
-                            <div className="mt-2 border border-mpca-oxblood/40 bg-mpca-oxblood/5 p-2 space-y-2" data-testid={`mpca-inv-form-${inv.id}`}>
-                                <div className="grid grid-cols-12 gap-2 items-end">
-                                    <label className="col-span-4">
-                                        <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-1">Accepted Amount (₹)</div>
-                                        <input type="number" min="0" max={inv.total_inr} value={editAmt}
-                                            onChange={(e) => setEditAmt(e.target.value)}
-                                            className="input-heritage !py-1.5 !text-xs font-mono text-right"
-                                            data-testid={`mpca-inv-amt-${inv.id}`} />
-                                    </label>
-                                    <label className="col-span-6">
-                                        <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-1">Reason / Remarks</div>
-                                        <input type="text" value={editReason}
-                                            onChange={(e) => setEditReason(e.target.value)}
-                                            placeholder="e.g. Bill amount partially outside sanctioned head"
-                                            className="input-heritage !py-1.5 !text-xs"
-                                            data-testid={`mpca-inv-reason-${inv.id}`} />
-                                    </label>
-                                    <div className="col-span-2 flex gap-1.5 justify-end">
-                                        <button onClick={saveEdit} disabled={busy || parseFloat(editAmt) < 0 || parseFloat(editAmt) > inv.total_inr}
-                                            className="text-[9px] uppercase tracking-widest bg-mpca-oxblood text-mpca-parchment px-2 py-1.5 disabled:opacity-40"
-                                            data-testid={`mpca-inv-save-${inv.id}`}>Save</button>
-                                        <button onClick={() => setEditing(null)} className="text-[9px] uppercase tracking-widest border border-mpca-brass/40 px-2 py-1.5">Cancel</button>
-                                    </div>
-                                </div>
-                                {r?.reason && (
-                                    <div className="text-[10px] italic text-mpca-brass">Previous reason: {r.reason}</div>
-                                )}
-                            </div>
-                        )}
-                        {!isEditingThis && r?.reason && (
-                            <div className="mt-1.5 text-[10px] italic text-mpca-brass">MPCA remark: {r.reason}</div>
-                        )}
-                    </div>
-                );
-            })}
-
-            {/* MPCA signed decision PDF */}
+            {/* MPCA signed decision PDF strip */}
             <div className="p-3 border-t-2 border-mpca-navy/40 bg-mpca-navy/5 flex items-center gap-3 flex-wrap" data-testid="mpca-signed-pdf-strip">
                 <div className="flex-1 min-w-[200px] text-[11px] text-mpca-charcoal/85">
-                    {!allReviewed ? (
-                        <>Complete acceptance on every invoice, then generate the MPCA Review PDF, sign it and upload back to unlock <b>Approve</b>.</>
-                    ) : hasMpcaSigned ? (
+                    {hasMpcaSigned ? (
                         <>MPCA-signed decision PDF uploaded on {new Date(claim.mpca_signed_pdf_uploaded_at || Date.now()).toLocaleDateString("en-IN")}. Ready to <b>Approve</b> ₹{totalAccepted.toLocaleString("en-IN")}.</>
                     ) : (
-                        <>All invoices reviewed. Generate the MPCA Review PDF, sign it and upload back to unlock <b>Approve</b>.</>
+                        <>Generate the MPCA Review PDF, sign it and upload back to unlock <b>Approve</b>.</>
                     )}
                 </div>
-                {allReviewed && (
-                    <a
-                        href={`/reimbursement-claims/${claim.id}/mpca-review-form`}
-                        target="_blank" rel="noreferrer"
-                        className="text-[10px] uppercase tracking-widest bg-mpca-navy text-mpca-parchment px-3 py-1.5"
-                        data-testid="mpca-review-pdf-btn"
-                    >
-                        Print MPCA Review PDF
-                    </a>
-                )}
-                {allReviewed && hasMpcaSigned && (
+                <a href={`/reimbursement-claims/${claim.id}/mpca-review-form`} target="_blank" rel="noreferrer"
+                    className="text-[10px] uppercase tracking-widest bg-mpca-navy text-mpca-parchment px-3 py-1.5"
+                    data-testid="mpca-review-pdf-btn">Print MPCA Review PDF</a>
+                {hasMpcaSigned && (
                     <a href={claim.mpca_signed_pdf_url} target="_blank" rel="noreferrer"
-                        className="text-[10px] uppercase tracking-widest text-mpca-green-dark hover:underline">
-                        View signed PDF
-                    </a>
+                        className="text-[10px] uppercase tracking-widest text-mpca-green-dark hover:underline">View signed PDF</a>
                 )}
-                {allReviewed && (
-                    <label className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-parchment px-3 py-1.5 cursor-pointer" data-testid="mpca-signed-pdf-upload">
-                        {uploadingPdf ? "Uploading…" : (hasMpcaSigned ? "Replace signed" : "Upload signed PDF")}
-                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-                            className="hidden" disabled={uploadingPdf}
-                            onChange={(e) => uploadMpcaSignedPdf(e.target.files?.[0])} />
-                    </label>
-                )}
+                <label className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-parchment px-3 py-1.5 cursor-pointer" data-testid="mpca-signed-pdf-upload">
+                    {uploadingPdf ? "Uploading…" : (hasMpcaSigned ? "Replace signed" : "Upload signed PDF")}
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                        className="hidden" disabled={uploadingPdf}
+                        onChange={(e) => uploadMpcaSignedPdf(e.target.files?.[0])} />
+                </label>
             </div>
         </div>
     );
@@ -424,15 +389,16 @@ export const ReimbursementClaimDetail = () => {
     };
     const approve = async () => {
         try {
+            const hasDeductions = (claim.mpca_deductions || []).length > 0;
             const hasInvoiceReviews = (claim.mpca_invoice_reviews || []).length > 0;
             const payload = {
                 actor_name: persona?.name, actor_role: persona?.post || "MPCA Secretary",
                 actor_body_id: "MPCA",
                 notes: "Approved by MPCA Secretary",
             };
-            // When line-item review is active, the backend computes approved_amount_inr
-            // from the sum of accepted amounts — don't send an override.
-            if (!hasInvoiceReviews) {
+            // When deductions OR line-item reviews are active, backend computes
+            // approved_amount_inr — don't send an override.
+            if (!hasDeductions && !hasInvoiceReviews) {
                 payload.approved_amount_inr = parseFloat(approveAmt) || 0;
             }
             await api.post(`/reimbursement-claims/${id}/approve`, payload);
@@ -481,16 +447,23 @@ export const ReimbursementClaimDetail = () => {
                     {canDecide && (
                         <div className="flex gap-2">
                             {(() => {
+                                const hasDeductions = (claim.mpca_deductions || []).length > 0;
                                 const hasReviews = (claim.mpca_invoice_reviews || []).length > 0;
-                                const reviewed = new Set((claim.mpca_invoice_reviews || []).map((r) => r.invoice_id));
-                                const invIds = claim.invoice_ids || [];
-                                const allReviewed = invIds.length > 0 && invIds.every((iid) => reviewed.has(iid));
                                 const hasSigned = !!claim.mpca_signed_pdf_url;
-                                // If line-item review is in use, gate Approve on all-reviewed + signed PDF.
-                                const gate = hasReviews && (!allReviewed || !hasSigned);
-                                const tip = gate
-                                    ? (!allReviewed ? `Accept all ${invIds.length} invoices first` : "Upload the MPCA-signed decision PDF first")
-                                    : "Approve this claim";
+                                // MPCA-168 v2 · Deductions-only: signed PDF gates Approve.
+                                // Legacy invoice-review path also gates on all-reviewed.
+                                let gate = false;
+                                let tip = "Approve this claim";
+                                if (hasDeductions) {
+                                    gate = !hasSigned;
+                                    if (gate) tip = "Upload the MPCA-signed decision PDF first";
+                                } else if (hasReviews) {
+                                    const reviewed = new Set((claim.mpca_invoice_reviews || []).map((r) => r.invoice_id));
+                                    const invIds = claim.invoice_ids || [];
+                                    const allReviewed = invIds.length > 0 && invIds.every((iid) => reviewed.has(iid));
+                                    gate = !allReviewed || !hasSigned;
+                                    tip = gate ? (!allReviewed ? `Accept all ${invIds.length} invoices first` : "Upload the MPCA-signed decision PDF first") : tip;
+                                }
                                 return (
                                     <button
                                         className="btn-heritage-primary disabled:opacity-40 disabled:cursor-not-allowed"

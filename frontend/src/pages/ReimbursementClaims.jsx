@@ -137,8 +137,10 @@ const MpcaLineItemReviewPanel = ({ claim, invoices, persona, onChange }) => {
     const totalDeducted = deductions.reduce((s, d) => s + Number(d.amount_inr || 0), 0);
     const totalAccepted = Math.max(totalSpent - totalDeducted, 0);
     const hasMpcaSigned = !!claim.mpca_signed_pdf_url;
-    // Heads eligible for a new deduction — anything Division spent something on.
-    const deductibleHeads = heads.filter((h) => (h.spent_inr || 0) > 0);
+    // Heads eligible for a new deduction — show ALL budget heads submitted by
+    // the Division (any head with sanctioned budget OR actual spend). This
+    // lets MPCA add a deduction against a head even before an invoice hits it.
+    const deductibleHeads = heads.filter((h) => (h.budget_inr || 0) > 0 || (h.spent_inr || 0) > 0);
 
     const addDeduction = async () => {
         if (!form.head || !(parseFloat(form.amount_inr) > 0)) return;
@@ -272,9 +274,15 @@ const MpcaLineItemReviewPanel = ({ claim, invoices, persona, onChange }) => {
                             <select value={form.head} onChange={(e) => setForm((f) => ({ ...f, head: e.target.value }))}
                                 className="input-heritage !py-1.5 !text-xs" data-testid="ded-form-head">
                                 <option value="">— Select head —</option>
-                                {deductibleHeads.map((h) => (
-                                    <option key={h.head} value={h.head}>{h.head} · spent {fmt(h.spent_inr)}</option>
-                                ))}
+                                {deductibleHeads.map((h) => {
+                                    const spent = h.spent_inr || 0;
+                                    const label = spent > 0
+                                        ? `${h.head} · spent ${fmt(spent)}`
+                                        : `${h.head} · budget ${fmt(h.budget_inr || 0)} · no spend yet`;
+                                    return (
+                                        <option key={h.head} value={h.head} disabled={spent <= 0}>{label}</option>
+                                    );
+                                })}
                             </select>
                         </label>
                         <label className="col-span-3">

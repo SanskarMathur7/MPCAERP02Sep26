@@ -303,6 +303,18 @@ const TournamentDetail = () => {
                                 view for MPCA, direct link to my squad for Division/District). */}
                             {/* M39t · Consolidated Finance action card — replaces the 6 individual finance boxes */}
                             <TournamentFinanceCard tournament={t} persona={persona} />
+                            {/* Aug 2026 · Restored direct-access Closure Letter box.
+                                MPCA generates + signs; Division/District can view once
+                                generated. The panel is still available via
+                                Finance Console → Closure Letter tab for MPCA. */}
+                            <SetupBox
+                                testId="box-closure"
+                                icon={ScrollText}
+                                label="Closure Letter"
+                                note={isState ? "Generate · sign · dispatch" : "View once MPCA has closed the tournament"}
+                                onClick={() => setOpenBox(openBox === "closure" ? null : "closure")}
+                                active={openBox === "closure"}
+                            />
                             {/* MPCA-133+ · Match Officials (moved out of Finance Console per user request). */}
                             <SetupBox testId="box-officials" icon={ShieldCheck} label="Match Officials" note="MPCA assigns umpires · scorers · referees · physios centrally" onClick={() => setOpenBox(openBox === "officials" ? null : "officials")} active={openBox === "officials"} />
                             <SetupBox testId="box-activity" icon={History} label="Activity Log" note="Chronological trail of all actions" onClick={() => setOpenBox(openBox === "activity" ? null : "activity")} active={openBox === "activity"} />

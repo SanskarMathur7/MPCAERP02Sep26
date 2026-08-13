@@ -39,6 +39,9 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange, hideConsoleLink
     // M39z.c · Head-wise spend tally per body_id. Keyed by body_id so MPCA
     // (who may open multiple bodies) can view each row's live spend.
     const [spendByBody, setSpendByBody] = useState({});
+    // MPCA-168 · Draft/Under_Review claim per body — powers the inline
+    // "Division remark" input on each head row. Keyed by body_id.
+    const [draftClaimByBody, setDraftClaimByBody] = useState({});
 
     const isMPCA = persona?.body_type === "State";
     const myBody = persona?.body_code;
@@ -109,11 +112,37 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange, hideConsoleLink
                 } catch (_) { /* skip on error (e.g. 403 for other bodies) */ }
             }));
             setSpendByBody(spendMap);
+            // MPCA-168 · Pull Draft/Submitted/Under_Review reimbursement claims
+            // so we can render Division-editable remarks against each head.
+            try {
+                const { data: cs } = await api.get("/reimbursement-claims", { params });
+                const dcMap = {};
+                (cs || []).forEach((c) => {
+                    if (["Draft", "Submitted", "Under_Review"].includes(c.status)) {
+                        dcMap[c.body_id] = c;
+                    }
+                });
+                setDraftClaimByBody(dcMap);
+            } catch (_) { /* silent */ }
         } catch (_) { setBudgets([]); }
         finally { setLoading(false); }
     };
 
     useEffect(() => { load(); /* eslint-disable-next-line */ }, [tournament.id, isMPCA, myBody]);
+
+    // MPCA-168 · Persist a Division head-remark on the claim. Called on blur
+    // from the inline input in the head-row table above.
+    const onSetRemark = async (claimId, head, remark) => {
+        try {
+            const { data: updated } = await api.post(
+                `/reimbursement-claims/${claimId}/head-remark`,
+                { head, remark },
+            );
+            setDraftClaimByBody((prev) => ({ ...prev, [updated.body_id]: updated }));
+        } catch (e) {
+            alert(e?.response?.data?.detail || e.message);
+        }
+    };
 
     const toggle = (id) => setOpenIds((s) => ({ ...s, [id]: !s[id] }));
 
@@ -282,14 +311,18 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange, hideConsoleLink
                                     (spend?.heads || []).forEach((r) => { spendByHead[r.head] = r; });
                                     const totalSpent = (spend?.heads || []).reduce((s, r) => s + (r.spent_inr || 0), 0);
                                     const totalOver  = (spend?.heads || []).reduce((s, r) => s + (r.over_inr  || 0), 0);
+                                    // MPCA-168 · Show Division-editable remarks inline for their own body.
+                                    const isOwnDraftClaim = draftClaimByBody[b.body_id];
+                                    const remarks = isOwnDraftClaim?.division_head_remarks || {};
                                     return (
                                     <div className="mb-3 border-2 border-mpca-brass/30 bg-mpca-parchment/40" data-testid={`tb-heads-${b.id}`}>
                                         <div className="grid grid-cols-12 items-center gap-2 px-3 py-2 border-b border-mpca-brass/25 bg-mpca-brass/10">
-                                            <div className="col-span-4 overline text-[9px] font-semibold text-mpca-green-dark">Head</div>
+                                            <div className="col-span-3 overline text-[9px] font-semibold text-mpca-green-dark">Head</div>
                                             <div className="col-span-2 text-right overline text-[9px] font-semibold text-mpca-green-dark">Sanctioned ₹</div>
                                             <div className="col-span-2 text-right overline text-[9px] font-semibold text-mpca-green-dark">Spent ₹</div>
                                             <div className="col-span-2 text-right overline text-[9px] font-semibold text-mpca-green-dark">Remaining ₹</div>
-                                            <div className="col-span-2 text-right overline text-[9px] font-semibold text-mpca-green-dark">Utilised</div>
+                                            <div className="col-span-1 text-right overline text-[9px] font-semibold text-mpca-green-dark">Util</div>
+                                            <div className="col-span-2 overline text-[9px] font-semibold text-mpca-green-dark">Division Remark</div>
                                         </div>
                                         {(b.head_allocations || []).map((h) => {
                                             const app = (b.approved_head_allocations || []).find((x) => x.head === h.head);
@@ -300,9 +333,10 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange, hideConsoleLink
                                             const util = row.utilisation_pct || 0;
                                             const isOver = spent > sanctioned && sanctioned > 0;
                                             const isExtra = (h.head || "").startsWith("Extra ");
+                                            const remark = remarks[h.head] || "";
                                             return (
                                                 <div key={h.head} className={`grid grid-cols-12 items-center gap-2 px-3 py-1.5 text-xs border-b border-mpca-brass/15 last:border-b-0 ${isExtra ? "bg-mpca-oxblood/8 border-l-4 border-l-mpca-oxblood" : ""} ${isOver ? "bg-mpca-oxblood/12" : ""}`} data-testid={`tb-head-${b.id}-${(h.head || "").replace(/\s+/g,"_")}`}>
-                                                    <div className={`col-span-4 ${isExtra ? "text-mpca-oxblood font-bold" : "text-mpca-charcoal font-medium"}`}>
+                                                    <div className={`col-span-3 ${isExtra ? "text-mpca-oxblood font-bold" : "text-mpca-charcoal font-medium"}`}>
                                                         {h.head}
                                                         {isExtra && <span className="ml-2 text-[9px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-oxblood px-1.5 py-0.5">Extra</span>}
                                                     </div>
@@ -311,29 +345,42 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange, hideConsoleLink
                                                     <div className={`col-span-2 text-right font-mono font-semibold ${remaining < 0 ? "text-mpca-oxblood" : remaining === 0 ? "text-mpca-charcoal/70" : "text-mpca-green-dark"}`}>
                                                         {remaining < 0 ? `−${fmt(Math.abs(remaining))}` : fmt(remaining)}
                                                     </div>
-                                                    <div className="col-span-2 text-right">
+                                                    <div className="col-span-1 text-right">
                                                         {sanctioned > 0 ? (
-                                                            <div className="flex items-center justify-end gap-1.5">
-                                                                <div className="w-16 h-1.5 bg-mpca-brass/20 relative overflow-hidden">
-                                                                    <div className={`absolute top-0 left-0 h-full ${isOver ? "bg-mpca-oxblood" : util > 80 ? "bg-mpca-brass" : "bg-mpca-green-dark"}`} style={{ width: `${Math.min(100, util)}%` }} />
-                                                                </div>
-                                                                <span className={`text-[10px] font-mono w-9 ${isOver ? "text-mpca-oxblood font-bold" : "text-mpca-charcoal/80"}`}>{util.toFixed(0)}%</span>
-                                                            </div>
+                                                            <span className={`text-[10px] font-mono ${isOver ? "text-mpca-oxblood font-bold" : "text-mpca-charcoal/80"}`}>{util.toFixed(0)}%</span>
                                                         ) : (
                                                             <span className="text-[10px] text-mpca-charcoal/50">—</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="col-span-2" data-testid={`tb-remark-cell-${b.id}-${(h.head || "").replace(/\s+/g,"_")}`}>
+                                                        {isOwnDraftClaim ? (
+                                                            <input
+                                                                type="text"
+                                                                defaultValue={remark}
+                                                                placeholder="Add remark…"
+                                                                onBlur={(e) => {
+                                                                    const v = e.target.value.trim();
+                                                                    if (v === remark) return;
+                                                                    onSetRemark?.(isOwnDraftClaim.id, h.head, v);
+                                                                }}
+                                                                className="w-full text-[10px] px-1.5 py-1 border border-mpca-brass/30 bg-white text-mpca-charcoal focus:outline-none focus:border-mpca-navy"
+                                                                data-testid={`tb-remark-input-${b.id}-${(h.head || "").replace(/\s+/g,"_")}`}
+                                                            />
+                                                        ) : (
+                                                            <span className="text-[10px] italic text-mpca-charcoal/70">{remark || "—"}</span>
                                                         )}
                                                     </div>
                                                 </div>
                                             );
                                         })}
                                         <div className="grid grid-cols-12 items-center gap-2 px-3 py-2 border-t-2 border-mpca-brass/40 bg-mpca-brass/10">
-                                            <div className="col-span-4 overline text-[9px] font-semibold text-mpca-oxblood">Totals</div>
+                                            <div className="col-span-3 overline text-[9px] font-semibold text-mpca-oxblood">Totals</div>
                                             <div className="col-span-2 text-right font-mono text-mpca-oxblood font-bold text-sm">{fmt(b.approved_total_inr || approvedTotal)}</div>
                                             <div className="col-span-2 text-right font-mono text-mpca-navy font-bold text-sm">{fmt(totalSpent)}</div>
                                             <div className={`col-span-2 text-right font-mono font-bold text-sm ${(b.approved_total_inr || approvedTotal) - totalSpent < 0 ? "text-mpca-oxblood" : "text-mpca-green-dark"}`}>
                                                 {fmt((b.approved_total_inr || approvedTotal) - totalSpent)}
                                             </div>
-                                            <div className="col-span-2 text-right">
+                                            <div className="col-span-3 text-right">
                                                 {totalOver > 0 && <span className="text-[9px] font-semibold uppercase tracking-widest text-mpca-parchment bg-mpca-oxblood px-1.5 py-0.5">Over ₹{Math.round(totalOver).toLocaleString("en-IN")}</span>}
                                             </div>
                                         </div>

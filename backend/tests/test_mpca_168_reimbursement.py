@@ -384,3 +384,43 @@ class TestPhaseELock:
                     loop.run_until_complete(_rm())
             except Exception:
                 pass
+
+
+# ═════════════════════ Feb 2026 · head remarks + spent fallback ═════════════════════
+
+class TestDivisionHeadRemarks:
+    """Feb 2026 additions on top of MPCA-168 Phase A."""
+
+    def test_set_remark(self, seed):
+        r = requests.post(
+            f"{API}/reimbursement-claims/{seed['cid']}/head-remark",
+            json={"head": "Hotel", "remark": "Bill missing GST invoice"},
+            headers=DIV_HEADERS,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json().get("division_head_remarks", {}).get("Hotel") == "Bill missing GST invoice"
+
+    def test_empty_remark_deletes(self, seed):
+        # Set then clear
+        requests.post(f"{API}/reimbursement-claims/{seed['cid']}/head-remark",
+                      json={"head": "Food", "remark": "temp"}, headers=DIV_HEADERS)
+        r = requests.post(f"{API}/reimbursement-claims/{seed['cid']}/head-remark",
+                          json={"head": "Food", "remark": ""}, headers=DIV_HEADERS)
+        assert r.status_code == 200
+        assert "Food" not in (r.json().get("division_head_remarks") or {})
+
+    def test_other_body_forbidden(self, seed):
+        r = requests.post(
+            f"{API}/reimbursement-claims/{seed['cid']}/head-remark",
+            json={"head": "Hotel", "remark": "shouldn't work"},
+            headers={"X-Body-Code": "DIV-BPL", "X-Body-Type": "Division"},
+        )
+        assert r.status_code == 403
+
+    def test_summary_returns_remarks(self, seed):
+        requests.post(f"{API}/reimbursement-claims/{seed['cid']}/head-remark",
+                      json={"head": "Travel", "remark": "AC-2 fares"}, headers=DIV_HEADERS)
+        r = requests.get(f"{API}/reimbursement-claims/{seed['cid']}/review-summary",
+                         headers=MPCA_HEADERS)
+        assert r.status_code == 200, r.text
+        assert (r.json().get("division_head_remarks") or {}).get("Travel") == "AC-2 fares"

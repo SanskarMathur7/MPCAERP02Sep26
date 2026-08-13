@@ -119,17 +119,19 @@ const DivisionReimbursementClaimForm = () => {
                     <tr className="border-y border-black">
                         <th className="text-left py-1 px-2 w-6">#</th>
                         <th className="text-left py-1 px-2">Budget Head</th>
-                        <th className="text-right py-1 px-2 w-28">Sanctioned</th>
-                        <th className="text-right py-1 px-2 w-28">Spent by Division</th>
-                        <th className="text-right py-1 px-2 w-28">Difference</th>
+                        <th className="text-right py-1 px-2 w-24">Sanctioned</th>
+                        <th className="text-right py-1 px-2 w-24">Spent by Division</th>
+                        <th className="text-right py-1 px-2 w-24">Difference</th>
+                        <th className="text-left py-1 px-2">Remark</th>
                     </tr>
                 </thead>
                 <tbody>
                     {heads.length === 0 && (
-                        <tr><td colSpan={5} className="py-3 px-2 text-center italic text-gray-500">No expenses recorded yet.</td></tr>
+                        <tr><td colSpan={6} className="py-3 px-2 text-center italic text-gray-500">No expenses recorded yet.</td></tr>
                     )}
                     {heads.map((h, i) => {
                         const diff = (h.budget_inr || 0) - (h.spent_inr || 0);
+                        const remark = (summary?.division_head_remarks || claim?.division_head_remarks || {})[h.head];
                         return (
                             <tr key={h.head + i} className="border-b border-gray-300">
                                 <td className="py-1.5 px-2 align-top">{i + 1}</td>
@@ -139,6 +141,7 @@ const DivisionReimbursementClaimForm = () => {
                                 <td className={"py-1.5 px-2 align-top text-right font-mono " + (diff < 0 ? "text-red-700" : "text-green-800")}>
                                     {diff < 0 ? "(-)" : ""} {fmtINR(Math.abs(diff))}
                                 </td>
+                                <td className="py-1.5 px-2 align-top text-[10px] italic text-gray-700">{remark || "—"}</td>
                             </tr>
                         );
                     })}
@@ -150,6 +153,7 @@ const DivisionReimbursementClaimForm = () => {
                         <td className={"py-2 px-2 text-right font-mono " + (totalDiff < 0 ? "text-red-700" : "text-green-800")}>
                             {totalDiff < 0 ? "(-)" : ""} {fmtINR(Math.abs(totalDiff))}
                         </td>
+                        <td className="py-2 px-2" />
                     </tr>
                 </tbody>
             </table>

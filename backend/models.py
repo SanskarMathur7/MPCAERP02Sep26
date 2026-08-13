@@ -2214,6 +2214,10 @@ class TournamentReimbursementClaim(TournamentReimbursementClaimBase):
     mpca_signed_pdf_url: Optional[str] = None
     mpca_signed_pdf_uploaded_at: Optional[str] = None
     mpca_signed_pdf_uploaded_by: Optional[str] = None
+    # MPCA-168 · Division may attach a free-text remark per budget head
+    # (e.g. "Bill missing GST", "Approved via extra-expense request X").
+    # Rendered on the Division reimbursement PDF's head-wise table.
+    division_head_remarks: Dict[str, str] = Field(default_factory=dict)
     comments: List[ReimbursementComment] = []
     approval_chain: List[ApprovalStep] = []
 

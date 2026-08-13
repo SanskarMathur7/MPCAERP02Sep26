@@ -568,6 +568,16 @@ async def get_review_summary(cid: str):
     # Group invoices by head allocation → sum spent + accepted per head
     invoice_ids = doc.get("invoice_ids") or []
     invoices = await db.tournament_invoices.find({"id": {"$in": invoice_ids}}, {"_id": 0}).to_list(500)
+    # MPCA-168 fix · When the claim is still Draft (empty invoice_ids), fall
+    # back to the tournament's live invoices for this body so the Division PDF
+    # + review summary reflect the actual spending shown on the Budget & Extras
+    # tracker widget. Once the claim is Submitted, `invoice_ids` is authoritative.
+    if not invoices:
+        invoices = await db.tournament_invoices.find({
+            "tournament_id": doc["tournament_id"],
+            "body_id": doc["body_id"],
+            "status": {"$in": ["Draft", "Submitted", "Approved"]},
+        }, {"_id": 0}).to_list(500)
     reviews_by_iid = {r["invoice_id"]: r for r in (doc.get("mpca_invoice_reviews") or [])}
 
     per_head: Dict[str, Dict[str, float]] = {}
@@ -640,7 +650,41 @@ async def get_review_summary(cid: str):
         },
         "invoices": invoice_lines,
         "mpca_signed_pdf_url": doc.get("mpca_signed_pdf_url"),
+        "division_head_remarks": doc.get("division_head_remarks") or {},
     }
+
+
+class DivisionHeadRemarkPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    head: str
+    remark: Optional[str] = None            # None or "" removes the remark
+
+
+@api_router.post("/reimbursement-claims/{cid}/head-remark", response_model=TournamentReimbursementClaim)
+async def set_division_head_remark(cid: str, payload: DivisionHeadRemarkPayload, request: Request):
+    """Division records a free-text remark against one budget head. Any
+    persona from the claiming body may write. MPCA can also edit (audit).
+    Draft/Submitted/Under_Review claims may edit; Approved/Rejected are frozen."""
+    doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    scope = get_scope(request)
+    if not scope.is_state and scope.body_code and scope.body_code != doc.get("body_id"):
+        raise HTTPException(403, "You can only add remarks to your own body's claim.")
+    if doc["status"] in ("Approved", "Rejected"):
+        raise HTTPException(409, f"Remarks cannot be edited on a {doc['status']} claim.")
+
+    remarks = dict(doc.get("division_head_remarks") or {})
+    clean = (payload.remark or "").strip()
+    if clean:
+        remarks[payload.head] = clean
+    else:
+        remarks.pop(payload.head, None)
+    await db.tournament_reimbursement_claims.update_one({"id": cid}, {"$set": {
+        "division_head_remarks": remarks,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    return await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
 
 
 class MpcaSignedPdfPayload(BaseModel):

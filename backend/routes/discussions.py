@@ -62,6 +62,8 @@ class Thread(BaseModel):
     kind: Kind
     tournament_id: Optional[str] = None      # for kind=tournament
     tournament_name: Optional[str] = None
+    body_scope: Optional[str] = None         # M39-v2 · null=general/broadcast; body_code=private MPCA↔body channel
+    body_scope_name: Optional[str] = None
     body_a: Optional[str] = None             # for kind=inbox — sorted pair
     body_b: Optional[str] = None
     pair_key: Optional[str] = None
@@ -76,30 +78,124 @@ def _pair_key(a: str, b: str) -> str:
     return "::".join(sorted([a, b]))
 
 
-async def _get_or_create_tournament_thread(tid: str) -> dict:
+async def _get_or_create_tournament_thread(tid: str, body_scope: Optional[str] = None) -> dict:
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "id": 1, "name": 1})
     if not t:
         raise HTTPException(404, "Tournament not found")
-    doc = await db.discussion_threads.find_one({"kind": "tournament", "tournament_id": tid}, {"_id": 0})
+    scope_key = (body_scope or None)
+    doc = await db.discussion_threads.find_one(
+        {"kind": "tournament", "tournament_id": tid, "body_scope": scope_key}, {"_id": 0}
+    )
     if doc:
         return doc
-    row = Thread(kind="tournament", tournament_id=tid, tournament_name=t.get("name"), title=f"Discussion · {t.get('name')}").model_dump()
+    body_scope_name = None
+    if scope_key:
+        b = await db.bodies.find_one({"code": scope_key}, {"_id": 0, "name": 1})
+        body_scope_name = (b or {}).get("name") or scope_key
+    title = (
+        f"Discussion · {t.get('name')}"
+        if not scope_key
+        else f"MPCA ↔ {body_scope_name} · {t.get('name')}"
+    )
+    row = Thread(
+        kind="tournament",
+        tournament_id=tid,
+        tournament_name=t.get("name"),
+        body_scope=scope_key,
+        body_scope_name=body_scope_name,
+        title=title,
+    ).model_dump()
     await db.discussion_threads.insert_one(row)
     return row
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────
 @api_router.get("/discussions/tournament/{tid}", response_model=Thread)
-async def get_or_create_tournament_thread(tid: str):
-    """Auto-creates one Discussion thread per tournament — first call opens it."""
-    return await _get_or_create_tournament_thread(tid)
+async def get_or_create_tournament_thread(tid: str, body_scope: Optional[str] = None, request: Request = None):
+    """M39-v2 · Resolves (or creates) a tournament discussion channel.
+
+    - `body_scope=None` → the general/broadcast thread (every participating
+      body + MPCA can post & read).
+    - `body_scope=<body_code>` → a private MPCA ↔ body channel — only MPCA
+      and that specific body may open/post/read it.
+    """
+    scope_key = (body_scope or None)
+    if scope_key and request is not None:
+        scope = get_scope(request)
+        is_mpca = scope.body_code == "MPCA" or scope.is_state
+        if not is_mpca and scope.body_code != scope_key:
+            raise HTTPException(
+                403,
+                "Divisions/Districts may only open their own MPCA-private channel.",
+            )
+    return await _get_or_create_tournament_thread(tid, body_scope=scope_key)
+
+
+@api_router.get("/discussions/tournament/{tid}/channels")
+async def list_tournament_channels(tid: str, request: Request):
+    """M39-v2 · Returns the discussion channels visible to the caller for the
+    given tournament, ordered General → per-body private.
+
+    - MPCA sees: General + one channel per participating Division/District.
+    - A Division/District sees: General + their own MPCA-private channel.
+    """
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "id": 1, "name": 1})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    scope = get_scope(request)
+    is_mpca = scope.body_code == "MPCA" or scope.is_state
+
+    channels = [{
+        "body_scope": None,
+        "body_scope_name": "General · All Divisions",
+        "label": "General · All Divisions",
+        "kind": "general",
+    }]
+
+    if is_mpca:
+        participants = await db.tournament_participations.find(
+            {"tournament_id": tid, "removed_at": {"$in": [None, ""]}},
+            {"_id": 0, "body_code": 1, "body_name": 1, "role": 1, "body_type": 1},
+        ).sort([("role", -1), ("body_name", 1)]).to_list(200)
+        seen = set()
+        for p in participants:
+            code = p.get("body_code")
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            channels.append({
+                "body_scope": code,
+                "body_scope_name": p.get("body_name") or code,
+                "label": f"{p.get('body_name') or code} ({p.get('role') or 'Visitor'})",
+                "kind": "private",
+            })
+    else:
+        # Division/District — only their own MPCA-private channel
+        if scope.body_code:
+            b = await db.bodies.find_one({"code": scope.body_code}, {"_id": 0, "name": 1})
+            channels.append({
+                "body_scope": scope.body_code,
+                "body_scope_name": (b or {}).get("name") or scope.body_code,
+                "label": f"MPCA ↔ {(b or {}).get('name') or scope.body_code}",
+                "kind": "private",
+            })
+    return {"tournament_id": tid, "tournament_name": t.get("name"), "channels": channels}
 
 
 @api_router.get("/discussions/{thread_id}/messages", response_model=List[Message])
-async def list_messages(thread_id: str, limit: int = 200):
+async def list_messages(thread_id: str, request: Request, limit: int = 200):
     thread = await db.discussion_threads.find_one({"id": thread_id}, {"_id": 0})
     if not thread:
         raise HTTPException(404, "Thread not found")
+    # M39-v2 · Read-side RBAC — private tournament + inbox channels only.
+    scope = get_scope(request)
+    is_mpca = scope.body_code == "MPCA" or scope.is_state
+    if thread["kind"] == "tournament" and thread.get("body_scope"):
+        if not is_mpca and scope.body_code != thread.get("body_scope"):
+            raise HTTPException(403, "This is a private channel — not for your body.")
+    if thread["kind"] == "inbox":
+        if not is_mpca and scope.body_code not in (thread.get("body_a"), thread.get("body_b")):
+            raise HTTPException(403, "You are not a participant in this conversation.")
     msgs = await db.discussion_messages.find(
         {"thread_id": thread_id}, {"_id": 0},
     ).sort("posted_at", 1).to_list(min(max(limit, 1), 1000))
@@ -118,6 +214,14 @@ async def post_message(thread_id: str, payload: MessageIn, request: Request):
             raise HTTPException(403, "Body scope required to post in inbox threads.")
         if scope.body_code not in (thread.get("body_a"), thread.get("body_b")):
             raise HTTPException(403, "You are not a participant in this conversation.")
+    # M39-v2 · Tournament private channels — only MPCA and the scoped body may post.
+    if thread["kind"] == "tournament" and thread.get("body_scope"):
+        is_mpca = scope.body_code == "MPCA" or scope.is_state
+        if not is_mpca and scope.body_code != thread.get("body_scope"):
+            raise HTTPException(
+                403,
+                "This is a private MPCA-only channel. You are not a participant here.",
+            )
     if not (payload.body or "").strip():
         raise HTTPException(400, "Message body cannot be empty.")
 

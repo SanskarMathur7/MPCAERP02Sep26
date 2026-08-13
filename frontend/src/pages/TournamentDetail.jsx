@@ -318,7 +318,7 @@ const TournamentDetail = () => {
                             {/* MPCA-133+ · Match Officials (moved out of Finance Console per user request). */}
                             <SetupBox testId="box-officials" icon={ShieldCheck} label="Match Officials" note="MPCA assigns umpires · scorers · referees · physios centrally" onClick={() => setOpenBox(openBox === "officials" ? null : "officials")} active={openBox === "officials"} />
                             <SetupBox testId="box-activity" icon={History} label="Activity Log" note="Chronological trail of all actions" onClick={() => setOpenBox(openBox === "activity" ? null : "activity")} active={openBox === "activity"} />
-                            <SetupBox testId="box-discussion" icon={MessageSquare} label="Discussion" note="MPCA · Division chat for this tournament" onClick={() => setOpenBox(openBox === "discussion" ? null : "discussion")} active={openBox === "discussion"} />
+                            <SetupBox testId="box-discussion" icon={MessageSquare} label="Discussion" note="Broadcast to all Divisions · or chat privately with one" onClick={() => setOpenBox(openBox === "discussion" ? null : "discussion")} active={openBox === "discussion"} />
                         </>
                     )}
                 </div>
@@ -378,17 +378,67 @@ const TournamentDetail = () => {
 
 export default TournamentDetail;
 
-// M39 · Thin wrapper that resolves the tournament's discussion thread id then renders the shared thread UI
+// M39-v2 · Tournament discussion with channel selector (General + per-Division private channels)
 const TournamentDiscussionBox = ({ tournamentId }) => {
+    const [channels, setChannels] = useState([]);
+    const [selectedScope, setSelectedScope] = useState(null); // null = General
     const [threadId, setThreadId] = useState(null);
+    const [loading, setLoading] = useState(true);
+
     useEffect(() => {
         (async () => {
             try {
-                const { data } = await api.get(`/discussions/tournament/${tournamentId}`);
-                setThreadId(data.id);
-            } catch { /* silent */ }
+                const { data } = await api.get(`/discussions/tournament/${tournamentId}/channels`);
+                setChannels(data.channels || []);
+            } catch { setChannels([{ body_scope: null, label: "General · All Divisions", kind: "general" }]); }
         })();
     }, [tournamentId]);
-    if (!threadId) return <div className="bulletin-card p-6 text-[11px] text-mpca-brass">Opening discussion thread…</div>;
-    return <DiscussionThread threadId={threadId} height="60vh" />;
+
+    useEffect(() => {
+        (async () => {
+            setLoading(true);
+            setThreadId(null);
+            try {
+                const params = selectedScope ? { body_scope: selectedScope } : {};
+                const { data } = await api.get(`/discussions/tournament/${tournamentId}`, { params });
+                setThreadId(data.id);
+            } catch { /* silent */ }
+            finally { setLoading(false); }
+        })();
+    }, [tournamentId, selectedScope]);
+
+    const activeLabel = (channels.find((c) => (c.body_scope || null) === (selectedScope || null)) || {}).label;
+
+    return (
+        <div data-testid="tournament-discussion-box">
+            {channels.length > 1 && (
+                <div className="mb-3 flex flex-wrap gap-2" data-testid="discussion-channels">
+                    {channels.map((c) => {
+                        const isActive = (c.body_scope || null) === (selectedScope || null);
+                        const tid = c.body_scope || "general";
+                        return (
+                            <button
+                                key={tid}
+                                onClick={() => setSelectedScope(c.body_scope || null)}
+                                className={`text-[10px] uppercase tracking-widest px-3 py-1.5 border ${isActive
+                                    ? "bg-mpca-green-dark text-mpca-gold-light border-mpca-green-dark"
+                                    : "border-mpca-brass/40 text-mpca-green-dark hover:bg-mpca-parchment/40"}`}
+                                data-testid={`discussion-channel-${tid}`}
+                            >
+                                {c.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+            {activeLabel && (
+                <div className="text-[10px] uppercase tracking-widest text-mpca-brass mb-2" data-testid="discussion-active-channel">
+                    Active channel · {activeLabel}
+                </div>
+            )}
+            {loading || !threadId
+                ? <div className="bulletin-card p-6 text-[11px] text-mpca-brass">Opening discussion thread…</div>
+                : <DiscussionThread key={threadId} threadId={threadId} height="60vh" />}
+        </div>
+    );
 };

@@ -110,6 +110,30 @@
 }
 
 @layer components {
+
+/* ─────────────────────────────────────────────────────────────
+   Print styles — for the /nomination-form, /division-form,
+   /mpca-review-form printable letters. Hide the app sidebar +
+   topbar + padding so "Save as PDF" produces a clean document.
+   ───────────────────────────────────────────────────────────── */
+@media print {
+    /* Hide navigation chrome */
+    [data-testid="app-sidebar"],
+    [data-testid="app-topbar"] { display: none !important; }
+    /* Let the letter fill the whole page */
+    [data-testid="app-main"] { overflow: visible !important; height: auto !important; }
+    [data-testid="app-content"] { padding: 0 !important; }
+    html, body, [data-testid="app-layout"] {
+        height: auto !important;
+        overflow: visible !important;
+        background: white !important;
+    }
+    /* Kill any inherited shadows or backgrounds that muddy print */
+    * { box-shadow: none !important; }
+    /* Sensible print margins */
+    @page { margin: 12mm 14mm; }
+}
+
     /* Markdown prose styling for the AI Rulebook viewer */
     .rulebook-prose h1 {
         @apply font-serif text-4xl text-mpca-green-dark mt-2 mb-5 leading-tight;

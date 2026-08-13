@@ -56,9 +56,9 @@ const DivisionReimbursementClaimForm = () => {
     return (
         <div className="min-h-screen bg-white text-black px-8 md:px-16 py-10 max-w-4xl mx-auto print:px-0 print:py-4" data-testid="division-reimb-claim-form">
             <div className="flex items-center justify-between print:hidden mb-6">
-                <div className="text-[11px] text-gray-500">Reimbursement claim on {bodyName} letterhead · Ctrl+P → Save as PDF → Print → Sign → Upload back</div>
+                <div className="text-[11px] text-gray-500">Reimbursement claim on {bodyName} letterhead · Click <b>Download PDF</b> → Save as PDF from the print dialog → Sign → Upload back on Finance Console</div>
                 <button onClick={() => window.print()} className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-white px-4 py-2 flex items-center gap-1" data-testid="reimb-print-btn">
-                    <Printer size={12} /> Print / Save as PDF
+                    <Printer size={12} /> Download PDF
                 </button>
             </div>
 
@@ -191,11 +191,11 @@ const DivisionReimbursementClaimForm = () => {
                     <li>All invoices submitted are true, correct, and pertain solely to the said tournament.</li>
                     <li>The claimed amount does not include any expenditure recovered from another source.</li>
                     <li>The physical vouchers / invoices are preserved with us and shall be produced for MPCA audit on demand.</li>
-                    <li>We request MPCA to sanction and disburse the eligible reimbursement of <b>{fmtINR(
+                    <li>We request MPCA to sanction and disburse the reimbursement of <b>{fmtINR(
                         (["Draft","Rejected"].includes(claim.status)
-                            ? summary?.live_invoice_totals?.eligible_total_inr
-                            : (claim.summary || {}).eligible_total_inr) ?? 0
-                    )}</b> under the {claim.fiscal_cycle} reimbursement scheme.</li>
+                            ? summary?.live_invoice_totals?.invoiced_total_inr
+                            : (claim.summary || {}).invoiced_total_inr) ?? 0
+                    )}</b> — being the full amount actually spent by us on this tournament — under the {claim.fiscal_cycle} reimbursement scheme, and request MPCA to approve or reject at its discretion.</li>
                 </ul>
             </div>
 

@@ -53,7 +53,7 @@ const MpcaClaimReviewForm = () => {
             <div className="flex items-center justify-between print:hidden mb-6">
                 <div className="text-[11px] text-gray-500">MPCA decision on MPCA letterhead · Ctrl+P → Save → Sign → Upload back → Approve Claim</div>
                 <button onClick={() => window.print()} className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-white px-4 py-2 flex items-center gap-1" data-testid="mpca-claim-print-btn">
-                    <Printer size={12} /> Print / Save as PDF
+                    <Printer size={12} /> Download PDF
                 </button>
             </div>
 

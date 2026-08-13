@@ -510,23 +510,9 @@ async def add_deduction(cid: str, payload: DeductionPayload, request: Request):
     if not head:
         raise HTTPException(422, "Head is required.")
 
-    # Prevent Accepted from going negative — cap total deductions by spent-on-head.
-    invoices = await db.tournament_invoices.find({
-        "tournament_id": doc["tournament_id"],
-        "body_id": doc["body_id"],
-        "status": {"$in": ["Draft", "Submitted", "Approved"]},
-    }, {"_id": 0}).to_list(500)
-    spent_on_head = 0.0
-    for inv in invoices:
-        for a in (inv.get("allocations") or []):
-            if (a.get("head_label") or "").strip() == head:
-                spent_on_head += float(a.get("amount_inr") or 0)
-    existing = sum(float(d.get("amount_inr") or 0) for d in (doc.get("mpca_deductions") or []) if (d.get("head") or "").strip() == head)
-    if existing + float(payload.amount_inr) > spent_on_head + 0.5:
-        raise HTTPException(
-            422,
-            f"Total deductions on '{head}' (₹{existing + payload.amount_inr:,.0f}) would exceed the Division's spend of ₹{spent_on_head:,.0f}. Accepted amount cannot go negative.",
-        )
+    # MPCA-168-v3 · No hard cap on deduction amounts. MPCA has full discretion
+    # to record deductions against any budgeted or spent head — Accepted display
+    # already clamps at zero in the review UI.
 
     from models import MpcaHeadDeduction
     row = MpcaHeadDeduction(
@@ -841,9 +827,9 @@ async def approve_claim(cid: str, action: TournamentReimbursementAction, request
             f"You are scoped to {scope.body_code} and cannot approve it.",
         )
 
-    # MPCA-168 v2 · Approved amount = spent − Σ deductions (from summary).
-    # Falls back to legacy invoice-review math when no deductions and no reviews
-    # exist (i.e. explicit action.approved_amount_inr wins).
+    # MPCA-168 v3 · MPCA has full discretion on the approved amount. If they
+    # supply an explicit `approved_amount_inr` we use it; otherwise we default
+    # to Spent − Σ Deductions (or the legacy invoice-review sum, or eligible).
     eligible = float((doc.get("summary") or {}).get("eligible_total_inr") or 0)
     deductions = doc.get("mpca_deductions") or []
     invoice_reviews = doc.get("mpca_invoice_reviews") or []
@@ -856,7 +842,8 @@ async def approve_claim(cid: str, action: TournamentReimbursementAction, request
         }, {"_id": 0}).to_list(500)
         total_spent = round(sum(float(i.get("total_inr") or 0) for i in invoices), 2)
         total_deducted = round(sum(float(d.get("amount_inr") or 0) for d in deductions), 2)
-        approved = round(max(total_spent - total_deducted, 0.0), 2)
+        default_approved = round(max(total_spent - total_deducted, 0.0), 2)
+        approved = float(action.approved_amount_inr) if action.approved_amount_inr is not None else default_approved
         if not doc.get("mpca_signed_pdf_url"):
             raise HTTPException(400, "Please sign the MPCA Review PDF and upload it back before approving.")
     elif invoice_reviews and route_to == "MPCA":
@@ -868,21 +855,15 @@ async def approve_claim(cid: str, action: TournamentReimbursementAction, request
             raise HTTPException(400, f"{len(missing)} invoice(s) still need MPCA acceptance before the claim can be approved.")
         if not doc.get("mpca_signed_pdf_url"):
             raise HTTPException(400, "Please sign the MPCA Review PDF and upload it back before approving.")
-        approved = round(sum(float(r.get("accepted_inr") or 0) for r in invoice_reviews), 2)
+        default_approved = round(sum(float(r.get("accepted_inr") or 0) for r in invoice_reviews), 2)
+        approved = float(action.approved_amount_inr) if action.approved_amount_inr is not None else default_approved
     else:
         approved = float(action.approved_amount_inr) if action.approved_amount_inr is not None else eligible
 
     if approved < 0:
         raise HTTPException(422, "Approved amount cannot be negative")
-    if approved > eligible and not invoice_reviews and not deductions:
-        raise HTTPException(422, f"Approved amount ₹{approved:,.0f} exceeds eligible ₹{eligible:,.0f}")
-    # MPCA-168 · Belt-and-braces cap when line-item review is active.
-    if invoice_reviews and eligible > 0 and approved > eligible + 0.5:
-        raise HTTPException(
-            422,
-            f"Sum of MPCA-accepted amounts ₹{approved:,.2f} exceeds the eligible ceiling ₹{eligible:,.2f}. "
-            f"Please reduce one or more per-invoice accepted amounts.",
-        )
+    # MPCA-168-v3 · No hard eligible cap. MPCA may approve any amount (deductions
+    # are the formal reduction mechanism now). Only guard against negatives.
 
     now = datetime.now(timezone.utc).isoformat()
     step = ApprovalStep(

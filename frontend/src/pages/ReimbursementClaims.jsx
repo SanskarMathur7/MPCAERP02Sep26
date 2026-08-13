@@ -393,18 +393,12 @@ export const ReimbursementClaimDetail = () => {
     };
     const approve = async () => {
         try {
-            const hasDeductions = (claim.mpca_deductions || []).length > 0;
-            const hasInvoiceReviews = (claim.mpca_invoice_reviews || []).length > 0;
             const payload = {
                 actor_name: persona?.name, actor_role: persona?.post || "MPCA Secretary",
                 actor_body_id: "MPCA",
                 notes: "Approved by MPCA Secretary",
+                approved_amount_inr: parseFloat(approveAmt) || 0,
             };
-            // When deductions OR line-item reviews are active, backend computes
-            // approved_amount_inr — don't send an override.
-            if (!hasDeductions && !hasInvoiceReviews) {
-                payload.approved_amount_inr = parseFloat(approveAmt) || 0;
-            }
             await api.post(`/reimbursement-claims/${id}/approve`, payload);
             setApproveOpen(false);
             await load();

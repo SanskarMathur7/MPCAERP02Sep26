@@ -1062,9 +1062,25 @@ class RateCard(BaseModel):
     season: str = "2026-27"
     budget_rates: Dict[str, RateHead] = Field(default_factory=dict)   # {head_key: RateHead}
     travel_rates: Dict[str, RateHead] = Field(default_factory=dict)   # {head_key: RateHead}
+    # MPCA-223 · Custom line items — MPCA may extend the default 17 heads
+    # with tournament-type-specific rows (e.g. VIP hospitality, Trophy engraving).
+    # Each dict shape: {key, name, driver, rooms, basis, owner, md_rate, nmd_rate}
+    custom_heads: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: Optional[str] = None
     updated_by: Optional[str] = None
+
+
+class RateCardCustomHead(BaseModel):
+    """Payload for POST /rate-cards/{id}/custom-heads (add a new line item)."""
+    model_config = ConfigDict(extra="ignore")
+    name: str
+    driver: Optional[str] = None   # None = flat; else "AwayTeamPax"/"HostTeamPax"/etc
+    rooms: bool = False
+    basis: str = "MatchDays"        # "MatchDays" | "Match"
+    owner: str = "Host"             # "Host" | "Visitor" | "Officials" | "Common"
+    md_rate: float = 0.0
+    nmd_rate: float = 0.0
 
 
 class RateCardPatch(BaseModel):

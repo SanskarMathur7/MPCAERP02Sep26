@@ -271,10 +271,14 @@ def compute_tournament_budget(
         {"hotel_team": {"md": 1800, "nmd": 1800}, ...}
     """
     budget_rates = rate_card.get("budget_rates") or {}
+    # MPCA-223 · Include custom heads (MPCA-added line items) alongside the
+    # 17 default heads. Custom heads are stored on the rate card and follow
+    # the same {key, name, driver, rooms, basis, owner} shape.
+    all_heads = list(BUDGET_HEADS_META) + list(rate_card.get("custom_heads") or [])
     valid_matches = [m for m in matches if match_days(m) > 0]
     gap = gap_map(valid_matches)
 
-    head_totals: Dict[str, Dict[str, float]] = {h["key"]: {"md_amount": 0.0, "nmd_amount": 0.0} for h in BUDGET_HEADS_META}
+    head_totals: Dict[str, Dict[str, float]] = {h["key"]: {"md_amount": 0.0, "nmd_amount": 0.0} for h in all_heads}
     match_rows: List[Dict[str, Any]] = []
     pool_totals: Dict[str, Dict[str, float]] = {}
 
@@ -285,7 +289,7 @@ def compute_tournament_budget(
         m_md_amt = 0.0
         m_nmd_amt = 0.0
         per_head_this_match: Dict[str, Dict[str, float]] = {}
-        for h in BUDGET_HEADS_META:
+        for h in all_heads:
             r = budget_rates.get(h["key"]) or {"md": 0, "nmd": 0}
             qty = derived_qty(m, h, pool, default_squad)
             overrides = m.get("driver_overrides") or {}
@@ -370,12 +374,13 @@ def compute_tournament_budget(
             {
                 "key": h["key"],
                 "name": h["name"],
-                "owner": h["owner"],
+                "owner": h.get("owner", "Common"),
+                "is_custom": bool(h.get("is_custom")),
                 "md_amount": head_totals[h["key"]]["md_amount"],
                 "nmd_amount": head_totals[h["key"]]["nmd_amount"],
                 "total": head_totals[h["key"]]["md_amount"] + head_totals[h["key"]]["nmd_amount"],
             }
-            for h in BUDGET_HEADS_META
+            for h in all_heads
         ],
         "match_rows": match_rows,
         "pool_totals": list(pool_totals.values()),

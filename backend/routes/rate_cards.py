@@ -217,3 +217,71 @@ async def reset_rate_card(card_id: str):
     }
     await db.rate_cards.update_one({"id": card_id}, {"$set": payload})
     return await db.rate_cards.find_one({"id": card_id}, {"_id": 0})
+
+
+# ─────────────── MPCA-223 · Custom line items ───────────────
+
+from models import RateCardCustomHead   # noqa: E402
+import re   # noqa: E402
+
+
+def _slugify(name: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "_", name.lower().strip()).strip("_")
+    return s or "custom"
+
+
+@api_router.post("/rate-cards/{card_id}/custom-heads", response_model=RateCard)
+async def add_custom_head(card_id: str, head: RateCardCustomHead):
+    """Append a new custom line item to a rate card. Auto-generates a unique
+    `custom_<slug>` key so it never collides with the default 17 heads."""
+    card = await db.rate_cards.find_one({"id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(404, "Rate card not found")
+    base = "custom_" + _slugify(head.name)
+    existing_keys = {h.get("key") for h in (card.get("custom_heads") or [])}
+    key = base
+    i = 2
+    while key in existing_keys:
+        key = f"{base}_{i}"
+        i += 1
+    row = {
+        "key": key,
+        "name": head.name,
+        "driver": head.driver or None,
+        "rooms": bool(head.rooms),
+        "basis": head.basis if head.basis in ("MatchDays", "Match") else "MatchDays",
+        "owner": head.owner if head.owner in ("Host", "Visitor", "Officials", "Common") else "Host",
+        "md_rate": float(head.md_rate or 0),
+        "nmd_rate": float(head.nmd_rate or 0),
+        "is_custom": True,
+    }
+    updated_heads = list(card.get("custom_heads") or []) + [row]
+    updated_budget_rates = dict(card.get("budget_rates") or {})
+    updated_budget_rates[key] = {"md": row["md_rate"], "nmd": row["nmd_rate"]}
+    await db.rate_cards.update_one(
+        {"id": card_id},
+        {"$set": {
+            "custom_heads": updated_heads,
+            "budget_rates": updated_budget_rates,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    return await db.rate_cards.find_one({"id": card_id}, {"_id": 0})
+
+
+@api_router.delete("/rate-cards/{card_id}/custom-heads/{key}", response_model=RateCard)
+async def delete_custom_head(card_id: str, key: str):
+    card = await db.rate_cards.find_one({"id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(404, "Rate card not found")
+    updated_heads = [h for h in (card.get("custom_heads") or []) if h.get("key") != key]
+    updated_budget_rates = {k: v for k, v in (card.get("budget_rates") or {}).items() if k != key}
+    await db.rate_cards.update_one(
+        {"id": card_id},
+        {"$set": {
+            "custom_heads": updated_heads,
+            "budget_rates": updated_budget_rates,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    return await db.rate_cards.find_one({"id": card_id}, {"_id": 0})

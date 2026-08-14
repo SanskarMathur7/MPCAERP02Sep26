@@ -2,7 +2,7 @@
 // rate cards. One card per (tournament_type, format_group, season). Values
 // mirror the MPCA Inter-Division Utility HTML (v20).
 import { useEffect, useMemo, useState } from "react";
-import { Save, Loader2, RotateCcw, Wallet, Plane } from "lucide-react";
+import { Save, Loader2, RotateCcw, Wallet, Plane, Plus, Trash2, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 
@@ -26,6 +26,17 @@ const OWNER_COLORS = {
     Common:    "bg-mpca-gray-dark/10 text-mpca-gray-dark border-mpca-gray-dark/30",
 };
 
+// MPCA-223 · Drivers available on custom heads. Match compute engine's driver_qty().
+const DRIVERS = [
+    { value: "",                   label: "Flat · no driver (once per day)" },
+    { value: "AwayTeamPax",        label: "Away Team Pax (squad × visiting teams)" },
+    { value: "HostTeamPax",        label: "Host Team Pax (squad × 1 when host plays)" },
+    { value: "MatchOfficialsPax",  label: "Match Officials Pax (assigned officials)" },
+    { value: "AllPax",             label: "All Pax (host + away + officials + other)" },
+    { value: "TeamCount",          label: "Team Count (teams in match, usually 2)" },
+    { value: "HostTeamCount",      label: "Host Team Count (1 if host plays, else 0)" },
+];
+
 const INR = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 
 export default function RateCardMaster() {
@@ -42,6 +53,9 @@ export default function RateCardMaster() {
     const [dirty, setDirty] = useState(false);
     const [err, setErr] = useState(null);
     const [msg, setMsg] = useState(null);
+    // MPCA-223 · Add-line-item modal state
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [newHead, setNewHead] = useState({ name: "", driver: "", rooms: false, basis: "MatchDays", owner: "Host", md_rate: 0, nmd_rate: 0 });
 
     // Load head metadata (17 budget + 8 travel) once
     useEffect(() => {
@@ -91,6 +105,36 @@ export default function RateCardMaster() {
         try {
             const { data } = await api.post(`/rate-cards/reset/${card.id}`);
             setCard(data); setDirty(false); setMsg("Reset to defaults.");
+            setTimeout(() => setMsg(null), 2000);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setSaving(false); }
+    };
+
+    // MPCA-223 · Custom head handlers
+    const addCustomHead = async () => {
+        if (!newHead.name?.trim()) { setErr("Line item name is required."); return; }
+        setSaving(true); setErr(null);
+        try {
+            const { data } = await api.post(`/rate-cards/${card.id}/custom-heads`, {
+                ...newHead,
+                md_rate: Number(newHead.md_rate) || 0,
+                nmd_rate: Number(newHead.nmd_rate) || 0,
+            });
+            setCard(data);
+            setShowAddModal(false);
+            setNewHead({ name: "", driver: "", rooms: false, basis: "MatchDays", owner: "Host", md_rate: 0, nmd_rate: 0 });
+            setMsg("Line item added.");
+            setTimeout(() => setMsg(null), 2000);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setSaving(false); }
+    };
+    const removeCustomHead = async (key) => {
+        if (!window.confirm("Delete this custom line item? Any per-match qty for it will also be dropped.")) return;
+        setSaving(true); setErr(null);
+        try {
+            const { data } = await api.delete(`/rate-cards/${card.id}/custom-heads/${key}`);
+            setCard(data);
+            setMsg("Line item removed.");
             setTimeout(() => setMsg(null), 2000);
         } catch (e) { setErr(e?.response?.data?.detail || e.message); }
         finally { setSaving(false); }
@@ -212,6 +256,73 @@ export default function RateCardMaster() {
                     </div>
                 </div>
 
+                {/* MPCA-223 · Custom line items */}
+                <div className="border border-mpca-brass/30 bg-mpca-ivory mb-8" data-testid="rc-custom-table">
+                    <div className="px-4 py-2 bg-mpca-oxblood text-mpca-ivory flex items-center gap-2">
+                        <Wallet size={13} />
+                        <div className="font-serif text-sm">Custom Line Items · {(card.custom_heads || []).length}</div>
+                        <div className="text-[10px] uppercase tracking-widest opacity-80 ml-auto flex items-center gap-2">
+                            Extend the 17 defaults with tournament-type-specific rows
+                            {canEdit && (
+                                <button onClick={() => setShowAddModal(true)} className="ml-2 bg-mpca-ivory text-mpca-oxblood px-2 py-1 flex items-center gap-1 hover:bg-mpca-gold-light" data-testid="rc-add-line-item-btn">
+                                    <Plus size={10} /> Add Line Item
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    {(card.custom_heads || []).length === 0 ? (
+                        <div className="p-4 text-center text-xs text-mpca-gray-dark italic">
+                            No custom line items yet. Click <b>Add Line Item</b> to extend this rate card.
+                        </div>
+                    ) : (
+                        <table className="w-full text-xs">
+                            <thead className="bg-mpca-parchment/60 text-mpca-brass uppercase text-[9px] tracking-widest">
+                                <tr>
+                                    <th className="px-3 py-2 text-left">Head</th>
+                                    <th className="px-3 py-2 text-left">Driver</th>
+                                    <th className="px-3 py-2 text-left">Basis</th>
+                                    <th className="px-3 py-2 text-left">Owner</th>
+                                    <th className="px-3 py-2 text-right w-28">MD rate (₹)</th>
+                                    <th className="px-3 py-2 text-right w-28">NMD rate (₹)</th>
+                                    <th className="px-3 py-2 text-right w-12"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(card.custom_heads || []).map((h) => {
+                                    const r = (card.budget_rates || {})[h.key] || { md: h.md_rate, nmd: h.nmd_rate };
+                                    return (
+                                        <tr key={h.key} className="border-b border-mpca-brass/10" data-testid={`rc-custom-row-${h.key}`}>
+                                            <td className="px-3 py-2 font-serif text-mpca-green-dark">
+                                                {h.name}
+                                                {h.rooms && <span className="ml-1 text-[9px] text-mpca-brass italic">· rooms = ceil/2</span>}
+                                                {h.basis === "Match" && <span className="ml-1 text-[9px] text-mpca-oxblood italic">· once per match</span>}
+                                            </td>
+                                            <td className="px-3 py-2 font-mono text-[10px] text-mpca-brass">{h.driver || "flat"}</td>
+                                            <td className="px-3 py-2 font-mono text-[10px]">{h.basis}</td>
+                                            <td className="px-3 py-2">
+                                                <span className={`px-1.5 py-0.5 text-[9px] border ${OWNER_COLORS[h.owner] || ""} uppercase tracking-widest`}>{h.owner}</span>
+                                            </td>
+                                            <td className="px-3 py-2 text-right">
+                                                <input type="number" min={0} className="input-heritage !py-1 !text-xs font-mono w-24 text-right" value={r.md ?? 0} disabled={!canEdit} onChange={(e) => setBudgetRate(h.key, "md", e.target.value)} data-testid={`rc-custom-md-${h.key}`} />
+                                            </td>
+                                            <td className="px-3 py-2 text-right">
+                                                <input type="number" min={0} className="input-heritage !py-1 !text-xs font-mono w-24 text-right" value={r.nmd ?? 0} disabled={!canEdit || h.basis === "Match"} onChange={(e) => setBudgetRate(h.key, "nmd", e.target.value)} data-testid={`rc-custom-nmd-${h.key}`} />
+                                            </td>
+                                            <td className="px-3 py-2 text-right">
+                                                {canEdit && (
+                                                    <button onClick={() => removeCustomHead(h.key)} className="text-mpca-oxblood/70 hover:text-mpca-oxblood" title="Delete line item" data-testid={`rc-custom-del-${h.key}`}>
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+
                 {/* Travel-grant heads (8) */}
                 <div className="border border-mpca-brass/30 bg-mpca-ivory mb-8" data-testid="rc-travel-table">
                     <div className="px-4 py-2 bg-mpca-navy text-mpca-gold-light flex items-center gap-2">
@@ -292,6 +403,67 @@ export default function RateCardMaster() {
                     </div>
                 )}
                 </>
+            )}
+
+            {/* MPCA-223 · Add-Line-Item modal */}
+            {showAddModal && (
+                <div className="fixed inset-0 bg-mpca-charcoal/60 flex items-center justify-center z-50 p-4" data-testid="rc-add-modal">
+                    <div className="bg-mpca-ivory border border-mpca-brass/40 max-w-lg w-full p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="font-serif text-lg text-mpca-green-dark">New Line Item</div>
+                            <button onClick={() => setShowAddModal(false)} className="text-mpca-gray-dark hover:text-mpca-oxblood"><X size={16} /></button>
+                        </div>
+                        <div className="text-xs text-mpca-gray-dark italic">
+                            Extends this rate card with an additional budget head. Every match will get this row in its per-head breakdown.
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <label className="col-span-2 block">
+                                <div className="overline text-[9px] mb-1">Line item name</div>
+                                <input className="input-heritage !py-1.5" value={newHead.name} onChange={(e) => setNewHead({ ...newHead, name: e.target.value })} placeholder="e.g. Trophy engraving, VIP hospitality" data-testid="rc-new-name" />
+                            </label>
+                            <label className="col-span-2 block">
+                                <div className="overline text-[9px] mb-1">Driver</div>
+                                <select className="input-heritage !py-1.5" value={newHead.driver} onChange={(e) => setNewHead({ ...newHead, driver: e.target.value })} data-testid="rc-new-driver">
+                                    {DRIVERS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                                </select>
+                            </label>
+                            <label className="block">
+                                <div className="overline text-[9px] mb-1">Basis</div>
+                                <select className="input-heritage !py-1.5" value={newHead.basis} onChange={(e) => setNewHead({ ...newHead, basis: e.target.value })} data-testid="rc-new-basis">
+                                    <option value="MatchDays">MatchDays (× MD + × NMD)</option>
+                                    <option value="Match">Match (once per match)</option>
+                                </select>
+                            </label>
+                            <label className="block">
+                                <div className="overline text-[9px] mb-1">Owner</div>
+                                <select className="input-heritage !py-1.5" value={newHead.owner} onChange={(e) => setNewHead({ ...newHead, owner: e.target.value })} data-testid="rc-new-owner">
+                                    <option>Host</option>
+                                    <option>Visitor</option>
+                                    <option>Officials</option>
+                                    <option>Common</option>
+                                </select>
+                            </label>
+                            <label className="flex items-center gap-2 col-span-2 pt-1">
+                                <input type="checkbox" checked={newHead.rooms} onChange={(e) => setNewHead({ ...newHead, rooms: e.target.checked })} data-testid="rc-new-rooms" />
+                                <span className="text-xs">Rooms rule — qty = ceil(driver ÷ 2)</span>
+                            </label>
+                            <label className="block">
+                                <div className="overline text-[9px] mb-1">MD rate (₹)</div>
+                                <input type="number" min={0} className="input-heritage !py-1.5 font-mono" value={newHead.md_rate} onChange={(e) => setNewHead({ ...newHead, md_rate: e.target.value })} data-testid="rc-new-md" />
+                            </label>
+                            <label className="block">
+                                <div className="overline text-[9px] mb-1">NMD rate (₹)</div>
+                                <input type="number" min={0} className="input-heritage !py-1.5 font-mono" value={newHead.nmd_rate} onChange={(e) => setNewHead({ ...newHead, nmd_rate: e.target.value })} disabled={newHead.basis === "Match"} data-testid="rc-new-nmd" />
+                            </label>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2 border-t border-mpca-brass/20">
+                            <button onClick={() => setShowAddModal(false)} className="text-xs uppercase tracking-widest text-mpca-gray-dark px-3 py-1.5 hover:text-mpca-oxblood">Cancel</button>
+                            <button onClick={addCustomHead} disabled={saving || !newHead.name?.trim()} className="text-xs uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="rc-new-save">
+                                {saving ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />} Add Line Item
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

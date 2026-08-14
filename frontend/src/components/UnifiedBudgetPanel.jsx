@@ -7,8 +7,8 @@
 //   3. Budget by Host/Pool — one row per pool
 //   4. Budget by Match — expandable rows showing per-head qty × MD/NMD
 //   5. Travel Grant — one row per visiting-division trip + by-division rollup
-import { useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCcw, Save, Wallet, Users as UsersIcon, Plane, ClipboardList } from "lucide-react";
+import { useEffect, useMemo, useState, Fragment } from "react";
+import { Loader2, RefreshCcw, Save, Wallet, Users as UsersIcon, Plane, ClipboardList, Lock, LockOpen } from "lucide-react";
 import { api } from "@/lib/api";
 
 const INR = (n) => `₹${Math.round(Number(n || 0)).toLocaleString("en-IN")}`;
@@ -76,6 +76,43 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
         } catch (e) { setErr(e?.response?.data?.detail || e.message); }
         finally { setLoading(false); }
     };
+    // MPCA-225 · Lock / Unlock a budget snapshot
+    const [locked, setLocked] = useState(false);
+    const [lockInfo, setLockInfo] = useState({ version: null, at: null });
+    const lockBudget = async () => {
+        if (!window.confirm("Lock this budget snapshot? Divisions will submit claims against these numbers until you unlock.")) return;
+        setSaving(true); setErr(null);
+        try {
+            const { data: d } = await api.post(`/tournaments/${tournament.id}/unified-budget/lock`);
+            setLocked(true); setLockInfo({ version: d.locked_version, at: d.locked_at });
+            setSavedMsg(`Locked at v${d.locked_version}.`);
+            setTimeout(() => setSavedMsg(null), 2500);
+            await compute(false);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setSaving(false); }
+    };
+    const unlockBudget = async () => {
+        if (!window.confirm("Unlock this budget snapshot? Downstream claims may re-open for adjustment.")) return;
+        setSaving(true); setErr(null);
+        try {
+            await api.post(`/tournaments/${tournament.id}/unified-budget/unlock`);
+            setLocked(false); setLockInfo({ version: null, at: null });
+            setSavedMsg("Unlocked.");
+            setTimeout(() => setSavedMsg(null), 2000);
+            await compute(false);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setSaving(false); }
+    };
+    useEffect(() => {
+        // Detect current lock state from the tournament doc
+        api.get(`/tournaments/${tournament.id}`).then((r) => {
+            const snap = r.data?.unified_budget_snapshot;
+            if (snap?.is_locked) {
+                setLocked(true);
+                setLockInfo({ version: snap.locked_version, at: snap.locked_at });
+            }
+        }).catch(() => {});
+    }, [tournament?.id]);
     useEffect(() => { compute(false); }, [tournament?.id]);
 
     const budget = data?.budget || {};
@@ -141,13 +178,35 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                     <button onClick={() => compute(false)} disabled={loading} className="text-[11px] uppercase tracking-widest border border-mpca-brass/40 text-mpca-brass px-3 py-1.5 hover:bg-mpca-brass/10 flex items-center gap-1 disabled:opacity-40" data-testid="ub-refresh">
                         {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCcw size={11} />} Refresh
                     </button>
+                    {canEdit && !locked && (
+                        <button onClick={lockBudget} disabled={saving} className="text-[11px] uppercase tracking-widest border border-mpca-oxblood/60 text-mpca-oxblood px-3 py-1.5 hover:bg-mpca-oxblood/10 flex items-center gap-1 disabled:opacity-40" data-testid="ub-lock">
+                            <Lock size={11} /> Lock Budget
+                        </button>
+                    )}
+                    {canEdit && locked && (
+                        <button onClick={unlockBudget} disabled={saving} className="text-[11px] uppercase tracking-widest border border-mpca-brass/60 text-mpca-brass px-3 py-1.5 hover:bg-mpca-brass/10 flex items-center gap-1 disabled:opacity-40" data-testid="ub-unlock">
+                            <LockOpen size={11} /> Unlock
+                        </button>
+                    )}
                     {canEdit && (
-                        <button onClick={save} disabled={saving} className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="ub-save-snapshot">
+                        <button onClick={save} disabled={saving || locked} className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="ub-save-snapshot" title={locked ? "Unlock first" : ""}>
                             {saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />} Save Snapshot
                         </button>
                     )}
                 </div>
             </div>
+
+            {locked && (
+                <div className="bg-mpca-oxblood/10 border-l-4 border-mpca-oxblood px-4 py-3 flex items-center gap-3" data-testid="ub-lock-banner">
+                    <Lock size={16} className="text-mpca-oxblood" />
+                    <div>
+                        <div className="font-serif text-mpca-oxblood text-sm">Budget locked at v{lockInfo.version}</div>
+                        <div className="text-[10px] text-mpca-gray-dark font-mono">
+                            {lockInfo.at ? new Date(lockInfo.at).toLocaleString("en-IN") : ""} · Divisions submit claims against these numbers · unlock to recompute
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {err && (
                 <div className="bg-mpca-oxblood/10 border border-mpca-oxblood/40 p-3 text-xs text-mpca-oxblood" data-testid="ub-err">{err}</div>
@@ -202,6 +261,7 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                 <div className="flex gap-1 border-b border-mpca-brass/30" data-testid="ub-tabs">
                     <TabButton active={tab === "head"} onClick={() => setTab("head")} icon={<ClipboardList size={12} />} testId="ub-tab-head">Budget by Head</TabButton>
                     <TabButton active={tab === "pool"} onClick={() => setTab("pool")} icon={<UsersIcon size={12} />} testId="ub-tab-pool">Budget by Pool</TabButton>
+                    <TabButton active={tab === "body"} onClick={() => setTab("body")} icon={<UsersIcon size={12} />} testId="ub-tab-body">Budget by Body</TabButton>
                     <TabButton active={tab === "match"} onClick={() => setTab("match")} icon={<Wallet size={12} />} testId="ub-tab-match">Budget by Match</TabButton>
                     <TabButton active={tab === "travel"} onClick={() => setTab("travel")} icon={<Plane size={12} />} testId="ub-tab-travel">Travel Grant · {INR(travel.grand_total || 0)}</TabButton>
                 </div>
@@ -275,6 +335,47 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                     </div>
                 )}
 
+                {(tab === "body" || printMode) && (
+                    <div className="border border-mpca-brass/30 overflow-x-auto" data-testid="ub-body-table">
+                        <div className="px-4 py-2 bg-mpca-green-dark text-mpca-gold-light font-serif text-sm flex items-center gap-2">
+                            Budget by Body · owner-attributed
+                            <span className="text-[10px] uppercase tracking-widest opacity-80 ml-auto">
+                                Finance Console reads these numbers as &laquo;Proposed ₹&raquo; per Division / Host / MPCA
+                            </span>
+                        </div>
+                        <table className="w-full text-sm">
+                            <thead className="bg-mpca-parchment/60 text-mpca-brass uppercase text-[9px] tracking-widest">
+                                <tr>
+                                    <th className="px-3 py-2 text-left">Body</th>
+                                    <th className="px-3 py-2 text-right">Budget ₹ (heads)</th>
+                                    <th className="px-3 py-2 text-right">Travel Grant ₹</th>
+                                    <th className="px-3 py-2 text-right">Total ₹</th>
+                                    <th className="px-3 py-2 text-right w-16">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(budget.by_body_totals || []).sort((a, b) => (b.total || 0) - (a.total || 0)).map((b) => {
+                                    const bodyGrand = grand + Number(travel.grand_total || 0);
+                                    return (
+                                        <tr key={b.body_code} className="border-t border-mpca-brass/10" data-testid={`ub-body-row-${b.body_code}`}>
+                                            <td className="px-3 py-2 font-serif text-mpca-green-dark">
+                                                {b.body_code}
+                                                {b.body_code === "MPCA" && <span className="ml-2 text-[9px] uppercase tracking-widest text-mpca-brass">State</span>}
+                                            </td>
+                                            <td className="px-3 py-2 text-right font-mono">{INR(b.budget)}</td>
+                                            <td className="px-3 py-2 text-right font-mono text-mpca-brass">{INR(b.travel_grant)}</td>
+                                            <td className="px-3 py-2 text-right font-mono font-semibold text-mpca-oxblood">{INR(b.total)}</td>
+                                            <td className="px-3 py-2 text-right font-mono text-xs text-mpca-gray-dark">{bodyGrand ? Math.round((b.total / bodyGrand) * 100) : 0}%</td>
+                                        </tr>
+                                    );
+                                })}
+                                {(budget.by_body_totals || []).length === 0 && (
+                                    <tr><td colSpan={5} className="px-4 py-6 text-center italic text-mpca-gray-dark">No per-body attribution — assign fixture pools + set host + teams to populate this table.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
                 {(tab === "match" || printMode) && (
                     <div className="border border-mpca-brass/30" data-testid="ub-match-table">
                         <table className="w-full text-sm">
@@ -292,9 +393,8 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                             </thead>
                             <tbody>
                                 {matches.map((m) => (
-                                    <>
+                                    <Fragment key={m.id}>
                                         <tr
-                                            key={m.id}
                                             className="border-t border-mpca-brass/10 hover:bg-mpca-parchment/40 cursor-pointer"
                                             onClick={() => setExpandedMatch(expandedMatch === m.id ? null : m.id)}
                                             data-testid={`ub-match-row-${m.id}`}
@@ -392,7 +492,7 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                                                 </td>
                                             </tr>
                                         )}
-                                    </>
+                                    </Fragment>
                                 ))}
                             </tbody>
                         </table>

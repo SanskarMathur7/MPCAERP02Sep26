@@ -1200,6 +1200,8 @@ class Tournament(TournamentBase):
     expense_events: List[ApprovalStep] = []
     # M11: Division/District host-acceptance workflow
     acceptance: TournamentAcceptance = Field(default_factory=TournamentAcceptance)
+    # MPCA-225 · Unified Budget snapshot (compute + freeze workflow)
+    unified_budget_snapshot: Optional[Dict[str, Any]] = None
     created_by: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

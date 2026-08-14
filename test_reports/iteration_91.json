@@ -1,0 +1,27 @@
+{
+  "summary": "Executed full end-to-end Playwright flow for MPCA Unified Budget → Finance Console linking + Budget Freeze workflow on tournament 8cf98196 (MY Memorial Trophy). 24 of 25 assertions PASSED. Login as Secretary persona, panel opens with 4 hero tiles (grand=₹15,23,860, md, nmd, avg), 4 owner rollup pills (Host/Visitor/Officials/Common), all 5 tabs (head/pool/body/match/travel) present. By Body table renders with 4 division rows: DIV-BPL=₹15,23,860 (host), DIV-GWL=₹95,900, DIV-JBP=₹81,900, DIV-RWA=₹81,900 (visiting travel grants). Lock flow works: banner shows 'Budget locked at v5', ub-save-snapshot becomes disabled with title='Unlock first', lock↔unlock button swap correct. Unlock flow correctly reverses state. Lock state PERSISTS across hard reload (banner + unlock button restored from Tournament.unified_budget_snapshot.is_locked backend field). Cross-tab consistency verified — grand total stays exactly ₹15,23,860 on all 5 tabs (compute called once, no drift). Travel tab label = 'TRAVEL GRANT · ₹2,59,700'. Cleanup unlock at end succeeded.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "UnifiedBudgetPanel · ub-saved toast", "issue": "Toast element not observable at assertion time — either auto-dismisses too fast (<toast lifetime shorter than post-lock settle) or is rendered elsewhere. Banner text 'Budget locked at v5' confirms the lock succeeded, but the 'Locked at v{N}' toast requirement was not visually verifiable in the DOM after wait_for_timeout(2000). Consider extending toast visibility to ≥3s or using a persistent state marker.", "selector": "[data-testid=ub-saved]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "critical_code_review_comments": [
+    "React console warning during render: 'Each child in a list should have a unique key prop. Check the render method of UnifiedBudgetPanel.' — one of the .map() calls in UnifiedBudgetPanel.jsx is missing a key prop. Non-blocking but should be fixed for React reconciliation performance / correctness."
+  ],
+  "test_report_links": ["/app/test_reports/iteration_91.json"],
+  "action_items": [
+    "(LOW) Extend ub-saved toast visibility or make it deterministically detectable so lock/save confirmation UX has a stable Playwright hook.",
+    "(LOW) Fix missing React 'key' prop warning inside UnifiedBudgetPanel render (likely in one of the tabs' inline .map())."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run)", "frontend": "96% (24/25)"},
+  "test_credentials": "Secretary persona chip only (data-testid=persona-chip-secretary → 'Sign in to the Registrar'). No password.",
+  "seed_data_creation": "None. Lock state was left UNLOCKED at end (cleanup step verified ub-lock button visible).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Unified Budget freeze workflow verified working end-to-end including backend persistence (Tournament.unified_budget_snapshot.is_locked round-trips via GET on mount). Lock version reached v5 during run. Two minor cosmetic items (toast visibility, React key warning) do not block feature. All hero tiles, owner pills, tabs, by-body table rows, travel grant totals match spec exactly.",
+  "rca of the issue": "ub-saved toast miss — most likely cause is toast auto-dismiss timer shorter than the 2s post-click wait; the banner (persistent) already proves lock succeeded so this is a testability gap, not a functional bug."
+}

@@ -373,6 +373,47 @@ def compute_tournament_budget(
     tot_md = sum(r["md_amount"] for r in match_rows)
     tot_nmd = sum(r["nmd_amount"] for r in match_rows)
 
+    # MPCA-225 · Owner-attributed per-body rollup — feeds Finance Console.
+    # Attribution rules:
+    #   • Host  owner heads   → host body of the pool the match is in
+    #   • Officials heads     → host body (they front-pay; MPCA reimburses via claim)
+    #   • Common heads (MOM)  → MPCA (State-level)
+    #   • Visitor heads       → away team of the match (the non-host side)
+    by_body: Dict[str, Dict[str, float]] = {}
+    def _bump(code: str, key: str, amt: float):
+        if not code:
+            return
+        if code not in by_body:
+            by_body[code] = {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
+        by_body[code][key] = by_body[code].get(key, 0.0) + amt
+        by_body[code]["total"] = by_body[code].get("budget", 0.0) + by_body[code].get("travel_grant", 0.0)
+
+    # Build a match→pool→host cache
+    for m in valid_matches:
+        pool = _pool_of_match(m, pools)
+        host_code = (pool.get("host_division_code") or pool.get("host_district_code")) if pool else None
+        team_a = m.get("team_a") or m.get("teamA") or m.get("home_team")
+        team_b = m.get("team_b") or m.get("teamB") or m.get("away_team")
+        # Away side (visitor) — whichever side isn't the host
+        away_code = team_b if host_code == team_a else team_a
+        # Iterate per-head amounts for this match
+        for h in all_heads:
+            per = next((mr["per_head"].get(h["key"]) for mr in match_rows if mr["id"] == m.get("id")), None)
+            if not per:
+                continue
+            amt = float(per.get("md_amount", 0) or 0) + float(per.get("nmd_amount", 0) or 0)
+            if amt == 0:
+                continue
+            owner = h.get("owner", "Common")
+            if owner == "Host":
+                _bump(host_code, "budget", amt)
+            elif owner == "Officials":
+                _bump(host_code, "budget", amt)
+            elif owner == "Common":
+                _bump("MPCA", "budget", amt)
+            elif owner == "Visitor":
+                _bump(away_code, "budget", amt)
+
     return {
         "format_group": rate_card.get("format_group"),
         "tournament_type": rate_card.get("tournament_type"),
@@ -391,6 +432,7 @@ def compute_tournament_budget(
         ],
         "match_rows": match_rows,
         "pool_totals": list(pool_totals.values()),
+        "by_body_totals": list(by_body.values()),   # MPCA-225 · owner-attributed per body
         "total_md_amount": tot_md,
         "total_nmd_amount": tot_nmd,
         "grand_total": tot_md + tot_nmd,
@@ -653,6 +695,17 @@ async def compute_unified_budget_for_tournament(tid: str, save: bool = False):
     budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
     travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=trip_overrides)
 
+    # MPCA-225 · Merge travel-grant per-Division into budget.by_body_totals so
+    # a single source of truth carries both budget + travel for each body.
+    body_map = {b["body_code"]: b for b in budget.get("by_body_totals") or []}
+    for d in (travel.get("by_division") or []):
+        code = d.get("division")
+        row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
+        row["travel_grant"] = row.get("travel_grant", 0.0) + float(d.get("total", 0) or 0)
+        row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
+        body_map[code] = row
+    budget["by_body_totals"] = list(body_map.values())
+
     snapshot = {
         "rate_card_id": card.get("id"),
         "tournament_type": card.get("tournament_type"),
@@ -778,3 +831,108 @@ async def migrate_legacy_budgets(dry_run: bool = True):
         "total_grand_inr": total_grand,
         "report": report,
     }
+
+
+# ─────────────── MPCA-225 · Budget Freeze workflow ───────────────
+
+@api_router.post("/tournaments/{tid}/unified-budget/lock")
+async def lock_unified_budget(tid: str):
+    """MPCA-only · Snapshot the current unified budget, freeze it at a new
+    version, and block further recomputes from overwriting it."""
+    from datetime import datetime, timezone
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if t is None:
+        raise HTTPException(404, "Tournament not found")
+
+    setup_meta = t.get("setup_meta") or {}
+    pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
+    matches: List[Dict[str, Any]] = []
+    async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
+        matches.append(m)
+    async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
+        matches.append(f)
+
+    card = await _load_rate_card_for_tournament(t)
+    default_squad = int(t.get("max_squad_size") or 18)
+    budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
+    travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=t.get("trip_overrides") or {})
+
+    # Merge travel-grant totals into by_body_totals
+    body_map = {b["body_code"]: b for b in budget.get("by_body_totals") or []}
+    for d in (travel.get("by_division") or []):
+        code = d.get("division")
+        row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
+        row["travel_grant"] = row.get("travel_grant", 0.0) + float(d.get("total", 0) or 0)
+        row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
+        body_map[code] = row
+    budget["by_body_totals"] = list(body_map.values())
+
+    prev_version = ((t.get("unified_budget_snapshot") or {}).get("locked_version") or 0)
+    snapshot = {
+        "rate_card_id": card.get("id"),
+        "tournament_type": card.get("tournament_type"),
+        "format_group": card.get("format_group"),
+        "budget": budget,
+        "travel_grant": travel,
+        "is_locked": True,
+        "locked_version": prev_version + 1,
+        "locked_at": datetime.now(timezone.utc).isoformat(),
+        "locked_by": "MPCA",
+    }
+    await db.tournaments.update_one({"id": tid}, {"$set": {"unified_budget_snapshot": snapshot}})
+    return snapshot
+
+
+@api_router.post("/tournaments/{tid}/unified-budget/unlock")
+async def unlock_unified_budget(tid: str):
+    """MPCA-only · Unfreeze the snapshot so Divisions can request re-computes."""
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "unified_budget_snapshot": 1, "id": 1})
+    if t is None:
+        raise HTTPException(404, "Tournament not found")
+    snap = t.get("unified_budget_snapshot") or {}
+    if not snap.get("is_locked"):
+        return {"already": "unlocked"}
+    snap["is_locked"] = False
+    await db.tournaments.update_one({"id": tid}, {"$set": {"unified_budget_snapshot": snap}})
+    return snap
+
+
+@api_router.get("/tournaments/{tid}/unified-budget/proposed/{body_code}")
+async def proposed_budget_for_body(tid: str, body_code: str):
+    """Finance Console linkage — returns the frozen or live "Proposed ₹" for
+    a specific body. If the tournament has a locked snapshot, uses that;
+    else runs a live compute. Returns `{body_code, budget, travel_grant,
+    total, source: "locked" | "live"}`."""
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if t is None:
+        raise HTTPException(404, "Tournament not found")
+    snap = t.get("unified_budget_snapshot") or {}
+    source = "locked" if snap.get("is_locked") else "live"
+    if not snap.get("is_locked"):
+        # Do a live compute so callers always get an answer
+        setup_meta = t.get("setup_meta") or {}
+        pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
+        matches: List[Dict[str, Any]] = []
+        async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
+            matches.append(m)
+        async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
+            matches.append(f)
+        try:
+            card = await _load_rate_card_for_tournament(t)
+        except HTTPException:
+            return {"body_code": body_code, "budget": 0, "travel_grant": 0, "total": 0, "source": "no-rate-card"}
+        default_squad = int(t.get("max_squad_size") or 18)
+        budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
+        travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=t.get("trip_overrides") or {})
+        body_map = {b["body_code"]: b for b in budget.get("by_body_totals") or []}
+        for d in (travel.get("by_division") or []):
+            code = d.get("division")
+            row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
+            row["travel_grant"] = row.get("travel_grant", 0.0) + float(d.get("total", 0) or 0)
+            row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
+            body_map[code] = row
+        row = body_map.get(body_code) or {"body_code": body_code, "budget": 0, "travel_grant": 0, "total": 0}
+    else:
+        rows = snap.get("budget", {}).get("by_body_totals") or []
+        row = next((r for r in rows if r.get("body_code") == body_code), {"body_code": body_code, "budget": 0, "travel_grant": 0, "total": 0})
+    return {**row, "source": source, "locked_version": snap.get("locked_version"), "locked_at": snap.get("locked_at")}

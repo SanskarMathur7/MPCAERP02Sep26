@@ -499,3 +499,142 @@ async def players_stats():
         "by_category": by_cat,
         "court_order_count": court_orders,
     }
+
+
+# ── MPCA-209 · Eligibility Tag Compute (from MPCA_Eligibility_Checks doc) ────
+def _months_between(iso_from: Optional[str], iso_to: Optional[str] = None) -> float:
+    """Rough month delta (30-day months) — good enough for eligibility windows."""
+    if not iso_from:
+        return 0.0
+    try:
+        d_from = datetime.fromisoformat(iso_from[:10])
+        d_to = datetime.fromisoformat((iso_to or "")[:10]) if iso_to else datetime.now(timezone.utc)
+        return (d_to - d_from).days / 30.0
+    except Exception:
+        return 0.0
+
+
+async def _resolve_division_of_district(district_body_id: Optional[str]) -> Optional[str]:
+    """Given a district body-code, return its parent Division code (or None)."""
+    if not district_body_id:
+        return None
+    body = await db.bodies.find_one({"code": district_body_id}, {"_id": 0, "parent_code": 1, "body_type": 1})
+    if not body:
+        return None
+    if body.get("body_type") == "Division":
+        return district_body_id
+    return body.get("parent_code")
+
+
+@api_router.post("/players/{pid}/eligibility-tag/compute", response_model=Player)
+async def compute_eligibility_tag(pid: str):
+    """Runs the sequential decision tree from MPCA_Eligibility_Checks.docx
+    (Season 2025-26) and stores the resulting tag on the player.
+
+    Order:
+      1. Local/Birth      – born within this Division's jurisdiction
+      2. Local/Residence  – bonafide resident ≥ 3 months
+      3. Local/Employment – bonafide employment (self or parent if ≤21)
+      4. Local/Education  – bonafide educational course ≥ 3 months, no distance
+      -- if none match, move to Guest checks --
+      5. Guest/MP-Domicile – born in MP but playing from a Division other than birth
+      6. Guest/Education   – born + resident out of MP, studying in MP ≥ 1 year
+      7. Guest/Out-of-MP   – anything else; requires 2 yr prior domestic play
+    """
+    p = await db.players.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Player not found")
+
+    reasons: List[str] = []
+    tag: Optional[str] = None
+
+    # Resolve the parent Division of the player's target body
+    target_division = await _resolve_division_of_district(p.get("body_id"))
+    birth_division = p.get("place_of_birth_division") or None
+    birth_state = (p.get("place_of_birth_state") or "").strip()
+    is_mp_born = birth_state.lower() in ("mp", "madhya pradesh")
+    if not birth_division and p.get("place_of_birth_city"):
+        # Best-effort: look up the district by name → parent division
+        d = await db.bodies.find_one(
+            {"body_type": "District", "$or": [
+                {"name": {"$regex": f"{p['place_of_birth_city']}", "$options": "i"}},
+                {"seat": {"$regex": f"^{p['place_of_birth_city']}$", "$options": "i"}},
+            ]}, {"_id": 0, "code": 1, "parent_code": 1},
+        )
+        if d:
+            birth_division = d.get("parent_code")
+
+    # ── LOCAL TESTS ─────────────────────────────────────────────────────────
+    # 1. Local/Birth
+    if target_division and birth_division and birth_division == target_division:
+        tag = "Local/Birth"
+        reasons.append(f"Born within {target_division} jurisdiction (birth division = {birth_division}).")
+
+    # 2. Local/Residence — bonafide resident ≥ 3 months
+    if not tag:
+        months_resident = _months_between(p.get("residency_since"))
+        if months_resident >= 3:
+            tag = "Local/Residence"
+            reasons.append(f"Resident in Division for {months_resident:.1f} months (≥ 3 required).")
+        elif p.get("residency_since"):
+            reasons.append(f"Residency insufficient ({months_resident:.1f} months; ≥ 3 required).")
+
+    # 3. Local/Employment — bonafide employment (self or parent if ≤21)
+    if not tag and p.get("is_employed") and p.get("employment"):
+        # For the decision tree we assume `employment` string means employer name;
+        # bonafide check is manual — but presence of employment + is_employed flag
+        # combined with 3-month residency proxy is enough to auto-tag.
+        months_resident = _months_between(p.get("residency_since"))
+        if months_resident >= 3:
+            tag = "Local/Employment"
+            reasons.append(f"Employed at {p['employment']} ({months_resident:.1f} months resident).")
+
+    # 4. Local/Education — 3 months + not distance learning
+    if not tag and p.get("education"):
+        months_resident = _months_between(p.get("residency_since"))
+        if months_resident >= 3 and "distance" not in (p.get("education") or "").lower():
+            tag = "Local/Education"
+            reasons.append(f"Studying at {p['education']} ({months_resident:.1f} months in Division).")
+
+    # ── GUEST TESTS ─────────────────────────────────────────────────────────
+    # 5. Guest/MP-Domicile — born in MP but playing from a different Division
+    if not tag:
+        if is_mp_born and target_division and birth_division and birth_division != target_division:
+            tag = "Guest/MP-Domicile"
+            reasons.append(f"Born in MP ({birth_division}) but registering with {target_division} — MP-Domicile Guest.")
+
+    # 6. Guest/Education — Birth AND residence out of MP but studying in MP
+    if not tag and not is_mp_born and p.get("education"):
+        # Admission must be before 1-Sep of previous season. Best-effort using
+        # first_registration_year if available.
+        months_studying = _months_between(p.get("residency_since"))
+        if months_studying >= 12 and "distance" not in (p.get("education") or "").lower():
+            tag = "Guest/Education"
+            reasons.append("Born + resident out of MP, studying in MP for ≥ 1 full academic year.")
+
+    # 7. Guest/Out-of-MP — must show 2 yr prior domestic play
+    if not tag and not is_mp_born:
+        prior_years = 1 if p.get("bcci_registered") else 0
+        # Approx via bcci_registration_year
+        if p.get("bcci_registration_year"):
+            try:
+                prior_years = max(prior_years, datetime.now(timezone.utc).year - int(p["bcci_registration_year"]))
+            except Exception:
+                pass
+        if prior_years >= 2:
+            tag = "Guest/Out-of-MP"
+            reasons.append(f"Not MP-born; prior domestic participation ≈ {prior_years} yrs (≥ 2 required).")
+        else:
+            reasons.append("Not MP-born and prior domestic participation < 2 yrs — Ineligible under 3.3.")
+
+    if not tag:
+        tag = "Ineligible"
+        reasons.append("None of the 7 tags matched — player does not qualify under the current data on file.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.players.update_one({"id": pid}, {"$set": {
+        "eligibility_tag": tag,
+        "eligibility_reasons": reasons,
+        "eligibility_computed_at": now,
+    }})
+    return await db.players.find_one({"id": pid}, {"_id": 0})

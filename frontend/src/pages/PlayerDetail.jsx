@@ -244,6 +244,61 @@ const OInput = ({ draft, setDraft, k, label, type = "text", options = null }) =>
     </div>
 );
 
+// MPCA-209 · Eligibility Tag panel — surfaces the decision-tree verdict + a Recompute button.
+const EligibilityTagPanel = ({ player, persona, onChanged }) => {
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState(null);
+    const canRecompute = persona && (persona.body_type === "State" || persona.body_code === player.body_id);
+    const recompute = async () => {
+        setBusy(true); setErr(null);
+        try {
+            const { data } = await api.post(`/players/${player.id}/eligibility-tag/compute`);
+            onChanged?.(data);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+    const tag = player.eligibility_tag;
+    const tagTone = tag?.startsWith("Local/") ? "bg-mpca-green-dark text-mpca-gold-light"
+        : tag?.startsWith("Guest/") ? "bg-mpca-navy text-mpca-gold-light"
+        : "bg-mpca-oxblood text-mpca-ivory";
+    return (
+        <div className="bulletin-card p-0 overflow-hidden" data-testid="eligibility-tag-panel">
+            <div className="bg-mpca-parchment px-4 py-3 border-b border-mpca-brass/30 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <div className="overline text-[9px] text-mpca-oxblood">MPCA Eligibility · Season 2025-26</div>
+                    <div className="mt-1">
+                        {tag ? (
+                            <span className={`inline-block text-[11px] uppercase tracking-widest px-3 py-1 font-mono ${tagTone}`} data-testid="eligibility-tag-badge">{tag}</span>
+                        ) : (
+                            <span className="text-[11px] italic text-mpca-brass" data-testid="eligibility-tag-unset">Not yet computed — click Recompute</span>
+                        )}
+                        {player.eligibility_computed_at && (
+                            <span className="ml-3 text-[10px] text-mpca-gray-dark font-mono">as of {new Date(player.eligibility_computed_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span>
+                        )}
+                    </div>
+                </div>
+                {canRecompute && (
+                    <button onClick={recompute} disabled={busy} className="text-[10px] uppercase tracking-widest border border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory px-3 py-1.5 disabled:opacity-40" data-testid="eligibility-recompute-btn">
+                        {busy ? <Loader2 size={11} className="inline animate-spin" /> : "Recompute"}
+                    </button>
+                )}
+            </div>
+            {err && <div className="p-3 text-[11px] text-mpca-oxblood bg-mpca-oxblood/5">{err}</div>}
+            {(player.eligibility_reasons || []).length > 0 && (
+                <ul className="p-4 space-y-1.5 text-[11px] text-mpca-green-dark" data-testid="eligibility-reasons">
+                    {player.eligibility_reasons.map((r, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                            <span className="text-mpca-brass mt-0.5">·</span>
+                            <span>{r}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+};
+
+
 const OverviewTab = ({ player, persona, locked, onChanged }) => {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState({});
@@ -282,6 +337,9 @@ const OverviewTab = ({ player, persona, locked, onChanged }) => {
 
     return (
         <div className="space-y-8" data-testid="overview-tab">
+            {/* MPCA-209 · Eligibility Tag panel — computed from decision tree */}
+            <EligibilityTagPanel player={player} persona={persona} onChanged={onChanged} />
+
             <div className="flex items-center justify-between">
                 <div className="overline">Personal & Family</div>
                 {canEdit && !editing && (

@@ -825,6 +825,12 @@ class Player(PlayerBase):
     # has `medical_required=True`.
     medical_cleared_at: Optional[str] = None
     medical_cleared_by: Optional[str] = None
+    # MPCA-209 · Eligibility Tag (per MPCA_Eligibility_Checks doc, Season 2025-26).
+    # One of: Local/Birth, Local/Residence, Local/Employment, Local/Education,
+    # Guest/MP-Domicile, Guest/Education, Guest/Out-of-MP, Ineligible.
+    eligibility_tag: Optional[str] = None
+    eligibility_reasons: List[str] = Field(default_factory=list)
+    eligibility_computed_at: Optional[str] = None
 
 
 class PlayerCreate(PlayerBase):

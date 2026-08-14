@@ -927,6 +927,11 @@ class TournamentMaster(BaseModel):
     # MPCA-207 · Player-age eligibility (drives Player Profile → Eligible Tournaments panel)
     born_on_or_before: Optional[str] = None                  # ISO date; latest DOB allowed
     born_on_or_after: Optional[str] = None                   # ISO date; earliest DOB allowed
+    # MPCA-211 · Squad restrictions — max Guest players allowed per Guest sub-tag
+    max_guest_mp_domicile: int = 0
+    max_guest_education: int = 0
+    max_guest_out_of_mp: int = 0
+    medical_required: bool = False
     default_format: Optional[TournamentFormat] = None
     default_scope: Optional[TournamentScope] = None
     is_active: bool = True
@@ -946,6 +951,10 @@ class TournamentMasterCreate(BaseModel):
     play_type: Optional[Literal["Multi_Day", "Limited_Overs"]] = None
     born_on_or_before: Optional[str] = None
     born_on_or_after: Optional[str] = None
+    max_guest_mp_domicile: Optional[int] = None
+    max_guest_education: Optional[int] = None
+    max_guest_out_of_mp: Optional[int] = None
+    medical_required: Optional[bool] = None
     default_format: Optional[TournamentFormat] = None
     default_scope: Optional[TournamentScope] = None
     sort_order: int = 100
@@ -961,6 +970,10 @@ class TournamentMasterPatch(BaseModel):
     play_type: Optional[Literal["Multi_Day", "Limited_Overs"]] = None
     born_on_or_before: Optional[str] = None
     born_on_or_after: Optional[str] = None
+    max_guest_mp_domicile: Optional[int] = None
+    max_guest_education: Optional[int] = None
+    max_guest_out_of_mp: Optional[int] = None
+    medical_required: Optional[bool] = None
     default_format: Optional[TournamentFormat] = None
     default_scope: Optional[TournamentScope] = None
     is_active: Optional[bool] = None

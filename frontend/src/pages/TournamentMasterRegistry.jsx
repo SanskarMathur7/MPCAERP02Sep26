@@ -18,6 +18,8 @@ const emptyForm = () => ({
     name: "", short_name: "", description: "",
     gender: "", age_grp: "", play_type: "",
     born_on_or_before: "", born_on_or_after: "",
+    max_guest_mp_domicile: 0, max_guest_education: 0, max_guest_out_of_mp: 0,
+    medical_required: false,
     default_format: "", default_scope: "", sort_order: 100,
 });
 
@@ -63,6 +65,10 @@ export default function TournamentMasterRegistry() {
                 play_type: form.play_type || null,
                 born_on_or_before: form.born_on_or_before || null,
                 born_on_or_after: form.born_on_or_after || null,
+                max_guest_mp_domicile: parseInt(form.max_guest_mp_domicile) || 0,
+                max_guest_education: parseInt(form.max_guest_education) || 0,
+                max_guest_out_of_mp: parseInt(form.max_guest_out_of_mp) || 0,
+                medical_required: !!form.medical_required,
                 default_format: form.default_format || null,
                 default_scope: form.default_scope || null,
                 sort_order: parseInt(form.sort_order) || 100,
@@ -84,6 +90,10 @@ export default function TournamentMasterRegistry() {
             play_type: row.play_type || "",
             born_on_or_before: row.born_on_or_before || "",
             born_on_or_after: row.born_on_or_after || "",
+            max_guest_mp_domicile: row.max_guest_mp_domicile ?? 0,
+            max_guest_education: row.max_guest_education ?? 0,
+            max_guest_out_of_mp: row.max_guest_out_of_mp ?? 0,
+            medical_required: !!row.medical_required,
             default_format: row.default_format || "",
             default_scope: row.default_scope || "",
             sort_order: row.sort_order ?? 100,
@@ -102,6 +112,10 @@ export default function TournamentMasterRegistry() {
                 play_type: editingForm.play_type || null,
                 born_on_or_before: editingForm.born_on_or_before || null,
                 born_on_or_after: editingForm.born_on_or_after || null,
+                max_guest_mp_domicile: parseInt(editingForm.max_guest_mp_domicile) || 0,
+                max_guest_education: parseInt(editingForm.max_guest_education) || 0,
+                max_guest_out_of_mp: parseInt(editingForm.max_guest_out_of_mp) || 0,
+                medical_required: !!editingForm.medical_required,
                 default_format: editingForm.default_format || null,
                 default_scope: editingForm.default_scope || null,
                 sort_order: parseInt(editingForm.sort_order) || 100,
@@ -230,6 +244,22 @@ export default function TournamentMasterRegistry() {
                             <div className="overline text-[9px] mb-1">Born on or After</div>
                             <input type="date" className="input-heritage" value={form.born_on_or_after || ""} onChange={(e) => setForm({ ...form, born_on_or_after: e.target.value })} data-testid="registry-boa-input" />
                         </label>
+                        <label>
+                            <div className="overline text-[9px] mb-1">Max Guest · MP-Domicile</div>
+                            <input type="number" min="0" className="input-heritage" value={form.max_guest_mp_domicile} onChange={(e) => setForm({ ...form, max_guest_mp_domicile: e.target.value })} data-testid="registry-mp-domicile-input" />
+                        </label>
+                        <label>
+                            <div className="overline text-[9px] mb-1">Max Guest · Education</div>
+                            <input type="number" min="0" className="input-heritage" value={form.max_guest_education} onChange={(e) => setForm({ ...form, max_guest_education: e.target.value })} data-testid="registry-education-input" />
+                        </label>
+                        <label>
+                            <div className="overline text-[9px] mb-1">Max Guest · Out-of-MP</div>
+                            <input type="number" min="0" className="input-heritage" value={form.max_guest_out_of_mp} onChange={(e) => setForm({ ...form, max_guest_out_of_mp: e.target.value })} data-testid="registry-out-of-mp-input" />
+                        </label>
+                        <label className="flex items-center gap-2 mt-6">
+                            <input type="checkbox" checked={!!form.medical_required} onChange={(e) => setForm({ ...form, medical_required: e.target.checked })} data-testid="registry-medical-toggle" />
+                            <div className="overline text-[9px] !mb-0">Medical Required</div>
+                        </label>
                         <label className="md:col-span-6">
                             <div className="overline text-[9px] mb-1">Description</div>
                             <input className="input-heritage" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional context shown in tooltips" />
@@ -253,7 +283,7 @@ export default function TournamentMasterRegistry() {
                     <table className="w-full text-sm">
                         <thead className="bg-mpca-parchment border-b border-mpca-brass/40">
                             <tr>
-                                {["Sort", "Name", "Category", "Age Group", "Type", "Born on/before", "Born on/after", "Status", "Actions"].map((h) => (
+                                {["Sort", "Name", "Category", "Age Group", "Type", "Born on/before", "Born on/after", "Max MP-Dom", "Max Edu", "Max Out-of-MP", "Medical", "Status", "Actions"].map((h) => (
                                     <th key={h} className="text-left px-3 py-3 text-[10px] uppercase tracking-widest text-mpca-brass">{h}</th>
                                 ))}
                             </tr>
@@ -310,6 +340,28 @@ export default function TournamentMasterRegistry() {
                                             {isEditing
                                                 ? <input type="date" className="input-heritage !py-1 !text-xs" value={editingForm.born_on_or_after || ""} onChange={(e) => setEditingForm({ ...editingForm, born_on_or_after: e.target.value })} />
                                                 : (r.born_on_or_after || "—")}
+                                        </td>
+                                        <td className="px-3 py-2 text-center font-mono text-[11px]">
+                                            {isEditing
+                                                ? <input type="number" min="0" className="input-heritage !py-1 !text-xs w-16" value={editingForm.max_guest_mp_domicile} onChange={(e) => setEditingForm({ ...editingForm, max_guest_mp_domicile: e.target.value })} />
+                                                : <span className={r.max_guest_mp_domicile > 0 ? "text-mpca-oxblood" : "text-mpca-gray-dark"}>{r.max_guest_mp_domicile ?? 0}</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-center font-mono text-[11px]">
+                                            {isEditing
+                                                ? <input type="number" min="0" className="input-heritage !py-1 !text-xs w-16" value={editingForm.max_guest_education} onChange={(e) => setEditingForm({ ...editingForm, max_guest_education: e.target.value })} />
+                                                : <span className={r.max_guest_education > 0 ? "text-mpca-oxblood" : "text-mpca-gray-dark"}>{r.max_guest_education ?? 0}</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-center font-mono text-[11px]">
+                                            {isEditing
+                                                ? <input type="number" min="0" className="input-heritage !py-1 !text-xs w-16" value={editingForm.max_guest_out_of_mp} onChange={(e) => setEditingForm({ ...editingForm, max_guest_out_of_mp: e.target.value })} />
+                                                : <span className={r.max_guest_out_of_mp > 0 ? "text-mpca-oxblood" : "text-mpca-gray-dark"}>{r.max_guest_out_of_mp ?? 0}</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-center text-[10px]">
+                                            {isEditing
+                                                ? <input type="checkbox" checked={!!editingForm.medical_required} onChange={(e) => setEditingForm({ ...editingForm, medical_required: e.target.checked })} />
+                                                : (r.medical_required
+                                                    ? <span className="uppercase tracking-widest text-mpca-oxblood font-mono">Yes</span>
+                                                    : <span className="uppercase tracking-widest text-mpca-gray-dark font-mono">No</span>)}
                                         </td>
                                         <td className="px-3 py-2 text-[10px]">
                                             {r.is_active

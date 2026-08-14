@@ -1338,9 +1338,32 @@ const PlayerDetail = () => {
                         <ArrowLeft size={12} /> Back to Player Register
                     </button>
                     <div className="flex items-start gap-6 flex-wrap">
-                        <div className="w-16 h-16 rounded-full bg-mpca-oxblood text-mpca-gold-light flex items-center justify-center font-serif text-2xl shrink-0">
-                            {player.full_name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
-                        </div>
+                        {(() => {
+                            // MPCA-208 · Player-photo placeholder.
+                            // Priority: 1) player.photo_url, 2) photo in KYC documents, 3) initials tile.
+                            const photoDoc = (player.documents || []).find((d) => d.type === "photo" && d.file_url);
+                            const photoSrc = player.photo_url || photoDoc?.file_url || null;
+                            const initials = (player.full_name || "").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+                            return photoSrc ? (
+                                <img
+                                    src={photoSrc.startsWith("http") ? photoSrc : `${API}${photoSrc}`}
+                                    alt={player.full_name}
+                                    className="w-28 h-36 md:w-32 md:h-40 object-cover shrink-0 border-4 border-mpca-oxblood bg-mpca-gold-light/10"
+                                    data-testid="player-photo"
+                                    onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
+                                />
+                            ) : (
+                                <div
+                                    className="w-28 h-36 md:w-32 md:h-40 shrink-0 border-4 border-mpca-oxblood bg-mpca-navy/60 flex flex-col items-center justify-center gap-1"
+                                    data-testid="player-photo-placeholder"
+                                    title="Passport-size photograph"
+                                >
+                                    <User size={40} className="text-mpca-gold-light/60" />
+                                    <div className="font-serif text-2xl text-mpca-gold-light">{initials || "—"}</div>
+                                    <div className="text-[8px] uppercase tracking-widest text-mpca-gold-light/50">Photo</div>
+                                </div>
+                            );
+                        })()}
                         <div className="flex-1 min-w-[280px]">
                             {player.player_display_id && (
                                 <div className="text-[11px] font-mono uppercase tracking-widest text-mpca-gold-light">{player.player_display_id}</div>

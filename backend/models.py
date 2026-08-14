@@ -1066,6 +1066,11 @@ class RateCard(BaseModel):
     # with tournament-type-specific rows (e.g. VIP hospitality, Trophy engraving).
     # Each dict shape: {key, name, driver, rooms, basis, owner, md_rate, nmd_rate}
     custom_heads: List[Dict[str, Any]] = Field(default_factory=list)
+    # MPCA-224 · Meta overrides for DEFAULT heads — MPCA may rename / change
+    # driver / owner / rooms / basis on any of the 17 default rows. Shape:
+    # {head_key: {name?, driver?, owner?, rooms?, basis?}}. Compute engine
+    # merges these on top of BUDGET_HEADS_META.
+    head_meta_overrides: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: Optional[str] = None
     updated_by: Optional[str] = None

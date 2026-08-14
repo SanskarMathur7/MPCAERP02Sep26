@@ -78,6 +78,24 @@ export default function RateCardMaster() {
         next.budget_rates[headKey] = { ...(next.budget_rates[headKey] || { md: 0, nmd: 0 }), [mdOrNmd]: Number(val) || 0 };
         setCard(next); setDirty(true);
     };
+
+    // MPCA-224 · Effective head metadata after applying overrides
+    const effectiveDefaultHeads = useMemo(() => {
+        const overrides = card?.head_meta_overrides || {};
+        return (heads.budget_heads || []).map((h) => ({ ...h, ...(overrides[h.key] || {}) }));
+    }, [heads.budget_heads, card?.head_meta_overrides]);
+
+    // MPCA-224 · Patch a head's metadata (name / driver / owner). Works for
+    // both default 17 heads and custom line items — backend routes to
+    // `head_meta_overrides` or updates the custom row in-place.
+    const patchHeadMeta = async (key, field, value) => {
+        setSaving(true); setErr(null);
+        try {
+            const { data } = await api.patch(`/rate-cards/${card.id}/heads/${key}`, { [field]: value });
+            setCard(data);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setSaving(false); }
+    };
     const setTravelRate = (headKey, mdOrNmd, val) => {
         const next = { ...card, travel_rates: { ...(card.travel_rates || {}) } };
         next.travel_rates[headKey] = { ...(next.travel_rates[headKey] || { md: 0, nmd: 0 }), [mdOrNmd]: Number(val) || 0 };
@@ -209,18 +227,55 @@ export default function RateCardMaster() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {budgetHeads.map((h) => {
+                                {effectiveDefaultHeads.map((h) => {
                                     const r = (card.budget_rates || {})[h.key] || { md: 0, nmd: 0 };
                                     return (
                                         <tr key={h.key} className="border-b border-mpca-brass/10" data-testid={`rc-b-row-${h.key}`}>
                                             <td className="px-3 py-2 font-serif text-mpca-green-dark">
-                                                {h.name}
-                                                {h.rooms && <span className="ml-1 text-[9px] text-mpca-brass italic">· rooms = ceil/2</span>}
-                                                {h.basis === "Match" && <span className="ml-1 text-[9px] text-mpca-oxblood italic">· once per match</span>}
+                                                <input
+                                                    type="text"
+                                                    className="input-heritage !py-1 !text-xs w-full font-serif"
+                                                    value={h.name}
+                                                    disabled={!canEdit}
+                                                    onBlur={(e) => e.target.value !== h.name && patchHeadMeta(h.key, "name", e.target.value)}
+                                                    onChange={(e) => setCard((c) => ({ ...c, head_meta_overrides: { ...(c.head_meta_overrides || {}), [h.key]: { ...(c.head_meta_overrides?.[h.key] || {}), name: e.target.value } } }))}
+                                                    data-testid={`rc-b-name-${h.key}`}
+                                                />
+                                                <div className="mt-1 text-[9px] text-mpca-brass italic space-x-1">
+                                                    {h.rooms && <span>rooms = ceil/2</span>}
+                                                    {h.basis === "Match" && <span>once per match</span>}
+                                                </div>
                                             </td>
-                                            <td className="px-3 py-2 font-mono text-[10px] text-mpca-brass">{h.driver || "flat"}</td>
                                             <td className="px-3 py-2">
-                                                <span className={`px-1.5 py-0.5 text-[9px] border ${OWNER_COLORS[h.owner] || ""} uppercase tracking-widest`}>{h.owner}</span>
+                                                <select
+                                                    className="input-heritage !py-1 !text-[10px] font-mono w-full"
+                                                    value={h.driver || ""}
+                                                    disabled={!canEdit}
+                                                    onChange={(e) => patchHeadMeta(h.key, "driver", e.target.value || null)}
+                                                    data-testid={`rc-b-driver-${h.key}`}
+                                                >
+                                                    <option value="">flat</option>
+                                                    <option value="AwayTeamPax">AwayTeamPax</option>
+                                                    <option value="HostTeamPax">HostTeamPax</option>
+                                                    <option value="MatchOfficialsPax">MatchOfficialsPax</option>
+                                                    <option value="AllPax">AllPax</option>
+                                                    <option value="TeamCount">TeamCount</option>
+                                                    <option value="HostTeamCount">HostTeamCount</option>
+                                                </select>
+                                            </td>
+                                            <td className="px-3 py-2">
+                                                <select
+                                                    className={`input-heritage !py-1 !text-[10px] uppercase tracking-widest w-full ${OWNER_COLORS[h.owner] || ""}`}
+                                                    value={h.owner}
+                                                    disabled={!canEdit}
+                                                    onChange={(e) => patchHeadMeta(h.key, "owner", e.target.value)}
+                                                    data-testid={`rc-b-owner-${h.key}`}
+                                                >
+                                                    <option>Host</option>
+                                                    <option>Visitor</option>
+                                                    <option>Officials</option>
+                                                    <option>Common</option>
+                                                </select>
                                             </td>
                                             <td className="px-3 py-2 text-right">
                                                 <input
@@ -293,14 +348,56 @@ export default function RateCardMaster() {
                                     return (
                                         <tr key={h.key} className="border-b border-mpca-brass/10" data-testid={`rc-custom-row-${h.key}`}>
                                             <td className="px-3 py-2 font-serif text-mpca-green-dark">
-                                                {h.name}
-                                                {h.rooms && <span className="ml-1 text-[9px] text-mpca-brass italic">· rooms = ceil/2</span>}
-                                                {h.basis === "Match" && <span className="ml-1 text-[9px] text-mpca-oxblood italic">· once per match</span>}
+                                                <input
+                                                    type="text"
+                                                    className="input-heritage !py-1 !text-xs w-full font-serif"
+                                                    value={h.name}
+                                                    disabled={!canEdit}
+                                                    onBlur={(e) => e.target.value !== h.name && patchHeadMeta(h.key, "name", e.target.value)}
+                                                    onChange={(e) => setCard((c) => ({ ...c, custom_heads: (c.custom_heads || []).map((x) => x.key === h.key ? { ...x, name: e.target.value } : x) }))}
+                                                    data-testid={`rc-custom-name-${h.key}`}
+                                                />
+                                                <div className="mt-1 text-[9px] text-mpca-brass italic space-x-1">
+                                                    {h.rooms && <span>rooms = ceil/2</span>}
+                                                    {h.basis === "Match" && <span>once per match</span>}
+                                                </div>
                                             </td>
-                                            <td className="px-3 py-2 font-mono text-[10px] text-mpca-brass">{h.driver || "flat"}</td>
-                                            <td className="px-3 py-2 font-mono text-[10px]">{h.basis}</td>
                                             <td className="px-3 py-2">
-                                                <span className={`px-1.5 py-0.5 text-[9px] border ${OWNER_COLORS[h.owner] || ""} uppercase tracking-widest`}>{h.owner}</span>
+                                                <select
+                                                    className="input-heritage !py-1 !text-[10px] font-mono w-full"
+                                                    value={h.driver || ""}
+                                                    disabled={!canEdit}
+                                                    onChange={(e) => patchHeadMeta(h.key, "driver", e.target.value || null)}
+                                                    data-testid={`rc-custom-driver-${h.key}`}
+                                                >
+                                                    <option value="">flat</option>
+                                                    <option value="AwayTeamPax">AwayTeamPax</option>
+                                                    <option value="HostTeamPax">HostTeamPax</option>
+                                                    <option value="MatchOfficialsPax">MatchOfficialsPax</option>
+                                                    <option value="AllPax">AllPax</option>
+                                                    <option value="TeamCount">TeamCount</option>
+                                                    <option value="HostTeamCount">HostTeamCount</option>
+                                                </select>
+                                            </td>
+                                            <td className="px-3 py-2">
+                                                <select className="input-heritage !py-1 !text-[10px] font-mono w-full" value={h.basis} disabled={!canEdit} onChange={(e) => patchHeadMeta(h.key, "basis", e.target.value)} data-testid={`rc-custom-basis-${h.key}`}>
+                                                    <option value="MatchDays">MatchDays</option>
+                                                    <option value="Match">Match</option>
+                                                </select>
+                                            </td>
+                                            <td className="px-3 py-2">
+                                                <select
+                                                    className={`input-heritage !py-1 !text-[10px] uppercase tracking-widest w-full ${OWNER_COLORS[h.owner] || ""}`}
+                                                    value={h.owner}
+                                                    disabled={!canEdit}
+                                                    onChange={(e) => patchHeadMeta(h.key, "owner", e.target.value)}
+                                                    data-testid={`rc-custom-owner-${h.key}`}
+                                                >
+                                                    <option>Host</option>
+                                                    <option>Visitor</option>
+                                                    <option>Officials</option>
+                                                    <option>Common</option>
+                                                </select>
                                             </td>
                                             <td className="px-3 py-2 text-right">
                                                 <input type="number" min={0} className="input-heritage !py-1 !text-xs font-mono w-24 text-right" value={r.md ?? 0} disabled={!canEdit} onChange={(e) => setBudgetRate(h.key, "md", e.target.value)} data-testid={`rc-custom-md-${h.key}`} />

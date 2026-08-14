@@ -15,7 +15,7 @@ Endpoints
     GET    /api/rate-cards/heads                        → returns BUDGET_HEADS_META + TRAVEL_HEADS_META (frontend meta)
 """
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
@@ -284,4 +284,71 @@ async def delete_custom_head(card_id: str, key: str):
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }},
     )
+    return await db.rate_cards.find_one({"id": card_id}, {"_id": 0})
+
+
+# ─────────────── MPCA-224 · Editable head metadata (name / driver / owner) ───────────────
+
+_ALLOWED_DRIVERS = {"", "AwayTeamPax", "HostTeamPax", "MatchOfficialsPax", "AllPax", "TeamCount", "HostTeamCount"}
+_ALLOWED_OWNERS = {"Host", "Visitor", "Officials", "Common"}
+_ALLOWED_BASIS = {"MatchDays", "Match"}
+_ALLOWED_META = {"name", "driver", "owner", "rooms", "basis"}
+
+
+@api_router.patch("/rate-cards/{card_id}/heads/{key}", response_model=RateCard)
+async def patch_head_meta(card_id: str, key: str, patch: Dict[str, Any]):
+    """MPCA-224 · Edit the metadata of a rate-card head (default OR custom).
+
+    Accepts any subset of `name`, `driver`, `owner`, `rooms`, `basis`. For
+    default 17 heads, changes go into `head_meta_overrides[key]`. For custom
+    heads, changes update the entry in `custom_heads` in-place.
+    """
+    card = await db.rate_cards.find_one({"id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(404, "Rate card not found")
+    # Sanitise + validate
+    clean: Dict[str, Any] = {}
+    for k, v in (patch or {}).items():
+        if k not in _ALLOWED_META:
+            continue
+        if k == "driver":
+            if v is None:
+                clean[k] = None
+            elif v in _ALLOWED_DRIVERS:
+                clean[k] = v or None
+        elif k == "owner":
+            if v in _ALLOWED_OWNERS:
+                clean[k] = v
+        elif k == "basis":
+            if v in _ALLOWED_BASIS:
+                clean[k] = v
+        elif k == "rooms":
+            clean[k] = bool(v)
+        elif k == "name":
+            s = str(v or "").strip()
+            if s:
+                clean[k] = s
+    if not clean:
+        return card
+
+    default_keys = {h["key"] for h in __import__("models", fromlist=["BUDGET_HEADS_META"]).BUDGET_HEADS_META}
+    updates: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if key in default_keys:
+        # Default head → override
+        overrides = dict(card.get("head_meta_overrides") or {})
+        overrides[key] = {**(overrides.get(key) or {}), **clean}
+        updates["head_meta_overrides"] = overrides
+    else:
+        # Custom head → update in-place
+        heads = list(card.get("custom_heads") or [])
+        found = False
+        for i, h in enumerate(heads):
+            if h.get("key") == key:
+                heads[i] = {**h, **clean}
+                found = True
+                break
+        if not found:
+            raise HTTPException(404, f"Head '{key}' not found on this rate card")
+        updates["custom_heads"] = heads
+    await db.rate_cards.update_one({"id": card_id}, {"$set": updates})
     return await db.rate_cards.find_one({"id": card_id}, {"_id": 0})

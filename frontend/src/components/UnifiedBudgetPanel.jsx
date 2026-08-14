@@ -27,8 +27,17 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState(null);
     const [tab, setTab] = useState("head");   // "head" | "pool" | "match" | "travel"
+    const [printMode, setPrintMode] = useState(false);
     const [expandedMatch, setExpandedMatch] = useState(null);
     const [savedMsg, setSavedMsg] = useState(null);
+
+    const handlePrint = () => {
+        setPrintMode(true);
+        setTimeout(() => {
+            window.print();
+            setPrintMode(false);
+        }, 250);
+    };
 
     const compute = async (save = false) => {
         setLoading(true); setErr(null);
@@ -98,6 +107,9 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button onClick={handlePrint} className="text-[11px] uppercase tracking-widest border border-mpca-brass/40 text-mpca-brass px-3 py-1.5 hover:bg-mpca-brass/10 flex items-center gap-1" data-testid="ub-print">
+                        <ClipboardList size={11} /> Print / PDF
+                    </button>
                     <button onClick={() => compute(false)} disabled={loading} className="text-[11px] uppercase tracking-widest border border-mpca-brass/40 text-mpca-brass px-3 py-1.5 hover:bg-mpca-brass/10 flex items-center gap-1 disabled:opacity-40" data-testid="ub-refresh">
                         {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCcw size={11} />} Refresh
                     </button>
@@ -166,7 +178,7 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                     <TabButton active={tab === "travel"} onClick={() => setTab("travel")} icon={<Plane size={12} />} testId="ub-tab-travel">Travel Grant · {INR(travel.grand_total || 0)}</TabButton>
                 </div>
 
-                {tab === "head" && (
+                {(tab === "head" || printMode) && (
                     <div className="border border-mpca-brass/30 overflow-x-auto" data-testid="ub-head-table">
                         <table className="w-full text-sm">
                             <thead className="bg-mpca-green-dark text-mpca-gold-light text-[10px] uppercase tracking-widest">
@@ -204,7 +216,7 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                     </div>
                 )}
 
-                {tab === "pool" && (
+                {(tab === "pool" || printMode) && (
                     <div className="border border-mpca-brass/30 overflow-x-auto" data-testid="ub-pool-table">
                         <table className="w-full text-sm">
                             <thead className="bg-mpca-green-dark text-mpca-gold-light text-[10px] uppercase tracking-widest">
@@ -235,7 +247,7 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                     </div>
                 )}
 
-                {tab === "match" && (
+                {(tab === "match" || printMode) && (
                     <div className="border border-mpca-brass/30" data-testid="ub-match-table">
                         <table className="w-full text-sm">
                             <thead className="bg-mpca-green-dark text-mpca-gold-light text-[10px] uppercase tracking-widest">
@@ -294,7 +306,7 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                     </div>
                 )}
 
-                {tab === "travel" && (
+                {(tab === "travel" || printMode) && (
                     <div className="space-y-4" data-testid="ub-travel-panel">
                         {(!travel.trips || travel.trips.length === 0) ? (
                             <div className="border border-dashed border-mpca-brass/40 bg-mpca-parchment/40 px-6 py-8 text-center text-sm italic text-mpca-gray-dark">
@@ -329,30 +341,32 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                                 </table>
                             </div>
                             <div className="border border-mpca-brass/30 overflow-x-auto" data-testid="ub-travel-trips">
-                                <div className="px-4 py-2 bg-mpca-navy text-mpca-gold-light font-serif text-sm">Travel Grant · by Trip</div>
+                                <div className="px-4 py-2 bg-mpca-navy text-mpca-gold-light font-serif text-sm flex items-center justify-between">
+                                    <span>Travel Grant · by Trip</span>
+                                    <span className="text-[10px] uppercase tracking-widest opacity-80">Edit Pax / MD / NMD inline to override auto-derived values</span>
+                                </div>
                                 <table className="w-full text-sm">
                                     <thead className="bg-mpca-parchment/60 text-mpca-brass uppercase text-[9px] tracking-widest">
                                         <tr>
                                             <th className="px-3 py-2 text-left">Division</th>
                                             <th className="px-3 py-2 text-left">Pool</th>
                                             <th className="px-3 py-2 text-left">Host</th>
-                                            <th className="px-3 py-2 text-right">Pax</th>
-                                            <th className="px-3 py-2 text-right">MD</th>
-                                            <th className="px-3 py-2 text-right">NMD</th>
+                                            <th className="px-3 py-2 text-right w-24">Pax</th>
+                                            <th className="px-3 py-2 text-right w-20">MD</th>
+                                            <th className="px-3 py-2 text-right w-20">NMD</th>
                                             <th className="px-3 py-2 text-right">Total ₹</th>
+                                            <th className="px-3 py-2 text-right w-20"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {(travel.trips || []).map((t) => (
-                                            <tr key={t.id} className="border-t border-mpca-brass/10 hover:bg-mpca-parchment/40" data-testid={`ub-trip-${t.id}`}>
-                                                <td className="px-3 py-2 font-serif text-mpca-green-dark">{t.division}</td>
-                                                <td className="px-3 py-2 text-xs">{t.pool_name}</td>
-                                                <td className="px-3 py-2 font-mono text-xs">{t.host_code}</td>
-                                                <td className="px-3 py-2 text-right font-mono">{t.pax}</td>
-                                                <td className="px-3 py-2 text-right font-mono">{t.match_days}</td>
-                                                <td className="px-3 py-2 text-right font-mono text-mpca-brass">{t.non_match_days}</td>
-                                                <td className="px-3 py-2 text-right font-mono font-semibold">{INR(t.total)}</td>
-                                            </tr>
+                                            <TripRow
+                                                key={t.id}
+                                                trip={t}
+                                                canEdit={canEdit}
+                                                tournamentId={tournament.id}
+                                                onSaved={() => compute(false)}
+                                            />
                                         ))}
                                     </tbody>
                                 </table>
@@ -376,5 +390,62 @@ function TabButton({ active, onClick, children, icon, testId }) {
         >
             {icon} {children}
         </button>
+    );
+}
+
+// MPCA-221 · Editable Trip row — override pax / md / nmd per trip.
+function TripRow({ trip, canEdit, tournamentId, onSaved }) {
+    const [edit, setEdit] = useState({ pax: trip.pax, md: trip.match_days, nmd: trip.non_match_days });
+    const [saving, setSaving] = useState(false);
+    const dirty =
+        Number(edit.pax) !== Number(trip.pax) ||
+        Number(edit.md) !== Number(trip.match_days) ||
+        Number(edit.nmd) !== Number(trip.non_match_days);
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            const patch = { [trip.id]: { pax: Number(edit.pax) || 0, md: Number(edit.md) || 0, nmd: Number(edit.nmd) || 0 } };
+            await api.patch(`/tournaments/${tournamentId}/travel-trip-overrides`, patch);
+            await onSaved?.();
+        } finally { setSaving(false); }
+    };
+    const reset = async () => {
+        setSaving(true);
+        try {
+            await api.patch(`/tournaments/${tournamentId}/travel-trip-overrides`, { [trip.id]: null });
+            await onSaved?.();
+        } finally { setSaving(false); }
+    };
+
+    const inputCls = "input-heritage !py-1 !text-xs font-mono w-16 text-right";
+    return (
+        <tr className="border-t border-mpca-brass/10 hover:bg-mpca-parchment/40" data-testid={`ub-trip-${trip.id}`}>
+            <td className="px-3 py-2 font-serif text-mpca-green-dark">{trip.division}</td>
+            <td className="px-3 py-2 text-xs">{trip.pool_name}</td>
+            <td className="px-3 py-2 font-mono text-xs">{trip.host_code}</td>
+            <td className="px-3 py-2 text-right">
+                <input type="number" min={0} className={inputCls} value={edit.pax} disabled={!canEdit} onChange={(e) => setEdit({ ...edit, pax: e.target.value })} data-testid={`ub-trip-pax-${trip.id}`} />
+            </td>
+            <td className="px-3 py-2 text-right">
+                <input type="number" min={0} className={inputCls} value={edit.md} disabled={!canEdit} onChange={(e) => setEdit({ ...edit, md: e.target.value })} data-testid={`ub-trip-md-${trip.id}`} />
+            </td>
+            <td className="px-3 py-2 text-right">
+                <input type="number" min={0} className={inputCls} value={edit.nmd} disabled={!canEdit} onChange={(e) => setEdit({ ...edit, nmd: e.target.value })} data-testid={`ub-trip-nmd-${trip.id}`} />
+            </td>
+            <td className="px-3 py-2 text-right font-mono font-semibold">{INR(trip.total)}</td>
+            <td className="px-3 py-2 text-right">
+                {canEdit && dirty && (
+                    <button onClick={save} disabled={saving} className="text-[9px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 disabled:opacity-40" data-testid={`ub-trip-save-${trip.id}`}>
+                        {saving ? "…" : "Save"}
+                    </button>
+                )}
+                {canEdit && !dirty && (
+                    <button onClick={reset} disabled={saving} className="text-[9px] uppercase tracking-widest text-mpca-brass border border-mpca-brass/40 px-2 py-1 disabled:opacity-40" title="Clear override & restore auto values" data-testid={`ub-trip-reset-${trip.id}`}>
+                        Reset
+                    </button>
+                )}
+            </td>
+        </tr>
     );
 }

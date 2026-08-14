@@ -379,15 +379,15 @@ def compute_travel_grant(
         pool_matches = [m for m in matches if (m.get("pool_id") or m.get("poolId")) == p.get("id")]
         divs: set = set()
         for m in pool_matches:
-            a = m.get("team_a") or m.get("teamA")
-            b = m.get("team_b") or m.get("teamB")
+            a = m.get("team_a") or m.get("teamA") or m.get("home_team")
+            b = m.get("team_b") or m.get("teamB") or m.get("away_team")
             if a: divs.add(a)
             if b: divs.add(b)
         host_code = p.get("host_division_code") or p.get("host_district_code")
         for div in divs:
             if div == host_code:
                 continue
-            dm = [m for m in pool_matches if (m.get("team_a") or m.get("teamA")) == div or (m.get("team_b") or m.get("teamB")) == div]
+            dm = [m for m in pool_matches if (m.get("team_a") or m.get("teamA") or m.get("home_team")) == div or (m.get("team_b") or m.get("teamB") or m.get("away_team")) == div]
             dm = [m for m in dm if match_days(m) > 0]
             if not dm:
                 continue
@@ -651,4 +651,93 @@ async def preview_compute_with_card(card_id: str, payload: Dict[str, Any]):
     return {
         "budget": compute_tournament_budget(matches, pools, card, default_squad=default_squad),
         "travel_grant": compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=trip_overrides),
+    }
+
+
+# ─────────────────── MPCA-221 · Trip Overrides + Legacy Migration ───────────────────
+
+@api_router.patch("/tournaments/{tid}/travel-trip-overrides")
+async def patch_trip_overrides(tid: str, payload: Dict[str, Any]):
+    """MPCA-221 · Upsert per-trip override values (pax / md / nmd) on the
+    tournament document. `payload` shape: `{ "<trip_id>": {"pax": 20, "md": 4, "nmd": 2} }`.
+
+    Sending `null` for a trip_id clears its override. Sending `{}` for a
+    trip_id also clears (all fields blank).
+    """
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "trip_overrides": 1, "id": 1})
+    if t is None:
+        raise HTTPException(404, "Tournament not found")
+    current = t.get("trip_overrides") or {}
+    for trip_id, ov in (payload or {}).items():
+        if ov is None or ov == {}:
+            current.pop(trip_id, None)
+        else:
+            clean = {k: v for k, v in ov.items() if v not in (None, "") and k in ("pax", "md", "nmd")}
+            if clean:
+                current[trip_id] = clean
+            else:
+                current.pop(trip_id, None)
+    await db.tournaments.update_one({"id": tid}, {"$set": {"trip_overrides": current}})
+    return {"trip_overrides": current}
+
+
+@api_router.post("/admin/migrate-legacy-budgets")
+async def migrate_legacy_budgets(dry_run: bool = True):
+    """MPCA-221 · One-off migration — for every Inter-Divisional and
+    Inter-District tournament, run the unified engine and persist the
+    snapshot under `unified_budget_snapshot`. Legacy scheme snapshots stay
+    untouched under their existing keys (`budget_snapshot`).
+
+    Returns a report so ops can see what would change before `dry_run=false`.
+    """
+    from datetime import datetime, timezone
+    report: List[Dict[str, Any]] = []
+    total_grand = 0.0
+    q = {"scope": {"$in": ["Inter_Divisional", "Inter_District", "Championship"]}}
+    async for t in db.tournaments.find(q, {"_id": 0}):
+        try:
+            setup_meta = t.get("setup_meta") or {}
+            pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
+            matches: List[Dict[str, Any]] = []
+            async for m in db.tournament_matches.find({"tournament_id": t["id"]}, {"_id": 0}):
+                matches.append(m)
+            if not matches:
+                report.append({"id": t["id"], "name": t.get("name"), "status": "skipped", "reason": "no matches"})
+                continue
+            card = await _load_rate_card_for_tournament(t)
+            default_squad = int(t.get("max_squad_size") or 18)
+            budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
+            travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=t.get("trip_overrides") or {})
+            grand = float(budget.get("grand_total") or 0)
+            total_grand += grand
+            snapshot = {
+                "rate_card_id": card.get("id"),
+                "tournament_type": card.get("tournament_type"),
+                "format_group": card.get("format_group"),
+                "budget": budget,
+                "travel_grant": travel,
+            }
+            entry = {"id": t["id"], "name": t.get("name"), "scope": t.get("scope"), "grand_total": grand, "match_count": budget.get("match_count", 0)}
+            if not dry_run:
+                await db.tournaments.update_one(
+                    {"id": t["id"]},
+                    {"$set": {
+                        "unified_budget_snapshot": snapshot,
+                        "unified_budget_snapshot_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+                entry["status"] = "migrated"
+            else:
+                entry["status"] = "would-migrate"
+            report.append(entry)
+        except HTTPException as he:
+            report.append({"id": t["id"], "name": t.get("name"), "status": "error", "reason": he.detail})
+        except Exception as e:
+            report.append({"id": t["id"], "name": t.get("name"), "status": "error", "reason": str(e)})
+    return {
+        "dry_run": dry_run,
+        "tournaments_scanned": len(report),
+        "would_migrate": sum(1 for r in report if r["status"] in ("would-migrate", "migrated")),
+        "total_grand_inr": total_grand,
+        "report": report,
     }

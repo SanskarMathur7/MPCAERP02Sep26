@@ -470,3 +470,34 @@
     pointer-events: none;
 }
 
+
+/* MPCA-221 · Print mode — hide sidebar/topbar & non-essential UI when the
+   Unified Budget panel is being sent to PDF via window.print(). */
+@media print {
+    aside, nav, header, .no-print,
+    [data-testid="ub-refresh"],
+    [data-testid="ub-print"],
+    [data-testid="ub-save-snapshot"],
+    [data-testid="ub-tabs"],
+    button {
+        display: none !important;
+    }
+    body, main, [data-testid="unified-budget-panel"] {
+        background: white !important;
+        color: black !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+    [data-testid="unified-budget-panel"] {
+        padding: 0 !important;
+    }
+    /* Print all tabs' content stacked */
+    [data-testid="ub-head-table"], [data-testid="ub-pool-table"],
+    [data-testid="ub-match-table"], [data-testid="ub-travel-panel"],
+    [data-testid="ub-travel-by-div"], [data-testid="ub-travel-trips"] {
+        display: block !important;
+        page-break-inside: avoid;
+        margin-bottom: 16px;
+    }
+    table { font-size: 10px; }
+}

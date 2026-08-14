@@ -45,6 +45,10 @@ class TournamentMatch(BaseModel):
     pool_id: Optional[str] = None               # mirrors setup_meta.division_pools/district_pools id
     format: Optional[str] = None                # per-match format override (defaults to tournament.format)
     officials_ids: Optional[Dict[str, List[str]]] = None   # {umpires:[], scorers:[], selectors:[], observers:[]}
+    # MPCA-218 · Utility-parity fields — allow inline card editor
+    label: Optional[str] = None                 # display label (e.g. "League R1", "SF-1")
+    squad: Optional[int] = None                 # per-match squad size override (blank = tournament default)
+    to_date: Optional[str] = None               # explicit end date (else derived from match_date + days - 1)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -65,6 +69,10 @@ class TournamentMatchCreate(BaseModel):
     pool_id: Optional[str] = None
     format: Optional[str] = None
     officials_ids: Optional[Dict[str, List[str]]] = None
+    # MPCA-218 · Utility-parity
+    label: Optional[str] = None
+    squad: Optional[int] = None
+    to_date: Optional[str] = None
 
 
 class TournamentMatchPatch(BaseModel):
@@ -85,6 +93,10 @@ class TournamentMatchPatch(BaseModel):
     pool_id: Optional[str] = None
     format: Optional[str] = None
     officials_ids: Optional[Dict[str, List[str]]] = None
+    # MPCA-218 · Utility-parity
+    label: Optional[str] = None
+    squad: Optional[int] = None
+    to_date: Optional[str] = None
 
 
 @api_router.get("/tournaments/{tid}/matches", response_model=List[TournamentMatch])

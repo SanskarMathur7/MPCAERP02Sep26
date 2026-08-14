@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Save, X, Loader2, Lock, LockOpen, Calendar as CalIcon, Upload } from "lucide-react";
 import Papa from "papaparse";
 import { api } from "@/lib/api";
+import MatchFixtureCard from "@/components/MatchFixtureCard";
 
 const inputCls = "input-heritage !py-1.5 !text-xs";
 
@@ -82,9 +83,38 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
     };
     useEffect(() => { if (tournament?.id) load(); }, [tournament?.id]); // eslint-disable-line
 
-    const addMatch = async () => {
+    // MPCA-218 · Fetch officials MPCA has assigned to this tournament.
+    // The Match Fixture Card multi-selects source their options from here.
+    const [tournamentOfficials, setTournamentOfficials] = useState([]);
+    useEffect(() => {
+        if (!tournament?.id) return;
+        api.get(`/tournaments/${tournament.id}/match-officials`)
+            .then((r) => setTournamentOfficials(r.data || []))
+            .catch(() => setTournamentOfficials([]));
+    }, [tournament?.id]);
+
+    // Group by role. Accepted-only (MPCA-133+ workflow). Fall back to all if none accepted.
+    const officialsByRole = useMemo(() => {
+        const accepted = tournamentOfficials.filter((o) => o.acceptance_status === "Accepted");
+        const source = accepted.length > 0 ? accepted : tournamentOfficials;
+        const bucketOf = (role) => {
+            const r = String(role || "").toLowerCase();
+            if (r.startsWith("umpire")) return "umpires";
+            if (r.startsWith("scorer")) return "scorers";
+            if (r.startsWith("selector")) return "selectors";
+            if (r.startsWith("observer") || r === "match_referee" || r === "referee") return "observers";
+            return null;
+        };
+        const out = { umpires: [], scorers: [], selectors: [], observers: [] };
+        source.forEach((o) => {
+            const bucket = bucketOf(o.role);
+            if (bucket) out[bucket].push({ id: o.official_id, name: o.official_name || o.official_id });
+        });
+        return out;
+    }, [tournamentOfficials]);
+
+    const legacyAddMatch = async () => {
         if (!form.home_team || !form.away_team || !form.match_date) return alert("Date, Team 1 and Team 2 are required.");
-        // MPCA-217 · Coerce days-engine fields (blank strings → null, else Number)
         const payload = {
             ...form,
             days: Number(form.days) || 1,
@@ -217,114 +247,35 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                     No fixtures added yet. Use &laquo;Add Match&raquo; to build the calendar.
                 </div>
             ) : (
-                <div className="space-y-1" data-testid="match-list">
-                    {matches.map((m, idx) => {
-                        const poolName = poolOptions.find((p) => p.id === m.pool_id)?.name;
-                        return (
-                        <div key={m.id} className="grid grid-cols-12 gap-2 items-center border border-mpca-brass/20 px-3 py-2 text-xs" data-testid={`match-row-${idx}`}>
-                            <div className="col-span-1 font-mono text-mpca-brass text-[10px]">M{String(m.match_no).padStart(2, "0")}</div>
-                            <div className="col-span-2 font-mono text-mpca-green-dark">
-                                {m.match_date || "—"}
-                                {(m.days || 1) > 1 && <span className="ml-1 text-[10px] text-mpca-oxblood">× {m.days}d</span>}
-                                <span className="text-mpca-gray-dark ml-1">{m.start_time}</span>
-                            </div>
-                            <div className="col-span-1 text-[9px] uppercase tracking-widest text-mpca-oxblood">{m.stage.replace(/_/g, " ")}</div>
-                            <div className="col-span-3 font-serif">{m.home_team} <span className="text-mpca-gray-dark mx-1">vs</span> {m.away_team}</div>
-                            <div className="col-span-2 text-mpca-gray-dark text-[11px]">{m.venue_name}{m.ground_name ? ` · ${m.ground_name}` : ""}</div>
-                            <div className="col-span-2 flex items-center gap-1.5 text-[10px]">
-                                {poolName && <span className="px-1.5 py-0.5 bg-mpca-parchment/60 border border-mpca-brass/30 text-mpca-brass uppercase tracking-widest">{poolName}</span>}
-                                {m.actual_days != null && m.actual_days !== "" && <span className="text-mpca-oxblood">actual {m.actual_days}d</span>}
-                                {m.nmd_manual != null && m.nmd_manual !== "" && <span className="text-mpca-oxblood">NMD {m.nmd_manual}</span>}
-                                {(m.other_pax || 0) > 0 && <span className="text-mpca-navy">+{m.other_pax}px</span>}
-                            </div>
-                            <div className="col-span-1 text-right">
-                                {canEdit && !locked && (
-                                    <button onClick={() => removeMatch(m.id)} className="text-mpca-oxblood/70 hover:text-mpca-oxblood" data-testid={`match-delete-${idx}`}>
-                                        <Trash2 size={12} />
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    );})}
-                </div>
-            )}
-
-            {creating && (
-                <div className="mt-4 border border-mpca-oxblood/40 bg-mpca-parchment/30 p-3" data-testid="match-create-form">
-                    <div className="overline text-[9px] mb-2">Add fixture</div>
-                    <div className="grid grid-cols-4 gap-2">
-                        <select className={inputCls} value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })} data-testid="match-stage-select">
-                            <option>League</option>
-                            <option>Practice</option>
-                            <option>Quarter_Final</option>
-                            <option>Semi_Final</option>
-                            <option>Final</option>
-                        </select>
-                        <input type="date" className={inputCls} value={form.match_date} onChange={(e) => setForm({ ...form, match_date: e.target.value })} data-testid="match-date-input" />
-                        <input type="time" className={inputCls} value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} data-testid="match-time-input" />
-                        <select className={inputCls} value={form.home_team} onChange={(e) => setForm({ ...form, home_team: e.target.value })} data-testid="match-home-input">
-                            <option value="">Team 1…</option>
-                            {teamOptions.map((t) => <option key={`h-${t}`} value={t}>{t}</option>)}
-                        </select>
-                        <select className={inputCls} value={form.away_team} onChange={(e) => setForm({ ...form, away_team: e.target.value })} data-testid="match-away-input">
-                            <option value="">Team 2…</option>
-                            {teamOptions.filter((t) => t !== form.home_team).map((t) => <option key={`a-${t}`} value={t}>{t}</option>)}
-                        </select>
-                        <select className={inputCls + " col-span-2"} value={`${form.venue_name}|${form.ground_name}`} onChange={(e) => {
-                            const [v, g] = e.target.value.split("|"); setForm({ ...form, venue_name: v || "", ground_name: g || "" });
-                        }} data-testid="match-venue-input">
-                            <option value="|">{groundOptions.length ? "Ground…" : "No grounds available — add in Basics"}</option>
-                            {groundOptions.map((g) => (
-                                <option key={g.id} value={`${g.venue_name}|${g.ground_name}`}>{g.ground_name} @ {g.venue_name}</option>
-                            ))}
-                        </select>
-                        <input placeholder="Notes" className={inputCls} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-                    </div>
-
-                    {/* MPCA-217 · Days-engine inputs — feed budget compute + Days Engine tab */}
-                    <div className="mt-3 pt-3 border-t border-mpca-brass/20">
-                        <div className="overline text-[9px] mb-2 text-mpca-brass">Days Engine · budget drivers</div>
-                        <div className="grid grid-cols-5 gap-2">
-                            <label className="block">
-                                <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">Days (span)</div>
-                                <input type="number" min={1} className={inputCls} value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value })} data-testid="match-days-input" />
-                            </label>
-                            <label className="block">
-                                <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">Actual days</div>
-                                <input type="number" min={0} placeholder="= span" className={inputCls} value={form.actual_days} onChange={(e) => setForm({ ...form, actual_days: e.target.value })} data-testid="match-actual-days-input" />
-                            </label>
-                            <label className="block">
-                                <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">NMD manual</div>
-                                <input type="number" min={0} placeholder="auto" className={inputCls} value={form.nmd_manual} onChange={(e) => setForm({ ...form, nmd_manual: e.target.value })} data-testid="match-nmd-manual-input" />
-                            </label>
-                            <label className="block">
-                                <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">Other Pax</div>
-                                <input type="number" min={0} className={inputCls} value={form.other_pax} onChange={(e) => setForm({ ...form, other_pax: e.target.value })} data-testid="match-other-pax-input" />
-                            </label>
-                            <label className="block">
-                                <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">Pool</div>
-                                <select className={inputCls} value={form.pool_id} onChange={(e) => setForm({ ...form, pool_id: e.target.value })} data-testid="match-pool-input">
-                                    <option value="">— none —</option>
-                                    {poolOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                </select>
-                            </label>
-                        </div>
-                        <div className="text-[10px] text-mpca-gray-dark italic mt-1.5">
-                            <b>Days (span)</b> = 1 for Ltd Overs · 3-5 for Multi-Day / Four-Day. &nbsp;·&nbsp;
-                            <b>Actual days</b> blank = play the full span (Ranji-style Day-2 finish uses a lower number). &nbsp;·&nbsp;
-                            <b>NMD manual</b> blank = calendar-derived (arrival + gap). &nbsp;·&nbsp;
-                            <b>Other Pax</b> = VIPs / ground staff counted in AllPax.
-                        </div>
-                    </div>
-                    {usingFallbackGrounds && (
-                        <div className="mt-2 text-[10px] text-mpca-brass italic" data-testid="calendar-grounds-fallback-hint">
-                            Showing all scoped grounds ({fallbackGrounds.length}). Tip · pin exact grounds for this tournament under Tournament Basics → Grounds.
-                        </div>
+                <div className="space-y-3" data-testid="match-list">
+                    {creating && (
+                        <MatchFixtureCard
+                            match={{ stage: "League", days: 1, other_pax: 0 }}
+                            idx={matches.length + 1}
+                            canEdit={canEdit && !locked}
+                            tournament={tournament}
+                            teamOptions={teamOptions}
+                            poolOptions={poolOptions}
+                            officialsByRole={officialsByRole}
+                            onSaved={async () => { setCreating(false); await load(); onChange?.(); }}
+                            onCancel={() => setCreating(false)}
+                            startExpanded
+                        />
                     )}
-                    <div className="flex justify-end gap-2 mt-3">
-                        <button onClick={() => setCreating(false)} className="text-[10px] uppercase tracking-widest text-mpca-gray-dark px-3 py-1.5 hover:text-mpca-oxblood flex items-center gap-1"><X size={11} /> Cancel</button>
-                        <button onClick={addMatch} className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1" data-testid="match-save-btn"><Save size={11} /> Save fixture</button>
-                    </div>
+                    {matches.map((m, idx) => (
+                        <MatchFixtureCard
+                            key={m.id}
+                            match={m}
+                            idx={idx + 1}
+                            canEdit={canEdit && !locked}
+                            tournament={tournament}
+                            teamOptions={teamOptions}
+                            poolOptions={poolOptions}
+                            officialsByRole={officialsByRole}
+                            onSaved={async () => { await load(); onChange?.(); }}
+                            onDeleted={async () => { await load(); onChange?.(); }}
+                        />
+                    ))}
                 </div>
             )}
         </div>

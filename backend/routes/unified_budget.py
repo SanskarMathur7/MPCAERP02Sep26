@@ -540,7 +540,8 @@ async def days_engine_for_tournament(tid: str):
             overrides += 1
         rows.append({
             "id": m.get("id"),
-            "label": m.get("round") or m.get("label") or m.get("match_no"),
+            "label": m.get("label") or m.get("round") or m.get("match_no"),
+            "stage": m.get("stage"),
             "team_a": m.get("home_team") or m.get("team_a"),
             "team_b": m.get("away_team") or m.get("team_b"),
             "pool_id": m.get("pool_id"),

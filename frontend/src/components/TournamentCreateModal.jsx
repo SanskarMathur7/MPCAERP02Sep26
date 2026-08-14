@@ -428,16 +428,26 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                                                 const picked = dir.find((d) => d.name === v);
                                                 const m = picked?._master;
                                                 if (m) {
+                                                    // MPCA-212 · Strict mapping · registry play_type → form Format value
+                                                    // (Multi_Day → "Multi-Day", Limited_Overs → "Limited Overs").
+                                                    const ageMap = { Senior: "Open" };
+                                                    const rawAge = m.age_grp || "";
+                                                    const formAgeGroup = ageMap[rawAge]
+                                                        || (rawAge.match(/^U(\d+)$/i) ? `U-${rawAge.slice(1)}` : rawAge)
+                                                        || form.age_group;
+                                                    const formatMap = { Multi_Day: "Multi_Day", Limited_Overs: "One_Day" };
+                                                    const formFormat = formatMap[m.play_type] || m.default_format || form.format;
                                                     setForm({
                                                         ...form,
                                                         name: v,
                                                         trophy_name: (m.short_name || v.split(" · ")[0] || v),
-                                                        format: m.default_format || form.format,
+                                                        format: formFormat,
                                                         scope: m.default_scope || form.scope,
                                                         gender: m.gender === "Women" ? "Female" : (m.gender === "Men" ? "Male" : form.gender),
                                                         is_womens: m.gender === "Women",
-                                                        age_group: m.age_grp || form.age_group,
-                                                        age_cap_years: (m.age_grp || "").match(/^U(\d+)$/i)?.[1] || form.age_cap_years,
+                                                        age_group: formAgeGroup,
+                                                        age_cap_years: rawAge.match(/^U(\d+)$/i)?.[1] || "",
+                                                        medical_required: !!m.medical_required,
                                                     });
                                                 } else {
                                                     setForm({ ...form, name: v, trophy_name: v.split(" · ")[0] || v });
@@ -447,7 +457,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                                         >
                                             <option value="">— Pick from Tournament Registry —</option>
                                             {dir.map((d) => (
-                                                <option key={d.name} value={d.name}>{d.name}{d.age ? ` · ${d.age}` : ""}</option>
+                                                <option key={d.name} value={d.name}>{d.name}</option>
                                             ))}
                                         </select>
                                     )}

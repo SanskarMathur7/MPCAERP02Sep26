@@ -1,8 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { Save, Loader2, Plus, Trash2, Users as UsersIcon, MapPin, Home, Plane } from "lucide-react";
+import { Save, Loader2, Plus, Trash2, Users as UsersIcon, MapPin, Home, Plane, BookMarked, Lock } from "lucide-react";
 import { api } from "@/lib/api";
 import { getTypeByCode } from "@/lib/tournamentCatalog";
 import TournamentSchemeBadge from "@/components/TournamentSchemeBadge";
+
+// MPCA-213 · Derive Category + Age Group from a Master Tournament Registry row
+// so Tournament Basics stays locked to the single source of truth.
+const REGISTRY_AGE_TO_LABEL = { Senior: "Senior", U25: "U-25", U23: "U-23", U22: "U-22", U19: "U-19", U18: "U-18", U16: "U-16", U15: "U-15", U14: "U-14" };
+const deriveCategoryFromMaster = (m) => {
+    if (!m) return null;
+    const isWomen = m.gender === "Women";
+    const isSenior = (m.age_grp || "Senior") === "Senior";
+    if (isSenior) return isWomen ? "Senior Women" : "Senior Men";
+    return isWomen ? "Girls" : "Boys";
+};
+const deriveAgeGroupFromMaster = (m) => {
+    if (!m) return null;
+    return REGISTRY_AGE_TO_LABEL[m.age_grp || "Senior"] || m.age_grp || "Senior";
+};
 
 const inputCls = "input-heritage !py-1.5 !text-xs";
 const CAMP_TYPES = ["pre_camp", "coaching_camp", "vacation_camp"];
@@ -61,6 +76,9 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     const [bodies, setBodies] = useState([]);   // divisions OR districts depending on scope
     const [newTeam, setNewTeam] = useState({ name: "", pool: "A" });
     const [newGround, setNewGround] = useState({ ground_id: "" });
+    // MPCA-213 · Registry match — locks Category, Age Group, and Medical to
+    // the Master Tournament Registry entry that gave birth to this tournament.
+    const [registryMatch, setRegistryMatch] = useState(null);
     // MPCA-105 / MPCA-108 · Direct tournament field edits (max_squad_size,
     // medical_required) — separate from setup_meta because they live on the
     // Tournament model itself.
@@ -115,6 +133,56 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
             .then((r) => setAvailableGrounds(r.data || []))
             .catch(() => setAvailableGrounds([]));
     }, [tournament.host_body_id, meta.division_pools, meta.district_pools]);
+
+    // MPCA-213 · Look up the Master Tournament Registry row for THIS tournament
+    // and force Category / Age Group / Medical to match. Match on scope→category
+    // + name (case-insensitive).
+    useEffect(() => {
+        if (!tournament?.name) { setRegistryMatch(null); return; }
+        const scopeToCategory = {
+            Inter_Divisional: "Inter_Divisional",
+            Inter_District: "Inter_District",
+            Championship: "Inter_Divisional",
+            Invitational: null,
+        };
+        const category = scopeToCategory[tournament.scope];
+        if (!category) { setRegistryMatch(null); return; }
+        let cancelled = false;
+        api.get("/tournament-master", { params: { category } })
+            .then((r) => {
+                if (cancelled) return;
+                const rows = r.data || [];
+                const target = String(tournament.name || "").trim().toLowerCase();
+                const found = rows.find((m) => String(m.name || "").trim().toLowerCase() === target);
+                setRegistryMatch(found || null);
+                if (found) {
+                    // Force meta to mirror the registry — this is the single source of truth.
+                    const cat = deriveCategoryFromMaster(found);
+                    const age = deriveAgeGroupFromMaster(found);
+                    setMeta((m) => ({
+                        ...m,
+                        category: cat || m.category,
+                        age_group: age || m.age_group,
+                    }));
+                    // Medical + age_cap live on Tournament itself. Only queue a
+                    // patch if the current value diverges from the registry.
+                    const cap = AGE_GROUP_TO_CAP[age] ?? null;
+                    const patch = {};
+                    if ((tournament.medical_required || false) !== !!found.medical_required) {
+                        patch.medical_required = !!found.medical_required;
+                    }
+                    if ((tournament.age_cap_years ?? null) !== cap) {
+                        patch.age_cap_years = cap;
+                    }
+                    if (Object.keys(patch).length > 0) {
+                        setTournamentPatch((p) => ({ ...p, ...patch }));
+                        setDirty(true);
+                    }
+                }
+            })
+            .catch(() => setRegistryMatch(null));
+        return () => { cancelled = true; };
+    }, [tournament?.name, tournament?.scope]);
 
     const setField = (k, v) => { setMeta((m) => ({ ...m, [k]: v })); setDirty(true); };
 
@@ -263,10 +331,20 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
             </div>
 
             {/* Step 2 · Category + Age Group */}
+            {registryMatch && (
+                <div className="border border-mpca-brass/40 bg-mpca-parchment/60 px-3 py-2 flex items-center gap-2" data-testid="basics-registry-chip">
+                    <BookMarked size={12} className="text-mpca-brass" />
+                    <div className="text-[10px] uppercase tracking-widest text-mpca-brass">Sourced from Master Tournament Registry</div>
+                    <div className="text-[11px] text-mpca-charcoal font-serif ml-2">{registryMatch.name}</div>
+                    <div className="text-[10px] text-mpca-gray-dark ml-auto italic flex items-center gap-1">
+                        <Lock size={10} /> Category · Age Group · Medical locked
+                    </div>
+                </div>
+            )}
             <div className="grid md:grid-cols-2 gap-3" data-testid="basics-category-row">
                 <label className="block">
                     <div className="overline text-[9px] mb-1">Category</div>
-                    <select className={inputCls} value={meta.category} onChange={(e) => setField("category", e.target.value)} disabled={!canEdit} data-testid="basics-category">
+                    <select className={inputCls} value={meta.category} onChange={(e) => setField("category", e.target.value)} disabled={!canEdit || !!registryMatch} data-testid="basics-category">
                         <option>Senior Men</option>
                         <option>Senior Women</option>
                         <option>Boys</option>
@@ -278,7 +356,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                 </label>
                 <label className="block">
                     <div className="overline text-[9px] mb-1">Age Group</div>
-                    <select className={inputCls} value={meta.age_group} onChange={(e) => setAgeGroup(e.target.value)} disabled={!canEdit} data-testid="basics-age">
+                    <select className={inputCls} value={meta.age_group} onChange={(e) => setAgeGroup(e.target.value)} disabled={!canEdit || !!registryMatch} data-testid="basics-age">
                         <option>Senior</option>
                         <option>U-25</option>
                         <option>U-23</option>
@@ -313,7 +391,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                         type="checkbox"
                         checked={!!(tournamentPatch.medical_required ?? tournament.medical_required)}
                         onChange={(e) => setTournamentField("medical_required", e.target.checked)}
-                        disabled={!canEdit}
+                        disabled={!canEdit || !!registryMatch}
                         className="mt-1"
                         data-testid="basics-medical-check"
                     />

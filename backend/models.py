@@ -910,10 +910,14 @@ class TournamentMaster(BaseModel):
     """
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    category: TournamentMasterCategory
-    name: str                                     # e.g. "Ranji Trophy"
-    short_name: Optional[str] = None              # e.g. "Ranji"
+    category: TournamentMasterCategory                       # BCCI / Inter_Divisional / Inter_District
+    name: str                                                # e.g. "MY Memorial"
+    short_name: Optional[str] = None
     description: Optional[str] = None
+    # MPCA-206 · Master row taxonomy — surfaces in Registry table AND auto-fills the create form
+    gender: Optional[Literal["Men", "Women"]] = None         # Men / Women
+    age_grp: Optional[str] = None                            # Senior / U22 / U19 / U18 / U15 / U14
+    play_type: Optional[Literal["Multi_Day", "Limited_Overs", "T20"]] = None
     default_format: Optional[TournamentFormat] = None
     default_scope: Optional[TournamentScope] = None
     is_active: bool = True
@@ -928,6 +932,9 @@ class TournamentMasterCreate(BaseModel):
     name: str
     short_name: Optional[str] = None
     description: Optional[str] = None
+    gender: Optional[Literal["Men", "Women"]] = None
+    age_grp: Optional[str] = None
+    play_type: Optional[Literal["Multi_Day", "Limited_Overs", "T20"]] = None
     default_format: Optional[TournamentFormat] = None
     default_scope: Optional[TournamentScope] = None
     sort_order: int = 100
@@ -938,6 +945,9 @@ class TournamentMasterPatch(BaseModel):
     name: Optional[str] = None
     short_name: Optional[str] = None
     description: Optional[str] = None
+    gender: Optional[Literal["Men", "Women"]] = None
+    age_grp: Optional[str] = None
+    play_type: Optional[Literal["Multi_Day", "Limited_Overs", "T20"]] = None
     default_format: Optional[TournamentFormat] = None
     default_scope: Optional[TournamentScope] = None
     is_active: Optional[bool] = None

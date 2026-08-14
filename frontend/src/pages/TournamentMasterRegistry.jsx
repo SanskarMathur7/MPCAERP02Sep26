@@ -16,6 +16,7 @@ const CATEGORIES = [
 
 const emptyForm = () => ({
     name: "", short_name: "", description: "",
+    gender: "", age_grp: "", play_type: "",
     default_format: "", default_scope: "", sort_order: 100,
 });
 
@@ -54,6 +55,9 @@ export default function TournamentMasterRegistry() {
                 category: tab, name: form.name.trim(),
                 short_name: form.short_name.trim() || null,
                 description: form.description.trim() || null,
+                gender: form.gender || null,
+                age_grp: form.age_grp.trim() || null,
+                play_type: form.play_type || null,
                 default_format: form.default_format || null,
                 default_scope: form.default_scope || null,
                 sort_order: parseInt(form.sort_order) || 100,
@@ -70,6 +74,9 @@ export default function TournamentMasterRegistry() {
         setEditingForm({
             name: row.name || "", short_name: row.short_name || "",
             description: row.description || "",
+            gender: row.gender || "",
+            age_grp: row.age_grp || "",
+            play_type: row.play_type || "",
             default_format: row.default_format || "",
             default_scope: row.default_scope || "",
             sort_order: row.sort_order ?? 100,
@@ -83,6 +90,9 @@ export default function TournamentMasterRegistry() {
                 name: editingForm.name.trim(),
                 short_name: editingForm.short_name.trim() || null,
                 description: editingForm.description.trim() || null,
+                gender: editingForm.gender || null,
+                age_grp: editingForm.age_grp.trim() || null,
+                play_type: editingForm.play_type || null,
                 default_format: editingForm.default_format || null,
                 default_scope: editingForm.default_scope || null,
                 sort_order: parseInt(editingForm.sort_order) || 100,
@@ -167,24 +177,48 @@ export default function TournamentMasterRegistry() {
                 </div>
 
                 {adding && !isReadOnly && (
-                    <div className="bg-mpca-parchment/60 border-b-2 border-mpca-brass/30 p-4 grid md:grid-cols-4 gap-3 items-end" data-testid="registry-add-form">
-                        <label className="md:col-span-2">
+                    <div className="bg-mpca-parchment/60 border-b-2 border-mpca-brass/30 p-4 grid md:grid-cols-6 gap-3 items-end" data-testid="registry-add-form">
+                        <label className="md:col-span-3">
                             <div className="overline text-[9px] mb-1">Name *</div>
-                            <input className="input-heritage" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Ranji Trophy" data-testid="registry-name-input" />
+                            <input className="input-heritage" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. MY Memorial Trophy" data-testid="registry-name-input" />
                         </label>
-                        <label>
+                        <label className="md:col-span-2">
                             <div className="overline text-[9px] mb-1">Short Name</div>
-                            <input className="input-heritage" value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} placeholder="Ranji" />
+                            <input className="input-heritage" value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} placeholder="MY Memorial" />
                         </label>
                         <label>
-                            <div className="overline text-[9px] mb-1">Sort Order</div>
+                            <div className="overline text-[9px] mb-1">Sort</div>
                             <input type="number" className="input-heritage" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: e.target.value })} />
                         </label>
-                        <label className="md:col-span-4">
-                            <div className="overline text-[9px] mb-1">Description</div>
-                            <input className="input-heritage" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short description shown in tooltips" />
+                        <label>
+                            <div className="overline text-[9px] mb-1">Category</div>
+                            <select className="input-heritage" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} data-testid="registry-gender-input">
+                                <option value="">—</option>
+                                <option value="Men">MEN</option>
+                                <option value="Women">WOMEN</option>
+                            </select>
                         </label>
-                        <div className="md:col-span-4 flex justify-end gap-3">
+                        <label>
+                            <div className="overline text-[9px] mb-1">Age Group</div>
+                            <select className="input-heritage" value={form.age_grp} onChange={(e) => setForm({ ...form, age_grp: e.target.value })} data-testid="registry-agegrp-input">
+                                <option value="">—</option>
+                                {["Senior", "U25", "U23", "U22", "U19", "U18", "U16", "U15", "U14", "U11"].map((a) => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                        </label>
+                        <label>
+                            <div className="overline text-[9px] mb-1">Type</div>
+                            <select className="input-heritage" value={form.play_type} onChange={(e) => setForm({ ...form, play_type: e.target.value })} data-testid="registry-playtype-input">
+                                <option value="">—</option>
+                                <option value="Multi_Day">MULTI DAY</option>
+                                <option value="Limited_Overs">LTD OVERS</option>
+                                <option value="T20">T20</option>
+                            </select>
+                        </label>
+                        <label className="md:col-span-6">
+                            <div className="overline text-[9px] mb-1">Description</div>
+                            <input className="input-heritage" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional context shown in tooltips" />
+                        </label>
+                        <div className="md:col-span-6 flex justify-end gap-3">
                             <button onClick={() => { setAdding(false); setForm(emptyForm()); }} className="btn-heritage-ghost">Cancel</button>
                             <button onClick={save} disabled={busy || !form.name.trim()} className="btn-heritage-primary disabled:opacity-40" data-testid="registry-save-btn">
                                 {busy ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Save Entry
@@ -203,7 +237,7 @@ export default function TournamentMasterRegistry() {
                     <table className="w-full text-sm">
                         <thead className="bg-mpca-parchment border-b border-mpca-brass/40">
                             <tr>
-                                {["Sort", "Name", "Short", "Description", "Default Format", "Status", "Actions"].map((h) => (
+                                {["Sort", "Name", "Category", "Age Group", "Type", "Default Format", "Status", "Actions"].map((h) => (
                                     <th key={h} className="text-left px-3 py-3 text-[10px] uppercase tracking-widest text-mpca-brass">{h}</th>
                                 ))}
                             </tr>
@@ -211,25 +245,49 @@ export default function TournamentMasterRegistry() {
                         <tbody>
                             {rows.map((r) => {
                                 const isEditing = editingId === r.id;
+                                const playTypeLabel = { Multi_Day: "Multi Day", Limited_Overs: "Ltd Overs", T20: "T20" }[r.play_type] || (r.play_type || "—");
                                 return (
                                     <tr key={r.id + (isReadOnly ? "-ro" : "")} className={`border-b border-mpca-brass/20 ${!r.is_active ? "opacity-50" : ""}`} data-testid={`registry-row-${r.name.replace(/\s+/g, "-").toLowerCase()}`}>
                                         <td className="px-3 py-2 font-mono text-[10px] text-mpca-brass">{r.sort_order}</td>
                                         <td className="px-3 py-2 font-serif text-mpca-green-dark">
                                             {isEditing
                                                 ? <input className="input-heritage !py-1 !text-xs" value={editingForm.name} onChange={(e) => setEditingForm({ ...editingForm, name: e.target.value })} />
-                                                : r.name}
+                                                : (<>
+                                                    <div>{r.name}</div>
+                                                    {r.short_name && <div className="text-[9px] uppercase text-mpca-brass mt-0.5">{r.short_name}</div>}
+                                                </>)}
                                         </td>
-                                        <td className="px-3 py-2 text-xs">
-                                            {isEditing
-                                                ? <input className="input-heritage !py-1 !text-xs" value={editingForm.short_name} onChange={(e) => setEditingForm({ ...editingForm, short_name: e.target.value })} />
-                                                : (r.short_name || "—")}
+                                        <td className="px-3 py-2 text-[10px]">
+                                            {isEditing ? (
+                                                <select className="input-heritage !py-1 !text-xs" value={editingForm.gender || ""} onChange={(e) => setEditingForm({ ...editingForm, gender: e.target.value })}>
+                                                    <option value="">—</option>
+                                                    <option value="Men">MEN</option>
+                                                    <option value="Women">WOMEN</option>
+                                                </select>
+                                            ) : (
+                                                <span className={`uppercase tracking-widest ${r.gender === "Women" ? "text-mpca-oxblood" : "text-mpca-navy"}`}>{r.gender || "—"}</span>
+                                            )}
                                         </td>
-                                        <td className="px-3 py-2 text-xs text-mpca-gray-dark max-w-md">
-                                            {isEditing
-                                                ? <input className="input-heritage !py-1 !text-xs" value={editingForm.description} onChange={(e) => setEditingForm({ ...editingForm, description: e.target.value })} />
-                                                : (r.description || "—")}
+                                        <td className="px-3 py-2 text-[10px] font-mono uppercase">
+                                            {isEditing ? (
+                                                <input className="input-heritage !py-1 !text-xs" value={editingForm.age_grp || ""} onChange={(e) => setEditingForm({ ...editingForm, age_grp: e.target.value })} placeholder="Senior · U22 · U18" />
+                                            ) : (
+                                                <span className="text-mpca-green-dark">{r.age_grp || "—"}</span>
+                                            )}
                                         </td>
-                                        <td className="px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-mpca-navy">
+                                        <td className="px-3 py-2 text-[10px] uppercase tracking-widest">
+                                            {isEditing ? (
+                                                <select className="input-heritage !py-1 !text-xs" value={editingForm.play_type || ""} onChange={(e) => setEditingForm({ ...editingForm, play_type: e.target.value })}>
+                                                    <option value="">—</option>
+                                                    <option value="Multi_Day">MULTI DAY</option>
+                                                    <option value="Limited_Overs">LTD OVERS</option>
+                                                    <option value="T20">T20</option>
+                                                </select>
+                                            ) : (
+                                                <span className="text-mpca-brass">{playTypeLabel}</span>
+                                            )}
+                                        </td>
+                                        <td className="px-3 py-2 text-[10px] font-mono text-mpca-navy">
                                             {r.default_format || "—"}
                                         </td>
                                         <td className="px-3 py-2 text-[10px]">

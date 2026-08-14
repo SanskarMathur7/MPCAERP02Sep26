@@ -136,18 +136,56 @@ SEED_BCCI = [
 ]
 
 SEED_INTER_DIV = [
-    ("MY Memorial Trophy", "MY Memorial", "Inter-divisional multi-day memorial trophy · Senior", 10),
-    ("Madhavrao Scindia Trophy", "Scindia", "Inter-divisional multi-day trophy · Senior", 20),
-    ("JN Bhaya Trophy", "JN Bhaya", "Inter-divisional multi-day trophy · Senior", 30),
-    ("H Gaekwad Trophy", "H Gaekwad", "Inter-divisional multi-day trophy · Senior", 40),
-    ("SM Khan Trophy", "SM Khan", "Inter-divisional multi-day trophy · Senior", 50),
-    ("Parmanandbhai Patel Trophy", "PB Patel", "Inter-divisional multi-day trophy · Senior", 60),
-    ("Boys U-22 Limited Over Trophy", "Boys U-22 OD", "Inter-divisional limited-overs trophy · U-22", 70),
-    ("MM Jagdale Trophy", "MM Jagdale", "Inter-divisional multi-day trophy · Senior", 80),
-    ("AW Kanmadikar Trophy", "AW Kanmadikar", "Inter-divisional multi-day trophy · Senior", 90),
-    ("JS Anand Trophy", "JS Anand", "Inter-divisional multi-day trophy · Women's", 100),
-    ("Girls U-18 Trophy", "Girls U-18", "Inter-divisional trophy · U-18 (Girls)", 110),
+    # (name, short, gender, age_grp, play_type, sort)
+    ("MY Memorial Trophy",                  "MY Memorial",      "Men",   "Senior", "Multi_Day",     10),
+    ("JN Bhaya Trophy",                     "JN Bhaya",         "Men",   "Senior", "T20",           20),
+    ("Madhavrao Scindia Trophy",            "Scindia",          "Men",   "Senior", "Limited_Overs", 30),
+    ("JS Anand Trophy",                     "JS Anand",         "Women", "Senior", "Limited_Overs", 40),
+    ("Boys U-23 One Day Trophy",            "Boys U-23 OD",     "Men",   "U22",    "Limited_Overs", 50),
+    ("Parmanand Trophy",                    "Parmanand",        "Men",   "U22",    "Multi_Day",     60),
+    ("Hiralal Gaikwad Trophy",              "Hiralal Gaikwad",  "Men",   "U18",    "Multi_Day",     70),
+    ("SM Khan Trophy",                      "SM Khan",          "Men",   "U18",    "Limited_Overs", 80),
+    ("MM Jagdale Trophy",                   "MM Jagdale",       "Men",   "U15",    "Multi_Day",     90),
+    ("AW Kanmadikar Trophy",                "AW Kanmadikar",    "Men",   "U14",    "Multi_Day",    100),
+    ("Girls U-18 Trophy",                   "Girls U-18",       "Women", "U18",    "Limited_Overs",110),
+    ("CT Sarwate Trophy",                   "CT Sarwate",       "Men",   "Senior", "Multi_Day",    120),
+    ("CS Nayudu Trophy",                    "CS Nayudu",        "Men",   "U22",    "Multi_Day",    130),
+    ("Bhausaheb Nimbalkar Trophy",          "Bhausaheb",        "Men",   "U18",    "Multi_Day",    140),
+    ("Bhau Nivsarkar Trophy",               "Bhau Nivsarkar",   "Men",   "U15",    "Multi_Day",    150),
+    ("Rameshwar Pratap Trophy",             "Rameshwar",        "Men",   "U14",    "Multi_Day",    160),
 ]
+
+# Play-type + age-grp + gender → canonical TournamentFormat (best-effort)
+def _derive_default_format(play_type: Optional[str], age_grp: Optional[str], gender: Optional[str]) -> Optional[str]:
+    if not play_type:
+        return None
+    age = (age_grp or "").upper()
+    is_women = gender == "Women"
+    if play_type == "T20":
+        if is_women:
+            return "T20_Womens"
+        if age in ("U19", "U18"):
+            return "T20_U19"
+        if age in ("U22", "U23"):
+            return "T20_U23"
+        return "T20_Senior"
+    if play_type == "Limited_Overs":
+        if is_women:
+            return "OneDay_Womens"
+        if age in ("U19", "U18"):
+            return "OneDay_U19"
+        if age in ("U22", "U23"):
+            return "OneDay_U23"
+        return "OneDay_Senior"
+    if play_type == "Multi_Day":
+        if age in ("U19", "U18"):
+            return "FourDay_U19"
+        if age in ("U22", "U23"):
+            return "FourDay_U23"
+        if age in ("U15", "U14"):
+            return "Multi_Day"     # no fine-grained format for U-15/U-14 four-day
+        return "FourDay_Senior"
+    return None
 
 SEED_INTER_DIST = [
     ("Indore Division Inter-District Championship",     "Indore Inter-Dist",     "Inter-District championship hosted by Indore Division", 10),
@@ -177,7 +215,14 @@ async def seed_tournament_master() -> dict:
                 default_format=fmt, sort_order=order,
             ).model_dump())
             created += 1
-    for name, short, desc, order in SEED_INTER_DIV:
+    # MPCA-206 · Re-seed Inter_Divisional with the user-provided 16-item list.
+    # We purge only auto-seeded rows (no updated_at) so any manually-edited
+    # entries stay untouched.
+    await db.tournament_master.delete_many({
+        "category": "Inter_Divisional",
+        "updated_at": {"$in": [None, ""]},
+    })
+    for name, short, gender, age_grp, play_type, order in SEED_INTER_DIV:
         exists = await db.tournament_master.find_one({
             "category": "Inter_Divisional",
             "name": {"$regex": f"^{name}$", "$options": "i"},
@@ -185,7 +230,10 @@ async def seed_tournament_master() -> dict:
         if not exists:
             await db.tournament_master.insert_one(TournamentMaster(
                 category="Inter_Divisional", name=name, short_name=short,
-                description=desc, default_scope="Inter_Divisional", sort_order=order,
+                gender=gender, age_grp=age_grp, play_type=play_type,
+                default_format=_derive_default_format(play_type, age_grp, gender),
+                default_scope="Inter_Divisional", sort_order=order,
+                description=f"{gender} · {age_grp} · {play_type.replace('_', ' ')}",
             ).model_dump())
             created += 1
     for name, short, desc, order in SEED_INTER_DIST:

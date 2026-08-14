@@ -402,7 +402,11 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                                 BCCI: "BCCI",
                             })[form.tournament_type_code];
                             const registryEntries = registryCategory
-                                ? (masterByType[registryCategory] || []).map((m) => ({ name: m.name, age: m.description || m.short_name || "" }))
+                                ? (masterByType[registryCategory] || []).map((m) => ({
+                                    name: m.name,
+                                    age: m.age_grp || m.description || m.short_name || "",
+                                    _master: m,   // MPCA-206 · retain full row for auto-fill
+                                }))
                                 : [];
                             const legacyDir = registryCategory ? [] : getDirectoryFor(form.tournament_type_code);
                             // Merge unique by name — registry takes precedence
@@ -420,8 +424,25 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                                             value={dir.some((d) => d.name === form.name) ? form.name : (form.name ? "__other__" : "")}
                                             onChange={(e) => {
                                                 const v = e.target.value;
-                                                if (v === "__other__") setForm({ ...form, name: "__other__" });
-                                                else setForm({ ...form, name: v, trophy_name: v.split(" · ")[0] || v });
+                                                if (v === "__other__") { setForm({ ...form, name: "__other__" }); return; }
+                                                const picked = dir.find((d) => d.name === v);
+                                                const m = picked?._master;
+                                                if (m) {
+                                                    // MPCA-206 · Auto-fill format/age/gender/scope from Registry
+                                                    setForm({
+                                                        ...form,
+                                                        name: v,
+                                                        trophy_name: (m.short_name || v.split(" · ")[0] || v),
+                                                        format: m.default_format || form.format,
+                                                        scope: m.default_scope || form.scope,
+                                                        gender: m.gender === "Women" ? "Female" : (m.gender === "Men" ? "Male" : form.gender),
+                                                        is_womens: m.gender === "Women",
+                                                        age_group: m.age_grp || form.age_group,
+                                                        age_cap_years: (m.age_grp || "").match(/^U(\d+)$/i)?.[1] || form.age_cap_years,
+                                                    });
+                                                } else {
+                                                    setForm({ ...form, name: v, trophy_name: v.split(" · ")[0] || v });
+                                                }
                                             }}
                                             data-testid="trn-name-select"
                                         >

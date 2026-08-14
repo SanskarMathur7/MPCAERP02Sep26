@@ -17,8 +17,11 @@ const CATEGORIES = [
 const emptyForm = () => ({
     name: "", short_name: "", description: "",
     gender: "", age_grp: "", play_type: "",
+    born_on_or_before: "", born_on_or_after: "",
     default_format: "", default_scope: "", sort_order: 100,
 });
+
+const PLAY_TYPE_LABEL = { Multi_Day: "Multi Day", Limited_Overs: "Ltd Overs" };
 
 export default function TournamentMasterRegistry() {
     const { persona } = useAuth();
@@ -58,6 +61,8 @@ export default function TournamentMasterRegistry() {
                 gender: form.gender || null,
                 age_grp: form.age_grp.trim() || null,
                 play_type: form.play_type || null,
+                born_on_or_before: form.born_on_or_before || null,
+                born_on_or_after: form.born_on_or_after || null,
                 default_format: form.default_format || null,
                 default_scope: form.default_scope || null,
                 sort_order: parseInt(form.sort_order) || 100,
@@ -77,6 +82,8 @@ export default function TournamentMasterRegistry() {
             gender: row.gender || "",
             age_grp: row.age_grp || "",
             play_type: row.play_type || "",
+            born_on_or_before: row.born_on_or_before || "",
+            born_on_or_after: row.born_on_or_after || "",
             default_format: row.default_format || "",
             default_scope: row.default_scope || "",
             sort_order: row.sort_order ?? 100,
@@ -93,6 +100,8 @@ export default function TournamentMasterRegistry() {
                 gender: editingForm.gender || null,
                 age_grp: editingForm.age_grp.trim() || null,
                 play_type: editingForm.play_type || null,
+                born_on_or_before: editingForm.born_on_or_before || null,
+                born_on_or_after: editingForm.born_on_or_after || null,
                 default_format: editingForm.default_format || null,
                 default_scope: editingForm.default_scope || null,
                 sort_order: parseInt(editingForm.sort_order) || 100,
@@ -211,8 +220,15 @@ export default function TournamentMasterRegistry() {
                                 <option value="">—</option>
                                 <option value="Multi_Day">MULTI DAY</option>
                                 <option value="Limited_Overs">LTD OVERS</option>
-                                <option value="T20">T20</option>
                             </select>
+                        </label>
+                        <label>
+                            <div className="overline text-[9px] mb-1">Born on or Before</div>
+                            <input type="date" className="input-heritage" value={form.born_on_or_before || ""} onChange={(e) => setForm({ ...form, born_on_or_before: e.target.value })} data-testid="registry-boob-input" />
+                        </label>
+                        <label>
+                            <div className="overline text-[9px] mb-1">Born on or After</div>
+                            <input type="date" className="input-heritage" value={form.born_on_or_after || ""} onChange={(e) => setForm({ ...form, born_on_or_after: e.target.value })} data-testid="registry-boa-input" />
                         </label>
                         <label className="md:col-span-6">
                             <div className="overline text-[9px] mb-1">Description</div>
@@ -237,7 +253,7 @@ export default function TournamentMasterRegistry() {
                     <table className="w-full text-sm">
                         <thead className="bg-mpca-parchment border-b border-mpca-brass/40">
                             <tr>
-                                {["Sort", "Name", "Category", "Age Group", "Type", "Default Format", "Status", "Actions"].map((h) => (
+                                {["Sort", "Name", "Category", "Age Group", "Type", "Born on/before", "Born on/after", "Status", "Actions"].map((h) => (
                                     <th key={h} className="text-left px-3 py-3 text-[10px] uppercase tracking-widest text-mpca-brass">{h}</th>
                                 ))}
                             </tr>
@@ -245,7 +261,6 @@ export default function TournamentMasterRegistry() {
                         <tbody>
                             {rows.map((r) => {
                                 const isEditing = editingId === r.id;
-                                const playTypeLabel = { Multi_Day: "Multi Day", Limited_Overs: "Ltd Overs", T20: "T20" }[r.play_type] || (r.play_type || "—");
                                 return (
                                     <tr key={r.id + (isReadOnly ? "-ro" : "")} className={`border-b border-mpca-brass/20 ${!r.is_active ? "opacity-50" : ""}`} data-testid={`registry-row-${r.name.replace(/\s+/g, "-").toLowerCase()}`}>
                                         <td className="px-3 py-2 font-mono text-[10px] text-mpca-brass">{r.sort_order}</td>
@@ -281,14 +296,20 @@ export default function TournamentMasterRegistry() {
                                                     <option value="">—</option>
                                                     <option value="Multi_Day">MULTI DAY</option>
                                                     <option value="Limited_Overs">LTD OVERS</option>
-                                                    <option value="T20">T20</option>
                                                 </select>
                                             ) : (
-                                                <span className="text-mpca-brass">{playTypeLabel}</span>
+                                                <span className="text-mpca-brass">{PLAY_TYPE_LABEL[r.play_type] || (r.play_type || "—")}</span>
                                             )}
                                         </td>
                                         <td className="px-3 py-2 text-[10px] font-mono text-mpca-navy">
-                                            {r.default_format || "—"}
+                                            {isEditing
+                                                ? <input type="date" className="input-heritage !py-1 !text-xs" value={editingForm.born_on_or_before || ""} onChange={(e) => setEditingForm({ ...editingForm, born_on_or_before: e.target.value })} />
+                                                : (r.born_on_or_before || "—")}
+                                        </td>
+                                        <td className="px-3 py-2 text-[10px] font-mono text-mpca-navy">
+                                            {isEditing
+                                                ? <input type="date" className="input-heritage !py-1 !text-xs" value={editingForm.born_on_or_after || ""} onChange={(e) => setEditingForm({ ...editingForm, born_on_or_after: e.target.value })} />
+                                                : (r.born_on_or_after || "—")}
                                         </td>
                                         <td className="px-3 py-2 text-[10px]">
                                             {r.is_active

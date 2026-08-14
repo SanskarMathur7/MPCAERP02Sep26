@@ -415,20 +415,19 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                                 ...registryEntries,
                                 ...legacyDir.filter((d) => !seenNames.has(d.name)),
                             ];
-                            const isOther = form.name === "__other__" || (!!form.name && form.name !== "__other__" && !dir.some((d) => d.name === form.name));
+                            const isOther = false;   // MPCA-207 · Registry is strict — no manual override.
                             return (
                                 <>
                                     {dir.length > 0 && (
                                         <select
                                             className="input-heritage"
-                                            value={dir.some((d) => d.name === form.name) ? form.name : (form.name ? "__other__" : "")}
+                                            value={dir.some((d) => d.name === form.name) ? form.name : ""}
                                             onChange={(e) => {
                                                 const v = e.target.value;
-                                                if (v === "__other__") { setForm({ ...form, name: "__other__" }); return; }
+                                                if (!v) { setForm({ ...form, name: "" }); return; }
                                                 const picked = dir.find((d) => d.name === v);
                                                 const m = picked?._master;
                                                 if (m) {
-                                                    // MPCA-206 · Auto-fill format/age/gender/scope from Registry
                                                     setForm({
                                                         ...form,
                                                         name: v,
@@ -446,22 +445,16 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                                             }}
                                             data-testid="trn-name-select"
                                         >
-                                            <option value="">— Pick from MPCA registry —</option>
+                                            <option value="">— Pick from Tournament Registry —</option>
                                             {dir.map((d) => (
                                                 <option key={d.name} value={d.name}>{d.name}{d.age ? ` · ${d.age}` : ""}</option>
                                             ))}
-                                            <option value="__other__">➕ Other · type manually</option>
                                         </select>
                                     )}
-                                    {(dir.length === 0 || isOther) && (
-                                        <input
-                                            className={`input-heritage ${dir.length > 0 ? "mt-2" : ""}`}
-                                            value={form.name === "__other__" ? "" : form.name}
-                                            onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                            placeholder={dir.length > 0 ? "Type the tournament name manually…" : "e.g. MY Memorial Trophy"}
-                                            data-testid="trn-name-input"
-                                            autoFocus={isOther}
-                                        />
+                                    {dir.length === 0 && (
+                                        <div className="text-[11px] p-3 bg-mpca-parchment/60 border border-mpca-brass/30 text-mpca-brass" data-testid="trn-name-empty">
+                                            No tournament names configured in the registry for this category. Ask MPCA to add entries under <span className="font-mono">/tournament-master</span>.
+                                        </div>
                                     )}
                                 </>
                             );

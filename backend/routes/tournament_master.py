@@ -101,7 +101,52 @@ async def delete_tournament_master(mid: str):
     return {"id": mid, "is_active": False}
 
 
-# ── Seeder — invoked on startup, idempotent ────────────────────────────────
+@api_router.get("/players/{pid}/eligible-tournaments")
+async def eligible_tournaments_for_player(pid: str):
+    """MPCA-207 · Return every active master tournament the player is eligible
+    for, based on gender + DOB matching the master row's date window.
+
+    Eligibility rule per master row:
+      • `born_on_or_before` (if set) — player DOB must be ≤ this date
+      • `born_on_or_after`  (if set) — player DOB must be ≥ this date
+      • `gender` (if set)             — must match player gender
+      • Rows with no date window     — considered "Open" (only gender check applies)
+    """
+    player = await db.players.find_one({"id": pid}, {"_id": 0, "id": 1, "dob": 1, "gender": 1, "full_name": 1})
+    if not player:
+        raise HTTPException(404, "Player not found")
+    dob = (player.get("dob") or "").strip()
+    gender = player.get("gender") or ""
+    # Normalise player gender to master vocab
+    player_gender = "Women" if gender.lower() in ("female", "women", "f") else ("Men" if gender.lower() in ("male", "men", "m") else None)
+
+    masters = await db.tournament_master.find({"is_active": True}, {"_id": 0}).sort([
+        ("category", 1), ("sort_order", 1), ("name", 1),
+    ]).to_list(500)
+
+    def _eligible(m: dict) -> bool:
+        # Gender check
+        if m.get("gender") and player_gender and m["gender"] != player_gender:
+            return False
+        # Date window check
+        boob = (m.get("born_on_or_before") or "").strip()
+        boa = (m.get("born_on_or_after") or "").strip()
+        if boob and dob and dob > boob:
+            return False
+        if boa and dob and dob < boa:
+            return False
+        return True
+
+    eligible = [m for m in masters if _eligible(m)]
+    return {
+        "player_id": pid,
+        "player_name": player.get("full_name"),
+        "player_dob": dob,
+        "player_gender": player_gender,
+        "eligible_count": len(eligible),
+        "tournaments": eligible,
+    }
+
 SEED_BCCI = [
     # Men's Multi-Day
     ("Ranji Trophy · Elite", "Ranji Elite", "Ranji Trophy · Elite Group (first-class four-day)", "FourDay_Senior", 10),
@@ -138,7 +183,7 @@ SEED_BCCI = [
 SEED_INTER_DIV = [
     # (name, short, gender, age_grp, play_type, sort)
     ("MY Memorial Trophy",                  "MY Memorial",      "Men",   "Senior", "Multi_Day",     10),
-    ("JN Bhaya Trophy",                     "JN Bhaya",         "Men",   "Senior", "T20",           20),
+    ("JN Bhaya Trophy",                     "JN Bhaya",         "Men",   "Senior", "Multi_Day",     20),
     ("Madhavrao Scindia Trophy",            "Scindia",          "Men",   "Senior", "Limited_Overs", 30),
     ("JS Anand Trophy",                     "JS Anand",         "Women", "Senior", "Limited_Overs", 40),
     ("Boys U-23 One Day Trophy",            "Boys U-23 OD",     "Men",   "U22",    "Limited_Overs", 50),
@@ -161,14 +206,6 @@ def _derive_default_format(play_type: Optional[str], age_grp: Optional[str], gen
         return None
     age = (age_grp or "").upper()
     is_women = gender == "Women"
-    if play_type == "T20":
-        if is_women:
-            return "T20_Womens"
-        if age in ("U19", "U18"):
-            return "T20_U19"
-        if age in ("U22", "U23"):
-            return "T20_U23"
-        return "T20_Senior"
     if play_type == "Limited_Overs":
         if is_women:
             return "OneDay_Womens"
@@ -183,7 +220,7 @@ def _derive_default_format(play_type: Optional[str], age_grp: Optional[str], gen
         if age in ("U22", "U23"):
             return "FourDay_U23"
         if age in ("U15", "U14"):
-            return "Multi_Day"     # no fine-grained format for U-15/U-14 four-day
+            return "Multi_Day"
         return "FourDay_Senior"
     return None
 

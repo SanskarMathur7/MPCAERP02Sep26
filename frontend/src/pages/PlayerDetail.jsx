@@ -9,8 +9,9 @@ import {
 } from "@/lib/api";
 import {
     ArrowLeft, User, FileText, ShieldCheck, ClipboardList, Upload, X, CheckCircle2, AlertTriangle,
-    Ban, Loader2, ExternalLink, Trash2, Edit3, Save, Gavel, ScrollText, Sparkles, ShieldAlert, Award,
+    Ban, Loader2, ExternalLink, Trash2, Edit3, Save, Gavel, ScrollText, Sparkles, ShieldAlert, Award, Trophy,
 } from "lucide-react";
+import { api } from "@/lib/api";
 import CricketLoader from "@/components/CricketLoader";
 import DocumentPreview from "@/components/DocumentPreview";
 import {
@@ -1184,6 +1185,98 @@ const AuditTab = ({ player }) => (
     </div>
 );
 
+// MPCA-207 · Eligible Tournaments Tab — computed from Tournament Registry
+// against the player's DOB + gender via GET /players/{id}/eligible-tournaments.
+const EligibilityTab = ({ player }) => {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState(null);
+
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            setLoading(true); setErr(null);
+            try {
+                const { data } = await api.get(`/players/${player.id}/eligible-tournaments`);
+                if (alive) setData(data);
+            } catch (e) { if (alive) setErr(e?.response?.data?.detail || e.message); }
+            finally { if (alive) setLoading(false); }
+        })();
+        return () => { alive = false; };
+    }, [player.id]);
+
+    if (loading) return <div className="p-8 text-center text-mpca-brass text-xs">Checking eligibility…</div>;
+    if (err) return <div className="border border-mpca-oxblood/30 bg-mpca-oxblood/5 text-mpca-oxblood p-3 text-xs">{err}</div>;
+
+    const grouped = (data?.tournaments || []).reduce((acc, m) => {
+        (acc[m.category] = acc[m.category] || []).push(m); return acc;
+    }, {});
+    const catLabel = { BCCI: "BCCI", Inter_Divisional: "Inter-Divisional", Inter_District: "Inter-District" };
+    const playLabel = { Multi_Day: "Multi Day", Limited_Overs: "Ltd Overs" };
+
+    return (
+        <div className="space-y-4" data-testid="eligibility-tab">
+            <div className="bulletin-card p-4 flex flex-wrap items-center gap-4 justify-between">
+                <div>
+                    <div className="overline text-[9px]">Eligibility Snapshot</div>
+                    <div className="font-serif text-lg text-mpca-green-dark mt-1">
+                        {data?.player_name || player.full_name}
+                    </div>
+                    <div className="text-[11px] text-mpca-gray-dark mt-1">
+                        DOB {data?.player_dob || player.dob || "—"} · Gender {data?.player_gender || player.gender || "—"}
+                    </div>
+                </div>
+                <div className="text-right">
+                    <div className="overline text-[9px]">Eligible Tournaments</div>
+                    <div className="font-mono text-2xl text-mpca-oxblood">{data?.eligible_count || 0}</div>
+                </div>
+            </div>
+
+            {(!data || data.eligible_count === 0) && (
+                <div className="bulletin-card p-6 text-[11px] text-mpca-brass italic text-center" data-testid="eligibility-empty">
+                    No tournaments match this player&apos;s age/gender window. Ensure the master registry rows have the correct <span className="font-mono">born-on-or-before / born-on-or-after</span> dates.
+                </div>
+            )}
+
+            {Object.entries(grouped).map(([cat, rows]) => (
+                <div key={cat} className="bulletin-card p-0 overflow-hidden" data-testid={`eligibility-group-${cat}`}>
+                    <div className="bg-mpca-navy text-mpca-gold-light px-4 py-2 text-[10px] uppercase tracking-widest">
+                        {catLabel[cat] || cat} · {rows.length}
+                    </div>
+                    <table className="w-full text-sm">
+                        <thead className="bg-mpca-parchment border-b border-mpca-brass/40">
+                            <tr>
+                                {["Name", "Category", "Age Group", "Type", "Window"].map((h) => (
+                                    <th key={h} className="text-left px-3 py-2 text-[10px] uppercase tracking-widest text-mpca-brass">{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((m) => (
+                                <tr key={m.id} className="border-b border-mpca-brass/20" data-testid={`eligibility-row-${m.id}`}>
+                                    <td className="px-3 py-2 font-serif text-mpca-green-dark">
+                                        {m.name}
+                                        {m.short_name && <div className="text-[9px] uppercase text-mpca-brass mt-0.5">{m.short_name}</div>}
+                                    </td>
+                                    <td className="px-3 py-2 text-[10px] uppercase tracking-widest">{m.gender || "—"}</td>
+                                    <td className="px-3 py-2 text-[10px] font-mono uppercase text-mpca-green-dark">{m.age_grp || "—"}</td>
+                                    <td className="px-3 py-2 text-[10px] uppercase tracking-widest text-mpca-brass">{playLabel[m.play_type] || (m.play_type || "—")}</td>
+                                    <td className="px-3 py-2 text-[10px] font-mono text-mpca-navy">
+                                        {(m.born_on_or_after || m.born_on_or_before)
+                                            ? <>{m.born_on_or_after || "—"} → {m.born_on_or_before || "—"}</>
+                                            : <span className="italic text-mpca-gray-dark">Open (no window)</span>}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+
 const PlayerDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -1322,6 +1415,7 @@ const PlayerDetail = () => {
                     {[
                         ["overview",    "Overview",           User],
                         ["performance", "Performance",        Award],
+                        ["eligibility", "Eligible Tournaments", Trophy],
                         ["documents",   "KYC & Documents",    FileText],
                         ["sanctions",   "Sanctions",          Gavel],
                         ["audit",       "Audit Trail",        ClipboardList],
@@ -1344,6 +1438,7 @@ const PlayerDetail = () => {
                 <div className="py-10">
                     {tab === "overview"    && <OverviewTab    player={player} persona={persona} locked={player.submission_locked} onChanged={setPlayer} />}
                     {tab === "performance" && <PerformanceTab player={player} />}
+                    {tab === "eligibility" && <EligibilityTab  player={player} />}
                     {tab === "documents"   && <DocumentsTab   player={player} persona={persona} onChanged={setPlayer} />}
                     {tab === "sanctions"   && <SanctionsTab   player={player} persona={persona} onChanged={setPlayer} />}
                     {tab === "audit"       && <AuditTab       player={player} />}

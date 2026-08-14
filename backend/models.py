@@ -917,7 +917,10 @@ class TournamentMaster(BaseModel):
     # MPCA-206 · Master row taxonomy — surfaces in Registry table AND auto-fills the create form
     gender: Optional[Literal["Men", "Women"]] = None         # Men / Women
     age_grp: Optional[str] = None                            # Senior / U22 / U19 / U18 / U15 / U14
-    play_type: Optional[Literal["Multi_Day", "Limited_Overs", "T20"]] = None
+    play_type: Optional[Literal["Multi_Day", "Limited_Overs"]] = None
+    # MPCA-207 · Player-age eligibility (drives Player Profile → Eligible Tournaments panel)
+    born_on_or_before: Optional[str] = None                  # ISO date; latest DOB allowed
+    born_on_or_after: Optional[str] = None                   # ISO date; earliest DOB allowed
     default_format: Optional[TournamentFormat] = None
     default_scope: Optional[TournamentScope] = None
     is_active: bool = True
@@ -934,7 +937,9 @@ class TournamentMasterCreate(BaseModel):
     description: Optional[str] = None
     gender: Optional[Literal["Men", "Women"]] = None
     age_grp: Optional[str] = None
-    play_type: Optional[Literal["Multi_Day", "Limited_Overs", "T20"]] = None
+    play_type: Optional[Literal["Multi_Day", "Limited_Overs"]] = None
+    born_on_or_before: Optional[str] = None
+    born_on_or_after: Optional[str] = None
     default_format: Optional[TournamentFormat] = None
     default_scope: Optional[TournamentScope] = None
     sort_order: int = 100
@@ -947,7 +952,9 @@ class TournamentMasterPatch(BaseModel):
     description: Optional[str] = None
     gender: Optional[Literal["Men", "Women"]] = None
     age_grp: Optional[str] = None
-    play_type: Optional[Literal["Multi_Day", "Limited_Overs", "T20"]] = None
+    play_type: Optional[Literal["Multi_Day", "Limited_Overs"]] = None
+    born_on_or_before: Optional[str] = None
+    born_on_or_after: Optional[str] = None
     default_format: Optional[TournamentFormat] = None
     default_scope: Optional[TournamentScope] = None
     is_active: Optional[bool] = None

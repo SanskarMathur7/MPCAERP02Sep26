@@ -244,11 +244,19 @@ const OInput = ({ draft, setDraft, k, label, type = "text", options = null }) =>
     </div>
 );
 
+const ELIGIBILITY_TAGS = [
+    "Local/Birth", "Local/Residence", "Local/Employment", "Local/Education",
+    "Guest/MP-Domicile", "Guest/Education", "Guest/Out-of-MP", "Ineligible",
+];
+
 // MPCA-209 · Eligibility Tag panel — surfaces the decision-tree verdict + a Recompute button.
 const EligibilityTagPanel = ({ player, persona, onChanged }) => {
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState(null);
+    const [overrideOpen, setOverrideOpen] = useState(false);
+    const [ovForm, setOvForm] = useState({ eligibility_tag: player.eligibility_tag || "Local/Birth", reason: "" });
     const canRecompute = persona && (persona.body_type === "State" || persona.body_code === player.body_id);
+
     const recompute = async () => {
         setBusy(true); setErr(null);
         try {
@@ -257,6 +265,22 @@ const EligibilityTagPanel = ({ player, persona, onChanged }) => {
         } catch (e) { setErr(e?.response?.data?.detail || e.message); }
         finally { setBusy(false); }
     };
+    const saveOverride = async () => {
+        if (!ovForm.reason.trim() || ovForm.reason.trim().length < 3) { setErr("Reason must be at least 3 characters."); return; }
+        setBusy(true); setErr(null);
+        try {
+            const { data } = await api.post(`/players/${player.id}/eligibility-tag/override`, {
+                eligibility_tag: ovForm.eligibility_tag,
+                reason: ovForm.reason.trim(),
+                actor_name: persona?.display_name || persona?.name,
+                actor_body_id: persona?.body_code,
+            });
+            onChanged?.(data);
+            setOverrideOpen(false); setOvForm({ eligibility_tag: data.eligibility_tag, reason: "" });
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
     const tag = player.eligibility_tag;
     const tagTone = tag?.startsWith("Local/") ? "bg-mpca-green-dark text-mpca-gold-light"
         : tag?.startsWith("Guest/") ? "bg-mpca-navy text-mpca-gold-light"
@@ -278,11 +302,35 @@ const EligibilityTagPanel = ({ player, persona, onChanged }) => {
                     </div>
                 </div>
                 {canRecompute && (
-                    <button onClick={recompute} disabled={busy} className="text-[10px] uppercase tracking-widest border border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory px-3 py-1.5 disabled:opacity-40" data-testid="eligibility-recompute-btn">
-                        {busy ? <Loader2 size={11} className="inline animate-spin" /> : "Recompute"}
-                    </button>
+                    <div className="flex gap-2 flex-wrap">
+                        <button onClick={recompute} disabled={busy} className="text-[10px] uppercase tracking-widest border border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory px-3 py-1.5 disabled:opacity-40" data-testid="eligibility-recompute-btn">
+                            {busy ? <Loader2 size={11} className="inline animate-spin" /> : "Recompute"}
+                        </button>
+                        <button onClick={() => setOverrideOpen((s) => !s)} className="text-[10px] uppercase tracking-widest border border-mpca-brass text-mpca-brass hover:bg-mpca-brass hover:text-mpca-ivory px-3 py-1.5" data-testid="eligibility-override-btn">
+                            {overrideOpen ? "Cancel" : "Override Tag"}
+                        </button>
+                    </div>
                 )}
             </div>
+            {overrideOpen && canRecompute && (
+                <div className="bg-mpca-cream/40 border-b border-mpca-brass/20 p-4 grid md:grid-cols-3 gap-3 items-end" data-testid="eligibility-override-form">
+                    <label>
+                        <div className="overline text-[9px] mb-1">Set Tag</div>
+                        <select className="input-heritage" value={ovForm.eligibility_tag} onChange={(e) => setOvForm({ ...ovForm, eligibility_tag: e.target.value })} data-testid="override-tag-select">
+                            {ELIGIBILITY_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </label>
+                    <label className="md:col-span-2">
+                        <div className="overline text-[9px] mb-1">Reason / Evidence *</div>
+                        <input className="input-heritage" value={ovForm.reason} onChange={(e) => setOvForm({ ...ovForm, reason: e.target.value })} placeholder="e.g. Bonafide employment letter from XYZ Ltd verified; residency proof attached" data-testid="override-reason-input" />
+                    </label>
+                    <div className="md:col-span-3 flex justify-end">
+                        <button onClick={saveOverride} disabled={busy || !ovForm.reason.trim()} className="btn-heritage-primary disabled:opacity-40" data-testid="override-save-btn">
+                            {busy ? <Loader2 size={11} className="inline animate-spin" /> : <Save size={12} className="inline mr-1" />} Save Override
+                        </button>
+                    </div>
+                </div>
+            )}
             {err && <div className="p-3 text-[11px] text-mpca-oxblood bg-mpca-oxblood/5">{err}</div>}
             {(player.eligibility_reasons || []).length > 0 && (
                 <ul className="p-4 space-y-1.5 text-[11px] text-mpca-green-dark" data-testid="eligibility-reasons">

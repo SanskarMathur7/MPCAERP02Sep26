@@ -15,6 +15,7 @@ from core.helpers import (
     _next_player_id, _new_player_display_id, _next_player_display_serial,
     _derive_division_folder, _age_years, _validate_eligibility, _create_notification,
 )
+from pydantic import BaseModel, ConfigDict, Field
 from core.ai_validator import _run_player_doc_validation
 
 
@@ -632,9 +633,87 @@ async def compute_eligibility_tag(pid: str):
         reasons.append("None of the 7 tags matched — player does not qualify under the current data on file.")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.players.update_one({"id": pid}, {"$set": {
+    updates = {
         "eligibility_tag": tag,
         "eligibility_reasons": reasons,
         "eligibility_computed_at": now,
-    }})
+    }
+    # MPCA-210 · Auto-raise a discrepancy on the player when tag is Ineligible.
+    if tag == "Ineligible":
+        auto_note = f"[Eligibility] {now[:10]} · Auto-flagged as Ineligible — Division must correct place-of-birth / residency / employment / education records and recompute."
+        existing_notes = set(p.get("review_notes") or [])
+        if auto_note not in existing_notes:
+            updates["$push_review_note"] = auto_note   # sentinel; expanded below
+    upd_query = {"$set": {k: v for k, v in updates.items() if k != "$push_review_note"}}
+    if updates.get("$push_review_note"):
+        upd_query["$push"] = {"review_notes": updates["$push_review_note"]}
+    await db.players.update_one({"id": pid}, upd_query)
     return await db.players.find_one({"id": pid}, {"_id": 0})
+
+
+class EligibilityTagOverride(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    eligibility_tag: str = Field(..., description="Local/Birth · Local/Residence · Local/Employment · Local/Education · Guest/MP-Domicile · Guest/Education · Guest/Out-of-MP · Ineligible")
+    reason: str = Field(..., min_length=3)
+    actor_name: Optional[str] = None
+    actor_body_id: Optional[str] = None
+
+
+@api_router.post("/players/{pid}/eligibility-tag/override", response_model=Player)
+async def override_eligibility_tag(pid: str, payload: EligibilityTagOverride):
+    """MPCA-210 · Manual tag override — Divisions/MPCA may adjust the auto-tag
+    (e.g. after producing offline proof of employment/residence). Appends a
+    reason to `eligibility_reasons` and a formal audit-trail event.
+    """
+    p = await db.players.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Player not found")
+    valid = {
+        "Local/Birth", "Local/Residence", "Local/Employment", "Local/Education",
+        "Guest/MP-Domicile", "Guest/Education", "Guest/Out-of-MP", "Ineligible",
+    }
+    if payload.eligibility_tag not in valid:
+        raise HTTPException(422, f"Invalid tag. Allowed: {sorted(valid)}")
+    now = datetime.now(timezone.utc).isoformat()
+    stamped = f"[Manual · {now[:10]} · {payload.actor_name or payload.actor_body_id or 'user'}] {payload.eligibility_tag} — {payload.reason.strip()}"
+    reasons = list(p.get("eligibility_reasons") or [])
+    reasons.append(stamped)
+    await db.players.update_one({"id": pid}, {"$set": {
+        "eligibility_tag": payload.eligibility_tag,
+        "eligibility_reasons": reasons,
+        "eligibility_computed_at": now,
+    }})
+    await _append_audit(pid, PlayerAuditEvent(
+        actor_name=payload.actor_name or "system",
+        actor_role="Eligibility Override",
+        actor_body_id=payload.actor_body_id,
+        event=f"Eligibility tag manually set → {payload.eligibility_tag}",
+        details=payload.reason.strip(),
+    ))
+    return await db.players.find_one({"id": pid}, {"_id": 0})
+
+
+@api_router.post("/players/eligibility-tag/recompute-all")
+async def bulk_recompute_eligibility(request: Request, body_id: Optional[str] = None):
+    """MPCA-210 · Bulk recompute for the whole player register in scope.
+    - MPCA: retags every active player across MPCA.
+    - Division scope: retags only players registered with that Division/District.
+    """
+    q: dict = {}
+    if body_id:
+        q["body_id"] = body_id
+    else:
+        q.update(body_scope(get_scope(request)))
+    docs = await db.players.find(q, {"_id": 0, "id": 1}).to_list(5000)
+    stats = {"total": len(docs), "tagged": 0, "ineligible": 0, "errors": 0, "by_tag": {}}
+    for d in docs:
+        try:
+            updated = await compute_eligibility_tag(d["id"])   # reuse the single-player logic
+            stats["tagged"] += 1
+            t = updated.get("eligibility_tag") or "Unknown"
+            stats["by_tag"][t] = stats["by_tag"].get(t, 0) + 1
+            if t == "Ineligible":
+                stats["ineligible"] += 1
+        except Exception:
+            stats["errors"] += 1
+    return stats

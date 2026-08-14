@@ -5,6 +5,7 @@ import {
     fetchPlayers, fetchPlayerStats, createPlayer, checkPlayerEligibility, approvePlayer, disqualifyPlayer, reinstatePlayer,
     startPlayerReview, raisePlayerDiscrepancy, divisionApprovePlayer,
 } from "@/lib/api";
+import { api } from "@/lib/api";
 import {
     User as UserIcon, Plus, Trophy, ShieldAlert, ShieldCheck, ChevronRight, Filter, X, Award, CheckCircle2, AlertTriangle, BadgeCheck, Ban,
 } from "lucide-react";
@@ -655,9 +656,25 @@ const Players = () => {
                     </p>
                 </div>
                 {canCreate && (
-                    <button onClick={() => setShowNew(true)} className="btn-heritage-primary" data-testid="new-player-btn">
-                        <Plus size={14} /> Register a Player
-                    </button>
+                    <div className="flex gap-3 flex-wrap">
+                        <button
+                            onClick={async () => {
+                                if (!window.confirm("Recompute eligibility tags for every player in your scope? This may take a few seconds.")) return;
+                                try {
+                                    const { data } = await api.post("/players/eligibility-tag/recompute-all");
+                                    alert(`Retagged ${data.tagged} of ${data.total} players.\nBreakdown: ${Object.entries(data.by_tag || {}).map(([k, v]) => `${k}: ${v}`).join("  ·  ")}\nIneligible: ${data.ineligible}  ·  Errors: ${data.errors}`);
+                                    await load();
+                                } catch (e) { alert(e?.response?.data?.detail || e.message); }
+                            }}
+                            className="text-[10px] uppercase tracking-widest border-2 border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory px-3 py-2"
+                            data-testid="bulk-recompute-eligibility-btn"
+                        >
+                            <ShieldCheck size={12} className="inline mr-1" /> Recompute Eligibility (All)
+                        </button>
+                        <button onClick={() => setShowNew(true)} className="btn-heritage-primary" data-testid="new-player-btn">
+                            <Plus size={14} /> Register a Player
+                        </button>
+                    </div>
                 )}
             </div>
 

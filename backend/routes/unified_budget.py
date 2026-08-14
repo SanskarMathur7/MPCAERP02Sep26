@@ -61,7 +61,7 @@ def _day_ordinal(d: Optional[date]) -> Optional[int]:
 
 def _from_date(m: Dict[str, Any]) -> Optional[date]:
     """Read the match start date from any of the supported fixture shapes."""
-    return _parse_iso(m.get("from_date") or m.get("from") or m.get("scheduled_date"))
+    return _parse_iso(m.get("from_date") or m.get("from") or m.get("scheduled_date") or m.get("match_date"))
 
 
 def _to_date(m: Dict[str, Any]) -> Optional[date]:
@@ -515,11 +515,13 @@ async def days_engine_for_tournament(tid: str):
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
-    fixtures_cur = db.fixtures.find({"tournament_id": tid}, {"_id": 0})
+    # MPCA-217 · Read from `tournament_matches` (Match Calendar UI) — with a
+    # fallback merge of `fixtures` for legacy pre-migration data.
     matches: List[Dict[str, Any]] = []
-    async for f in fixtures_cur:
+    async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
+        matches.append(m)
+    async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
         matches.append(f)
-
     valid = [m for m in matches if span_days(m) > 0]
     gap = gap_map(valid)
 
@@ -598,9 +600,11 @@ async def compute_unified_budget_for_tournament(tid: str, save: bool = False):
         raise HTTPException(404, "Tournament not found")
     setup_meta = t.get("setup_meta") or {}
     pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
-    fixtures_cur = db.fixtures.find({"tournament_id": tid}, {"_id": 0})
+    # MPCA-217 · Read from tournament_matches (Match Calendar UI) + fixtures (legacy)
     matches: List[Dict[str, Any]] = []
-    async for f in fixtures_cur:
+    async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
+        matches.append(m)
+    async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
         matches.append(f)
 
     card = await _load_rate_card_for_tournament(t)

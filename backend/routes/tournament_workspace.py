@@ -29,7 +29,7 @@ class TournamentMatch(BaseModel):
     tournament_id: str
     match_no: int
     stage: str = "League"                       # League | Quarter_Final | Semi_Final | Final | Practice
-    match_date: Optional[str] = None            # ISO YYYY-MM-DD
+    match_date: Optional[str] = None            # ISO YYYY-MM-DD — start date (from_date)
     start_time: Optional[str] = None            # HH:MM (24h)
     home_team: str
     away_team: str
@@ -37,6 +37,14 @@ class TournamentMatch(BaseModel):
     ground_name: Optional[str] = None
     result: Optional[str] = None                # free-text result note when completed
     notes: Optional[str] = None
+    # MPCA-217 · Days-engine fields — feed the unified budget compute engine.
+    days: int = 1                               # scheduled days (span). 1 for LO, 3/4/5 for Multi-Day.
+    actual_days: Optional[int] = None           # early-finish override; blank = play the full span
+    nmd_manual: Optional[int] = None            # override auto-derived NMD (blank = calendar-derived)
+    other_pax: int = 0                          # VIPs / ground staff counted in AllPax driver
+    pool_id: Optional[str] = None               # mirrors setup_meta.division_pools/district_pools id
+    format: Optional[str] = None                # per-match format override (defaults to tournament.format)
+    officials_ids: Optional[Dict[str, List[str]]] = None   # {umpires:[], scorers:[], selectors:[], observers:[]}
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -49,6 +57,14 @@ class TournamentMatchCreate(BaseModel):
     venue_name: Optional[str] = None
     ground_name: Optional[str] = None
     notes: Optional[str] = None
+    # MPCA-217 · Days-engine
+    days: int = 1
+    actual_days: Optional[int] = None
+    nmd_manual: Optional[int] = None
+    other_pax: int = 0
+    pool_id: Optional[str] = None
+    format: Optional[str] = None
+    officials_ids: Optional[Dict[str, List[str]]] = None
 
 
 class TournamentMatchPatch(BaseModel):
@@ -61,6 +77,14 @@ class TournamentMatchPatch(BaseModel):
     ground_name: Optional[str] = None
     result: Optional[str] = None
     notes: Optional[str] = None
+    # MPCA-217 · Days-engine
+    days: Optional[int] = None
+    actual_days: Optional[int] = None
+    nmd_manual: Optional[int] = None
+    other_pax: Optional[int] = None
+    pool_id: Optional[str] = None
+    format: Optional[str] = None
+    officials_ids: Optional[Dict[str, List[str]]] = None
 
 
 @api_router.get("/tournaments/{tid}/matches", response_model=List[TournamentMatch])

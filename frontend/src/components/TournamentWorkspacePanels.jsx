@@ -22,7 +22,15 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
         stage: "League", match_date: "", start_time: "10:00",
         home_team: "", away_team: "", venue_name: tournament?.venue_name_snapshot || "",
         ground_name: tournament?.ground_name_snapshot || "", notes: "",
+        // MPCA-217 · Days-engine fields
+        days: 1, actual_days: "", nmd_manual: "", other_pax: 0, pool_id: "",
     });
+
+    // MPCA-217 · Pool options for the fixture (Inter-Div → division_pools · Inter-Dist → district_pools)
+    const poolOptions = useMemo(() => {
+        const meta = tournament?.setup_meta || {};
+        return [...(meta.division_pools || []), ...(meta.district_pools || [])];
+    }, [tournament?.setup_meta]);
 
     // M29 · Derive team options from tournament pools + ground options from Step 5 grounds.
     const teamOptions = useMemo(() => {
@@ -76,8 +84,17 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
 
     const addMatch = async () => {
         if (!form.home_team || !form.away_team || !form.match_date) return alert("Date, Team 1 and Team 2 are required.");
-        await api.post(`/tournaments/${tournament.id}/matches`, form);
-        setForm({ ...form, home_team: "", away_team: "", match_date: "", notes: "" });
+        // MPCA-217 · Coerce days-engine fields (blank strings → null, else Number)
+        const payload = {
+            ...form,
+            days: Number(form.days) || 1,
+            actual_days: form.actual_days === "" ? null : Number(form.actual_days),
+            nmd_manual: form.nmd_manual === "" ? null : Number(form.nmd_manual),
+            other_pax: Number(form.other_pax) || 0,
+            pool_id: form.pool_id || null,
+        };
+        await api.post(`/tournaments/${tournament.id}/matches`, payload);
+        setForm({ ...form, home_team: "", away_team: "", match_date: "", notes: "", actual_days: "", nmd_manual: "" });
         setCreating(false);
         await load();
         onChange?.();
@@ -201,13 +218,25 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                 </div>
             ) : (
                 <div className="space-y-1" data-testid="match-list">
-                    {matches.map((m, idx) => (
+                    {matches.map((m, idx) => {
+                        const poolName = poolOptions.find((p) => p.id === m.pool_id)?.name;
+                        return (
                         <div key={m.id} className="grid grid-cols-12 gap-2 items-center border border-mpca-brass/20 px-3 py-2 text-xs" data-testid={`match-row-${idx}`}>
                             <div className="col-span-1 font-mono text-mpca-brass text-[10px]">M{String(m.match_no).padStart(2, "0")}</div>
-                            <div className="col-span-2 font-mono text-mpca-green-dark">{m.match_date || "—"}<span className="text-mpca-gray-dark ml-1">{m.start_time}</span></div>
+                            <div className="col-span-2 font-mono text-mpca-green-dark">
+                                {m.match_date || "—"}
+                                {(m.days || 1) > 1 && <span className="ml-1 text-[10px] text-mpca-oxblood">× {m.days}d</span>}
+                                <span className="text-mpca-gray-dark ml-1">{m.start_time}</span>
+                            </div>
                             <div className="col-span-1 text-[9px] uppercase tracking-widest text-mpca-oxblood">{m.stage.replace(/_/g, " ")}</div>
-                            <div className="col-span-4 font-serif">{m.home_team} <span className="text-mpca-gray-dark mx-1">vs</span> {m.away_team}</div>
-                            <div className="col-span-3 text-mpca-gray-dark text-[11px]">{m.venue_name}{m.ground_name ? ` · ${m.ground_name}` : ""}</div>
+                            <div className="col-span-3 font-serif">{m.home_team} <span className="text-mpca-gray-dark mx-1">vs</span> {m.away_team}</div>
+                            <div className="col-span-2 text-mpca-gray-dark text-[11px]">{m.venue_name}{m.ground_name ? ` · ${m.ground_name}` : ""}</div>
+                            <div className="col-span-2 flex items-center gap-1.5 text-[10px]">
+                                {poolName && <span className="px-1.5 py-0.5 bg-mpca-parchment/60 border border-mpca-brass/30 text-mpca-brass uppercase tracking-widest">{poolName}</span>}
+                                {m.actual_days != null && m.actual_days !== "" && <span className="text-mpca-oxblood">actual {m.actual_days}d</span>}
+                                {m.nmd_manual != null && m.nmd_manual !== "" && <span className="text-mpca-oxblood">NMD {m.nmd_manual}</span>}
+                                {(m.other_pax || 0) > 0 && <span className="text-mpca-navy">+{m.other_pax}px</span>}
+                            </div>
                             <div className="col-span-1 text-right">
                                 {canEdit && !locked && (
                                     <button onClick={() => removeMatch(m.id)} className="text-mpca-oxblood/70 hover:text-mpca-oxblood" data-testid={`match-delete-${idx}`}>
@@ -216,7 +245,7 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                                 )}
                             </div>
                         </div>
-                    ))}
+                    );})}
                 </div>
             )}
 
@@ -250,6 +279,42 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                             ))}
                         </select>
                         <input placeholder="Notes" className={inputCls} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                    </div>
+
+                    {/* MPCA-217 · Days-engine inputs — feed budget compute + Days Engine tab */}
+                    <div className="mt-3 pt-3 border-t border-mpca-brass/20">
+                        <div className="overline text-[9px] mb-2 text-mpca-brass">Days Engine · budget drivers</div>
+                        <div className="grid grid-cols-5 gap-2">
+                            <label className="block">
+                                <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">Days (span)</div>
+                                <input type="number" min={1} className={inputCls} value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value })} data-testid="match-days-input" />
+                            </label>
+                            <label className="block">
+                                <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">Actual days</div>
+                                <input type="number" min={0} placeholder="= span" className={inputCls} value={form.actual_days} onChange={(e) => setForm({ ...form, actual_days: e.target.value })} data-testid="match-actual-days-input" />
+                            </label>
+                            <label className="block">
+                                <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">NMD manual</div>
+                                <input type="number" min={0} placeholder="auto" className={inputCls} value={form.nmd_manual} onChange={(e) => setForm({ ...form, nmd_manual: e.target.value })} data-testid="match-nmd-manual-input" />
+                            </label>
+                            <label className="block">
+                                <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">Other Pax</div>
+                                <input type="number" min={0} className={inputCls} value={form.other_pax} onChange={(e) => setForm({ ...form, other_pax: e.target.value })} data-testid="match-other-pax-input" />
+                            </label>
+                            <label className="block">
+                                <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">Pool</div>
+                                <select className={inputCls} value={form.pool_id} onChange={(e) => setForm({ ...form, pool_id: e.target.value })} data-testid="match-pool-input">
+                                    <option value="">— none —</option>
+                                    {poolOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                            </label>
+                        </div>
+                        <div className="text-[10px] text-mpca-gray-dark italic mt-1.5">
+                            <b>Days (span)</b> = 1 for Ltd Overs · 3-5 for Multi-Day / Four-Day. &nbsp;·&nbsp;
+                            <b>Actual days</b> blank = play the full span (Ranji-style Day-2 finish uses a lower number). &nbsp;·&nbsp;
+                            <b>NMD manual</b> blank = calendar-derived (arrival + gap). &nbsp;·&nbsp;
+                            <b>Other Pax</b> = VIPs / ground staff counted in AllPax.
+                        </div>
                     </div>
                     {usingFallbackGrounds && (
                         <div className="mt-2 text-[10px] text-mpca-brass italic" data-testid="calendar-grounds-fallback-hint">

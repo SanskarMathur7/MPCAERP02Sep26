@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
 
-OfficialRole = Literal["Umpire", "Scorer", "Referee", "Manager", "Coach", "Trainer", "Physio"]
+OfficialRole = Literal["Umpire", "Scorer", "Selector", "Observer", "Referee", "Manager", "Coach", "Trainer", "Physio"]
 OfficialGrade = Literal["BCCI_Panel", "State_Panel", "Division_Panel", "District_Panel", "Trainee"]
 
 
@@ -468,3 +468,56 @@ async def my_official_assignments(
         r["da_total_inr"] = float(r.get("per_day_da_inr") or 0) * d
         r["grand_total_inr"] = r["fee_total_inr"] + r["da_total_inr"]
     return {"count": len(rows), "assignments": rows}
+
+
+# ─────────────────── MPCA-219 · Sample roster seeder ───────────────────
+# Idempotent: seeds ~24 officials so the tournament assignment picker has a
+# realistic selection to demo the flow. Names/grades are illustrative only.
+
+SAMPLE_OFFICIALS = [
+    # ── Umpires (State + Division panel) ──
+    {"full_name": "Ravi Kulkarni",    "role": "Umpire",  "grade": "BCCI_Panel",     "city": "Indore",   "state": "MP", "years_of_experience": 18},
+    {"full_name": "Ashok Mehta",      "role": "Umpire",  "grade": "State_Panel",    "city": "Bhopal",   "state": "MP", "years_of_experience": 12},
+    {"full_name": "Ramesh Yadav",     "role": "Umpire",  "grade": "State_Panel",    "city": "Jabalpur", "state": "MP", "years_of_experience": 10},
+    {"full_name": "Rakesh Tiwari",    "role": "Umpire",  "grade": "State_Panel",    "city": "Gwalior",  "state": "MP", "years_of_experience": 9},
+    {"full_name": "Suresh Malviya",   "role": "Umpire",  "grade": "Division_Panel", "city": "Ujjain",   "state": "MP", "years_of_experience": 7},
+    {"full_name": "Vikram Raghuvanshi","role": "Umpire", "grade": "Division_Panel", "city": "Sagar",    "state": "MP", "years_of_experience": 6},
+    {"full_name": "Nitin Chouhan",    "role": "Umpire",  "grade": "Division_Panel", "city": "Rewa",     "state": "MP", "years_of_experience": 5},
+    {"full_name": "Manish Bhargava",  "role": "Umpire",  "grade": "State_Panel",    "city": "Indore",   "state": "MP", "years_of_experience": 8},
+    # ── Scorers ──
+    {"full_name": "Prakash Dubey",    "role": "Scorer",  "grade": "State_Panel",    "city": "Bhopal",   "state": "MP", "years_of_experience": 14},
+    {"full_name": "Sanjay Verma",     "role": "Scorer",  "grade": "State_Panel",    "city": "Indore",   "state": "MP", "years_of_experience": 11},
+    {"full_name": "Deepak Shukla",    "role": "Scorer",  "grade": "Division_Panel", "city": "Jabalpur", "state": "MP", "years_of_experience": 6},
+    {"full_name": "Anil Patel",       "role": "Scorer",  "grade": "Division_Panel", "city": "Ujjain",   "state": "MP", "years_of_experience": 4},
+    # ── Selectors (senior ex-players / talent-scout panel) ──
+    {"full_name": "Vinod Chouhan",    "role": "Selector","grade": "State_Panel",    "city": "Indore",   "state": "MP", "years_of_experience": 20},
+    {"full_name": "Naresh Solanki",   "role": "Selector","grade": "State_Panel",    "city": "Bhopal",   "state": "MP", "years_of_experience": 18},
+    {"full_name": "Sunil Joshi",      "role": "Selector","grade": "BCCI_Panel",     "city": "Ratlam",   "state": "MP", "years_of_experience": 22},
+    # ── Observers (BCCI reps / MPCA senior figures) ──
+    {"full_name": "Deepak Jain",      "role": "Observer","grade": "BCCI_Panel",     "city": "Indore",   "state": "MP", "years_of_experience": 25},
+    {"full_name": "Amitabh Vijayvargiya","role": "Observer","grade": "State_Panel", "city": "Bhopal",   "state": "MP", "years_of_experience": 19},
+    {"full_name": "Rajkumar Sharma",  "role": "Observer","grade": "State_Panel",    "city": "Jabalpur", "state": "MP", "years_of_experience": 15},
+    # ── Referees ──
+    {"full_name": "Ajay Ratnakar",    "role": "Referee", "grade": "BCCI_Panel",     "city": "Indore",   "state": "MP", "years_of_experience": 21},
+    {"full_name": "Mahesh Nagar",     "role": "Referee", "grade": "State_Panel",    "city": "Gwalior",  "state": "MP", "years_of_experience": 13},
+    # ── Physios ──
+    {"full_name": "Dr. Rahul Agarwal","role": "Physio",  "grade": "State_Panel",    "city": "Bhopal",   "state": "MP", "years_of_experience": 8},
+    {"full_name": "Dr. Priya Sinha",  "role": "Physio",  "grade": "State_Panel",    "city": "Indore",   "state": "MP", "years_of_experience": 6},
+]
+
+
+async def seed_match_officials() -> dict:
+    """Idempotent · adds sample match officials only if they don't already exist
+    (matched by full_name + role). Safe to call on every startup."""
+    created = 0
+    for row in SAMPLE_OFFICIALS:
+        exists = await db.match_officials.find_one(
+            {"full_name": row["full_name"], "role": row["role"]},
+            {"_id": 0, "id": 1},
+        )
+        if exists:
+            continue
+        off = MatchOfficial(**row)
+        await db.match_officials.insert_one(off.model_dump())
+        created += 1
+    return {"created": created, "total_sample": len(SAMPLE_OFFICIALS)}

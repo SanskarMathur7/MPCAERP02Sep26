@@ -75,6 +75,9 @@ async def lifespan(app: FastAPI):
         # MPCA-215 · Rate Card seed (17 budget heads × 8 travel heads × N tournament types × 2 formats)
         from routes.rate_cards import seed_rate_cards
         await seed_rate_cards("2026-27")
+        # MPCA-219 · Sample match-officials roster
+        from routes.match_officials import seed_match_officials
+        await seed_match_officials()
     yield
     # ---- shutdown ----
     client.close()

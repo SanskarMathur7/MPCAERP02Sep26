@@ -46,6 +46,22 @@ class CampBase(BaseModel):
     planned_participants: int = 0
     notes: Optional[str] = None
     fiscal_cycle: str = "2025-26"
+    # MPCA-204 · Pre-Tournament Camps must be linked to an Inter-Division tournament.
+    inter_division_tournament_id: Optional[str] = None
+    inter_division_tournament_name: Optional[str] = None
+
+
+class ReciprocalVisitor(BaseModel):
+    """MPCA-204 · A Division that visits ANOTHER division's Pre-Tournament Camp.
+    The visiting body still receives its own standard grant on its own camp,
+    while the HOST camp gets the extra reciprocal budget top-up.
+    """
+    model_config = ConfigDict(extra="ignore")
+    body_id: str                                  # visiting body code
+    body_name: str
+    invited_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    invited_by: Optional[str] = None              # actor persona name
+    confirmed_at: Optional[str] = None
 
 
 class Camp(CampBase):
@@ -54,7 +70,9 @@ class Camp(CampBase):
     status: CampStatus = "Draft"
     actual_participants: Optional[int] = None
     auto_budget_id: Optional[str] = None
+    reciprocal_visitors: List[ReciprocalVisitor] = Field(default_factory=list)
     created_by: Optional[str] = None
+    auto_created_from_tournament: bool = False    # true if the auto-hook birthed it
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -101,8 +119,44 @@ async def create_camp(payload: CampCreate):
     if not body:
         raise HTTPException(404, f"Body '{payload.body_id}' not found")
     scheme_code = payload.scheme_code or CAMP_TYPE_TO_SCHEME.get(payload.camp_type)
+
+    # MPCA-204 · Pre-Tournament Camps are mandatorily linked to an
+    # Inter-Divisional tournament. Idempotent on (idt_id, body_id).
+    idt_id = payload.inter_division_tournament_id
+    idt_name = payload.inter_division_tournament_name
+    if payload.camp_type == "Pre_Tournament_Camp":
+        if not idt_id:
+            raise HTTPException(
+                422,
+                "Pre-Tournament Camps must be linked to an Inter-Division Tournament. "
+                "Please select one from the dropdown.",
+            )
+        t = await db.tournaments.find_one({"id": idt_id}, {"_id": 0, "name": 1, "tournament_scope": 1})
+        if not t:
+            raise HTTPException(404, f"Inter-Division tournament '{idt_id}' not found")
+        if t.get("tournament_scope") != "Inter_Divisional":
+            raise HTTPException(
+                422,
+                f"Only Inter-Division tournaments may host Pre-Tournament Camps "
+                f"(got scope: {t.get('tournament_scope')}).",
+            )
+        idt_name = idt_name or t.get("name")
+        existing = await db.camps.find_one({
+            "camp_type": "Pre_Tournament_Camp",
+            "inter_division_tournament_id": idt_id,
+            "body_id": payload.body_id,
+        }, {"_id": 0})
+        if existing:
+            # Idempotent: return the pre-existing camp instead of raising.
+            return existing
+
     camp_no = await _next_camp_no(payload.fiscal_cycle)
-    camp = Camp(camp_no=camp_no, **{**payload.model_dump(), "scheme_code": scheme_code})
+    camp = Camp(camp_no=camp_no, **{
+        **payload.model_dump(),
+        "scheme_code": scheme_code,
+        "inter_division_tournament_id": idt_id,
+        "inter_division_tournament_name": idt_name,
+    })
     await db.camps.insert_one(camp.model_dump())
     return camp
 
@@ -157,3 +211,141 @@ async def camps_stats(request: Request, body_id: Optional[str] = None, fiscal_cy
         "by_type": {t: len([d for d in docs if d["camp_type"] == t]) for t in ["Periodical_Coaching", "Vacation_Camp", "Reciprocal_Match", "Pre_Tournament_Camp"]},
         "total_planned_participants": sum(d.get("planned_participants") or 0 for d in docs),
     }
+
+
+# ── MPCA-204 · Inter-Division ↔ Pre-Tournament Camp linkage ────────────────
+async def auto_create_pre_camps_for_tournament(tournament: dict) -> dict:
+    """Auto-create one Draft Pre-Tournament Camp for each participating body of
+    an Inter-Divisional tournament that has just been Approved. Idempotent on
+    `(inter_division_tournament_id, body_id)` — never duplicates. Called from
+    `approve_tournament_plan()`.
+
+    Returns `{"created": [camp_ids], "skipped": [body_codes_already_linked]}`.
+    """
+    if tournament.get("tournament_scope") != "Inter_Divisional":
+        return {"created": [], "skipped": [], "reason": "not inter-divisional"}
+    tid = tournament["id"]
+    t_name = tournament.get("name") or tid
+
+    # Participating bodies = every non-removed participation record for this tournament
+    participations = await db.tournament_participations.find(
+        {"tournament_id": tid, "removed_at": {"$in": [None, ""]}},
+        {"_id": 0, "body_code": 1, "body_name": 1, "role": 1},
+    ).to_list(200)
+
+    cycle = tournament.get("fiscal_cycle") or "2025-26"
+    scheme_code = CAMP_TYPE_TO_SCHEME["Pre_Tournament_Camp"]
+    created: list = []
+    skipped: list = []
+    for p in participations:
+        body_code = p.get("body_code")
+        if not body_code:
+            continue
+        already = await db.camps.find_one({
+            "camp_type": "Pre_Tournament_Camp",
+            "inter_division_tournament_id": tid,
+            "body_id": body_code,
+        }, {"_id": 0, "id": 1})
+        if already:
+            skipped.append(body_code)
+            continue
+        camp_no = await _next_camp_no(cycle)
+        # Default window: 14→3 days before the tournament kick-off (best-effort)
+        start_date = tournament.get("start_date") or ""
+        end_date = tournament.get("start_date") or ""
+        camp = Camp(
+            name=f"Pre-Tournament Camp · {p.get('body_name') or body_code} · {t_name}",
+            camp_type="Pre_Tournament_Camp",
+            body_id=body_code,
+            scheme_code=scheme_code,
+            start_date=start_date,
+            end_date=end_date,
+            fiscal_cycle=cycle,
+            inter_division_tournament_id=tid,
+            inter_division_tournament_name=t_name,
+            camp_no=camp_no,
+            auto_created_from_tournament=True,
+        )
+        await db.camps.insert_one(camp.model_dump())
+        created.append(camp.id)
+    return {"created": created, "skipped": skipped}
+
+
+@api_router.get("/tournaments/{tid}/pre-tournament-camps", response_model=List[Camp])
+async def list_pre_tournament_camps(tid: str):
+    """List all Pre-Tournament Camps auto-linked to this Inter-Divisional tournament."""
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "tournament_scope": 1})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    if t.get("tournament_scope") != "Inter_Divisional":
+        return []
+    docs = await db.camps.find({
+        "camp_type": "Pre_Tournament_Camp",
+        "inter_division_tournament_id": tid,
+    }, {"_id": 0}).sort("body_id", 1).to_list(200)
+    return docs
+
+
+class ReciprocalVisitorPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    body_id: str
+    invited_by: Optional[str] = None
+
+
+@api_router.post("/camps/{cid}/reciprocal-visitors", response_model=Camp)
+async def add_reciprocal_visitor(cid: str, payload: ReciprocalVisitorPayload):
+    """Register a visiting Division on a HOST division's Pre-Tournament Camp.
+    Both the visiting body's own camp and this host camp remain in place — the
+    host camp will get extra reciprocal budget top-ups (accommodation + food
+    of the visiting team + umpire/scorer fees).
+
+    Rule reminders:
+      - Host camp cannot self-invite (`body_id != camp.body_id`).
+      - Visitor must belong to the same Inter-Divisional tournament.
+      - Cannot double-add the same visitor twice.
+    """
+    camp = await db.camps.find_one({"id": cid}, {"_id": 0})
+    if not camp:
+        raise HTTPException(404, "Camp not found")
+    if camp.get("camp_type") != "Pre_Tournament_Camp":
+        raise HTTPException(422, "Reciprocal visitors are only supported for Pre-Tournament Camps.")
+    if payload.body_id == camp["body_id"]:
+        raise HTTPException(422, "A camp cannot list itself as a reciprocal visitor.")
+
+    idt_id = camp.get("inter_division_tournament_id")
+    if not idt_id:
+        raise HTTPException(422, "Camp is not linked to an Inter-Division tournament.")
+    # Visitor must be a participating body of the same tournament
+    v_participation = await db.tournament_participations.find_one({
+        "tournament_id": idt_id,
+        "body_code": payload.body_id,
+        "removed_at": {"$in": [None, ""]},
+    }, {"_id": 0})
+    if not v_participation:
+        raise HTTPException(
+            422,
+            f"Body '{payload.body_id}' is not a participant of the Inter-Division tournament linked to this camp.",
+        )
+
+    visitors = list(camp.get("reciprocal_visitors") or [])
+    if any(v.get("body_id") == payload.body_id for v in visitors):
+        raise HTTPException(409, f"Body '{payload.body_id}' is already a reciprocal visitor on this camp.")
+
+    body_doc = await db.bodies.find_one({"code": payload.body_id}, {"_id": 0, "name": 1})
+    visitors.append(ReciprocalVisitor(
+        body_id=payload.body_id,
+        body_name=(body_doc or {}).get("name") or payload.body_id,
+        invited_by=payload.invited_by,
+    ).model_dump())
+    await db.camps.update_one({"id": cid}, {"$set": {"reciprocal_visitors": visitors}})
+    return await db.camps.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.delete("/camps/{cid}/reciprocal-visitors/{body_id}", response_model=Camp)
+async def remove_reciprocal_visitor(cid: str, body_id: str):
+    camp = await db.camps.find_one({"id": cid}, {"_id": 0})
+    if not camp:
+        raise HTTPException(404, "Camp not found")
+    visitors = [v for v in (camp.get("reciprocal_visitors") or []) if v.get("body_id") != body_id]
+    await db.camps.update_one({"id": cid}, {"$set": {"reciprocal_visitors": visitors}})
+    return await db.camps.find_one({"id": cid}, {"_id": 0})

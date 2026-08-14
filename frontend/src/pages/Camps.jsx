@@ -25,6 +25,7 @@ const CampsPage = () => {
     const navigate = useNavigate();
     const [camps, setCamps] = useState([]);
     const [schemes, setSchemes] = useState([]);
+    const [interDivTournaments, setInterDivTournaments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState(emptyForm);
@@ -32,12 +33,14 @@ const CampsPage = () => {
     const load = async () => {
         setLoading(true);
         try {
-            const [{ data: c }, { data: s }] = await Promise.all([
+            const [{ data: c }, { data: s }, { data: tournaments }] = await Promise.all([
                 api.get("/camps"),
                 api.get("/reimbursement-schemes"),
+                api.get("/tournaments", { params: { limit: 500 } }).catch(() => ({ data: [] })),
             ]);
             setCamps(c || []);
             setSchemes(s || []);
+            setInterDivTournaments((tournaments || []).filter((t) => t.tournament_scope === "Inter_Divisional"));
         } finally { setLoading(false); }
     };
     useEffect(() => { load(); }, []);
@@ -52,6 +55,10 @@ const CampsPage = () => {
     const saveCamp = async () => {
         try {
             const payload = { ...form, planned_participants: parseInt(form.planned_participants) || 0, created_by: persona?.name };
+            if (payload.camp_type !== "Pre_Tournament_Camp") {
+                delete payload.inter_division_tournament_id;
+                delete payload.inter_division_tournament_name;
+            }
             await api.post("/camps", payload);
             setShowForm(false);
             await load();
@@ -143,6 +150,32 @@ const CampsPage = () => {
                                     {CAMP_TYPES.map((t) => <option key={t.code} value={t.code}>{t.label} (Scheme {t.scheme})</option>)}
                                 </select>
                             </label>
+                            {form.camp_type === "Pre_Tournament_Camp" && (
+                                <label className="md:col-span-2">
+                                    <div className="overline text-[9px] mb-1">Inter-Division Tournament *</div>
+                                    <select
+                                        className="input-heritage"
+                                        value={form.inter_division_tournament_id || ""}
+                                        onChange={(e) => {
+                                            const t = interDivTournaments.find((x) => x.id === e.target.value);
+                                            setForm({
+                                                ...form,
+                                                inter_division_tournament_id: e.target.value,
+                                                inter_division_tournament_name: t?.name || "",
+                                            });
+                                        }}
+                                        data-testid="camp-idt-select"
+                                    >
+                                        <option value="">— Select Inter-Division Tournament —</option>
+                                        {interDivTournaments.map((t) => (
+                                            <option key={t.id} value={t.id}>{t.name} · {t.fiscal_cycle}</option>
+                                        ))}
+                                    </select>
+                                    <div className="text-[9px] mt-1 text-mpca-brass">
+                                        Pre-Tournament Camps must be linked to an Inter-Division Tournament. If a camp already exists for your Division against the selected tournament, opening this form will surface it instead of creating a duplicate.
+                                    </div>
+                                </label>
+                            )}
                             <label>
                                 <div className="overline text-[9px] mb-1">Body (Organising) *</div>
                                 <input className="input-heritage" value={form.body_id} onChange={(e) => setForm({ ...form, body_id: e.target.value })} placeholder="DIV-IND" data-testid="camp-body" />
@@ -186,7 +219,7 @@ const CampsPage = () => {
                         </div>
                         <div className="mt-4 flex justify-end gap-2">
                             <button className="btn-heritage-secondary" onClick={() => setShowForm(false)}>Cancel</button>
-                            <button className="btn-heritage-primary" onClick={saveCamp} disabled={!form.name || !form.body_id} data-testid="save-camp-btn">Create Camp</button>
+                            <button className="btn-heritage-primary" onClick={saveCamp} disabled={!form.name || !form.body_id || (form.camp_type === "Pre_Tournament_Camp" && !form.inter_division_tournament_id)} data-testid="save-camp-btn">Create Camp</button>
                         </div>
                     </div>
                 </div>

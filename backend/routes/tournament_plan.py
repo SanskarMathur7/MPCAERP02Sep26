@@ -275,6 +275,15 @@ async def approve_tournament_plan(tid: str, action: TournamentPlanAction):
     # Pre-build DA forms from proposed_official_ids (or from fixtures.officials)
     await _prebuild_da_forms(t)
 
+    # MPCA-204 · Auto-create Pre-Tournament Camps for Inter-Divisional tournaments.
+    try:
+        from routes.camps import auto_create_pre_camps_for_tournament
+        # Re-fetch to pick up the "status" flip we just committed
+        fresh = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+        await auto_create_pre_camps_for_tournament(fresh or t)
+    except Exception:
+        pass
+
     updated = await db.tournaments.find_one({"id": tid}, {"_id": 0})
 
     # Notify the originating division

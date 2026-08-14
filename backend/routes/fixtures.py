@@ -73,14 +73,85 @@ async def set_fixture_status(fid: str, new_status: FixtureStatus):
     if new_status not in allowed.get(doc["status"], []):
         raise HTTPException(400, f"Cannot move fixture from {doc['status']} to {new_status}")
     await db.fixtures.update_one({"id": fid}, {"$set": {"status": new_status}})
-    # MPCA-202 · Auto-refresh DA counters when a fixture's played-status flips
-    # (Scheduled→In_Progress→Completed/Abandoned/Cancelled).
+    # MPCA-202 · Auto-refresh DA counters when a fixture's played-status flips.
     try:
         from routes.tournament_plan import rebuild_da_forms
         await rebuild_da_forms(doc["tournament_id"])
     except Exception:
         pass
+    # MPCA-203 · Notify each allocated official when the match is Cancelled or Abandoned.
+    if new_status in ("Cancelled", "Abandoned"):
+        try:
+            await _notify_officials_of_match_disruption(doc, new_status)
+        except Exception:
+            pass
     return await db.fixtures.find_one({"id": fid}, {"_id": 0})
+
+
+async def _notify_officials_of_match_disruption(fixture: dict, new_status: str) -> None:
+    """MPCA-203 · Ping every allocated official (in-app + email) when a
+    fixture flips to Cancelled or Abandoned.
+
+    Business rule reminder for the message body:
+        Match Fee stays payable for the scheduled day. DA/TA is not paid
+        for a day that was not actually played.
+    """
+    from core.helpers import _create_notification
+    from core.email_notifications import send_email
+
+    tournament = await db.tournaments.find_one({"id": fixture["tournament_id"]}, {"_id": 0, "name": 1})
+    t_name = (tournament or {}).get("name") or fixture.get("tournament_id")
+    match_label = fixture.get("name") or f"{fixture.get('home_team', 'Home')} vs {fixture.get('away_team', 'Away')}"
+    match_date = fixture.get("scheduled_date") or ""
+    verb = "cancelled" if new_status == "Cancelled" else "abandoned"
+
+    title = f"Match {verb} · {match_label}"
+    message_text = (
+        f"The match \"{match_label}\" on {match_date} in tournament {t_name} has been {verb}. "
+        f"Your Match-Officials Fee for this scheduled day is still payable. "
+        f"DA/TA will not apply for this day since the match was not played."
+    )
+    html_body = (
+        f"<p>Hello,</p>"
+        f"<p>The match <strong>{match_label}</strong> on <strong>{match_date}</strong> "
+        f"in tournament <em>{t_name}</em> has been <strong>{verb}</strong>.</p>"
+        f"<ul>"
+        f"<li>Your Match-Officials Fee for this scheduled day is still payable.</li>"
+        f"<li>DA/TA will <strong>not</strong> apply for this day since the match was not played.</li>"
+        f"</ul>"
+        f"<p>Regards,<br/>Madhya Pradesh Cricket Association</p>"
+    )
+
+    for o in (fixture.get("officials") or []):
+        # In-app notification (best-effort — the role_id is a synthetic tag).
+        try:
+            await _create_notification(
+                recipient_role_id=f"official::{(o.get('name') or '').lower().replace(' ', '-')}",
+                recipient_body_id=o.get("body_id") or "MPCA",
+                title=title,
+                message=message_text,
+                link=f"/tournaments/{fixture['tournament_id']}/schedule",
+                related_type="fixture",
+                related_id=fixture.get("id"),
+                severity="warning",
+                kind="info",
+            )
+        except Exception:
+            pass
+        # Email · look up the official's registered email in the central pool.
+        try:
+            profile = await db.match_officials.find_one(
+                {"full_name": o.get("name"), "role": o.get("role")},
+                {"_id": 0, "email": 1},
+            ) or await db.match_officials.find_one(
+                {"full_name": o.get("name")},
+                {"_id": 0, "email": 1},
+            )
+            email_to = (profile or {}).get("email")
+            if email_to:
+                await send_email(email_to, title, html_body, text_body=message_text)
+        except Exception:
+            pass
 
 
 @api_router.post("/fixtures/{fid}/officials", response_model=Fixture)

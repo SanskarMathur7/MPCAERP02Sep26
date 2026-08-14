@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -319,6 +319,9 @@ const TournamentDetail = () => {
                             <SetupBox testId="box-officials" icon={ShieldCheck} label="Match Officials" note="MPCA assigns umpires · scorers · referees · physios centrally" onClick={() => setOpenBox(openBox === "officials" ? null : "officials")} active={openBox === "officials"} />
                             <SetupBox testId="box-activity" icon={History} label="Activity Log" note="Chronological trail of all actions" onClick={() => setOpenBox(openBox === "activity" ? null : "activity")} active={openBox === "activity"} />
                             <SetupBox testId="box-discussion" icon={MessageSquare} label="Discussion" note="Broadcast to all Divisions · or chat privately with one" onClick={() => setOpenBox(openBox === "discussion" ? null : "discussion")} active={openBox === "discussion"} />
+                            {t.tournament_scope === "Inter_Divisional" && (
+                                <SetupBox testId="box-pre-camps" icon={UsersRound} label="Pre-Tournament Camps" note="One per participating body · auto-created on approval" onClick={() => setOpenBox(openBox === "pre-camps" ? null : "pre-camps")} active={openBox === "pre-camps"} />
+                            )}
                         </>
                     )}
                 </div>
@@ -363,6 +366,9 @@ const TournamentDetail = () => {
                 )}
                 {openBox === "discussion" && (
                     <div className="mt-4"><TournamentDiscussionBox tournamentId={id} /></div>
+                )}
+                {openBox === "pre-camps" && (
+                    <div className="mt-4"><PreTournamentCampsPanel tournamentId={id} tournamentName={t.name} persona={persona} /></div>
                 )}
             </div>
 
@@ -439,6 +445,139 @@ const TournamentDiscussionBox = ({ tournamentId }) => {
             {loading || !threadId
                 ? <div className="bulletin-card p-6 text-[11px] text-mpca-brass">Opening discussion thread…</div>
                 : <DiscussionThread key={threadId} threadId={threadId} height="60vh" />}
+        </div>
+    );
+};
+
+
+// MPCA-204 · Pre-Tournament Camps panel (Inter-Divisional tournaments only)
+const PreTournamentCampsPanel = ({ tournamentId, tournamentName, persona }) => {
+    const [camps, setCamps] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [participants, setParticipants] = useState([]);
+    const navigate = useNavigate();
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const [c, p] = await Promise.all([
+                api.get(`/tournaments/${tournamentId}/pre-tournament-camps`).then((r) => r.data).catch(() => []),
+                api.get(`/tournaments/${tournamentId}/participants`).then((r) => r.data).catch(() => []),
+            ]);
+            setCamps(c || []);
+            setParticipants((p || []).filter((x) => !x.removed_at));
+        } finally { setLoading(false); }
+    };
+    useEffect(() => { load(); }, [tournamentId]);
+
+    const campByBody = useMemo(() => Object.fromEntries((camps || []).map((c) => [c.body_id, c])), [camps]);
+    const isMPCA = persona?.body_type === "State" || persona?.body_code === "MPCA";
+    const inviteReciprocal = async (hostCid, visitorCode) => {
+        try {
+            await api.post(`/camps/${hostCid}/reciprocal-visitors`, { body_id: visitorCode, invited_by: persona?.display_name });
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const removeReciprocal = async (hostCid, visitorCode) => {
+        if (!window.confirm("Remove this reciprocal visitor?")) return;
+        try {
+            await api.delete(`/camps/${hostCid}/reciprocal-visitors/${visitorCode}`);
+            await load();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
+    if (loading) return <div className="bulletin-card p-6 text-[11px] text-mpca-brass">Loading camps…</div>;
+
+    return (
+        <div className="space-y-4" data-testid="pre-camps-panel">
+            <div className="bulletin-card p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                        <div className="overline">Pre-Tournament Camps</div>
+                        <div className="font-serif text-xl text-mpca-green-dark mt-1">{tournamentName}</div>
+                        <p className="text-[11px] text-mpca-gray-dark mt-1 max-w-2xl">
+                            One Pre-Tournament Camp is auto-materialised for every participating body when this tournament is Approved. Each Division can budget & claim its camp independently. Divisions may join another division&apos;s camp as a <em>reciprocal visitor</em> — the host camp then receives extra budget top-ups (accommodation + food of visiting team + umpire &amp; scorer fees).
+                        </p>
+                    </div>
+                    <div className="text-right">
+                        <div className="overline text-[9px]">Camps</div>
+                        <div className="font-mono text-lg text-mpca-oxblood">{camps.length} / {participants.length}</div>
+                    </div>
+                </div>
+            </div>
+
+            {participants.length === 0 && (
+                <div className="bulletin-card p-4 text-[11px] text-mpca-brass" data-testid="pre-camps-no-participants">
+                    No participating bodies on this tournament yet. Add participants first — camps materialise automatically on plan approval.
+                </div>
+            )}
+
+            {participants.map((p) => {
+                const c = campByBody[p.body_code];
+                return (
+                    <div key={p.body_code} className="bulletin-card p-4" data-testid={`pre-camp-row-${p.body_code}`}>
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                                <div className="font-serif text-base text-mpca-green-dark">{p.body_name}</div>
+                                <div className="text-[10px] text-mpca-brass uppercase tracking-widest">
+                                    {p.role || "Participant"}{c ? ` · Camp ${c.camp_no}` : " · No camp yet"}
+                                </div>
+                                {c && (
+                                    <div className="text-[10px] text-mpca-gray-dark mt-1">
+                                        {c.start_date} → {c.end_date} · Status <span className="font-mono">{c.status}</span>
+                                        {c.auto_created_from_tournament && <span className="ml-2 text-mpca-navy">· Auto</span>}
+                                    </div>
+                                )}
+                            </div>
+                            {c ? (
+                                <button
+                                    onClick={() => navigate(`/camps/${c.id}`)}
+                                    className="text-[10px] uppercase tracking-widest border border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory px-3 py-1.5"
+                                    data-testid={`open-camp-${p.body_code}`}
+                                >
+                                    Open Camp
+                                </button>
+                            ) : (
+                                <span className="text-[10px] text-mpca-oxblood italic">Auto-creates on tournament approval</span>
+                            )}
+                        </div>
+                        {c && (
+                            <div className="mt-3 pl-3 border-l-2 border-mpca-brass/30">
+                                <div className="overline text-[9px] flex items-center justify-between mb-2">
+                                    <span>Reciprocal Visitors · {(c.reciprocal_visitors || []).length}</span>
+                                    {(isMPCA || persona?.body_code === c.body_id) && (
+                                        <select
+                                            defaultValue=""
+                                            onChange={(e) => { if (e.target.value) { inviteReciprocal(c.id, e.target.value); e.target.value = ""; } }}
+                                            className="text-[10px] normal-case tracking-normal border border-mpca-brass/40 px-2 py-1 bg-mpca-parchment"
+                                            data-testid={`invite-reciprocal-${p.body_code}`}
+                                        >
+                                            <option value="">+ Invite visiting body</option>
+                                            {participants
+                                                .filter((x) => x.body_code !== c.body_id && !(c.reciprocal_visitors || []).some((r) => r.body_id === x.body_code))
+                                                .map((x) => <option key={x.body_code} value={x.body_code}>{x.body_name}</option>)}
+                                        </select>
+                                    )}
+                                </div>
+                                {(c.reciprocal_visitors || []).length === 0 ? (
+                                    <div className="text-[10px] text-mpca-gray-dark italic">None yet.</div>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                        {c.reciprocal_visitors.map((v) => (
+                                            <div key={v.body_id} className="text-[10px] bg-mpca-navy text-mpca-gold-light px-2 py-1 flex items-center gap-2" data-testid={`reciprocal-${p.body_code}-${v.body_id}`}>
+                                                {v.body_name}
+                                                {(isMPCA || persona?.body_code === c.body_id) && (
+                                                    <button onClick={() => removeReciprocal(c.id, v.body_id)} className="hover:text-mpca-oxblood" title="Remove">×</button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
         </div>
     );
 };

@@ -1875,6 +1875,17 @@ class FixtureBase(BaseModel):
     format: TournamentFormat
     days: int = 1                                 # 1 for LO, 3/4/5 for Multi-Day
     notes: Optional[str] = None
+    # MPCA-217 · Days engine inputs (feed unified budget calculator)
+    # `actual_days` — for multi-day matches that ended early (e.g. Ranji Day-2
+    # finish). Falls back to `days` if null/empty.
+    actual_days: Optional[int] = None
+    # `nmd_manual` — manual override for non-match days (arrival + break
+    # inference is otherwise automatic).
+    nmd_manual: Optional[int] = None
+    # `other_pax` — ground staff / guests / VIPs counted in `AllPax` driver.
+    other_pax: int = 0
+    # `pool_id` — the pool this fixture belongs to (mirrors setup_meta pools).
+    pool_id: Optional[str] = None
 
 
 class Fixture(FixtureBase):

@@ -33,6 +33,31 @@ async def list_fixtures(
     return docs
 
 
+@api_router.patch("/fixtures/{fid}", response_model=Fixture)
+async def patch_fixture(fid: str, payload: Dict = None):
+    """MPCA-217 · Update days-engine + venue fields on a fixture.
+
+    Allow-listed fields only — days-engine drivers (`actual_days`, `nmd_manual`,
+    `other_pax`, `pool_id`) plus common calendar edits (`scheduled_date`,
+    `scheduled_time`, `days`, `ground_id`, `venue_name`, `ground_name`,
+    `round`, `notes`). Everything else is silently dropped.
+    """
+    fx = await db.fixtures.find_one({"id": fid}, {"_id": 0})
+    if not fx:
+        raise HTTPException(404, "Fixture not found")
+    allow = {
+        "actual_days", "nmd_manual", "other_pax", "pool_id",
+        "scheduled_date", "scheduled_time", "days",
+        "ground_id", "venue_name", "ground_name",
+        "round", "notes",
+    }
+    patch = {k: v for k, v in (payload or {}).items() if k in allow}
+    if not patch:
+        return fx
+    await db.fixtures.update_one({"id": fid}, {"$set": patch})
+    return await db.fixtures.find_one({"id": fid}, {"_id": 0})
+
+
 @api_router.get("/fixtures/{fid}", response_model=Fixture)
 async def get_fixture(fid: str):
     doc = await db.fixtures.find_one({"id": fid}, {"_id": 0})

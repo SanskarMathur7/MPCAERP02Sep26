@@ -16,13 +16,14 @@ import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
 import TournamentInvoicesPanel from "@/components/TournamentInvoicesPanel";
 import TournamentStatusStepper from "@/components/TournamentStatusStepper";
 import TournamentBasicsPanel from "@/components/TournamentBasicsPanel";
+import DaysEnginePanel from "@/components/DaysEnginePanel";
 import ParticipantsMatrix from "@/components/ParticipantsMatrix";
 import TournamentSquadsPanel from "@/components/TournamentSquadsPanel";
 import {
     MatchCalendarPanel, TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
 } from "@/components/TournamentWorkspacePanels";
 import { getTypeByCode } from "@/lib/tournamentCatalog";
-import { Wallet, ArrowRight, Sliders, Receipt, ScrollText, Activity, HandCoins, Landmark, ListChecks, UsersRound, ClipboardEdit, History, MessageSquare } from "lucide-react";
+import { Wallet, ArrowRight, Sliders, Receipt, ScrollText, Activity, HandCoins, Landmark, ListChecks, UsersRound, ClipboardEdit, History, MessageSquare, CalendarClock } from "lucide-react";
 import MatchOfficialDAPanel from "@/components/MatchOfficialDAPanel";
 import TournamentActivityLog from "@/components/TournamentActivityLog";
 import DiscussionThread from "@/components/DiscussionThread";
@@ -298,6 +299,7 @@ const TournamentDetail = () => {
                             <SetupBox testId="box-participants" icon={UsersRound} label="Participants Matrix" note={(() => { const pools = (t.setup_meta?.division_pools || []).concat(t.setup_meta?.district_pools || []); const totalCodes = pools.flatMap(p => p.division_codes || p.district_codes || []).length; return pools.length ? `${totalCodes} bodies · ${pools.length} pool(s)` : "Set pools first"; })()} onClick={() => setOpenBox(openBox === "participants" ? null : "participants")} active={openBox === "participants"} />
                             <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body · click to open selection" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} />
                             <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
+                            <SetupBox testId="box-days-engine" icon={CalendarClock} label="Days Engine" note="Match Days · Non-Match Days · calendar" onClick={() => setOpenBox(openBox === "days-engine" ? null : "days-engine")} active={openBox === "days-engine"} />
                             {/* MPCA-125 · Removed the duplicate "Squad Selection" box — the
                                 "Squads" box above is now the ONLY entry point (multi-body
                                 view for MPCA, direct link to my squad for Division/District). */}
@@ -339,6 +341,9 @@ const TournamentDetail = () => {
                 )}
                 {openBox === "calendar" && (
                     <div className="mt-4"><MatchCalendarPanel tournament={t} canEdit={canEdit || persona?.body_code === t.host_body_id} onChange={() => { refreshProgress(); load(); }} /></div>
+                )}
+                {openBox === "days-engine" && (
+                    <div className="mt-4"><DaysEnginePanel tournament={t} canEdit={canEdit || persona?.body_code === t.host_body_id} /></div>
                 )}
                 {openBox === "budget" && (
                     <div className="mt-4"><TournamentBudgetsPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>

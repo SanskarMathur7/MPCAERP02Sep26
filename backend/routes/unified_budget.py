@@ -59,10 +59,32 @@ def _day_ordinal(d: Optional[date]) -> Optional[int]:
     return d.toordinal()
 
 
-def span_days(m: Dict[str, Any]) -> int:
-    """Inclusive day count between `from_date` and `to_date`."""
-    f = _parse_iso(m.get("from_date") or m.get("from"))
+def _from_date(m: Dict[str, Any]) -> Optional[date]:
+    """Read the match start date from any of the supported fixture shapes."""
+    return _parse_iso(m.get("from_date") or m.get("from") or m.get("scheduled_date"))
+
+
+def _to_date(m: Dict[str, Any]) -> Optional[date]:
+    """Read the match end date; falls back to `scheduled_date + days - 1`."""
     t = _parse_iso(m.get("to_date") or m.get("to"))
+    if t:
+        return t
+    f = _from_date(m)
+    if not f:
+        return None
+    try:
+        d = int(m.get("days") or 1)
+    except (TypeError, ValueError):
+        d = 1
+    if d < 1:
+        d = 1
+    return date.fromordinal(f.toordinal() + d - 1)
+
+
+def span_days(m: Dict[str, Any]) -> int:
+    """Inclusive day count between from_date and to_date."""
+    f = _from_date(m)
+    t = _to_date(m)
     if not f or not t or t < f:
         return 0
     return (t - f).days + 1
@@ -98,14 +120,14 @@ def gap_map(matches: List[Dict[str, Any]]) -> Dict[str, int]:
     valid = [m for m in matches if span_days(m) > 0]
     playing: set = set()
     for m in valid:
-        f = _parse_iso(m.get("from_date") or m.get("from"))
-        t = _parse_iso(m.get("to_date") or m.get("to"))
+        f = _from_date(m)
+        t = _to_date(m)
         for x in range(f.toordinal(), t.toordinal() + 1):
             playing.add(x)
     sorted_days = sorted(playing)
     gap: Dict[str, int] = {}
     for m in valid:
-        f_ord = _parse_iso(m.get("from_date") or m.get("from")).toordinal()
+        f_ord = _from_date(m).toordinal()
         prev = None
         for p in sorted_days:
             if p < f_ord:
@@ -155,7 +177,10 @@ def _team_pax(m: Dict[str, Any], default_squad: int) -> int:
 def host_away_pax(m: Dict[str, Any], pool: Optional[Dict[str, Any]], default_squad: int) -> Dict[str, Any]:
     """Compute host / away pax counts and team-count flags for a match."""
     sq = _team_pax(m, default_squad)
-    sides = [s for s in [m.get("team_a") or m.get("teamA"), m.get("team_b") or m.get("teamB")] if s]
+    sides = [s for s in [
+        m.get("team_a") or m.get("teamA") or m.get("home_team"),
+        m.get("team_b") or m.get("teamB") or m.get("away_team"),
+    ] if s]
     n = len(sides) or 2
     host_code = pool.get("host_division_code") or pool.get("host_district_code") if pool else None
     host_playing = bool(host_code and host_code in sides)
@@ -170,14 +195,26 @@ def host_away_pax(m: Dict[str, Any], pool: Optional[Dict[str, Any]], default_squ
 
 
 def officials_count(m: Dict[str, Any]) -> int:
-    """Total officials assigned to this match — umpires + scorers + selectors + observers."""
-    off = m.get("officials") or {}
+    """Total officials assigned to this match — umpires + scorers + selectors + observers.
+
+    Supports THREE shapes:
+      1. `officials`: {umpires: [...], scorers: [...], selectors: [...], observers: [...]}
+         — HTML utility shape.
+      2. `officials_ids`: same buckets — future frontend shape.
+      3. `officials`: [{role: 'Umpire_On_Field_1', name: '...'}, ...]
+         — legacy `MatchOfficialAllocation` list (default in ERP fixtures).
+    """
+    off = m.get("officials") or m.get("officials_ids") or []
     if isinstance(off, dict):
         return sum(len(off.get(k) or []) for k in ("umpires", "scorers", "selectors", "observers"))
-    # fallback: match may store officials_ids
-    off = m.get("officials_ids") or {}
-    if isinstance(off, dict):
-        return sum(len(off.get(k) or []) for k in ("umpires", "scorers", "selectors", "observers"))
+    if isinstance(off, list):
+        # Count only roles that map to the HTML utility's 4 buckets.
+        count = 0
+        for row in off:
+            role = str(row.get("role") or "").lower()
+            if any(role.startswith(prefix) for prefix in ("umpire", "scorer", "selector", "observer", "match_referee")):
+                count += 1
+        return count
     return 0
 
 
@@ -258,14 +295,21 @@ def compute_tournament_budget(
 
         row = {
             "id": m.get("id"),
-            "label": m.get("label") or m.get("match_no"),
+            "label": m.get("label") or m.get("round") or m.get("match_no"),
             "type": m.get("type") or m.get("match_type"),
-            "team_a": m.get("team_a") or m.get("teamA"),
-            "team_b": m.get("team_b") or m.get("teamB"),
+            "team_a": m.get("team_a") or m.get("teamA") or m.get("home_team"),
+            "team_b": m.get("team_b") or m.get("teamB") or m.get("away_team"),
             "pool_id": m.get("pool_id") or m.get("poolId"),
             "pool_name": pool.get("name") if pool else None,
+            "from_date": (_from_date(m).isoformat() if _from_date(m) else None),
+            "to_date": (_to_date(m).isoformat() if _to_date(m) else None),
             "match_days": md,
             "non_match_days": nmd,
+            "nmd_manual": m.get("nmd_manual"),
+            "nmd_auto": gap.get(m.get("id") or "", 0),
+            "shortfall_days": shortfall_days(m),
+            "officials_count": officials_count(m),
+            "other_pax": int(m.get("other_pax") or 0),
             "md_amount": m_md_amt,
             "nmd_amount": m_nmd_amt,
             "total": m_md_amt + m_nmd_amt,
@@ -452,6 +496,93 @@ async def _load_rate_card_for_tournament(t: Dict[str, Any]) -> Dict[str, Any]:
     if not card:
         raise HTTPException(404, f"No rate card configured for {tt}/{fg}/{season}")
     return card
+
+
+@api_router.get("/tournaments/{tid}/days-engine")
+async def days_engine_for_tournament(tid: str):
+    """MPCA-217 · Days-Engine — headless payload for the calendar / MD/NMD tiles.
+
+    Returns:
+      • `matches`: one row per fixture with from/to, MD, NMD (auto), shortfall,
+        NMD manual override, officials count, other_pax.
+      • `calendar`: date → status ("MD" | "NMD" | "idle") for every day of the
+        tournament window.
+      • `totals`: {match_days, non_match_days_auto, non_match_days_effective, days_span}.
+      • `overrides_used`: number of matches with a manual NMD override.
+
+    Read-only — no rate lookup / no rupees. Used by the tab UI.
+    """
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    fixtures_cur = db.fixtures.find({"tournament_id": tid}, {"_id": 0})
+    matches: List[Dict[str, Any]] = []
+    async for f in fixtures_cur:
+        matches.append(f)
+
+    valid = [m for m in matches if span_days(m) > 0]
+    gap = gap_map(valid)
+
+    rows: List[Dict[str, Any]] = []
+    tot_md = 0
+    tot_nmd_auto = 0
+    tot_nmd_eff = 0
+    overrides = 0
+    playing_days: set = set()
+
+    for m in valid:
+        md = match_days(m)
+        nmd_eff = effective_nmd(m, gap)
+        nmd_auto = gap.get(m.get("id") or "", 0) + shortfall_days(m)
+        if m.get("nmd_manual") is not None and m.get("nmd_manual") != "":
+            overrides += 1
+        rows.append({
+            "id": m.get("id"),
+            "label": m.get("round") or m.get("label") or m.get("match_no"),
+            "team_a": m.get("home_team") or m.get("team_a"),
+            "team_b": m.get("away_team") or m.get("team_b"),
+            "pool_id": m.get("pool_id"),
+            "from_date": (_from_date(m).isoformat() if _from_date(m) else None),
+            "to_date": (_to_date(m).isoformat() if _to_date(m) else None),
+            "match_days": md,
+            "non_match_days_auto": nmd_auto,
+            "non_match_days_effective": nmd_eff,
+            "nmd_manual": m.get("nmd_manual"),
+            "shortfall_days": shortfall_days(m),
+            "officials_count": officials_count(m),
+            "other_pax": int(m.get("other_pax") or 0),
+        })
+        tot_md += md
+        tot_nmd_auto += nmd_auto
+        tot_nmd_eff += nmd_eff
+        f = _from_date(m); ttd = _to_date(m)
+        for x in range(f.toordinal(), ttd.toordinal() + 1):
+            playing_days.add(x)
+
+    # Calendar strip — all days between earliest and latest match
+    calendar: List[Dict[str, Any]] = []
+    if playing_days:
+        lo = min(playing_days)
+        hi = max(playing_days)
+        for x in range(lo, hi + 1):
+            calendar.append({
+                "date": date.fromordinal(x).isoformat(),
+                "status": "MD" if x in playing_days else "NMD",
+            })
+
+    return {
+        "tournament_id": tid,
+        "matches": rows,
+        "calendar": calendar,
+        "totals": {
+            "match_days": tot_md,
+            "non_match_days_auto": tot_nmd_auto,
+            "non_match_days_effective": tot_nmd_eff,
+            "days_span": len(calendar),
+            "match_count": len(rows),
+            "overrides_used": overrides,
+        },
+    }
 
 
 @api_router.post("/tournaments/{tid}/unified-budget/compute")

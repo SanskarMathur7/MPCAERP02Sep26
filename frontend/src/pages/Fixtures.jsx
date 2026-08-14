@@ -433,20 +433,53 @@ const Fixtures = () => {
                         </div>
                         <div className="p-7 space-y-6">
                             {canManage && (
-                                <div className="flex flex-wrap gap-3">
-                                    {selected.status === "Scheduled" && (
-                                        <button onClick={async () => { const u = await setFixtureStatus(selected.id, "In_Progress"); setSelected(u); await load(); }} className="btn-heritage-primary" data-testid="fx-start">
-                                            <Trophy size={14} /> Start Match
+                                <div className="space-y-2">
+                                    <div className="flex flex-wrap gap-3">
+                                        {selected.status === "Scheduled" && (
+                                            <>
+                                                <button onClick={async () => { const u = await setFixtureStatus(selected.id, "In_Progress"); setSelected(u); await load(); }} className="btn-heritage-primary" data-testid="fx-start">
+                                                    <Trophy size={14} /> Start Match
+                                                </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        if (!window.confirm("Mark this match as Cancelled? DA/TA counters for allocated officials will refresh automatically.")) return;
+                                                        const u = await setFixtureStatus(selected.id, "Cancelled");
+                                                        setSelected(u); await load();
+                                                    }}
+                                                    className="btn-heritage-ghost !border-mpca-oxblood !text-mpca-oxblood"
+                                                    data-testid="fx-cancel"
+                                                >
+                                                    Cancel Match
+                                                </button>
+                                            </>
+                                        )}
+                                        {selected.status === "In_Progress" && (
+                                            <>
+                                                <button onClick={async () => { const u = await setFixtureStatus(selected.id, "Completed"); setSelected(u); await load(); }} className="btn-heritage-primary" data-testid="fx-complete">
+                                                    <Trophy size={14} /> Mark Completed
+                                                </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        if (!window.confirm("Abandon this match? DA/TA counters will refresh.")) return;
+                                                        const u = await setFixtureStatus(selected.id, "Abandoned");
+                                                        setSelected(u); await load();
+                                                    }}
+                                                    className="btn-heritage-ghost !border-mpca-oxblood !text-mpca-oxblood"
+                                                    data-testid="fx-abandon"
+                                                >
+                                                    Abandon Match
+                                                </button>
+                                            </>
+                                        )}
+                                        <button onClick={() => setAllocFor(selected)} className="btn-heritage-secondary" data-testid="fx-allocate">
+                                            <Users size={14} /> Allocate Official
                                         </button>
+                                    </div>
+                                    {["Cancelled", "Abandoned", "Completed"].includes(selected.status) && (selected.officials || []).length > 0 && (
+                                        <div className="text-[10px] text-mpca-brass italic">
+                                            Officials&apos; Match Fee is paid for this scheduled day. DA/TA will only be paid if the match was played (In Progress or Completed).
+                                        </div>
                                     )}
-                                    {selected.status === "In_Progress" && (
-                                        <button onClick={async () => { const u = await setFixtureStatus(selected.id, "Completed"); setSelected(u); await load(); }} className="btn-heritage-primary" data-testid="fx-complete">
-                                            <Trophy size={14} /> Mark Completed
-                                        </button>
-                                    )}
-                                    <button onClick={() => setAllocFor(selected)} className="btn-heritage-secondary" data-testid="fx-allocate">
-                                        <Users size={14} /> Allocate Official
-                                    </button>
                                 </div>
                             )}
                             <div>

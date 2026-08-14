@@ -73,6 +73,13 @@ async def set_fixture_status(fid: str, new_status: FixtureStatus):
     if new_status not in allowed.get(doc["status"], []):
         raise HTTPException(400, f"Cannot move fixture from {doc['status']} to {new_status}")
     await db.fixtures.update_one({"id": fid}, {"$set": {"status": new_status}})
+    # MPCA-202 · Auto-refresh DA counters when a fixture's played-status flips
+    # (Scheduled→In_Progress→Completed/Abandoned/Cancelled).
+    try:
+        from routes.tournament_plan import rebuild_da_forms
+        await rebuild_da_forms(doc["tournament_id"])
+    except Exception:
+        pass
     return await db.fixtures.find_one({"id": fid}, {"_id": 0})
 
 

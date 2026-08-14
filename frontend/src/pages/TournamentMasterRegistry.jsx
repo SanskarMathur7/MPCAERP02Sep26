@@ -280,7 +280,8 @@ export default function TournamentMasterRegistry() {
                         No entries yet in this category. {isReadOnly ? "" : "Click ‘Add Entry’ above to create one."}
                     </div>
                 ) : (
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[1400px]">
                         <thead className="bg-mpca-parchment border-b border-mpca-brass/40">
                             <tr>
                                 {["Sort", "Name", "Category", "Age Group", "Type", "Born on/before", "Born on/after", "Max MP-Dom", "Max Edu", "Max Out-of-MP", "Medical", "Status", "Actions"].map((h) => (
@@ -392,7 +393,22 @@ export default function TournamentMasterRegistry() {
                             })}
                         </tbody>
                     </table>
+                    </div>
                 )}
+                {editingId && !isReadOnly && (
+                    <div className="sticky bottom-0 z-20 bg-mpca-green-dark text-mpca-gold-light px-4 py-3 flex items-center justify-between border-t-2 border-mpca-oxblood" data-testid="registry-edit-action-bar">
+                        <div className="text-[10px] uppercase tracking-widest">
+                            Editing · {(rows.find((r) => r.id === editingId) || {}).name || "row"}
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setEditingId(null)} className="text-[10px] uppercase tracking-widest border border-mpca-gold-light text-mpca-gold-light hover:bg-mpca-gold-light hover:text-mpca-green-dark px-3 py-1.5" data-testid="registry-edit-cancel-bar">Cancel</button>
+                            <button onClick={saveEdit} disabled={busy} className="text-[10px] uppercase tracking-widest bg-mpca-gold-light text-mpca-green-dark hover:bg-mpca-parchment px-4 py-1.5 disabled:opacity-40 flex items-center gap-1" data-testid="registry-edit-save-bar">
+                                {busy ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />} Save Changes
+                            </button>
+                        </div>
+                    </div>
+                )}
+
             </div>
         </div>
     );

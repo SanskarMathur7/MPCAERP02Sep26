@@ -956,11 +956,22 @@ const DATab = ({ tournament, persona, onChanged }) => {
                                 </div>
                                 <div className="text-right">
                                     <div className="font-serif text-xl text-mpca-oxblood">{fmtINR(d.total_inr)}</div>
-                                    <div className="text-[10px] text-mpca-brass uppercase tracking-wider">{d.days} day × ₹{d.da_rate_inr}</div>
+                                    <div className="text-[10px] text-mpca-brass uppercase tracking-wider">
+                                        Sched {d.scheduled_days ?? d.days ?? 0} d · Played {d.played_days ?? d.days ?? 0} d
+                                    </div>
                                 </div>
                             </div>
-                            <div className="mt-3 grid sm:grid-cols-5 gap-3 text-xs">
-                                <div><div className="overline">DA</div><div className="font-mono">{fmtINR(d.da_amount_inr)}</div></div>
+                            <div className="mt-3 grid sm:grid-cols-6 gap-3 text-xs">
+                                <div title="Officiating fee — paid for every scheduled day (even if cancelled)">
+                                    <div className="overline">Match Fee</div>
+                                    <div className="font-mono text-mpca-navy">{fmtINR(d.match_fee_amount_inr || 0)}</div>
+                                    <div className="text-[9px] text-mpca-gray-dark">{d.scheduled_days ?? 0} × ₹{d.match_fee_rate_inr || 0}</div>
+                                </div>
+                                <div title="DA/TA — paid only for days actually played">
+                                    <div className="overline">DA</div>
+                                    <div className="font-mono">{fmtINR(d.da_amount_inr)}</div>
+                                    <div className="text-[9px] text-mpca-gray-dark">{d.played_days ?? d.days ?? 0} × ₹{d.da_rate_inr || 0}</div>
+                                </div>
                                 <div><div className="overline">Travel</div><div className="font-mono">{fmtINR(d.travel_amount_inr)}</div></div>
                                 <div><div className="overline">Food</div><div className="font-mono">{fmtINR(d.food_amount_inr)}</div></div>
                                 <div><div className="overline">Misc</div><div className="font-mono">{fmtINR(d.misc_amount_inr)}</div></div>
@@ -995,8 +1006,16 @@ const DATab = ({ tournament, persona, onChanged }) => {
                         <div className="p-6 space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="label-heritage">Days</label>
-                                    <input type="number" value={editing.days || 0} onChange={(e) => setEditing((d) => ({ ...d, days: parseInt(e.target.value) || 0 }))} className="input-heritage" data-testid="da-edit-days" />
+                                    <label className="label-heritage">Scheduled Days <span className="text-[9px] normal-case text-mpca-gray-dark">(match-fee driver)</span></label>
+                                    <input type="number" value={editing.scheduled_days ?? editing.days ?? 0} onChange={(e) => setEditing((d) => ({ ...d, scheduled_days: parseInt(e.target.value) || 0 }))} className="input-heritage" data-testid="da-edit-scheduled-days" />
+                                </div>
+                                <div>
+                                    <label className="label-heritage">Match-Fee Rate (₹/day)</label>
+                                    <input type="number" value={editing.match_fee_rate_inr || 0} onChange={(e) => setEditing((d) => ({ ...d, match_fee_rate_inr: parseFloat(e.target.value) || 0 }))} className="input-heritage" data-testid="da-edit-fee-rate" />
+                                </div>
+                                <div>
+                                    <label className="label-heritage">Played Days <span className="text-[9px] normal-case text-mpca-gray-dark">(DA/TA driver)</span></label>
+                                    <input type="number" value={editing.played_days ?? editing.days ?? 0} onChange={(e) => setEditing((d) => ({ ...d, played_days: parseInt(e.target.value) || 0 }))} className="input-heritage" data-testid="da-edit-played-days" />
                                 </div>
                                 <div>
                                     <label className="label-heritage">DA Rate (₹/day)</label>

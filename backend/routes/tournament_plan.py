@@ -340,26 +340,43 @@ async def _next_da_ref(cycle: str) -> str:
 async def _prebuild_da_forms(tournament: dict) -> int:
     """Pre-build one DA form per allocated official across all fixtures of this tournament.
     Returns number of forms created.
+
+    MPCA-202 · Two day counters:
+      - scheduled_days → sum of days across ALL fixtures the official is allocated to
+                        (drives Match-Officials Fee, paid even if match cancelled)
+      - played_days    → sum of days across fixtures actually played
+                        (status ∈ {In_Progress, Completed}) — drives DA/TA
     """
     tid = tournament["id"]
     cycle = tournament.get("fiscal_cycle") or "2025-26"
-    # Collect unique (name, role) across fixtures
+    PLAYED_STATUSES = {"In_Progress", "Completed"}
+    # Collect unique (name, role) across fixtures — track scheduled + played separately
     fixtures = await db.fixtures.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
     seen: dict = {}
     for fx in fixtures:
+        fx_days = float(fx.get("days") or 1)
+        fx_played = fx.get("status") in PLAYED_STATUSES
         for o in (fx.get("officials") or []):
             key = (o.get("name") or "", o.get("role") or "")
-            if key in seen:
-                seen[key]["fixture_ids"].append(fx["id"])
-                seen[key]["days"] += float(fx.get("days") or 1)
-            else:
-                seen[key] = {"official": o, "fixture_ids": [fx["id"]], "days": float(fx.get("days") or 1)}
+            if key not in seen:
+                seen[key] = {"official": o, "fixture_ids": [], "scheduled_days": 0.0, "played_days": 0.0}
+            seen[key]["fixture_ids"].append(fx["id"])
+            seen[key]["scheduled_days"] += fx_days
+            if fx_played:
+                seen[key]["played_days"] += fx_days
 
-    # Look up DA rate from grant scheme
-    da_rate_row = await db.grant_scheme_rates.find_one({
-        "head_code": "MATCH_OFFICIAL_DA", "is_active": True, "fiscal_cycle": cycle,
-    }, {"_id": 0})
-    da_rate = float((da_rate_row or {}).get("rate_inr") or 0)
+    # Look up DA + officiating fee rates from grant scheme
+    async def _rate(head_code: str) -> float:
+        row = await db.grant_scheme_rates.find_one({
+            "head_code": head_code, "is_active": True, "fiscal_cycle": cycle,
+        }, {"_id": 0})
+        return float((row or {}).get("rate_inr") or 0)
+
+    da_rate = await _rate("MATCH_OFFICIAL_DA")
+    fee_rate_by_role = {
+        "umpire": await _rate("UMPIRE_HONORARIUM"),
+        "scorer": await _rate("SCORER_HONORARIUM"),
+    }
     created = 0
     for (name, role), meta in seen.items():
         if not name:
@@ -370,7 +387,10 @@ async def _prebuild_da_forms(tournament: dict) -> int:
         })
         if exists:
             continue
-        days = int(meta["days"] or 1)
+        scheduled_days = int(meta["scheduled_days"] or 1)
+        played_days = int(meta["played_days"] or 0)
+        role_key = (role or "").lower().split("_")[0]  # umpire / scorer / referee...
+        fee_rate = fee_rate_by_role.get(role_key, 0.0)
         o = meta["official"]
         da = MatchOfficialDA(
             da_ref=await _next_da_ref(cycle),
@@ -380,10 +400,14 @@ async def _prebuild_da_forms(tournament: dict) -> int:
             official_role=role,
             official_phone=o.get("phone"),
             body_id=o.get("body_id"),
-            days=days,
+            scheduled_days=scheduled_days,
+            played_days=played_days,
+            days=played_days,                                # legacy alias
+            match_fee_rate_inr=fee_rate,
+            match_fee_amount_inr=round(scheduled_days * fee_rate, 2),
             da_rate_inr=da_rate,
-            da_amount_inr=round(days * da_rate, 2),
-            total_inr=round(days * da_rate, 2),
+            da_amount_inr=round(played_days * da_rate, 2),
+            total_inr=round(scheduled_days * fee_rate + played_days * da_rate, 2),
         )
         await db.match_official_da.insert_one(da.model_dump())
         created += 1
@@ -470,10 +494,19 @@ async def update_da_form(did: str, patch: MatchOfficialDAUpdate):
     journey_units = math.ceil(j_hours / 12) if j_hours > 0 else 0
     merged["journey_amount_inr"] = round(journey_units * j_rate, 2)
 
-    # DA amount
-    days = int(merged.get("days") or 0)
+    # DA amount (MPCA-202 · driven by played_days, not scheduled_days)
+    scheduled_days = int(merged.get("scheduled_days") or merged.get("days") or 0)
+    played_days = int(merged.get("played_days") if merged.get("played_days") is not None else merged.get("days") or 0)
+    # Legacy `days` kept in sync with played_days
+    merged["scheduled_days"] = scheduled_days
+    merged["played_days"] = played_days
+    merged["days"] = played_days
     da_rate = float(merged.get("da_rate_inr") or 0)
-    merged["da_amount_inr"] = round(days * da_rate, 2)
+    merged["da_amount_inr"] = round(played_days * da_rate, 2)
+
+    # Match Officials Fee (paid for every scheduled day, cancelled or not)
+    fee_rate = float(merged.get("match_fee_rate_inr") or 0)
+    merged["match_fee_amount_inr"] = round(scheduled_days * fee_rate, 2)
 
     # Conveyance
     conv_rate = float(merged.get("conveyance_rate_inr") or 0)
@@ -492,11 +525,12 @@ async def update_da_form(did: str, patch: MatchOfficialDAUpdate):
         misc_total = float(merged.get("misc_amount_inr") or 0)
     merged["misc_amount_inr"] = misc_total
 
-    # Grand Total
+    # Grand Total (MPCA-202 · include Match-Officials Fee)
     night_halt = float(merged.get("night_halt_amount_inr") or 0)
     food_legacy = float(merged.get("food_amount_inr") or 0)   # only for old rows
     grand_total = round(
-        merged["da_amount_inr"] + merged["travel_amount_inr"] + merged["journey_amount_inr"] +
+        merged["da_amount_inr"] + merged["match_fee_amount_inr"] +
+        merged["travel_amount_inr"] + merged["journey_amount_inr"] +
         merged["conveyance_amount_inr"] + merged["incidental_amount_inr"] + night_halt +
         merged["misc_amount_inr"] + food_legacy,
         2,
@@ -507,6 +541,10 @@ async def update_da_form(did: str, patch: MatchOfficialDAUpdate):
     # Persist ONLY the fields we touched + derived
     to_set = {
         **{k: merged[k] for k in p.keys() if k in merged},
+        "scheduled_days": merged["scheduled_days"],
+        "played_days": merged["played_days"],
+        "days": merged["days"],
+        "match_fee_amount_inr": merged["match_fee_amount_inr"],
         "da_amount_inr": merged["da_amount_inr"],
         "travel_amount_inr": merged["travel_amount_inr"],
         "journey_amount_inr": merged["journey_amount_inr"],
@@ -787,9 +825,67 @@ async def reject_da_form(did: str, actor_name: str, reason: str, actor_body_id: 
 
 @api_router.post("/tournaments/{tid}/da-forms/rebuild")
 async def rebuild_da_forms(tid: str):
-    """Regenerate any missing DA forms (e.g. after adding new fixture officials)."""
+    """Regenerate any missing DA forms and refresh scheduled/played day counters
+    on Draft/Rejected forms. Submitted/Approved forms are left untouched.
+
+    MPCA-202 · When fixtures flip to Completed / In_Progress after the form
+    was pre-built, the Draft DA needs to pick up the fresh played-day count.
+    """
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
+    # Create any missing forms first
     created = await _prebuild_da_forms(t)
-    return {"created": created}
+
+    # Recompute counters on editable forms
+    PLAYED_STATUSES = {"In_Progress", "Completed"}
+    fixtures = await db.fixtures.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
+    seen: dict = {}
+    for fx in fixtures:
+        fx_days = float(fx.get("days") or 1)
+        fx_played = fx.get("status") in PLAYED_STATUSES
+        for o in (fx.get("officials") or []):
+            key = (o.get("name") or "", o.get("role") or "")
+            if key not in seen:
+                seen[key] = {"scheduled_days": 0.0, "played_days": 0.0}
+            seen[key]["scheduled_days"] += fx_days
+            if fx_played:
+                seen[key]["played_days"] += fx_days
+    refreshed = 0
+    for (name, role), meta in seen.items():
+        if not name:
+            continue
+        form = await db.match_official_da.find_one({
+            "tournament_id": tid, "official_name": name, "official_role": role,
+        }, {"_id": 0})
+        if not form or form.get("status") not in ("Draft", "Rejected"):
+            continue
+        scheduled_days = int(meta["scheduled_days"] or 0)
+        played_days = int(meta["played_days"] or 0)
+        fee_rate = float(form.get("match_fee_rate_inr") or 0)
+        da_rate = float(form.get("da_rate_inr") or 0)
+        match_fee = round(scheduled_days * fee_rate, 2)
+        da_amount = round(played_days * da_rate, 2)
+        # Compute new grand total from existing fields + refreshed amounts
+        night_halt = float(form.get("night_halt_amount_inr") or 0)
+        food_legacy = float(form.get("food_amount_inr") or 0)
+        total = round(
+            match_fee + da_amount +
+            float(form.get("travel_amount_inr") or 0) +
+            float(form.get("journey_amount_inr") or 0) +
+            float(form.get("conveyance_amount_inr") or 0) +
+            float(form.get("incidental_amount_inr") or 0) +
+            night_halt + food_legacy +
+            float(form.get("misc_amount_inr") or 0),
+            2,
+        )
+        await db.match_official_da.update_one({"id": form["id"]}, {"$set": {
+            "scheduled_days": scheduled_days,
+            "played_days": played_days,
+            "days": played_days,
+            "match_fee_amount_inr": match_fee,
+            "da_amount_inr": da_amount,
+            "total_inr": total,
+        }})
+        refreshed += 1
+    return {"created": created, "refreshed": refreshed}

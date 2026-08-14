@@ -1960,10 +1960,18 @@ class MatchOfficialDA(BaseModel):
     journey_hours: float = 0.0
     journey_rate_per_12h_inr: float = 300.0
     journey_amount_inr: float = 0.0              # rate × ceil(hours/12) (auto)
-    # ── DA (days × rate) ──
-    days: int = 0
+    # ── DA (played days × rate) ──
+    # MPCA-202 · Split scheduled vs played days.
+    #   scheduled_days = total match-days on the schedule (drives Match-Officials Fee — paid even if cancelled)
+    #   played_days    = days actually played (drives DA/TA — paid only for actually played days)
+    # Legacy `days` mirrors `played_days` for backward-compat.
+    scheduled_days: int = 0
+    played_days: int = 0
+    days: int = 0                                # legacy alias — kept in sync with played_days
+    match_fee_rate_inr: float = 0.0              # per-day officiating fee (from scheme)
+    match_fee_amount_inr: float = 0.0            # scheduled_days × match_fee_rate_inr (auto)
     da_rate_inr: float = 0.0                     # per-day rate from rate card
-    da_amount_inr: float = 0.0                   # days × rate (auto)
+    da_amount_inr: float = 0.0                   # played_days × da_rate_inr (auto)
     da_date_from: Optional[str] = None
     da_date_to: Optional[str] = None
     # ── Conveyance Allowance ──
@@ -2013,6 +2021,9 @@ class MatchOfficialDAUpdate(BaseModel):
     journey_hours: Optional[float] = None
     journey_rate_per_12h_inr: Optional[float] = None
     days: Optional[int] = None
+    scheduled_days: Optional[int] = None
+    played_days: Optional[int] = None
+    match_fee_rate_inr: Optional[float] = None
     da_rate_inr: Optional[float] = None
     da_date_from: Optional[str] = None
     da_date_to: Optional[str] = None

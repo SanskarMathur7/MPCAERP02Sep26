@@ -17,6 +17,7 @@ import TournamentInvoicesPanel from "@/components/TournamentInvoicesPanel";
 import TournamentStatusStepper from "@/components/TournamentStatusStepper";
 import TournamentBasicsPanel from "@/components/TournamentBasicsPanel";
 import DaysEnginePanel from "@/components/DaysEnginePanel";
+import UnifiedBudgetPanel from "@/components/UnifiedBudgetPanel";
 import ParticipantsMatrix from "@/components/ParticipantsMatrix";
 import TournamentSquadsPanel from "@/components/TournamentSquadsPanel";
 import {
@@ -300,6 +301,7 @@ const TournamentDetail = () => {
                             <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body · click to open selection" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} />
                             <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
                             <SetupBox testId="box-days-engine" icon={CalendarClock} label="Days Engine" note="Match Days · Non-Match Days · calendar" onClick={() => setOpenBox(openBox === "days-engine" ? null : "days-engine")} active={openBox === "days-engine"} />
+                            <SetupBox testId="box-unified-budget" icon={Wallet} label="Unified Budget" note="Auto ₹ from Calendar × Rate Card × Officials" onClick={() => setOpenBox(openBox === "unified-budget" ? null : "unified-budget")} active={openBox === "unified-budget"} />
                             {/* MPCA-125 · Removed the duplicate "Squad Selection" box — the
                                 "Squads" box above is now the ONLY entry point (multi-body
                                 view for MPCA, direct link to my squad for Division/District). */}
@@ -344,6 +346,9 @@ const TournamentDetail = () => {
                 )}
                 {openBox === "days-engine" && (
                     <div className="mt-4"><DaysEnginePanel tournament={t} canEdit={canEdit || persona?.body_code === t.host_body_id} /></div>
+                )}
+                {openBox === "unified-budget" && (
+                    <div className="mt-4"><UnifiedBudgetPanel tournament={t} canEdit={canEdit || persona?.body_code === "MPCA"} /></div>
                 )}
                 {openBox === "budget" && (
                     <div className="mt-4"><TournamentBudgetsPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>

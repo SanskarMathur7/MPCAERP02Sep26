@@ -65,12 +65,16 @@ class MatchOfficial(MatchOfficialBase):
 STANDARD_MO_FEES_INR = {
     "Umpire":   700.0,   # ₹700 / day per BCCI panel norms
     "Scorer":   500.0,
+    "Selector": 800.0,
+    "Observer": 1200.0,
     "Referee":  1500.0,
     "Physio":   1200.0,
 }
 STANDARD_MO_DA_INR = {   # per-day DA (food + local) — flat rate, MPCA-paid
     "Umpire":   500.0,
     "Scorer":   400.0,
+    "Selector": 600.0,
+    "Observer": 700.0,
     "Referee":  700.0,
     "Physio":   400.0,
 }

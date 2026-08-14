@@ -7,7 +7,12 @@ import { api } from "@/lib/api";
 // Days, fees and DA are computed downstream by the Unified Budget Engine
 // from the Match Calendar (per-match officials × match days). Nothing to
 // budget here.
-const ROLE_OPTIONS = ["Umpire", "Scorer", "Selector", "Observer", "Referee", "Physio"];
+//
+// MPCA-220 · Only 4 roles are relevant for CENTRAL assignment: Umpire,
+// Scorer, Selector, Observer. Managers / coaches / trainers / physios are
+// selected by Divisions when they submit their squad — not MPCA-owned.
+const ROLE_OPTIONS = ["Umpire", "Scorer", "Selector", "Observer"];
+const ROLE_SET = new Set(ROLE_OPTIONS);
 
 const MatchOfficialsPanel = ({ tournament, persona }) => {
     const isMPCA = persona?.body_type === "State";
@@ -60,8 +65,9 @@ const MatchOfficialsPanel = ({ tournament, persona }) => {
                     <div>
                         <div className="font-serif text-base text-mpca-green-dark">Match Officials · Central Assignment (MPCA)</div>
                         <div className="text-[11px] text-mpca-gray-dark italic">
-                            MPCA-133 · Umpires, scorers, selectors, observers, referees and physios for this tournament are picked centrally by MPCA.
+                            MPCA-133 · Umpires, scorers, selectors and observers for this tournament are picked centrally by MPCA.
                             Fees and DA are computed automatically by the Unified Budget Engine from the Match Calendar — no numbers to enter here.
+                            (Managers · Coaches · Trainers · Physios are selected by each Division as part of squad selection.)
                         </div>
                     </div>
                 </div>
@@ -73,7 +79,7 @@ const MatchOfficialsPanel = ({ tournament, persona }) => {
                             <div className="overline text-[9px] mb-1">Match Official</div>
                             <select className="input-heritage !py-1.5" value={form.official_id} onChange={(e) => setForm({ ...form, official_id: e.target.value })} data-testid="mo-official-select">
                                 <option value="">— pick a person —</option>
-                                {officials.map((o) => (
+                                {officials.filter((o) => ROLE_SET.has(o.role)).map((o) => (
                                     <option key={o.id} value={o.id}>{o.full_name}{o.grade ? ` · ${o.grade}` : ""}{o.role ? ` · ${o.role}` : ""}</option>
                                 ))}
                             </select>

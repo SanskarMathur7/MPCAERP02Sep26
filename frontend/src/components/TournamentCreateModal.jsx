@@ -125,6 +125,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
     const [venues, setVenues] = useState([]);
     const [grounds, setGrounds] = useState([]);
     const [schemes, setSchemes] = useState([]);
+    const [masterByType, setMasterByType] = useState({});
     const [budgetPreview, setBudgetPreview] = useState(null);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -144,16 +145,18 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
         setErr(null);
         (async () => {
             try {
-                const [b, v, g, s] = await Promise.all([
+                const [b, v, g, s, master] = await Promise.all([
                     fetchBodies().catch(() => []),
                     fetchVenues().catch(() => []),
                     fetchGrounds().catch(() => []),
                     api.get("/reimbursement-schemes", { params: { active_only: true } }).then((r) => r.data).catch(() => []),
+                    api.get("/tournament-master/grouped").then((r) => r.data).catch(() => ({})),
                 ]);
                 setBodies(b || []);
                 setVenues(v || []);
                 setGrounds(g || []);
                 setSchemes((s || []).filter((x) => TOURNAMENT_SCHEME_CODES.has(x.scheme_code) || x.scheme_type === "Reimbursement"));
+                setMasterByType(master || {});
             } finally {
                 setRefsLoading(false);
             }
@@ -385,7 +388,29 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                     <label className="block">
                         <div className="overline text-[9px] mb-1">Tournament Name *</div>
                         {(() => {
-                            const dir = getDirectoryFor(form.tournament_type_code);
+                            // MPCA-205 · Prefer master registry entries; fallback to legacy directory.
+                            const registryCategory = ({
+                                MPCA_InterDivisional: "Inter_Divisional",
+                                MPCA_Championship: "Inter_Divisional",
+                                BCCI: "BCCI",
+                                Inter_District: "Inter_District",
+                                inter_div: "Inter_Divisional",
+                                inter_district: "Inter_District",
+                                bcci: "BCCI",
+                            })[form.tournament_type] || ({
+                                MPCA_InterDivisional: "Inter_Divisional",
+                                BCCI: "BCCI",
+                            })[form.tournament_type_code];
+                            const registryEntries = registryCategory
+                                ? (masterByType[registryCategory] || []).map((m) => ({ name: m.name, age: m.description || m.short_name || "" }))
+                                : [];
+                            const legacyDir = getDirectoryFor(form.tournament_type_code);
+                            // Merge unique by name — registry takes precedence
+                            const seenNames = new Set(registryEntries.map((e) => e.name));
+                            const dir = [
+                                ...registryEntries,
+                                ...legacyDir.filter((d) => !seenNames.has(d.name)),
+                            ];
                             const isOther = form.name === "__other__" || (!!form.name && form.name !== "__other__" && !dir.some((d) => d.name === form.name));
                             return (
                                 <>
@@ -400,7 +425,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                                             }}
                                             data-testid="trn-name-select"
                                         >
-                                            <option value="">— Pick from MPCA directory —</option>
+                                            <option value="">— Pick from MPCA registry —</option>
                                             {dir.map((d) => (
                                                 <option key={d.name} value={d.name}>{d.name}{d.age ? ` · ${d.age}` : ""}</option>
                                             ))}

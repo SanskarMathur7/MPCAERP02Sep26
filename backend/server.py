@@ -22,7 +22,7 @@ from routes import (  # noqa: F401
     assets, hr_payroll, dms, compliance, audit_pack, selection_console, match_officials,
     reimbursement_schemes, reimbursement_claims, camps, squad_ai, grant_claims, scheme_calc,
     tournament_workspace, rbac, tournament_participations, body_documents, player_registrations,
-    discussions, events, finance_console,
+    discussions, events, finance_console, tournament_master,
 )
 from seed import seed_data
 
@@ -69,6 +69,9 @@ async def lifespan(app: FastAPI):
         # Sprint M21: seed 13 RBAC roles + bootstrap 6 users from personas
         from routes.rbac import seed_roles_and_permissions
         await seed_roles_and_permissions()
+        # MPCA-205 · Master Tournament Registry seed
+        from routes.tournament_master import seed_tournament_master
+        await seed_tournament_master()
     yield
     # ---- shutdown ----
     client.close()

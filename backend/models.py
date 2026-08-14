@@ -894,6 +894,56 @@ TournamentType = Literal[
 ]
 
 
+# MPCA-205 · Master Tournament Registry — canonical list of tournament names
+# grouped by category, feeds the create-tournament wizard's name dropdown.
+TournamentMasterCategory = Literal[
+    "BCCI",
+    "Inter_Divisional",
+    "Inter_District",
+]
+
+
+class TournamentMaster(BaseModel):
+    """A canonical tournament name in the master registry.
+    Pre-Tournament Camps auto-mirror the `Inter_Divisional` entries — they
+    have no independent registry rows.
+    """
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    category: TournamentMasterCategory
+    name: str                                     # e.g. "Ranji Trophy"
+    short_name: Optional[str] = None              # e.g. "Ranji"
+    description: Optional[str] = None
+    default_format: Optional[TournamentFormat] = None
+    default_scope: Optional[TournamentScope] = None
+    is_active: bool = True
+    sort_order: int = 100
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: Optional[str] = None
+
+
+class TournamentMasterCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    category: TournamentMasterCategory
+    name: str
+    short_name: Optional[str] = None
+    description: Optional[str] = None
+    default_format: Optional[TournamentFormat] = None
+    default_scope: Optional[TournamentScope] = None
+    sort_order: int = 100
+
+
+class TournamentMasterPatch(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: Optional[str] = None
+    short_name: Optional[str] = None
+    description: Optional[str] = None
+    default_format: Optional[TournamentFormat] = None
+    default_scope: Optional[TournamentScope] = None
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
 class SquadTimeline(BaseModel):
     """Squad announcement timelines per MPCA plan."""
     model_config = ConfigDict(extra="ignore")

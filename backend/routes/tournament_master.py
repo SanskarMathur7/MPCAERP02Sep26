@@ -103,28 +103,63 @@ async def delete_tournament_master(mid: str):
 
 # ── Seeder — invoked on startup, idempotent ────────────────────────────────
 SEED_BCCI = [
-    ("Ranji Trophy", "Ranji", "First-class four-day national championship", "FourDay_Senior", 10),
-    ("Vijay Hazare Trophy", "Vijay Hazare", "One-Day domestic national championship", "OneDay_Senior", 20),
-    ("Syed Mushtaq Ali Trophy", "SMAT", "Twenty20 domestic national championship", "T20_Senior", 30),
-    ("Duleep Trophy", "Duleep", "Zonal first-class trophy", "FourDay_Senior", 40),
-    ("Irani Cup", "Irani", "Ranji Champions vs Rest of India", "FourDay_Senior", 50),
-    ("Col. CK Nayudu Trophy", "CK Nayudu", "U-23 first-class (four-day)", "FourDay_U23", 60),
-    ("Cooch Behar Trophy", "Cooch Behar", "U-19 first-class (four-day)", "FourDay_U19", 70),
-    ("Vinoo Mankad Trophy", "Vinoo Mankad", "U-19 one-day national championship", "OneDay_U19", 80),
-    ("Vijay Merchant Trophy", "Vijay Merchant", "U-16 first-class (four-day)", None, 90),
-    ("U-16 Nagesh Trophy", "Nagesh", "U-16 one-day national championship", None, 100),
-    ("Women's Senior One-Day Trophy", "Women's ODI", "Senior Women one-day national championship", "OneDay_Womens", 110),
-    ("Women's Senior T20 Trophy", "Women's T20", "Senior Women T20 national championship", "T20_Womens", 120),
+    # Men's Multi-Day
+    ("Ranji Trophy · Elite", "Ranji Elite", "Ranji Trophy · Elite Group (first-class four-day)", "FourDay_Senior", 10),
+    ("Ranji Trophy · Plate", "Ranji Plate", "Ranji Trophy · Plate Group (first-class four-day)", "FourDay_Senior", 15),
+    ("Duleep Trophy", "Duleep", "Zonal first-class trophy", "FourDay_Senior", 20),
+    ("ZR Irani Cup", "Irani", "Ranji Champions vs Rest of India", "FourDay_Senior", 30),
+    ("Col CK Nayudu Trophy · Elite", "CK Nayudu Elite", "U-23 first-class · Elite Group", "FourDay_U23", 40),
+    ("Col CK Nayudu Trophy · Plate", "CK Nayudu Plate", "U-23 first-class · Plate Group", "FourDay_U23", 45),
+    ("Cooch Behar Trophy · Elite", "Cooch Behar Elite", "U-19 first-class · Elite Group", "FourDay_U19", 50),
+    ("Cooch Behar Trophy · Plate", "Cooch Behar Plate", "U-19 first-class · Plate Group", "FourDay_U19", 55),
+    ("Vijay Merchant Trophy · Elite", "Vijay Merchant Elite", "U-16 first-class · Elite Group", None, 60),
+    ("Vijay Merchant Trophy · Plate", "Vijay Merchant Plate", "U-16 first-class · Plate Group", None, 65),
+    # Men's Limited Overs
+    ("Vijay Hazare Trophy", "Vijay Hazare", "One-Day domestic national championship", "OneDay_Senior", 70),
+    ("Syed Mushtaq Ali Trophy", "SMAT", "Twenty20 domestic national championship", "T20_Senior", 80),
+    ("Men's U-23 State A One Day Trophy", "U-23 One Day", "U-23 one-day national championship", "OneDay_U23", 90),
+    ("Men's U-19 One Day Challenger Trophy", "U-19 Challenger", "U-19 one-day Challenger trophy", "OneDay_U19", 100),
+    ("Vinoo Mankad Trophy", "Vinoo Mankad", "U-19 one-day national championship", "OneDay_U19", 110),
+    ("Vizzy Trophy", "Vizzy", "U-25 all-India tournament", None, 120),
+    ("U-16 Nagesh Trophy", "Nagesh", "U-16 one-day national championship", None, 125),
+    # Women's
+    ("Sr. Women's Multi-Day Inter-Zonal Trophy", "Women's Multi-Day", "Senior Women multi-day inter-zonal", None, 130),
+    ("Sr. Women's One Day Trophy", "Women's ODI", "Senior Women one-day national championship", "OneDay_Womens", 140),
+    ("Sr. Women's One Day Inter-Zonal Trophy", "Women's ODI IZ", "Senior Women one-day inter-zonal", "OneDay_Womens", 145),
+    ("Sr. Women's T20 Trophy", "Women's T20", "Senior Women T20 national championship", "T20_Womens", 150),
+    ("Sr. Women's T20 Inter-Zonal Trophy", "Women's T20 IZ", "Senior Women T20 inter-zonal", "T20_Womens", 155),
+    ("Women's U-23 One Day Trophy", "Women U-23 OD", "U-23 Women one-day", None, 160),
+    ("Women's U-23 T20 Trophy", "Women U-23 T20", "U-23 Women T20", None, 165),
+    ("Women's U-19 One Day Trophy", "Women U-19 OD", "U-19 Women one-day", None, 170),
+    ("Women's U-19 T20 Trophy", "Women U-19 T20", "U-19 Women T20", None, 175),
+    ("Women's U-15 One Day Trophy", "Women U-15 OD", "U-15 Women one-day", None, 180),
 ]
 
 SEED_INTER_DIV = [
-    ("MY Memorial Trophy", "MY Memorial", "Inter-divisional multi-day memorial trophy", 10),
-    ("Madhavrao Scindia Trophy", "Scindia", "Inter-divisional multi-day trophy", 20),
-    ("JN Bhaya Trophy", "JN Bhaya", "Inter-divisional multi-day trophy", 30),
+    ("MY Memorial Trophy", "MY Memorial", "Inter-divisional multi-day memorial trophy · Senior", 10),
+    ("Madhavrao Scindia Trophy", "Scindia", "Inter-divisional multi-day trophy · Senior", 20),
+    ("JN Bhaya Trophy", "JN Bhaya", "Inter-divisional multi-day trophy · Senior", 30),
+    ("H Gaekwad Trophy", "H Gaekwad", "Inter-divisional multi-day trophy · Senior", 40),
+    ("SM Khan Trophy", "SM Khan", "Inter-divisional multi-day trophy · Senior", 50),
+    ("Parmanandbhai Patel Trophy", "PB Patel", "Inter-divisional multi-day trophy · Senior", 60),
+    ("Boys U-22 Limited Over Trophy", "Boys U-22 OD", "Inter-divisional limited-overs trophy · U-22", 70),
+    ("MM Jagdale Trophy", "MM Jagdale", "Inter-divisional multi-day trophy · Senior", 80),
+    ("AW Kanmadikar Trophy", "AW Kanmadikar", "Inter-divisional multi-day trophy · Senior", 90),
+    ("JS Anand Trophy", "JS Anand", "Inter-divisional multi-day trophy · Women's", 100),
+    ("Girls U-18 Trophy", "Girls U-18", "Inter-divisional trophy · U-18 (Girls)", 110),
 ]
 
 SEED_INTER_DIST = [
-    # Left empty as per user request; UI supports add-from-UI.
+    ("Indore Division Inter-District Championship",     "Indore Inter-Dist",     "Inter-District championship hosted by Indore Division", 10),
+    ("Bhopal Division Inter-District Championship",     "Bhopal Inter-Dist",     "Inter-District championship hosted by Bhopal Division", 20),
+    ("Gwalior Division Inter-District Championship",    "Gwalior Inter-Dist",    "Inter-District championship hosted by Gwalior Division", 30),
+    ("Jabalpur Division Inter-District Championship",   "Jabalpur Inter-Dist",   "Inter-District championship hosted by Jabalpur Division", 40),
+    ("Ujjain Division Inter-District Championship",     "Ujjain Inter-Dist",     "Inter-District championship hosted by Ujjain Division", 50),
+    ("Chambal Division Inter-District Championship",    "Chambal Inter-Dist",    "Inter-District championship hosted by Chambal Division", 60),
+    ("Sagar Division Inter-District Championship",      "Sagar Inter-Dist",      "Inter-District championship hosted by Sagar Division", 70),
+    ("Rewa Division Inter-District Championship",       "Rewa Inter-Dist",       "Inter-District championship hosted by Rewa Division", 80),
+    ("Shahdol Division Inter-District Championship",    "Shahdol Inter-Dist",    "Inter-District championship hosted by Shahdol Division", 90),
+    ("Narmadapuram Division Inter-District Championship", "Narmadapuram Inter-Dist", "Inter-District championship hosted by Narmadapuram Division", 100),
 ]
 
 
@@ -151,6 +186,17 @@ async def seed_tournament_master() -> dict:
             await db.tournament_master.insert_one(TournamentMaster(
                 category="Inter_Divisional", name=name, short_name=short,
                 description=desc, default_scope="Inter_Divisional", sort_order=order,
+            ).model_dump())
+            created += 1
+    for name, short, desc, order in SEED_INTER_DIST:
+        exists = await db.tournament_master.find_one({
+            "category": "Inter_District",
+            "name": {"$regex": f"^{name}$", "$options": "i"},
+        }, {"_id": 0, "id": 1})
+        if not exists:
+            await db.tournament_master.insert_one(TournamentMaster(
+                category="Inter_District", name=name, short_name=short,
+                description=desc, default_scope="Inter_District", sort_order=order,
             ).model_dump())
             created += 1
     return {"created": created}

@@ -404,7 +404,7 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                             const registryEntries = registryCategory
                                 ? (masterByType[registryCategory] || []).map((m) => ({ name: m.name, age: m.description || m.short_name || "" }))
                                 : [];
-                            const legacyDir = getDirectoryFor(form.tournament_type_code);
+                            const legacyDir = registryCategory ? [] : getDirectoryFor(form.tournament_type_code);
                             // Merge unique by name — registry takes precedence
                             const seenNames = new Set(registryEntries.map((e) => e.name));
                             const dir = [

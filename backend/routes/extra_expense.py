@@ -341,3 +341,65 @@ async def get_tournament_expense_events(tid: str):
         "tournament_name": t.get("name"),
         "events": t.get("expense_events") or [],
     }
+
+
+# ── MPCA-201 · Bulk actions ────────────────────────────────────────────────
+class BulkExtraAction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    ids: List[str] = Field(default_factory=list)
+    tournament_id: Optional[str] = None
+    body_id: Optional[str] = None
+    actor_name: Optional[str] = None
+    actor_post: Optional[str] = None
+    actor_body_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@api_router.post("/extra-expense-requests/bulk-submit")
+async def bulk_submit_extras(payload: BulkExtraAction):
+    """Division-side · submit every Draft/Info_Requested extra for a
+    (tournament, body) or an explicit id list to MPCA."""
+    q: dict = {"status": {"$in": ["Draft", "Info_Requested"]}}
+    if payload.ids:
+        q["id"] = {"$in": payload.ids}
+    else:
+        if not (payload.tournament_id and payload.body_id):
+            raise HTTPException(400, "Provide `ids` or both `tournament_id` and `body_id`.")
+        q.update({"tournament_id": payload.tournament_id, "body_id": payload.body_id})
+    docs = await db.extra_expense_requests.find(q, {"_id": 0}).to_list(500)
+    submitted = []
+    for d in docs:
+        try:
+            await submit_extra_expense_request(d["id"], ExtraExpenseAction(
+                actor_name=payload.actor_name, actor_post=payload.actor_post or "Division Secretary",
+                actor_body_id=payload.actor_body_id, notes=payload.notes or "Bulk submit",
+            ))
+            submitted.append(d["id"])
+        except HTTPException:
+            continue
+    return {"submitted_count": len(submitted), "ids": submitted}
+
+
+@api_router.post("/extra-expense-requests/bulk-approve")
+async def bulk_approve_extras(payload: BulkExtraAction):
+    """MPCA-side · approve every Submitted extra for a (tournament, body)
+    or an explicit id list."""
+    q: dict = {"status": "Submitted"}
+    if payload.ids:
+        q["id"] = {"$in": payload.ids}
+    else:
+        if not (payload.tournament_id and payload.body_id):
+            raise HTTPException(400, "Provide `ids` or both `tournament_id` and `body_id`.")
+        q.update({"tournament_id": payload.tournament_id, "body_id": payload.body_id})
+    docs = await db.extra_expense_requests.find(q, {"_id": 0}).to_list(500)
+    approved = []
+    for d in docs:
+        try:
+            await approve_extra_expense_request(d["id"], ExtraExpenseAction(
+                actor_name=payload.actor_name, actor_post=payload.actor_post or "MPCA Secretary",
+                actor_body_id=payload.actor_body_id or "MPCA", notes=payload.notes or "Bulk approve",
+            ))
+            approved.append(d["id"])
+        except HTTPException:
+            continue
+    return {"approved_count": len(approved), "ids": approved}

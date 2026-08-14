@@ -9,11 +9,14 @@ import {
     fetchGrantRates, fetchBudgetTracker, fetchTournamentBudgets,
     fetchTournamentInvoices, createTournamentInvoice, aiExtractInvoice,
     submitTournamentInvoice, approveTournamentInvoice, rejectTournamentInvoice,
+    updateTournamentInvoice, bulkSubmitTournamentInvoices, bulkApproveTournamentInvoices,
+    bulkSubmitExtraExpenses, bulkApproveExtraExpenses,
     fetchDAForms, updateDAForm, submitDAForm, approveDAForm, rejectDAForm, rebuildDAForms,
     fetchExtraExpenseRequests, createExtraExpenseRequest, submitExtraExpenseRequest,
     approveExtraExpenseRequest, rejectExtraExpenseRequest, requestInfoOnExtraExpense,
     fetchTournamentExpenseEvents,
 } from "@/lib/api";
+import { api } from "@/lib/api";
 import {
     ClipboardList, IndianRupee, FileText, Users, Save, Send, CheckCircle2, X,
     Sparkles, Upload, AlertTriangle, Loader2, ArrowUpRight, RotateCcw,
@@ -302,9 +305,12 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [addOpen, setAddOpen] = useState(false);
+    const [editing, setEditing] = useState(null);                 // MPCA-201 · invoice being edited
+    const [selected, setSelected] = useState({});                 // MPCA-201 · id → true
     const [aiExtracting, setAiExtracting] = useState(false);
     const [aiPreview, setAiPreview] = useState(null);
     const [approvedBudget, setApprovedBudget] = useState(null);
+    const [activeClaim, setActiveClaim] = useState(null);         // MPCA-201 · lock flag
     const emptyForm = () => ({
         vendor_name: "", invoice_no: "", invoice_date: "",
         amount_inr: 0, gst_inr: 0, total_inr: 0,
@@ -363,6 +369,14 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
             ]);
             setInvoices(inv);
             setApprovedBudget((budgets && budgets.length) ? budgets[0] : null);
+            // MPCA-201 · detect active reimbursement claim (Division-side lock).
+            try {
+                const claims = await api.get("/reimbursement-claims", { params: {
+                    tournament_id: tournament.id, body_id: persona?.body_code,
+                } }).then((r) => r.data).catch(() => []);
+                const locked = (claims || []).find((c) => ["Submitted", "Under_Review", "Approved"].includes(c.status));
+                setActiveClaim(locked || null);
+            } catch { setActiveClaim(null); }
         } finally { setLoading(false); }
     };
     useEffect(() => { load(); }, [tournament.id, persona?.body_code]);
@@ -436,6 +450,86 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
         allocations: f.allocations.filter((_, i) => i !== idx),
     }));
 
+    // MPCA-201 · Division-side lock once claim is Submitted/Under_Review/Approved.
+    const isDivisionScope = persona?.body_type === "Division" || persona?.body_type === "District";
+    const isStateScope = persona?.body_type === "State";
+    const locked = !!activeClaim && isDivisionScope;
+
+    const selectedIds = Object.keys(selected).filter((k) => selected[k]);
+    const toggleSel = (id) => setSelected((m) => ({ ...m, [id]: !m[id] }));
+
+    // Group by body for MPCA bulk-approve buttons
+    const invoicesByBody = useMemo(() => {
+        const g = {};
+        for (const i of invoices) {
+            if (!g[i.body_id]) g[i.body_id] = { body_id: i.body_id, body_name: i.body_name || i.body_id, rows: [] };
+            g[i.body_id].rows.push(i);
+        }
+        return Object.values(g);
+    }, [invoices]);
+
+    const draftRejected = invoices.filter((i) => ["Draft", "Rejected"].includes(i.status));
+
+    const bulkSubmit = async () => {
+        setBusy(true); setError(null);
+        try {
+            const ids = selectedIds.length ? selectedIds : draftRejected.map((i) => i.id);
+            if (!ids.length) throw new Error("No draft/rejected invoices to submit.");
+            await bulkSubmitTournamentInvoices({ ids });
+            setSelected({});
+            await load(); onChanged?.();
+        } catch (e) { setError(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+    const bulkApproveBody = async (bodyId) => {
+        setBusy(true); setError(null);
+        try {
+            await bulkApproveTournamentInvoices({ tournament_id: tournament.id, body_id: bodyId });
+            await load(); onChanged?.();
+        } catch (e) { setError(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
+    const beginEdit = (inv) => {
+        setEditing(inv);
+        setForm({
+            vendor_name: inv.vendor_name || "", invoice_no: inv.invoice_no || "",
+            invoice_date: inv.invoice_date || "",
+            amount_inr: inv.amount_inr || 0, gst_inr: inv.gst_inr || 0, total_inr: inv.total_inr || 0,
+            allocations: (inv.allocations && inv.allocations.length)
+                ? inv.allocations.map((a) => ({ head_code: a.head_code, head_label: a.head_label, amount_inr: a.amount_inr }))
+                : [{ head_code: inv.budget_head_code || "", head_label: HEAD_CODE_TO_LABEL[inv.budget_head_code] || "", amount_inr: inv.total_inr || 0 }],
+            file_url: inv.file_url || "", filename: inv.filename || "", ai_extracted: inv.ai_extracted || false,
+        });
+        setAddOpen(true);
+    };
+
+    const saveEdit = async () => {
+        setBusy(true); setError(null);
+        try {
+            const total = round2(invoiceTotal);
+            const cleanedAllocs = (form.allocations || [])
+                .filter((a) => a.head_code)
+                .map((a) => ({
+                    head_code: a.head_code,
+                    head_label: a.head_label || HEAD_CODE_TO_LABEL[a.head_code] || a.head_code,
+                    amount_inr: parseFloat(a.amount_inr) || 0,
+                }));
+            if (!cleanedAllocs.length) throw new Error("Pick at least one budget head.");
+            const sum = round2(cleanedAllocs.reduce((s, a) => s + a.amount_inr, 0));
+            if (Math.abs(sum - total) > 0.5)
+                throw new Error(`Sum of head allocations (₹${sum.toLocaleString("en-IN")}) must equal total (₹${total.toLocaleString("en-IN")}).`);
+            await updateTournamentInvoice(editing.id, {
+                vendor_name: form.vendor_name, invoice_no: form.invoice_no, invoice_date: form.invoice_date,
+                amount_inr: parseFloat(form.amount_inr) || 0, gst_inr: parseFloat(form.gst_inr) || 0,
+                total_inr: total, allocations: cleanedAllocs, budget_head_code: cleanedAllocs[0].head_code,
+            });
+            setEditing(null); setAddOpen(false); setForm(emptyForm()); setAiPreview(null);
+            await load(); onChanged?.();
+        } catch (e) { setError(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
     const save = async () => {
         setBusy(true); setError(null);
         try {
@@ -486,17 +580,53 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                     </p>
                 </div>
                 {canAdd && (
-                    <button
-                        onClick={() => setAddOpen(true)}
-                        disabled={budgetHeads.length === 0}
-                        title={budgetHeads.length === 0 ? "This tournament has no approved budget yet — invoices can only be added after MPCA sanctions the budget." : ""}
-                        className="btn-heritage-primary disabled:opacity-40 disabled:cursor-not-allowed"
-                        data-testid="add-invoice-btn"
-                    >
-                        <Upload size={12} /> Upload Invoice
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {isStateScope && invoicesByBody.length > 0 && (
+                            <select
+                                onChange={(e) => { if (e.target.value) { bulkApproveBody(e.target.value); e.target.value = ""; } }}
+                                className="input-heritage !py-1.5 !text-xs !w-auto"
+                                defaultValue=""
+                                data-testid="bulk-approve-body-select"
+                            >
+                                <option value="">— Bulk Approve by Body —</option>
+                                {invoicesByBody.filter((g) => g.rows.some((r) => r.status === "Submitted")).map((g) => {
+                                    const n = g.rows.filter((r) => r.status === "Submitted").length;
+                                    return <option key={g.body_id} value={g.body_id}>{g.body_name} · Approve {n} Submitted</option>;
+                                })}
+                            </select>
+                        )}
+                        {isDivisionScope && !locked && draftRejected.length > 0 && (
+                            <button
+                                onClick={bulkSubmit}
+                                disabled={busy}
+                                className="text-[10px] uppercase tracking-widest border-2 border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory px-3 py-1.5 disabled:opacity-40"
+                                data-testid="bulk-submit-invoices-btn"
+                            >
+                                <Send size={11} className="inline mr-1" />
+                                Submit {selectedIds.length ? `${selectedIds.length} Selected` : `All ${draftRejected.length}`} to MPCA
+                            </button>
+                        )}
+                        <button
+                            onClick={() => { setEditing(null); setForm(emptyForm()); setAddOpen(true); }}
+                            disabled={budgetHeads.length === 0 || locked}
+                            title={locked ? `Locked · claim ${activeClaim.claim_ref} is ${activeClaim.status}` : (budgetHeads.length === 0 ? "This tournament has no approved budget yet — invoices can only be added after MPCA sanctions the budget." : "")}
+                            className="btn-heritage-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                            data-testid="add-invoice-btn"
+                        >
+                            <Upload size={12} /> Upload Invoice
+                        </button>
+                    </div>
                 )}
             </div>
+
+            {locked && (
+                <div className="border-2 border-mpca-oxblood bg-mpca-oxblood/5 p-3 text-xs text-mpca-oxblood flex items-start gap-2" data-testid="invoices-locked-banner">
+                    <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                    <div>
+                        <strong>Finance Console Locked.</strong> Reimbursement claim <span className="font-mono">{activeClaim.claim_ref}</span> is <em>{activeClaim.status.replace("_", " ")}</em> with MPCA — all invoices are frozen. Ask MPCA to reject the claim if you need to edit or add invoices.
+                    </div>
+                </div>
+            )}
 
             {budgetHeads.length === 0 && canAdd && (
                 <div className="border border-mpca-brass/40 bg-mpca-parchment/40 p-3 text-xs text-mpca-gray-dark" data-testid="no-approved-budget-msg">
@@ -515,6 +645,7 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                         <table className="w-full text-sm" data-testid="invoices-table">
                             <thead className="bg-mpca-parchment border-b border-mpca-brass/40">
                                 <tr>
+                                    {isDivisionScope && !locked && <th className="px-2 py-3 w-8"></th>}
                                     {["Ref", "Vendor", "Head(s)", "Date", "Amount", "GST", "Total", "Eligible", "Status"].map((h) => (
                                         <th key={h} className="text-left px-3 py-3 text-[11px] uppercase tracking-wider text-mpca-brass">{h}</th>
                                     ))}
@@ -524,8 +655,16 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                 {invoices.map((i) => {
                                     const over = i.over_budget_amount_inr > 0;
                                     const allocs = (i.allocations && i.allocations.length) ? i.allocations : null;
+                                    const canEditRow = isDivisionScope && !locked;
                                     return (
                                         <tr key={i.id} className={"border-b border-mpca-brass/20 " + (over ? "bg-mpca-oxblood/5" : "")} data-testid={`inv-row-${i.invoice_ref}`}>
+                                            {isDivisionScope && !locked && (
+                                                <td className="px-2 py-2 text-center">
+                                                    {["Draft", "Rejected"].includes(i.status) && (
+                                                        <input type="checkbox" checked={!!selected[i.id]} onChange={() => toggleSel(i.id)} data-testid={`inv-select-${i.invoice_ref}`} />
+                                                    )}
+                                                </td>
+                                            )}
                                             <td className="px-3 py-2 font-mono text-[10px]">{i.invoice_ref}
                                                 {i.ai_extracted && <span title="AI extracted"><Sparkles size={10} className="inline ml-1 text-mpca-oxblood" /></span>}
                                                 {i.manually_overridden && <span className="ml-1 text-[9px] text-mpca-brass">EDITED</span>}
@@ -553,6 +692,9 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                             </td>
                                             <td className="px-3 py-2">
                                                 <Pill tone={i.status === "Approved" ? "active" : i.status === "Rejected" ? "suspended" : "pending"} label={i.status} />
+                                                {canEditRow && (
+                                                    <button onClick={() => beginEdit(i)} className="block text-[9px] uppercase text-mpca-navy underline mt-1" data-testid={`inv-edit-${i.invoice_ref}`}>edit</button>
+                                                )}
                                                 {i.status === "Draft" && (
                                                     <button onClick={async () => { await submitTournamentInvoice(i.id); await load(); }} className="block text-[9px] uppercase text-mpca-oxblood underline mt-1" data-testid={`inv-submit-${i.invoice_ref}`}>submit</button>
                                                 )}
@@ -578,10 +720,10 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                     <div className="bg-mpca-ivory border-2 border-mpca-brass max-w-2xl w-full my-8">
                         <div className="bg-mpca-green-dark text-mpca-ivory px-6 py-4 border-b-4 border-mpca-oxblood flex items-center justify-between">
                             <div>
-                                <div className="overline !text-mpca-gold-light">New Invoice</div>
-                                <div className="font-serif text-2xl mt-1">Upload & AI-Extract</div>
+                                <div className="overline !text-mpca-gold-light">{editing ? "Edit Invoice" : "New Invoice"}</div>
+                                <div className="font-serif text-2xl mt-1">{editing ? `Edit · ${editing.invoice_ref}` : "Upload & AI-Extract"}</div>
                             </div>
-                            <button onClick={() => { setAddOpen(false); setForm(emptyForm()); setAiPreview(null); }}><X className="text-mpca-gold-light" /></button>
+                            <button onClick={() => { setAddOpen(false); setEditing(null); setForm(emptyForm()); setAiPreview(null); }}><X className="text-mpca-gold-light" /></button>
                         </div>
                         <div className="p-6 space-y-4">
                             <div>
@@ -735,14 +877,14 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                             {error && <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood p-2 text-xs" data-testid="inv-error">{error}</div>}
                         </div>
                         <div className="px-6 pb-5 flex justify-end gap-3">
-                            <button onClick={() => { setAddOpen(false); setForm(emptyForm()); setAiPreview(null); }} className="btn-heritage-ghost">Cancel</button>
+                            <button onClick={() => { setAddOpen(false); setEditing(null); setForm(emptyForm()); setAiPreview(null); }} className="btn-heritage-ghost">Cancel</button>
                             <button
-                                onClick={save}
+                                onClick={editing ? saveEdit : save}
                                 disabled={busy || !allHeadsPicked || allocMismatch || budgetHeads.length === 0 || invoiceTotal <= 0}
                                 className="btn-heritage-primary disabled:opacity-40 disabled:cursor-not-allowed"
                                 data-testid="inv-save"
                             >
-                                {busy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save Invoice
+                                {busy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} {editing ? "Save Changes" : "Save Invoice"}
                             </button>
                         </div>
                     </div>
@@ -1011,6 +1153,43 @@ const ExtraExpenseTab = ({ tournament, persona, onChanged }) => {
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
 
+    // MPCA-201 · Bulk actions
+    const draftExtras = requests.filter((r) => ["Draft", "Info_Requested"].includes(r.status));
+    const submittedByBody = useMemo(() => {
+        const g = {};
+        for (const r of requests) {
+            if (r.status !== "Submitted") continue;
+            if (!g[r.body_id]) g[r.body_id] = { body_id: r.body_id, rows: [] };
+            g[r.body_id].rows.push(r);
+        }
+        return Object.values(g);
+    }, [requests]);
+    const bulkSubmitAll = async () => {
+        if (!draftExtras.length) return;
+        setBusy(true); setError(null);
+        try {
+            await bulkSubmitExtraExpenses({
+                ids: draftExtras.map((r) => r.id),
+                actor_name: persona?.display_name, actor_post: persona?.role_label,
+                actor_body_id: persona?.body_code, notes: "Bulk submit",
+            });
+            await load(); onChanged?.();
+        } catch (e) { setError(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+    const bulkApproveBody = async (bodyId) => {
+        setBusy(true); setError(null);
+        try {
+            await bulkApproveExtraExpenses({
+                tournament_id: tournament.id, body_id: bodyId,
+                actor_name: persona?.display_name, actor_post: persona?.role_label,
+                actor_body_id: "MPCA", notes: "Bulk approve",
+            });
+            await load(); onChanged?.();
+        } catch (e) { setError(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+
     return (
         <div className="space-y-6" data-testid="extra-expense-tab">
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1020,12 +1199,37 @@ const ExtraExpenseTab = ({ tournament, persona, onChanged }) => {
                         Request MPCA approval for expenses not in the auto-budget. Every action is logged on the tournament for full audit.
                     </p>
                 </div>
-                {canRequest && (
-                    <button onClick={() => setShowNew(true)} className="btn-heritage-primary" data-testid="new-eer-btn">
-                        <Plus size={12} /> Request Extra Approval
-                    </button>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                    {canApprove && submittedByBody.length > 0 && (
+                        <select
+                            onChange={(e) => { if (e.target.value) { bulkApproveBody(e.target.value); e.target.value = ""; } }}
+                            defaultValue=""
+                            className="input-heritage !py-1.5 !text-xs !w-auto"
+                            data-testid="bulk-approve-extra-body-select"
+                        >
+                            <option value="">— Bulk Approve by Division —</option>
+                            {submittedByBody.map((g) => (
+                                <option key={g.body_id} value={g.body_id}>{g.body_id} · Approve {g.rows.length} Submitted</option>
+                            ))}
+                        </select>
+                    )}
+                    {canRequest && draftExtras.length > 0 && (
+                        <button onClick={bulkSubmitAll} disabled={busy}
+                            className="text-[10px] uppercase tracking-widest border-2 border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory px-3 py-1.5 disabled:opacity-40"
+                            data-testid="bulk-submit-extras-btn"
+                        >
+                            <Send size={11} className="inline mr-1" /> Submit All {draftExtras.length} to MPCA
+                        </button>
+                    )}
+                    {canRequest && (
+                        <button onClick={() => setShowNew(true)} className="btn-heritage-primary" data-testid="new-eer-btn">
+                            <Plus size={12} /> Request Extra Approval
+                        </button>
+                    )}
+                </div>
             </div>
+
+            {error && <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood p-2 text-xs" data-testid="eer-bulk-err">{error}</div>}
 
             {loading ? <div className="p-8 text-center"><Loader2 className="animate-spin inline" /></div> : requests.length === 0 ? (
                 <div className="p-10 border border-mpca-brass/30 text-center text-mpca-gray-dark italic font-serif" data-testid="no-eer">

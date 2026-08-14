@@ -420,6 +420,35 @@ const TournamentFinanceConsole = () => {
                 </div>
             )}
 
+            {/* MPCA-201 · Tournament-wide financial summary for MPCA */}
+            {isMPCA && matrix?.rows?.length > 0 && (() => {
+                const totals = matrix.rows.reduce((acc, r) => ({
+                    approved: acc.approved + Number(r.approved_total_inr || 0),
+                    proposed: acc.proposed + Number(r.budget_total_inr || 0),
+                    spent: acc.spent + Number(r.invoice_total_inr || 0),
+                    extras: acc.extras + Number(r.extras_total_inr || 0),
+                    claim_approved: acc.claim_approved + Number(r.claim_approved_inr || 0),
+                }), { approved: 0, proposed: 0, spent: 0, extras: 0, claim_approved: 0 });
+                const remaining = Math.max(totals.approved + totals.extras - totals.spent, 0);
+                const tiles = [
+                    { label: "Approved Budget", value: totals.approved, tone: "text-mpca-green-dark", testid: "fc-tile-approved" },
+                    { label: "Extras Approved", value: totals.extras, tone: "text-mpca-brass", testid: "fc-tile-extras" },
+                    { label: "Total Spent", value: totals.spent, tone: "text-mpca-navy", testid: "fc-tile-spent" },
+                    { label: "Remaining", value: remaining, tone: remaining === 0 && totals.spent > 0 ? "text-mpca-oxblood" : "text-mpca-green-dark", testid: "fc-tile-remaining" },
+                    { label: "Claims Approved", value: totals.claim_approved, tone: "text-mpca-oxblood", testid: "fc-tile-claim-approved" },
+                ];
+                return (
+                    <div className="mb-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3" data-testid="fc-mpca-summary">
+                        {tiles.map((t) => (
+                            <div key={t.label} className="bulletin-card p-3 border-l-4 border-mpca-oxblood/60" data-testid={t.testid}>
+                                <div className="overline text-[9px]">{t.label}</div>
+                                <div className={`font-mono text-lg font-semibold mt-1 ${t.tone}`}>{fmt(t.value)}</div>
+                            </div>
+                        ))}
+                    </div>
+                );
+            })()}
+
             {/* M39u · Section tabs (visible when budgets exist, OR for
                 Districts who never get their own budget row — they still
                 need Claims/Invoices/Extras tabs to submit upward).
@@ -433,8 +462,8 @@ const TournamentFinanceConsole = () => {
                         { id: "budgets",   label: "Budgets",          icon: Wallet,        show: true },
                         { id: "extras",    label: "Extras",           icon: Gavel,         show: true },
                         { id: "invoices",  label: "Invoices",         icon: Receipt,       show: true },
-                        { id: "da",        label: "DA / TA Forms",    icon: ClipboardEdit, show: true },
-                        { id: "actuals",   label: "Actuals vs Budget",icon: Activity,      show: true },
+                        { id: "da",        label: "DA / TA Forms",    icon: ClipboardEdit, show: isMPCA },
+                        { id: "actuals",   label: "Actuals vs Budget",icon: Activity,      show: isMPCA },
                         { id: "claims",    label: "Reimbursement Claim", icon: FileSignature, show: true },
                         { id: "receipts",  label: "MPCA Receipts",    icon: HandCoins,     show: isMPCA },
                         { id: "closure",   label: "Closure Letter",   icon: ScrollText,    show: isMPCA },

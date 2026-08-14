@@ -246,8 +246,9 @@ async def update_invoice(iid: str, patch: TournamentInvoicePatch):
     doc = await db.tournament_invoices.find_one({"id": iid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Invoice not found")
-    if doc["status"] not in ("Draft", "Rejected"):
-        raise HTTPException(409, f"Cannot edit an invoice in status {doc['status']}")
+    # MPCA-201 · Divisions can now edit any invoice (Draft, Submitted, Approved,
+    # Rejected) until the reimbursement claim is locked with MPCA. The
+    # active_claim gate below is the only real freeze.
     # MPCA-168 · Phase E · Post-Submission lock. Once the Division has
     # submitted its reimbursement claim, all attached invoices freeze —
     # otherwise a Division could quietly retouch expenses after MPCA has
@@ -311,6 +312,50 @@ async def reject_invoice(iid: str, reason: str = ""):
         "status": "Rejected", "notes": (doc.get("notes") or "") + f" · Rejected: {reason}",
     }})
     return await db.tournament_invoices.find_one({"id": iid}, {"_id": 0})
+
+
+# ── MPCA-201 · Bulk actions ────────────────────────────────────────────────
+class BulkInvoiceAction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    ids: List[str] = Field(default_factory=list)
+    tournament_id: Optional[str] = None
+    body_id: Optional[str] = None
+
+
+@api_router.post("/tournament-invoices/bulk-submit")
+async def bulk_submit_invoices(payload: BulkInvoiceAction):
+    """Division-side · submit every eligible (Draft/Rejected) invoice for a
+    (tournament, body) — or an explicit id list — to MPCA in one shot."""
+    q: dict = {"status": {"$in": ["Draft", "Rejected"]}}
+    if payload.ids:
+        q["id"] = {"$in": payload.ids}
+    else:
+        if not (payload.tournament_id and payload.body_id):
+            raise HTTPException(400, "Provide `ids` or both `tournament_id` and `body_id`.")
+        q.update({"tournament_id": payload.tournament_id, "body_id": payload.body_id})
+    docs = await db.tournament_invoices.find(q, {"_id": 0, "id": 1}).to_list(500)
+    ids = [d["id"] for d in docs]
+    if ids:
+        await db.tournament_invoices.update_many({"id": {"$in": ids}}, {"$set": {"status": "Submitted"}})
+    return {"submitted_count": len(ids), "ids": ids}
+
+
+@api_router.post("/tournament-invoices/bulk-approve")
+async def bulk_approve_invoices(payload: BulkInvoiceAction):
+    """MPCA-side · approve every Submitted invoice for a (tournament, body)
+    or an explicit id list in one shot."""
+    q: dict = {"status": "Submitted"}
+    if payload.ids:
+        q["id"] = {"$in": payload.ids}
+    else:
+        if not (payload.tournament_id and payload.body_id):
+            raise HTTPException(400, "Provide `ids` or both `tournament_id` and `body_id`.")
+        q.update({"tournament_id": payload.tournament_id, "body_id": payload.body_id})
+    docs = await db.tournament_invoices.find(q, {"_id": 0, "id": 1}).to_list(500)
+    ids = [d["id"] for d in docs]
+    if ids:
+        await db.tournament_invoices.update_many({"id": {"$in": ids}}, {"$set": {"status": "Approved"}})
+    return {"approved_count": len(ids), "ids": ids}
 
 
 @api_router.delete("/tournament-invoices/{iid}")

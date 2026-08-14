@@ -649,6 +649,22 @@ export const rejectTournamentInvoice = async (iid, reason) => {
     const { data } = await api.post(`/tournament-invoices/${iid}/reject`, null, { params: { reason } });
     return data;
 };
+export const bulkSubmitTournamentInvoices = async (payload) => {
+    const { data } = await api.post("/tournament-invoices/bulk-submit", payload);
+    return data;
+};
+export const bulkApproveTournamentInvoices = async (payload) => {
+    const { data } = await api.post("/tournament-invoices/bulk-approve", payload);
+    return data;
+};
+export const bulkSubmitExtraExpenses = async (payload) => {
+    const { data } = await api.post("/extra-expense-requests/bulk-submit", payload);
+    return data;
+};
+export const bulkApproveExtraExpenses = async (payload) => {
+    const { data } = await api.post("/extra-expense-requests/bulk-approve", payload);
+    return data;
+};
 export const fetchBudgetTracker = async (bid) => {
     const { data } = await api.get(`/tournament-budgets/${bid}/tracker`);
     return data;

@@ -94,6 +94,17 @@ const MpcaClaimReviewForm = () => {
                 <TRow label="Invoices" value={`${summary.invoices_reviewed}/${summary.invoice_count} reviewed`} />
             </div>
 
+            {tournament.unified_budget_snapshot?.is_locked && (
+                <div className="border-2 border-black px-3 py-2 mb-6 flex items-center gap-2 bg-gray-50" data-testid="mpca-locked-watermark">
+                    <span className="text-[9px] uppercase tracking-widest font-bold border border-black px-1.5 py-0.5">Locked Snapshot</span>
+                    <span className="text-[11px] font-mono">
+                        Unified Budget v{tournament.unified_budget_snapshot.locked_version} · Frozen {fmtDate(tournament.unified_budget_snapshot.locked_at)}
+                        {tournament.unified_budget_snapshot.locked_by ? ` · by ${tournament.unified_budget_snapshot.locked_by}` : ""}
+                    </span>
+                    <span className="text-[9px] italic ml-auto text-gray-600">Sanctioned ceiling frozen at this snapshot; deductions apply against it.</span>
+                </div>
+            )}
+
             {/* Head-wise Budget / Spent / Deducted / Accepted */}
             <h3 className="font-serif text-lg border-b border-black mb-2 mt-6">A. Head-wise Budget · Spent · Deducted · Accepted</h3>
             <table className="w-full text-[10.5px] border-collapse mb-6">

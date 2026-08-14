@@ -335,6 +335,202 @@ async def prepare_budgets(tid: str, payload: PreparePayload):
     }
 
 
+# ─────────────────── MPCA-226 · Unified-Budget Prepare ───────────────────
+# Deprecates legacy 2-B / 2-D scheme calculators for tournament types that
+# have a Unified Budget rate card. Reads by_body_totals + head_allocations
+# from the unified snapshot (or computes it live) and materialises one
+# TournamentBudget draft per body — same downstream flow (send / accept /
+# revise), just with math coming from the Unified Budget engine instead of
+# scheme_calc.
+UNIFIED_TOURNAMENT_TYPES = {
+    "Inter_Divisional", "Inter_District", "BCCI",
+    "Championship", "Pre_Tournament_Camp",
+}
+
+
+class PrepareUnifiedPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    prepared_by_name: Optional[str] = None
+    per_body_head_overrides: Optional[Dict[str, Dict[str, float]]] = None
+
+
+@api_router.post("/tournaments/{tid}/finance/prepare-budgets-unified")
+async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
+    """MPCA-226 · One TournamentBudget draft per body sourced from the
+    Unified Budget engine (owner-attributed by_body_totals + head_allocations).
+    Replaces the legacy scheme-based `prepare_budgets` for tournament types
+    covered by a rate card (Inter_Divisional / Inter_District / BCCI /
+    Championship / Pre_Tournament_Camp). Existing live budgets (Sent/Accepted/
+    Approved) are preserved; Draft / Revision_Requested rows are replaced."""
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    if t.get("scope") not in UNIFIED_TOURNAMENT_TYPES:
+        raise HTTPException(400, f"Tournament scope {t.get('scope')!r} is not covered by the Unified Budget. Use the legacy scheme-based prepare-budgets instead.")
+
+    # Compute (or use locked snapshot) — never override a locked snapshot's math
+    snap = t.get("unified_budget_snapshot") or {}
+    if snap.get("is_locked"):
+        source = f"locked-v{snap.get('locked_version')}"
+        budget = snap.get("budget") or {}
+    else:
+        # Live compute — same code path as the compute endpoint (with travel merge)
+        from routes.unified_budget import (
+            compute_tournament_budget, compute_travel_grant,
+            _load_rate_card_for_tournament,
+        )
+        setup_meta = t.get("setup_meta") or {}
+        pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
+        matches: List[Dict[str, Any]] = []
+        async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
+            matches.append(m)
+        async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
+            matches.append(f)
+        card = await _load_rate_card_for_tournament(t)
+        default_squad = int(t.get("max_squad_size") or 18)
+        budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
+        travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=t.get("trip_overrides") or {})
+        # Merge travel per body + synthetic head allocation
+        body_map = {b["body_code"]: b for b in budget.get("by_body_totals") or []}
+        for d in (travel.get("by_division") or []):
+            code = d.get("division")
+            amt = float(d.get("total", 0) or 0)
+            row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0, "head_allocations": []}
+            row["travel_grant"] = row.get("travel_grant", 0.0) + amt
+            row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
+            allocs = list(row.get("head_allocations") or [])
+            if amt > 0 and not any(a.get("head_key") == "travel_grant" for a in allocs):
+                allocs.append({"head_key": "travel_grant", "head": "Travel Grant", "owner": "Visitor", "limit_inr": amt})
+            row["head_allocations"] = allocs
+            body_map[code] = row
+        budget["by_body_totals"] = list(body_map.values())
+        source = "live"
+
+    by_body = budget.get("by_body_totals") or []
+    if not by_body:
+        raise HTTPException(400, "Unified budget produced no per-body allocations. Ensure the Match Calendar has fixtures with pool + host + teams set.")
+
+    cycle = t.get("fiscal_cycle") or "2025-26"
+    created: List[Dict[str, Any]] = []
+    replaced: List[Dict[str, Any]] = []
+    skipped: List[Dict[str, Any]] = []
+
+    for row in by_body:
+        body_code = row.get("body_code")
+        if not body_code:
+            continue
+        # Skip MPCA — it's the sanctioning authority, not a claimant
+        if body_code == "MPCA":
+            skipped.append({"body_code": body_code, "reason": "MPCA is sanctioner (Common heads stay on state books)"})
+            continue
+
+        allocs = list(row.get("head_allocations") or [])
+        if not allocs:
+            skipped.append({"body_code": body_code, "reason": "no head allocations"})
+            continue
+
+        # Skip if a live budget already exists for this body
+        live = await db.tournament_budgets.find_one({
+            "tournament_id": tid,
+            "body_id": body_code,
+            "fiscal_cycle": cycle,
+            "status": {"$in": [
+                "Submitted", "Approved", "Sent_To_Division",
+                "Accepted_By_Division",
+            ]},
+        }, {"_id": 0})
+        if live:
+            skipped.append({
+                "body_code": body_code,
+                "budget_no": live.get("budget_no"),
+                "reason": f"already {live.get('status')}",
+            })
+            continue
+
+        # Replace any Draft / Revision_Requested / Returned rows
+        old_draft = await db.tournament_budgets.find_one({
+            "tournament_id": tid,
+            "body_id": body_code,
+            "fiscal_cycle": cycle,
+            "status": {"$in": ["Draft", "Revision_Requested", "Returned"]},
+        }, {"_id": 0})
+        if old_draft:
+            await db.tournament_budgets.delete_one({"id": old_draft["id"]})
+            replaced.append({"body_code": body_code, "budget_no": old_draft.get("budget_no")})
+
+        head_allocs = [BudgetHeadAllocation(
+            head=a["head"], limit_inr=float(a["limit_inr"]),
+            notes=f"{a.get('owner', 'Common')} owner · Unified Budget {source}",
+        ) for a in allocs if float(a.get("limit_inr", 0)) > 0]
+
+        # MPCA per-body head overrides
+        body_overrides = ((payload.per_body_head_overrides or {}).get(body_code) or {})
+        if body_overrides:
+            existing = {h.head for h in head_allocs}
+            for h in head_allocs:
+                if h.head in body_overrides:
+                    try:
+                        new_amt = float(body_overrides[h.head])
+                        h.notes = (h.notes or "") + f" · MPCA override ₹{new_amt:,.0f}"
+                        h.limit_inr = new_amt
+                    except (TypeError, ValueError):
+                        pass
+            for label, amt in body_overrides.items():
+                if label in existing:
+                    continue
+                try:
+                    amt_f = float(amt)
+                    if amt_f <= 0:
+                        continue
+                except (TypeError, ValueError):
+                    continue
+                head_allocs.append(BudgetHeadAllocation(
+                    head=label, limit_inr=amt_f,
+                    notes=f"MPCA custom head ₹{amt_f:,.0f}",
+                ))
+
+        total = round(sum(h.limit_inr for h in head_allocs), 2)
+        body = await db.bodies.find_one({"code": body_code}, {"_id": 0})
+        role = "Host" if float(row.get("budget", 0)) >= float(row.get("travel_grant", 0)) else "Visitor"
+
+        tb = TournamentBudget(
+            budget_no=await _next_budget_no(cycle),
+            tournament_id=tid,
+            tournament_name=t.get("name"),
+            body_id=body_code,
+            body_name=(body or {}).get("name", body_code),
+            fiscal_cycle=cycle,
+            head_allocations=[h.model_dump() for h in head_allocs],
+            total_ceiling_inr=total,
+            status="Draft",
+            notes=(f"MPCA prepared · Unified Budget {source} · {role} allocation · "
+                   f"{len(head_allocs)} heads · ₹{total:,.0f}"),
+            participant_body_code=body_code,
+            prepared_by_name=payload.prepared_by_name,
+            role_flavour=role,
+        )
+        await db.tournament_budgets.insert_one(tb.model_dump())
+        try:
+            from routes.tournament_participations import link_budget_to_participant
+            await link_budget_to_participant(tid, body_code, tb.id)
+        except Exception:  # noqa
+            pass
+        created.append({
+            "budget_id": tb.id, "budget_no": tb.budget_no,
+            "body_code": body_code, "role": role,
+            "total_inr": total, "heads_count": len(head_allocs),
+        })
+
+    return {
+        "tournament_id": tid,
+        "source": source,
+        "engine": "unified_budget",
+        "created": created, "replaced": replaced, "skipped": skipped,
+        "created_count": len(created), "replaced_count": len(replaced),
+        "skipped_count": len(skipped),
+    }
+
+
 @api_router.post("/tournaments/{tid}/finance/send-budgets")
 async def send_budgets(tid: str, payload: SendPayload):
     """MPCA flips prepared Drafts to Sent_To_Division. Also handles the

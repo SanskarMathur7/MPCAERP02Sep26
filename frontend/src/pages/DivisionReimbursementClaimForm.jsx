@@ -100,6 +100,16 @@ const DivisionReimbursementClaimForm = () => {
 
             {/* Tournament details */}
             <h3 className="font-serif text-lg border-b border-black mb-2 mt-6">1. Tournament Details</h3>
+            {tournament.unified_budget_snapshot?.is_locked && (
+                <div className="border-2 border-black px-3 py-2 mb-3 flex items-center gap-2 bg-gray-50" data-testid="reimb-locked-watermark">
+                    <span className="text-[9px] uppercase tracking-widest font-bold border border-black px-1.5 py-0.5">Locked Snapshot</span>
+                    <span className="text-[11px] font-mono">
+                        Budget v{tournament.unified_budget_snapshot.locked_version} · Frozen {fmtDate(tournament.unified_budget_snapshot.locked_at)}
+                        {tournament.unified_budget_snapshot.locked_by ? ` · by ${tournament.unified_budget_snapshot.locked_by}` : ""}
+                    </span>
+                    <span className="text-[9px] italic ml-auto text-gray-600">Claim ceiling frozen at this snapshot version.</span>
+                </div>
+            )}
             <table className="w-full text-[11px] border-collapse mb-6">
                 <tbody>
                     <TRow label="Name" value={tournament.name} />

@@ -1,0 +1,38 @@
+{
+  "summary": "Full e2e coverage of MPCA-226 (A) Legacy scheme deprecation via prepare-budgets-unified + (B) Locked Budget Watermark on claim PDFs. Backend: 3/3 targeted tests PASS (compute head_allocations emission, prepare-budgets-unified success + idempotency); 1 SKIPPED (scope guard N/A — no Inter_School/Inter_Club tournaments seeded in current DB, only Inter_Divisional/Inter_District/Championship exist). Frontend: 6/7 assertions PASS. Finance Console budgets tab on SM Khan Trophy shows both Draft rows exactly per spec: Bhopal Division ₹1,31,690 (17 heads) + Rewa Division ₹67,900 (1 head). Budget Lock persisted to v7 on MY Memorial Trophy; the linked reimbursement claim (781d7979...) renders all three watermark artifacts correctly: claim-locked-snapshot-chip in claim detail header ('🔒Locked Budget v7 · 14/8/2026'), reimb-locked-watermark on division-form ('Locked Snapshot · Budget v7 · Frozen 14 August 2026 · by MPCA · Claim ceiling frozen at this snapshot version.'), and mpca-locked-watermark on mpca-review-form ('Locked Snapshot · Unified Budget v7 · Frozen 14 August 2026 · by MPCA · Sanctioned ceiling frozen at this snapshot; deductions apply against it.'). Regression on box-unified-budget → ub-tab-body: 4 body rows render with grand ₹15,23,860 intact (extending head_allocations did NOT break the older UI). Cleanup: MY Memorial Trophy unlocked at end of run.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/tournaments (no query params)", "issue": "Returns HTTP 500 when called without fiscal_cycle query param — should either default to current cycle or return 400/422 with clear message. Currently blocks any client that omits the filter."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Finance Console PreparePanel", "issue": "data-testid=fc-unified-engine-badge NOT visible on either budgets tab or pipeline tab of SM Khan Trophy Finance Console. Prepare panel may be conditionally hidden when drafts already exist, or the badge is only shown on the 'Re-prepare from current IVs' popover. Draft rows themselves come from Unified engine (verified in DB), so badge is a nice-to-have UX affordance — task Step 4 called for verification but this assertion could not be satisfied.", "selector": "[data-testid=fc-unified-engine-badge]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_unified_budget_iter92.py",
+    "/app/test_reports/pytest/iter92_results.xml"
+  ],
+  "action_items": [
+    "(LOW) Show fc-unified-engine-badge in a stable, always-visible location on Finance Console (e.g. adjacent to 'Re-prepare from current IVs' link) so persona users can visually confirm the engine source without opening a sub-panel.",
+    "(LOW) GET /api/tournaments without fiscal_cycle returns 500 — apply default or explicit 422."
+  ],
+  "critical_code_review_comments": [
+    "prepare-budgets-unified response semantics: rows appearing in BOTH created[] and replaced[] on re-run is confusing to callers. Consider making 'created' represent only NET new inserts (empty on idempotent re-run) and 'replaced' the ones whose prior Draft was overwritten — currently created_count == replaced_count on second call which is technically idempotent (same budget_no reused) but hard to reason about.",
+    "unified_budget_snapshot.version field is missing from the tournament GET response body even though the UI banner correctly derives v7 — recommend surfacing version at the top level of unified_budget_snapshot for easier consumer parsing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_unified_budget_iter92.py"
+  ],
+  "success_rate": {"backend": "100% (3/3 executed; 1 N/A)", "frontend": "86% (6/7)"},
+  "test_credentials": "persona-chip-secretary (Shri Sanjeev Dua). No password.",
+  "seed_data_creation": "None. MY Memorial Trophy was temporarily locked (v7) during the run and UNLOCKED at cleanup — final DB state matches iteration_91 baseline (unlocked).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both features shipped by iteration 92 are functionally correct. Only nit is missing fc-unified-engine-badge — cosmetic. All three watermark data-testids on claim PDFs render with correct 'Budget v{N} · Frozen {date}' semantics when tournament.unified_budget_snapshot.is_locked=true. Verified via TID 8cf98196... locked to v7, claim 781d7979-0e65-4e3e-acd7-db73d2be117e (MY Memorial Trophy, Approved status).",
+  "rca of the issue": "fc-unified-engine-badge missing: The PreparePanel component (TournamentFinanceConsole.jsx lines 700-728) that hosts the badge likely renders only when the user opens a 'prepare' action affordance, but on SM Khan the budgets have already been prepared so the panel doesn't auto-open. Suggestion: move the badge to the BUDGETS tab section header (near 'Budget & Extras · 2 budgets · all bodies') so it's persistently visible whenever the drafts are unified-engine-sourced."
+}

@@ -349,6 +349,7 @@ export const ReimbursementClaimDetail = () => {
     const [approveAmt, setApproveAmt] = useState(0);
     const [liveSpent, setLiveSpent] = useState(0);
     const [reviewSummary, setReviewSummary] = useState(null);
+    const [tournament, setTournament] = useState(null);
     const [rejectOpen, setRejectOpen] = useState(false);
     const [rejectReason, setRejectReason] = useState("");
 
@@ -357,6 +358,10 @@ export const ReimbursementClaimDetail = () => {
         try {
             const { data } = await api.get(`/reimbursement-claims/${id}`);
             setClaim(data);
+            // Load tournament for locked-snapshot watermark
+            if (data.tournament_id) {
+                api.get(`/tournaments/${data.tournament_id}`).then((r) => setTournament(r.data)).catch(() => {});
+            }
             // Live spent from review-summary (top-level claim.summary.spent_inr is stale-at-submit).
             let spent = Number(data.summary?.spent_inr || 0);
             try {
@@ -437,6 +442,13 @@ export const ReimbursementClaimDetail = () => {
                         <span className="text-mpca-gray-dark">·</span>
                         <span>{claim.body_name}</span>
                         {claim.scheme_code && <><span className="text-mpca-gray-dark">·</span><span className="font-mono text-mpca-green-dark">Scheme {claim.scheme_code}</span></>}
+                        {tournament?.unified_budget_snapshot?.is_locked && (
+                            <span className="ml-2 inline-flex items-center gap-1.5 border border-mpca-oxblood bg-mpca-oxblood/5 text-mpca-oxblood px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest" data-testid="claim-locked-snapshot-chip">
+                                <span aria-hidden>🔒</span>
+                                Locked Budget v{tournament.unified_budget_snapshot.locked_version}
+                                {tournament.unified_budget_snapshot.locked_at ? ` · ${new Date(tournament.unified_budget_snapshot.locked_at).toLocaleDateString("en-IN")}` : ""}
+                            </span>
+                        )}
                     </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">

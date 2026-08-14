@@ -213,6 +213,22 @@ const TournamentFinanceConsole = () => {
     const prepareBudgets = async () => {
         setBusy(true);
         try {
+            // MPCA-226 · Prefer the Unified Budget engine for tournament types
+            // with a Rate Card — Inter_Divisional / Inter_District / BCCI /
+            // Championship / Pre_Tournament_Camp. Legacy scheme-calc runs only
+            // for Inter_School / Inter_Club / Invitational / etc.
+            const UNIFIED_SCOPES = new Set([
+                "Inter_Divisional", "Inter_District", "BCCI",
+                "Championship", "Pre_Tournament_Camp",
+            ]);
+            if (UNIFIED_SCOPES.has(tournament?.scope)) {
+                const body = { prepared_by_name: persona?.name || persona?.id };
+                if (Object.keys(perBodyOverrides).length) body.per_body_head_overrides = perBodyOverrides;
+                const { data } = await api.post(`/tournaments/${id}/finance/prepare-budgets-unified`, body);
+                await load();
+                alert(`Prepared ${data.created_count} budget(s) from Unified Budget (${data.source}). ${data.replaced_count} replaced, ${data.skipped_count} skipped.`);
+                return;
+            }
             const body = { prepared_by_name: persona?.name || persona?.id };
             if (isMultiPool) {
                 if (!Object.keys(poolIvDrafts).length) { alert("Enter input variables for each pool first."); setBusy(false); return; }
@@ -567,6 +583,23 @@ const TournamentFinanceConsole = () => {
             {/* M39u · Reusable panels for each tab */}
             {activeTab === "budgets" && (
                 <div className="bulletin-card p-4" data-testid="fc-tab-budgets-panel">
+                    {["Inter_Divisional", "Inter_District", "BCCI", "Championship", "Pre_Tournament_Camp"].includes(tournament?.scope) && (
+                        <div className="mb-3 flex items-center gap-2 flex-wrap" data-testid="fc-unified-engine-banner">
+                            <span className="text-[10px] font-semibold uppercase tracking-widest bg-mpca-oxblood/10 text-mpca-oxblood px-2 py-0.5 border border-mpca-oxblood/30 inline-flex items-center gap-1"
+                                  data-testid="fc-unified-engine-badge"
+                                  title="Budgets on this tournament are sourced from the Unified Budget engine — math comes from the Match Calendar × Rate Card, not from scheme_calc.">
+                                Unified Budget engine
+                                {tournament?.unified_budget_snapshot?.is_locked && (
+                                    <span className="ml-1 border-l border-mpca-oxblood/30 pl-1">
+                                        🔒 v{tournament.unified_budget_snapshot.locked_version}
+                                    </span>
+                                )}
+                            </span>
+                            <span className="text-[10px] italic text-mpca-gray-dark">
+                                Legacy scheme calculators (2-B / 2-D) are deprecated for this scope.
+                            </span>
+                        </div>
+                    )}
                     <TournamentBudgetsPanel tournament={tournament} persona={persona} onChange={load} hideConsoleLinks />
                 </div>
             )}
@@ -682,9 +715,21 @@ const PreparePanel = ({ tournament, schemeSpec, visitorSchemeSpec, ivDraft, setI
 
     return (
         <div className="bulletin-card p-6 mb-6" data-testid="fc-prepare-panel">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <Calculator size={16} className="text-mpca-brass" />
                 <div className="overline">Step 1 · Prepare Budgets</div>
+                {["Inter_Divisional", "Inter_District", "BCCI", "Championship", "Pre_Tournament_Camp"].includes(tournament?.scope) && (
+                    <span className="ml-2 text-[10px] font-semibold uppercase tracking-widest bg-mpca-oxblood/10 text-mpca-oxblood px-2 py-0.5 border border-mpca-oxblood/30 inline-flex items-center gap-1"
+                          data-testid="fc-unified-engine-badge"
+                          title="This tournament uses the Unified Budget engine — math comes from Match Calendar × Rate Card, not from scheme_calc.">
+                        Unified Budget engine
+                        {tournament?.unified_budget_snapshot?.is_locked && (
+                            <span className="ml-1 border-l border-mpca-oxblood/30 pl-1">
+                                🔒 v{tournament.unified_budget_snapshot.locked_version}
+                            </span>
+                        )}
+                    </span>
+                )}
                 {isMultiPool && (
                     <span className="ml-2 text-[10px] font-semibold uppercase tracking-widest bg-mpca-navy/10 text-mpca-navy px-2 py-0.5 border border-mpca-navy/30"
                           data-testid="fc-multi-pool-badge">

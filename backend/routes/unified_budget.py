@@ -380,6 +380,8 @@ def compute_tournament_budget(
     #   • Common heads (MOM)  → MPCA (State-level)
     #   • Visitor heads       → away team of the match (the non-host side)
     by_body: Dict[str, Dict[str, float]] = {}
+    # MPCA-226 · Per-body per-head allocations (feeds Finance Console prepare-budgets)
+    by_body_heads: Dict[str, Dict[str, Dict[str, Any]]] = {}
     def _bump(code: str, key: str, amt: float):
         if not code:
             return
@@ -387,6 +389,15 @@ def compute_tournament_budget(
             by_body[code] = {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
         by_body[code][key] = by_body[code].get(key, 0.0) + amt
         by_body[code]["total"] = by_body[code].get("budget", 0.0) + by_body[code].get("travel_grant", 0.0)
+
+    def _bump_head(code: str, head_key: str, head_name: str, owner: str, amt: float):
+        if not code or amt == 0:
+            return
+        by_body_heads.setdefault(code, {})
+        row = by_body_heads[code].setdefault(head_key, {
+            "head_key": head_key, "head": head_name, "owner": owner, "limit_inr": 0.0,
+        })
+        row["limit_inr"] = float(row.get("limit_inr", 0.0)) + float(amt)
 
     # Build a match→pool→host cache
     for m in valid_matches:
@@ -405,14 +416,22 @@ def compute_tournament_budget(
             if amt == 0:
                 continue
             owner = h.get("owner", "Common")
+            target = None
             if owner == "Host":
-                _bump(host_code, "budget", amt)
+                target = host_code
             elif owner == "Officials":
-                _bump(host_code, "budget", amt)
+                target = host_code
             elif owner == "Common":
-                _bump("MPCA", "budget", amt)
+                target = "MPCA"
             elif owner == "Visitor":
-                _bump(away_code, "budget", amt)
+                target = away_code
+            if target:
+                _bump(target, "budget", amt)
+                _bump_head(target, h["key"], h["name"], owner, amt)
+
+    # MPCA-226 · Attach per-body head allocations onto by_body rows
+    for code, row in by_body.items():
+        row["head_allocations"] = list(by_body_heads.get(code, {}).values())
 
     return {
         "format_group": rate_card.get("format_group"),
@@ -697,12 +716,19 @@ async def compute_unified_budget_for_tournament(tid: str, save: bool = False):
 
     # MPCA-225 · Merge travel-grant per-Division into budget.by_body_totals so
     # a single source of truth carries both budget + travel for each body.
+    # MPCA-226 · Also append a synthetic "Travel Grant" head_allocation so the
+    # Finance Console prepare-budgets sees travel as a distinct line item.
     body_map = {b["body_code"]: b for b in budget.get("by_body_totals") or []}
     for d in (travel.get("by_division") or []):
         code = d.get("division")
-        row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
-        row["travel_grant"] = row.get("travel_grant", 0.0) + float(d.get("total", 0) or 0)
+        amt = float(d.get("total", 0) or 0)
+        row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0, "head_allocations": []}
+        row["travel_grant"] = row.get("travel_grant", 0.0) + amt
         row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
+        allocs = list(row.get("head_allocations") or [])
+        if amt > 0 and not any(a.get("head_key") == "travel_grant" for a in allocs):
+            allocs.append({"head_key": "travel_grant", "head": "Travel Grant", "owner": "Visitor", "limit_inr": amt})
+        row["head_allocations"] = allocs
         body_map[code] = row
     budget["by_body_totals"] = list(body_map.values())
 
@@ -857,13 +883,18 @@ async def lock_unified_budget(tid: str):
     budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
     travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=t.get("trip_overrides") or {})
 
-    # Merge travel-grant totals into by_body_totals
+    # Merge travel-grant totals + synthetic head_allocations into by_body_totals
     body_map = {b["body_code"]: b for b in budget.get("by_body_totals") or []}
     for d in (travel.get("by_division") or []):
         code = d.get("division")
-        row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
-        row["travel_grant"] = row.get("travel_grant", 0.0) + float(d.get("total", 0) or 0)
+        amt = float(d.get("total", 0) or 0)
+        row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0, "head_allocations": []}
+        row["travel_grant"] = row.get("travel_grant", 0.0) + amt
         row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
+        allocs = list(row.get("head_allocations") or [])
+        if amt > 0 and not any(a.get("head_key") == "travel_grant" for a in allocs):
+            allocs.append({"head_key": "travel_grant", "head": "Travel Grant", "owner": "Visitor", "limit_inr": amt})
+        row["head_allocations"] = allocs
         body_map[code] = row
     budget["by_body_totals"] = list(body_map.values())
 

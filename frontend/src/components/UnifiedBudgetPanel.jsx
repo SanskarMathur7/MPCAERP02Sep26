@@ -39,6 +39,34 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
         }, 250);
     };
 
+    // MPCA-222 · Driver overrides — PATCH the match's driver_overrides dict.
+    const setDriverOverride = async (matchId, headKey, value) => {
+        try {
+            const cur = matches.find((mm) => mm.id === matchId);
+            const existing = { ...(cur?.per_head?.[headKey] ? {} : {}) };   // placeholder
+            const overrides = {};
+            (matches.find((mm) => mm.id === matchId)?.per_head && Object.entries(matches.find((mm) => mm.id === matchId).per_head).forEach(([k, v]) => {
+                if (v.is_override) overrides[k] = v.qty;
+            }));
+            overrides[headKey] = value === "" ? null : Number(value);
+            await api.patch(`/tournaments/${tournament.id}/matches/${matchId}`, { driver_overrides: overrides });
+            await compute(false);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+    };
+    const resetDriverOverride = async (matchId, headKey) => {
+        try {
+            const overrides = {};
+            const cur = matches.find((mm) => mm.id === matchId);
+            if (cur?.per_head) {
+                Object.entries(cur.per_head).forEach(([k, v]) => {
+                    if (v.is_override && k !== headKey) overrides[k] = v.qty;
+                });
+            }
+            await api.patch(`/tournaments/${tournament.id}/matches/${matchId}`, { driver_overrides: overrides });
+            await compute(false);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+    };
+
     const compute = async (save = false) => {
         setLoading(true); setErr(null);
         try {
@@ -281,21 +309,86 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                                             <td className="px-3 py-2 text-right font-mono font-semibold">{INR(m.total)}</td>
                                         </tr>
                                         {expandedMatch === m.id && (
-                                            <tr className="bg-mpca-parchment/40" data-testid={`ub-match-details-${m.id}`}>
+                                            <tr className="bg-white" data-testid={`ub-match-details-${m.id}`}>
                                                 <td colSpan={8} className="px-4 py-3">
-                                                    <div className="overline text-[9px] mb-2">Per-head breakdown · {m.label}</div>
-                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                                                        {Object.entries(m.per_head || {}).filter(([, v]) => (v.md_amount || 0) + (v.nmd_amount || 0) > 0).map(([key, v]) => {
-                                                            const headMeta = (budget.head_totals || []).find((h) => h.key === key);
-                                                            return (
-                                                                <div key={key} className="border border-mpca-brass/20 bg-white px-2 py-1.5">
-                                                                    <div className="text-[10px] text-mpca-gray-dark uppercase tracking-widest">{headMeta?.name || key}</div>
-                                                                    <div className="font-mono text-mpca-charcoal">qty {v.qty} · <b>{INR((v.md_amount || 0) + (v.nmd_amount || 0))}</b></div>
-                                                                    <div className="text-[9px] text-mpca-brass font-mono">MD {INR_MINI(v.md_amount)} · NMD {INR_MINI(v.nmd_amount)}</div>
-                                                                </div>
-                                                            );
-                                                        })}
+                                                    <div className="text-[10px] text-mpca-gray-dark italic mb-2">
+                                                        Drivers are editable — squad-derived / official-derived numbers can be manually overridden by MPCA. Rates stay fixed at the Rate Card. Leave blank / click &laquo;reset&raquo; to restore the auto value.
                                                     </div>
+                                                    <table className="w-full text-xs border border-mpca-brass/20">
+                                                        <thead className="bg-mpca-parchment/60 text-mpca-brass uppercase text-[9px] tracking-widest">
+                                                            <tr>
+                                                                <th className="text-left px-3 py-1.5 w-1/4">Budget head</th>
+                                                                <th className="text-left px-3 py-1.5">Driver</th>
+                                                                <th className="text-left px-3 py-1.5">Match-day calc</th>
+                                                                <th className="text-left px-3 py-1.5">Non-match calc</th>
+                                                                <th className="text-right px-3 py-1.5">Total</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {Object.entries(m.per_head || {}).map(([key, v]) => {
+                                                                const headMeta = (budget.head_totals || []).find((h) => h.key === key);
+                                                                const label = v.driver === "AwayTeamPax" ? (v.rooms ? "rooms" : "away pax")
+                                                                    : v.driver === "HostTeamPax" ? (v.rooms ? "rooms" : "host pax")
+                                                                    : v.driver === "MatchOfficialsPax" ? (v.rooms ? "rooms" : "officials")
+                                                                    : v.driver === "AllPax" ? "all pax"
+                                                                    : v.driver === "TeamCount" ? "teams"
+                                                                    : v.driver === "HostTeamCount" ? "host teams"
+                                                                    : "flat";
+                                                                const total = (v.md_amount || 0) + (v.nmd_amount || 0);
+                                                                return (
+                                                                    <tr key={key} className="border-t border-mpca-brass/10">
+                                                                        <td className="px-3 py-1.5 font-serif text-mpca-green-dark">{headMeta?.name || key}</td>
+                                                                        <td className="px-3 py-1.5">
+                                                                            {v.driver ? (
+                                                                                <span className="inline-flex items-center gap-1.5">
+                                                                                    <input
+                                                                                        type="number" min={0}
+                                                                                        className={`input-heritage !py-0.5 !text-xs font-mono w-14 text-right ${v.is_override ? "border-mpca-oxblood/60 bg-mpca-oxblood/5" : ""}`}
+                                                                                        value={v.qty}
+                                                                                        disabled={!canEdit}
+                                                                                        onChange={(e) => setDriverOverride(m.id, key, e.target.value)}
+                                                                                        data-testid={`ub-driver-${m.id}-${key}`}
+                                                                                    />
+                                                                                    <span className="text-[10px] text-mpca-gray-dark">{label}</span>
+                                                                                    {v.is_override && canEdit && (
+                                                                                        <button
+                                                                                            onClick={() => resetDriverOverride(m.id, key, v.auto_qty)}
+                                                                                            className="text-[9px] text-mpca-brass hover:text-mpca-oxblood underline"
+                                                                                            data-testid={`ub-driver-reset-${m.id}-${key}`}
+                                                                                            title={`Auto = ${v.auto_qty}`}
+                                                                                        >
+                                                                                            reset
+                                                                                        </button>
+                                                                                    )}
+                                                                                    {!v.is_override && (
+                                                                                        <span className="text-[9px] text-mpca-gray-dark italic">auto</span>
+                                                                                    )}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[10px] text-mpca-gray-dark font-mono">flat</span>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-3 py-1.5 font-mono text-[11px] text-mpca-charcoal">
+                                                                            {v.basis === "Match"
+                                                                                ? `${INR(v.md_rate)} × ${v.qty} = ${INR(v.md_amount)}`
+                                                                                : `${INR(v.md_rate)} × ${v.qty} × ${m.match_days}d = ${INR(v.md_amount)}`}
+                                                                        </td>
+                                                                        <td className="px-3 py-1.5 font-mono text-[11px] text-mpca-brass">
+                                                                            {v.basis === "Match" ? "—"
+                                                                                : `${INR(v.nmd_rate)} × ${v.qty} × ${m.non_match_days}d = ${INR(v.nmd_amount)}`}
+                                                                        </td>
+                                                                        <td className="px-3 py-1.5 text-right font-mono font-semibold text-mpca-oxblood">{INR(total)}</td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                            <tr className="border-t-2 border-mpca-brass/40 bg-mpca-parchment/40 font-semibold">
+                                                                <td colSpan={2} className="px-3 py-1.5 text-right uppercase tracking-widest text-[10px] text-mpca-brass">Match total</td>
+                                                                <td className="px-3 py-1.5 font-mono text-mpca-green-dark">{INR(m.md_amount)}</td>
+                                                                <td className="px-3 py-1.5 font-mono text-mpca-brass">{INR(m.nmd_amount)}</td>
+                                                                <td className="px-3 py-1.5 text-right font-mono text-mpca-oxblood">{INR(m.total)}</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
                                                 </td>
                                             </tr>
                                         )}

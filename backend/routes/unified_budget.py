@@ -242,6 +242,13 @@ def driver_qty(m: Dict[str, Any], driver: Optional[str], pool: Optional[Dict[str
 
 
 def derived_qty(m: Dict[str, Any], head: Dict[str, Any], pool: Optional[Dict[str, Any]], default_squad: int) -> int:
+    # MPCA-222 · Manual driver override takes precedence when present
+    overrides = m.get("driver_overrides") or {}
+    if head["key"] in overrides and overrides[head["key"]] not in (None, ""):
+        try:
+            return max(int(overrides[head["key"]]), 0)
+        except (TypeError, ValueError):
+            pass
     if head.get("basis") == "Match":
         return 1
     q = driver_qty(m, head.get("driver"), pool, default_squad)
@@ -281,6 +288,13 @@ def compute_tournament_budget(
         for h in BUDGET_HEADS_META:
             r = budget_rates.get(h["key"]) or {"md": 0, "nmd": 0}
             qty = derived_qty(m, h, pool, default_squad)
+            overrides = m.get("driver_overrides") or {}
+            is_override = h["key"] in overrides and overrides[h["key"]] not in (None, "")
+            # Auto-computed qty (for the "reset" button on the frontend)
+            auto_head = {**h, "key": h["key"]}
+            auto_q = 1 if h.get("basis") == "Match" else driver_qty(m, h.get("driver"), pool, default_squad)
+            if h.get("rooms") and h.get("basis") != "Match":
+                auto_q = ceil(auto_q / 2)
             if h.get("basis") == "Match":
                 md_amt = float(r.get("md", 0) or 0) * qty
                 nmd_amt = 0.0
@@ -291,7 +305,18 @@ def compute_tournament_budget(
             head_totals[h["key"]]["nmd_amount"] += nmd_amt
             m_md_amt += md_amt
             m_nmd_amt += nmd_amt
-            per_head_this_match[h["key"]] = {"qty": qty, "md_amount": md_amt, "nmd_amount": nmd_amt}
+            per_head_this_match[h["key"]] = {
+                "qty": qty,
+                "auto_qty": int(auto_q),
+                "is_override": is_override,
+                "md_rate": float(r.get("md", 0) or 0),
+                "nmd_rate": float(r.get("nmd", 0) or 0),
+                "md_amount": md_amt,
+                "nmd_amount": nmd_amt,
+                "driver": h.get("driver"),
+                "rooms": h.get("rooms", False),
+                "basis": h.get("basis"),
+            }
 
         row = {
             "id": m.get("id"),

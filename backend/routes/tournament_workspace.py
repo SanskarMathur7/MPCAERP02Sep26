@@ -49,6 +49,9 @@ class TournamentMatch(BaseModel):
     label: Optional[str] = None                 # display label (e.g. "League R1", "SF-1")
     squad: Optional[int] = None                 # per-match squad size override (blank = tournament default)
     to_date: Optional[str] = None               # explicit end date (else derived from match_date + days - 1)
+    # MPCA-222 · Editable driver overrides per budget head (utility-parity).
+    # Shape: {head_key: qty_override}. Blank/missing = compute from formula.
+    driver_overrides: Optional[Dict[str, int]] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -73,6 +76,8 @@ class TournamentMatchCreate(BaseModel):
     label: Optional[str] = None
     squad: Optional[int] = None
     to_date: Optional[str] = None
+    # MPCA-222 · Editable driver overrides per budget head
+    driver_overrides: Optional[Dict[str, int]] = None
 
 
 class TournamentMatchPatch(BaseModel):
@@ -97,6 +102,8 @@ class TournamentMatchPatch(BaseModel):
     label: Optional[str] = None
     squad: Optional[int] = None
     to_date: Optional[str] = None
+    # MPCA-222 · Editable driver overrides per budget head
+    driver_overrides: Optional[Dict[str, int]] = None
 
 
 @api_router.get("/tournaments/{tid}/matches", response_model=List[TournamentMatch])

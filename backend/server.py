@@ -22,7 +22,7 @@ from routes import (  # noqa: F401
     assets, hr_payroll, dms, compliance, audit_pack, selection_console, match_officials,
     reimbursement_schemes, reimbursement_claims, camps, squad_ai, grant_claims, scheme_calc,
     tournament_workspace, rbac, tournament_participations, body_documents, player_registrations,
-    discussions, events, finance_console, tournament_master,
+    discussions, events, finance_console, tournament_master, rate_cards,
 )
 from seed import seed_data
 
@@ -72,6 +72,9 @@ async def lifespan(app: FastAPI):
         # MPCA-205 · Master Tournament Registry seed
         from routes.tournament_master import seed_tournament_master
         await seed_tournament_master()
+        # MPCA-215 · Rate Card seed (17 budget heads × 8 travel heads × N tournament types × 2 formats)
+        from routes.rate_cards import seed_rate_cards
+        await seed_rate_cards("2026-27")
     yield
     # ---- shutdown ----
     client.close()

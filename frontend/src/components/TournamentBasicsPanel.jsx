@@ -204,10 +204,28 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
 
     // ─── Body Pools helpers (Division or District) ──────────
     const dpools = meta[poolKey] || [];
-    const usedBodyCodes = useMemo(
-        () => new Set(dpools.flatMap((p) => p.division_codes || p.district_codes || [])),
-        [dpools]
-    );
+    // MPCA-214 · Track which pools each body appears in (a body can now be in
+    // MULTIPLE pools) and which pool it hosts (still exclusive — one host
+    // duty per body).
+    const bodyPoolMap = useMemo(() => {
+        const map = {};   // { code: [{ id, name }] }
+        dpools.forEach((p) => {
+            (p.division_codes || p.district_codes || []).forEach((c) => {
+                if (!map[c]) map[c] = [];
+                map[c].push({ id: p.id, name: p.name });
+            });
+        });
+        return map;
+    }, [dpools]);
+    const hostByCode = useMemo(() => {
+        const m = {};   // { code: { id, name } — the pool this body hosts }
+        dpools.forEach((p) => {
+            const hk = isDistrictScope ? "host_district_code" : "host_division_code";
+            const h = p[hk];
+            if (h) m[h] = { id: p.id, name: p.name };
+        });
+        return m;
+    }, [dpools, isDistrictScope]);
     const bodyByCode = useMemo(() => {
         const m = {};
         bodies.forEach((d) => { m[d.code] = d; });
@@ -215,6 +233,40 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
     }, [bodies]);
     const codesKey = isDistrictScope ? "district_codes" : "division_codes";
     const hostKey = isDistrictScope ? "host_district_code" : "host_division_code";
+
+    // MPCA-214 · Resolve the parent Division for Inter-District tournaments —
+    // this Division may host any pool of the tournament (external host).
+    const [parentDivision, setParentDivision] = useState(null);
+    useEffect(() => {
+        if (!isDistrictScope || !tournament.host_body_id) { setParentDivision(null); return; }
+        const host = tournament.host_body_id;
+        if (!String(host).startsWith("DIST-")) {
+            // host_body_id is itself a Division
+            api.get(`/bodies/${host}`).then((r) => setParentDivision(r.data)).catch(() => setParentDivision(null));
+            return;
+        }
+        api.get(`/bodies/${host}`)
+            .then((r) => {
+                const pc = r.data?.parent_code;
+                if (!pc) { setParentDivision(null); return; }
+                return api.get(`/bodies/${pc}`).then((r2) => setParentDivision(r2.data));
+            })
+            .catch(() => setParentDivision(null));
+    }, [isDistrictScope, tournament.host_body_id]);
+
+    // Special hosts: MPCA (Inter-Divisional) or the parent Division
+    // (Inter-District). These sit above pool members in the host dropdown.
+    const specialHosts = useMemo(() => {
+        if (isDistrictScope) {
+            return parentDivision
+                ? [{ code: parentDivision.code, name: parentDivision.name, kind: "External" }]
+                : [];
+        }
+        // Inter-Divisional → MPCA (State) can host any pool
+        const mpca = bodies.find((b) => b.code === "MPCA")
+            || { code: "MPCA", name: "MPCA (State)" };
+        return [{ code: mpca.code, name: mpca.name, kind: "External" }];
+    }, [isDistrictScope, parentDivision, bodies]);
 
     const addPool = () => {
         const nextLetter = POOL_LABELS[dpools.length] || `${dpools.length + 1}`;
@@ -233,17 +285,34 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
         if (!pool) return;
         const currentCodes = pool[codesKey] || [];
         const included = currentCodes.includes(code);
-        // Prevent putting a body into more than one pool
-        if (!included && usedBodyCodes.has(code)) return;
+        // MPCA-214 · A body may now appear in multiple pools — no cross-pool
+        // block. Only cross-pool constraint is HOSTING, enforced at setPoolHost.
         const next_codes = included
             ? currentCodes.filter((c) => c !== code)
             : [...currentCodes, code];
-        const next_host = pool[hostKey] && next_codes.includes(pool[hostKey])
-            ? pool[hostKey]
-            : (next_codes[0] || null);
+        // If we removed the current host, clear it (unless the host is an
+        // external body like MPCA/parent-Division — those persist).
+        const currentHost = pool[hostKey];
+        const currentHostIsExternal = currentHost && specialHosts.some((s) => s.code === currentHost);
+        const hostStillValid = currentHost && (currentHostIsExternal || next_codes.includes(currentHost));
+        const next_host = hostStillValid ? currentHost : null;
         patchPool(pid, { [codesKey]: next_codes, [hostKey]: next_host });
     };
-    const setPoolHost = (pid, code) => patchPool(pid, { [hostKey]: code });
+    const setPoolHost = (pid, code) => {
+        // MPCA-214 · Cross-pool exclusivity — a body may host only ONE pool.
+        // If this body is already host somewhere else, clear that first.
+        if (code && hostByCode[code] && hostByCode[code].id !== pid) {
+            const otherPoolId = hostByCode[code].id;
+            const updated = dpools.map((p) => {
+                if (p.id === otherPoolId) return { ...p, [hostKey]: null };
+                if (p.id === pid) return { ...p, [hostKey]: code };
+                return p;
+            });
+            setField(poolKey, updated);
+            return;
+        }
+        patchPool(pid, { [hostKey]: code });
+    };
     const renamePool = (pid, name) => patchPool(pid, { name });
 
     // ─── Free-text extra teams (clubs/schools/districts) ────
@@ -281,6 +350,7 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
 
     // ─── Save with validation ───────────────────────────
     const validate = () => {
+        const hostAssignments = {};   // code → poolName (should be unique)
         for (const p of dpools) {
             const memberCodes = p[codesKey] || [];
             if (memberCodes.length === 0) {
@@ -289,9 +359,19 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
             if (!p[hostKey]) {
                 return `${p.name} needs a host ${bodyLabel.toLowerCase()} marked.`;
             }
-            if (!memberCodes.includes(p[hostKey])) {
-                return `${p.name}'s host must be one of its ${bodyLabelPlural.toLowerCase()}.`;
+            // MPCA-214 · Host can now be either a pool member OR an external
+            // host (MPCA for Inter-Divisional, parent Division for
+            // Inter-District). Validate against that combined set.
+            const isMember = memberCodes.includes(p[hostKey]);
+            const isExternal = specialHosts.some((s) => s.code === p[hostKey]);
+            if (!isMember && !isExternal) {
+                return `${p.name}'s host must be one of its ${bodyLabelPlural.toLowerCase()} or ${isDistrictScope ? "the parent Division" : "MPCA"}.`;
             }
+            // MPCA-214 · Host uniqueness across pools
+            if (hostAssignments[p[hostKey]]) {
+                return `${bodyByCode[p[hostKey]]?.name || p[hostKey]} is already the host of ${hostAssignments[p[hostKey]]} — a body can host only one pool.`;
+            }
+            hostAssignments[p[hostKey]] = p.name;
         }
         return "";
     };
@@ -438,8 +518,11 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                         )}
                     </div>
                     <div className="text-[10px] text-mpca-gray-dark italic mb-3">
-                        Add one or more pools. Tick the {bodyLabelPlural.toLowerCase()} travelling in each pool and mark the host {bodyLabel.toLowerCase()} (where matches are played).
-                        A {bodyLabel.toLowerCase()} can appear in only one pool.
+                        Add one or more pools. Tick the {bodyLabelPlural.toLowerCase()} in each pool and pick a Host from the dropdown (matches play at the host).
+                        A {bodyLabel.toLowerCase()} may appear in <b>multiple pools</b> but can only host <b>one</b>.
+                        {isDistrictScope
+                            ? " The parent Division can also host any pool (external host)."
+                            : " MPCA can also host any pool (external host)."}
                         {isDistrictScope && !tournament.host_body_id && (
                             <span className="block mt-1 text-mpca-oxblood">Note: this Inter-District tournament has no host Division set — pick one from the tournament header first.</span>
                         )}
@@ -452,25 +535,74 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                     )}
 
                     <div className="space-y-3">
-                        {dpools.map((pool) => (
+                        {dpools.map((pool) => {
+                            const poolCodes = pool[codesKey] || [];
+                            const hostCode = pool[hostKey];
+                            const hostBody = hostCode
+                                ? (bodyByCode[hostCode] || specialHosts.find((s) => s.code === hostCode) || { name: hostCode })
+                                : null;
+                            // Host dropdown options: pool members + external special hosts.
+                            // Exclude bodies already hosting another pool.
+                            const hostOptions = [
+                                ...specialHosts.map((s) => ({ code: s.code, name: s.name, external: true })),
+                                ...poolCodes.map((c) => ({ code: c, name: bodyByCode[c]?.name || c, external: false })),
+                            ];
+                            return (
                             <div key={pool.id} className="border border-mpca-brass/30 bg-white" data-testid={`basics-pool-${pool.id}`}>
-                                <div className="flex items-center justify-between px-3 py-2 bg-mpca-green-dark text-mpca-gold-light">
-                                    <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-mpca-green-dark text-mpca-gold-light">
+                                    <div className="flex items-center gap-2 flex-1 min-w-[180px]">
                                         {canEdit ? (
                                             <input
                                                 value={pool.name}
                                                 onChange={(e) => renamePool(pool.id, e.target.value)}
-                                                className="bg-transparent border-b border-mpca-gold-light/40 text-mpca-gold-light font-serif text-sm focus:outline-none"
+                                                className="bg-transparent border-b border-mpca-gold-light/40 text-mpca-gold-light font-serif text-sm focus:outline-none w-24"
                                                 data-testid={`basics-pool-name-${pool.id}`}
                                             />
                                         ) : (
                                             <div className="font-serif text-sm">{pool.name}</div>
                                         )}
                                         <span className="text-[9px] uppercase tracking-widest opacity-80">
-                                            · {(pool[codesKey] || []).length} {isDistrictScope ? "distr." : "divs"}
-                                            {pool[hostKey] ? ` · host: ${bodyByCode[pool[hostKey]]?.name || pool[hostKey]}` : " · no host set"}
+                                            · {poolCodes.length} {isDistrictScope ? "distr." : "divs"}
                                         </span>
                                     </div>
+                                    {/* MPCA-214 · Host dropdown per pool — pool members + external hosts (MPCA / parent Division) */}
+                                    <label className="flex items-center gap-2 text-[10px]">
+                                        <Home size={11} className="opacity-80" />
+                                        <span className="uppercase tracking-widest opacity-80">Host</span>
+                                        <select
+                                            className="bg-mpca-ivory text-mpca-charcoal text-xs px-2 py-1 border border-mpca-gold-light/40 rounded"
+                                            value={hostCode || ""}
+                                            onChange={(e) => setPoolHost(pool.id, e.target.value || null)}
+                                            disabled={!canEdit}
+                                            data-testid={`basics-pool-${pool.id}-host-select`}
+                                        >
+                                            <option value="">— pick host —</option>
+                                            {specialHosts.length > 0 && (
+                                                <optgroup label="External host (owns venue budget)">
+                                                    {specialHosts.map((s) => {
+                                                        const clash = hostByCode[s.code] && hostByCode[s.code].id !== pool.id;
+                                                        return (
+                                                            <option key={s.code} value={s.code} disabled={clash}>
+                                                                {s.name}{clash ? ` · hosts ${hostByCode[s.code].name}` : ""}
+                                                            </option>
+                                                        );
+                                                    })}
+                                                </optgroup>
+                                            )}
+                                            {poolCodes.length > 0 && (
+                                                <optgroup label={`${bodyLabelPlural} in this pool`}>
+                                                    {poolCodes.map((c) => {
+                                                        const clash = hostByCode[c] && hostByCode[c].id !== pool.id;
+                                                        return (
+                                                            <option key={c} value={c} disabled={clash}>
+                                                                {bodyByCode[c]?.name || c}{clash ? ` · hosts ${hostByCode[c].name}` : ""}
+                                                            </option>
+                                                        );
+                                                    })}
+                                                </optgroup>
+                                            )}
+                                        </select>
+                                    </label>
                                     {canEdit && (
                                         <button onClick={() => removePool(pool.id)} className="text-mpca-ivory/80 hover:text-mpca-ivory" data-testid={`basics-pool-del-${pool.id}`}>
                                             <Trash2 size={12} />
@@ -483,48 +615,47 @@ const TournamentBasicsPanel = ({ tournament, canEdit, onChange }) => {
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
                                             {bodies.map((d) => {
-                                                const inThisPool = (pool[codesKey] || []).includes(d.code);
-                                                const inOtherPool = !inThisPool && usedBodyCodes.has(d.code);
-                                                const isHost = pool[hostKey] === d.code;
+                                                const inThisPool = poolCodes.includes(d.code);
+                                                const otherPools = (bodyPoolMap[d.code] || []).filter((p) => p.id !== pool.id);
+                                                const isHost = hostCode === d.code;
                                                 return (
                                                     <div
                                                         key={d.code}
-                                                        className={`flex items-center gap-2 py-1 px-1 text-xs ${inOtherPool ? "opacity-40" : ""}`}
+                                                        className="flex items-center gap-2 py-1 px-1 text-xs"
                                                         data-testid={`basics-pool-${pool.id}-div-${d.code}`}
                                                     >
                                                         <input
                                                             type="checkbox"
                                                             checked={inThisPool}
-                                                            disabled={!canEdit || inOtherPool}
+                                                            disabled={!canEdit}
                                                             onChange={() => toggleBodyInPool(pool.id, d.code)}
                                                             data-testid={`basics-pool-${pool.id}-div-${d.code}-check`}
                                                         />
                                                         <span className="flex-1 truncate text-mpca-charcoal">
                                                             {d.name} <span className="text-[9px] text-mpca-brass">({d.code})</span>
-                                                            {inOtherPool && <span className="ml-1 text-[9px] text-mpca-oxblood">in other pool</span>}
+                                                            {otherPools.length > 0 && (
+                                                                <span className="ml-1 text-[9px] text-mpca-brass italic">also in {otherPools.map((p) => p.name).join(", ")}</span>
+                                                            )}
+                                                            {isHost && (
+                                                                <span className="ml-1 inline-flex items-center gap-0.5 text-[9px] text-mpca-oxblood font-semibold uppercase tracking-widest">
+                                                                    <Home size={9} /> Host
+                                                                </span>
+                                                            )}
                                                         </span>
-                                                        {inThisPool && (
-                                                            <label className="flex items-center gap-1 text-[10px] text-mpca-oxblood cursor-pointer" title="Mark as Host">
-                                                                <input
-                                                                    type="radio"
-                                                                    name={`host-${pool.id}`}
-                                                                    checked={isHost}
-                                                                    disabled={!canEdit}
-                                                                    onChange={() => setPoolHost(pool.id, d.code)}
-                                                                    data-testid={`basics-pool-${pool.id}-host-${d.code}`}
-                                                                />
-                                                                {isHost ? <Home size={11} /> : <Plane size={11} className="opacity-60" />}
-                                                                <span className="uppercase tracking-widest">{isHost ? "Host" : "Host?"}</span>
-                                                            </label>
-                                                        )}
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     )}
+                                    {hostBody && specialHosts.some((s) => s.code === hostCode) && (
+                                        <div className="mt-2 text-[10px] text-mpca-brass italic flex items-center gap-1" data-testid={`basics-pool-${pool.id}-external-host-hint`}>
+                                            <Home size={10} />
+                                            External host · {hostBody.name} owns the venue budget for this pool.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                        ))}
+                        );})}
                     </div>
 
                     {dpools.length > 0 && (

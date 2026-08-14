@@ -154,6 +154,11 @@ async def sync_participants_from_pools(
 
     # Cache body names for display
     codes_in_pools = {c for p in merged_pools for c in (p.get("division_codes") or p.get("district_codes") or [])}
+    # MPCA-214 · External hosts (MPCA / parent Division) also need body_docs.
+    for p in merged_pools:
+        h = p.get("host_division_code") or p.get("host_district_code")
+        if h:
+            codes_in_pools.add(h)
     body_docs: Dict[str, Dict[str, Any]] = {}
     if codes_in_pools:
         async for b in db.bodies.find({"code": {"$in": list(codes_in_pools)}}, {"_id": 0, "code": 1, "name": 1, "body_type": 1}):
@@ -174,7 +179,14 @@ async def sync_participants_from_pools(
         host_code = pool.get("host_division_code") or pool.get("host_district_code")
         # Support both keys — division_codes for old data, district_codes for Phase C
         member_codes = pool.get("division_codes") or pool.get("district_codes") or []
-        for code in member_codes:
+        # MPCA-214 · External hosts (MPCA for Inter-Divisional, parent Division
+        # for Inter-District) are NOT in member_codes but still need a
+        # participation row so budgets/finance can attribute host expenses to
+        # them.
+        effective_codes = list(member_codes)
+        if host_code and host_code not in effective_codes:
+            effective_codes.append(host_code)
+        for code in effective_codes:
             kept_codes.add(code)
             body = body_docs.get(code, {})
             role = "Host" if code == host_code else "Visitor"

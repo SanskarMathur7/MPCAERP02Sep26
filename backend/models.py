@@ -980,6 +980,99 @@ class TournamentMasterPatch(BaseModel):
     sort_order: Optional[int] = None
 
 
+# ─────────────────── MPCA-215 · Unified Rate Card ───────────────────
+# One rate card per (tournament_type, format_group, season). Editable only by
+# MPCA. Feeds the unified per-match budget engine.
+#
+# BUDGET_HEADS + TRAVEL_HEADS mirror the MPCA Inter-Division Utility HTML — 17
+# tournament heads + 8 travel-grant heads. `owner_tag` classifies who bears
+# the cost (Host, Visitor, Officials, Common) so downstream rollups can
+# attribute expenses per body.
+
+BUDGET_HEAD_KEYS = Literal[
+    "hotel_team", "hotel_off", "food_on", "food_off", "food_nmd", "tent",
+    "conv_team", "conv_off", "labour", "local_mgr", "doctor", "ambulance",
+    "coach_mgr", "scoreboard", "water", "drinks", "mom",
+]
+
+TRAVEL_HEAD_KEYS = Literal[
+    "travel_rt", "coach", "manager", "trainer", "local_conveyance",
+    "medical", "misc_journey", "other",
+]
+
+# Public metadata used by frontend + compute engine (single source of truth).
+BUDGET_HEADS_META: List[Dict[str, Any]] = [
+    {"key": "hotel_team",  "name": "Hotel — team",          "driver": "AwayTeamPax",        "rooms": True,  "basis": "MatchDays", "owner": "Visitor"},
+    {"key": "hotel_off",   "name": "Hotel — officials",     "driver": "MatchOfficialsPax",  "rooms": True,  "basis": "MatchDays", "owner": "Officials"},
+    {"key": "food_on",     "name": "Food — on the ground",  "driver": "AllPax",             "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "food_off",    "name": "Food — off the ground", "driver": "AwayTeamPax",        "rooms": False, "basis": "MatchDays", "owner": "Visitor"},
+    {"key": "food_nmd",    "name": "Food — non-match day",  "driver": "AwayTeamPax",        "rooms": False, "basis": "MatchDays", "owner": "Visitor"},
+    {"key": "tent",        "name": "Tent",                  "driver": None,                 "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "conv_team",   "name": "Conveyance — team",     "driver": "TeamCount",          "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "conv_off",    "name": "Conveyance — official", "driver": None,                 "rooms": False, "basis": "MatchDays", "owner": "Officials"},
+    {"key": "labour",      "name": "Labour",                "driver": None,                 "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "local_mgr",   "name": "Local manager",         "driver": None,                 "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "doctor",      "name": "Doctor",                "driver": None,                 "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "ambulance",   "name": "Ambulance",             "driver": None,                 "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "coach_mgr",   "name": "Coach & manager trainer","driver": "HostTeamCount",     "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "scoreboard",  "name": "Score board",           "driver": None,                 "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "water",       "name": "Water",                 "driver": None,                 "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "drinks",      "name": "Match drinks, ice, refreshment, medical, fuel etc.", "driver": None, "rooms": False, "basis": "MatchDays", "owner": "Host"},
+    {"key": "mom",         "name": "Man of the Match",      "driver": None,                 "rooms": False, "basis": "Match",     "owner": "Common"},
+]
+
+TRAVEL_HEADS_META: List[Dict[str, Any]] = [
+    {"key": "travel_rt",         "name": "Round-trip travel",     "basis": "trip_pax", "hint": "Round-trip fare per team member, once per trip"},
+    {"key": "coach",             "name": "Coach fee",             "basis": "day",      "hint": "Per match day / non-match day"},
+    {"key": "manager",           "name": "Manager fee",           "basis": "day",      "hint": "Per match day / non-match day"},
+    {"key": "trainer",           "name": "Trainer fee",           "basis": "day",      "hint": "Per match day / non-match day"},
+    {"key": "local_conveyance",  "name": "Local conveyance",      "basis": "trip",     "hint": "Per trip"},
+    {"key": "medical",           "name": "Medical",               "basis": "trip",     "hint": "Per trip"},
+    {"key": "misc_journey",      "name": "Misc journey expense",  "basis": "trip",     "hint": "Per trip"},
+    {"key": "other",             "name": "Other",                 "basis": "trip",     "hint": "Per trip"},
+]
+
+# Tournament-type categories the rate card supports. Kept broad so BCCI +
+# camps can adopt the same engine later.
+RateCardTournamentType = Literal[
+    "Inter_Divisional", "Inter_District", "BCCI", "Championship",
+    "Pre_Tournament_Camp", "Coaching_Camp", "Invitational",
+]
+
+RateCardFormatGroup = Literal["ltd_overs", "multi_day"]
+
+
+class RateHead(BaseModel):
+    """A single rate row — md (match-day) and nmd (non-match-day) rates."""
+    model_config = ConfigDict(extra="ignore")
+    md: float = 0.0
+    nmd: float = 0.0
+
+
+class RateCard(BaseModel):
+    """MPCA-215 · Rate card for one (tournament_type, format_group, season).
+
+    Persisted per tuple. Only MPCA-scope personas may edit. Feeds the unified
+    per-match budget engine.
+    """
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    tournament_type: RateCardTournamentType
+    format_group: RateCardFormatGroup
+    season: str = "2026-27"
+    budget_rates: Dict[str, RateHead] = Field(default_factory=dict)   # {head_key: RateHead}
+    travel_rates: Dict[str, RateHead] = Field(default_factory=dict)   # {head_key: RateHead}
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: Optional[str] = None
+    updated_by: Optional[str] = None
+
+
+class RateCardPatch(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    budget_rates: Optional[Dict[str, RateHead]] = None
+    travel_rates: Optional[Dict[str, RateHead]] = None
+
+
 class SquadTimeline(BaseModel):
     """Squad announcement timelines per MPCA plan."""
     model_config = ConfigDict(extra="ignore")

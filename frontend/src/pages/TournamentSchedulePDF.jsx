@@ -24,22 +24,27 @@ export default function TournamentSchedulePDF() {
     const [t, setT] = useState(null);
     const [matches, setMatches] = useState([]);
     const [officialsMap, setOfficialsMap] = useState({});
+    const [groundsMap, setGroundsMap] = useState({});
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         (async () => {
             setLoading(true);
             try {
-                const [tRes, mRes, oRes] = await Promise.all([
+                const [tRes, mRes, oRes, gRes] = await Promise.all([
                     api.get(`/tournaments/${id}`),
                     api.get(`/tournaments/${id}/matches`),
                     api.get("/match-officials"),
+                    api.get("/grounds").catch(() => ({ data: [] })),
                 ]);
                 setT(tRes.data);
                 setMatches(mRes.data || []);
                 const map = {};
                 (oRes.data || []).forEach((o) => { map[o.id] = o.full_name; });
                 setOfficialsMap(map);
+                const gm = {};
+                (gRes.data || []).forEach((g) => { gm[g.id] = g.name + (g.venue_name ? ` · ${g.venue_name}` : ""); });
+                setGroundsMap(gm);
             } finally { setLoading(false); }
         })();
     }, [id]);
@@ -139,6 +144,7 @@ export default function TournamentSchedulePDF() {
                                     <th className="text-left py-1 pr-1">Fixture</th>
                                     <th className="text-left py-1 pr-1 w-20">From</th>
                                     <th className="text-left py-1 pr-1 w-20">To</th>
+                                    <th className="text-left py-1 pr-1">Ground</th>
                                     <th className="text-center py-1 pr-1 w-8">MD</th>
                                     <th className="text-center py-1 pr-1 w-10">Pax</th>
                                     <th className="text-left py-1 pr-1">Umpires</th>
@@ -155,6 +161,7 @@ export default function TournamentSchedulePDF() {
                                             <td className="py-1 pr-1 font-bold">{m.home_team || "?"} <span className="font-normal text-gray-500">v</span> {m.away_team || "?"}</td>
                                             <td className="py-1 pr-1 font-mono">{fmtDate(m.match_date || m.from_date)}</td>
                                             <td className="py-1 pr-1 font-mono">{fmtDate(m.to_date || m.match_date || m.from_date)}</td>
+                                            <td className="py-1 pr-1 text-[9px]">{groundsMap[m.ground_id] || m.ground_name || m.venue_name || "—"}</td>
                                             <td className="text-center py-1 pr-1 font-mono">{m.days || 1}</td>
                                             <td className="text-center py-1 pr-1 font-mono">{(m.squad ?? 18) * 2 + (m.other_pax || 0)}</td>
                                             <td className="py-1 pr-1">{nameOf(oi.umpires)}</td>

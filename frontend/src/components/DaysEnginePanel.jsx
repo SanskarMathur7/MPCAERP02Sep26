@@ -63,6 +63,23 @@ export default function DaysEnginePanel({ tournament, canEdit }) {
 
     const totals = data?.totals || {};
     const calendar = data?.calendar || [];
+    const perMatch = data?.matches || [];
+    // MPCA-232 · Build a date → matches lookup so calendar cells can overlay fixtures.
+    const matchesByDate = useMemo(() => {
+        const map = {};
+        (perMatch || []).forEach((m) => {
+            const from = m.from_date || m.match_date;
+            const to = m.to_date || from;
+            if (!from) return;
+            const start = new Date(from + "T12:00:00");
+            const end = new Date(to + "T12:00:00");
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                const iso = d.toISOString().split("T")[0];
+                (map[iso] = map[iso] || []).push(m);
+            }
+        });
+        return map;
+    }, [perMatch]);
     const matches = data?.matches || [];
 
     // Rough day-of-week + week labels for the strip
@@ -162,24 +179,43 @@ export default function DaysEnginePanel({ tournament, canEdit }) {
                     <div className="flex items-center gap-4 mb-3 text-xs text-mpca-gray-dark">
                         <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-4 bg-mpca-green-dark"></span>Match Day</span>
                         <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-4 border border-dashed border-mpca-brass bg-mpca-parchment/60"></span>Non-Match Day</span>
-                        <span className="text-mpca-brass italic ml-4">Hover a cell for the ISO date</span>
+                        <span className="text-mpca-brass italic ml-4">Hover a cell for the full fixture list</span>
                     </div>
-                    <div className="space-y-1.5" data-testid="days-engine-calendar">
+                    <div className="space-y-2" data-testid="days-engine-calendar">
                         {calendarByWeek.map((wk, wi) => (
-                            <div key={wi} className="flex gap-1.5">
+                            <div key={wi} className="flex gap-2">
                                 {wk.map((cell, ci) => {
-                                    if (!cell) return <div key={ci} className="w-16 h-16" />;
+                                    if (!cell) return <div key={ci} className="w-32 h-24" />;
                                     const isMD = cell.status === "MD";
                                     const d = new Date(cell.date + "T12:00:00");
+                                    const dayMatches = matchesByDate[cell.date] || [];
+                                    const tooltip = dayMatches.length
+                                        ? `${cell.date}\n${dayMatches.map((m) => `${m.label || ""} · ${m.home_team} v ${m.away_team}${m.ground_name ? " · " + m.ground_name : ""}`).join("\n")}`
+                                        : cell.date;
                                     return (
                                         <div
                                             key={ci}
-                                            title={cell.date}
-                                            className={`w-16 h-16 flex flex-col items-center justify-center text-xs font-mono border-2 ${isMD ? "bg-mpca-green-dark text-mpca-gold-light border-mpca-green-dark" : "bg-mpca-parchment/60 border-dashed border-mpca-brass text-mpca-brass"}`}
+                                            title={tooltip}
+                                            className={`w-32 h-24 flex flex-col p-1.5 text-xs border-2 relative overflow-hidden ${isMD ? "bg-mpca-green-dark text-mpca-gold-light border-mpca-green-dark" : "bg-mpca-parchment/60 border-dashed border-mpca-brass text-mpca-brass"}`}
                                             data-testid={`cal-${cell.date}-${cell.status}`}
                                         >
-                                            <span className="text-base font-semibold">{d.getDate()}</span>
-                                            <span className="text-[10px] opacity-80">{d.toLocaleDateString("en-IN", { month: "short" })}</span>
+                                            <div className="flex items-baseline justify-between">
+                                                <span className="text-lg font-bold font-mono leading-none">{d.getDate()}</span>
+                                                <span className="text-[9px] opacity-80 uppercase tracking-widest">{d.toLocaleDateString("en-IN", { month: "short" })}</span>
+                                            </div>
+                                            <div className="mt-1 flex-1 overflow-hidden space-y-0.5">
+                                                {dayMatches.slice(0, 3).map((m, mi) => (
+                                                    <div key={mi} className={`text-[9px] leading-tight font-mono ${isMD ? "bg-mpca-gold-light/20 text-mpca-gold-light" : "bg-mpca-brass/10 text-mpca-brass"} px-1 py-0.5 truncate`}>
+                                                        {(m.home_team || "?").replace(/^DIV-/, "").replace(/^DIS-/, "").slice(0, 4)} v {(m.away_team || "?").replace(/^DIV-/, "").replace(/^DIS-/, "").slice(0, 4)}
+                                                    </div>
+                                                ))}
+                                                {dayMatches.length > 3 && (
+                                                    <div className="text-[8px] opacity-70 italic">+{dayMatches.length - 3} more</div>
+                                                )}
+                                                {dayMatches.length === 0 && !isMD && (
+                                                    <div className="text-[9px] italic opacity-60">no match</div>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}

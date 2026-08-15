@@ -73,6 +73,7 @@ export default function MatchFixtureCard({
     tournament,
     teamOptions,     // ["DIV-BPL", ...]
     poolOptions,     // [{id, name, host_division_code, ...}]
+    groundOptions,   // MPCA-232 · [{id/ground_id, ground_name, venue_name, ...}]
     officialsByRole, // {umpires:[{id,name}], scorers:[...], selectors:[...], observers:[...]}
     onSaved,         // callback after successful save
     onDeleted,       // callback after successful delete
@@ -90,6 +91,7 @@ export default function MatchFixtureCard({
         pool_id: match.pool_id || "",
         home_team: match.home_team || "",
         away_team: match.away_team || "",
+        ground_id: match.ground_id || "",   // MPCA-232 · venue picker
         squad: match.squad ?? "",
         match_date: match.match_date || "",
         to_date: match.to_date || "",
@@ -163,6 +165,7 @@ export default function MatchFixtureCard({
             days: derivedDays,
             to_date: form.to_date || null,
             pool_id: form.pool_id || null,
+            ground_id: form.ground_id || null,
             label: form.label || null,
         };
         try {
@@ -254,10 +257,11 @@ export default function MatchFixtureCard({
                         placeholders so MPCA can schedule KO fixtures before league standings finalise. */}
                     {(() => {
                         const isKO = form.stage === "Semi Final" || form.stage === "Final" || form.stage === "Knockouts";
+                        // MPCA-232 · Placeholder names: no Home/Away — just "Team SFn A/B" & "SFn Winner"
                         const placeholders = isKO
                             ? (form.stage === "Final"
                                 ? ["SF1 Winner", "SF2 Winner"]
-                                : ["SF1 Home", "SF1 Away", "SF2 Home", "SF2 Away"])
+                                : ["Team SF1", "Team SF2", "Team SF3", "Team SF4"])
                             : [];
                         const mergedOptions = [...placeholders, ...teamOptions.filter((t) => !placeholders.includes(t))];
                         return (
@@ -342,7 +346,7 @@ export default function MatchFixtureCard({
                         </div>
                     </div>
 
-                    {/* Row 4: Date from · Date to · Actual days */}
+                    {/* Row 4: Date from · Date to · Actual days · NMD manual */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                         <div>
                             <div className={labelCls}>Date from</div>
@@ -359,6 +363,29 @@ export default function MatchFixtureCard({
                         <div>
                             <div className={labelCls}>NMD manual override <span className="text-mpca-gray-dark normal-case tracking-normal">blank = calendar-derived</span></div>
                             <input type="number" min={0} className={inputCls} value={form.nmd_manual} onChange={(e) => setField("nmd_manual", e.target.value)} disabled={!canEdit} placeholder="auto" data-testid="fx-nmd-manual" />
+                        </div>
+                    </div>
+
+                    {/* MPCA-232 · Row 5: Ground / Venue picker — filtered to grounds
+                        registered under Basics or owned by MPCA + participating bodies. */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <div className="md:col-span-3">
+                            <div className={labelCls}>Ground / Venue <span className="text-mpca-gray-dark normal-case tracking-normal">where this match is played</span></div>
+                            <select className={inputCls} value={form.ground_id} onChange={(e) => setField("ground_id", e.target.value)} disabled={!canEdit} data-testid="fx-ground">
+                                <option value="">— not assigned —</option>
+                                {(groundOptions || []).map((g) => {
+                                    const val = g.ground_id || g.id;
+                                    const label = g.ground_name || g.name || val;
+                                    const venue = g.venue_name ? ` · ${g.venue_name}` : "";
+                                    const owner = g.owner_body_code ? ` · ${g.owner_body_code}` : "";
+                                    return <option key={val} value={val}>{label}{venue}{owner}</option>;
+                                })}
+                            </select>
+                        </div>
+                        <div className="text-[10px] text-mpca-gray-dark self-end pb-2">
+                            {(groundOptions || []).length === 0
+                                ? "No grounds fetched — check Basics → Grounds"
+                                : `${(groundOptions || []).length} ground(s) available`}
                         </div>
                     </div>
 

@@ -242,8 +242,8 @@ async def add_fixtures_ltd_overs(db, t: dict):
     # the utility loads KO fixtures BEFORE we know who the league semi-finalists
     # will be. MPCA edits these to actual Division codes once the league concludes.
     sf_date = datetime(2026, 11, 6)
-    ko_pairs = [("SF1 Home", "SF1 Away", "Semi-final 1"),
-                ("SF2 Home", "SF2 Away", "Semi-final 2")]
+    ko_pairs = [("Team SF1", "Team SF2", "Semi-final 1"),
+                ("Team SF3", "Team SF4", "Semi-final 2")]
     for team_a, team_b, label in ko_pairs:
         rows.append({
             "id": uuid.uuid4().hex,
@@ -346,8 +346,8 @@ async def add_fixtures_multi_day(db, t: dict):
     # Semi-finals — placeholders (SF1/SF2 Home vs Away) · 2026-09-18 to 2026-09-21
     sf_start = datetime(2026, 9, 18)
     sf_end = datetime(2026, 9, 21)
-    for team_a, team_b, label in [("SF1 Home", "SF1 Away", "Semi-final 1"),
-                                    ("SF2 Home", "SF2 Away", "Semi-final 2")]:
+    for team_a, team_b, label in [("Team SF1", "Team SF2", "Semi-final 1"),
+                                    ("Team SF3", "Team SF4", "Semi-final 2")]:
         rows.append({
             "id": uuid.uuid4().hex,
             "tournament_id": tid,

@@ -262,6 +262,7 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                             tournament={tournament}
                             teamOptions={teamOptions}
                             poolOptions={poolOptions}
+                            groundOptions={groundOptions}
                             officialsByRole={officialsByRole}
                             onSaved={async () => { setCreating(false); await load(); onChange?.(); }}
                             onCancel={() => setCreating(false)}
@@ -277,6 +278,7 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                             tournament={tournament}
                             teamOptions={teamOptions}
                             poolOptions={poolOptions}
+                            groundOptions={groundOptions}
                             officialsByRole={officialsByRole}
                             onSaved={async () => { await load(); onChange?.(); }}
                             onDeleted={async () => { await load(); onChange?.(); }}

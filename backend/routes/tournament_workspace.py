@@ -37,6 +37,7 @@ class TournamentMatch(BaseModel):
     ground_name: Optional[str] = None
     result: Optional[str] = None                # free-text result note when completed
     notes: Optional[str] = None
+    ground_id: Optional[str] = None             # MPCA-232 · link to Ground.id (venue picker)
     # MPCA-217 · Days-engine fields — feed the unified budget compute engine.
     days: int = 1                               # scheduled days (span). 1 for LO, 3/4/5 for Multi-Day.
     actual_days: Optional[int] = None           # early-finish override; blank = play the full span
@@ -64,6 +65,7 @@ class TournamentMatchCreate(BaseModel):
     venue_name: Optional[str] = None
     ground_name: Optional[str] = None
     notes: Optional[str] = None
+    ground_id: Optional[str] = None             # MPCA-232 · venue picker
     # MPCA-217 · Days-engine
     days: int = 1
     actual_days: Optional[int] = None
@@ -90,6 +92,7 @@ class TournamentMatchPatch(BaseModel):
     ground_name: Optional[str] = None
     result: Optional[str] = None
     notes: Optional[str] = None
+    ground_id: Optional[str] = None             # MPCA-232 · venue picker
     # MPCA-217 · Days-engine
     days: Optional[int] = None
     actual_days: Optional[int] = None

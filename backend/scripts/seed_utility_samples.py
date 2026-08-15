@@ -238,9 +238,13 @@ async def add_fixtures_ltd_overs(db, t: dict):
             })
             order += 1
 
-    # Semi-finals — Div[0] vs Div[3], Div[1] vs Div[2] on 2026-11-06
+    # Semi-finals — placeholders (Team A vs Team B, Team C vs Team D) since
+    # the utility loads KO fixtures BEFORE we know who the league semi-finalists
+    # will be. MPCA edits these to actual Division codes once the league concludes.
     sf_date = datetime(2026, 11, 6)
-    for a_idx, b_idx, label in [(0, 3, "Semi-final 1"), (1, 2, "Semi-final 2")]:
+    ko_pairs = [("SF1 Home", "SF1 Away", "Semi-final 1"),
+                ("SF2 Home", "SF2 Away", "Semi-final 2")]
+    for team_a, team_b, label in ko_pairs:
         rows.append({
             "id": uuid.uuid4().hex,
             "tournament_id": tid,
@@ -248,10 +252,10 @@ async def add_fixtures_ltd_overs(db, t: dict):
             "stage": "Knockouts",
             "pool_id": ko_pool_id,
             "pool_name": "Knockouts",
-            "team_a": DIV_CODES[a_idx],
-            "team_b": DIV_CODES[b_idx],
-            "home_team": DIV_CODES[a_idx],
-            "away_team": DIV_CODES[b_idx],
+            "team_a": team_a,
+            "team_b": team_b,
+            "home_team": team_a,
+            "away_team": team_b,
             "scheduled_date": iso(sf_date),
             "from_date": iso(sf_date),
             "to_date": iso(sf_date),
@@ -266,7 +270,7 @@ async def add_fixtures_ltd_overs(db, t: dict):
         })
         order += 1
 
-    # Final — Div[0] vs Div[1] on 2026-11-08
+    # Final — placeholder (SF1 Winner vs SF2 Winner) on 2026-11-08
     final_date = datetime(2026, 11, 8)
     rows.append({
         "id": uuid.uuid4().hex,
@@ -275,10 +279,10 @@ async def add_fixtures_ltd_overs(db, t: dict):
         "stage": "Knockouts",
         "pool_id": ko_pool_id,
         "pool_name": "Knockouts",
-        "team_a": DIV_CODES[0],
-        "team_b": DIV_CODES[1],
-        "home_team": DIV_CODES[0],
-        "away_team": DIV_CODES[1],
+        "team_a": "SF1 Winner",
+        "team_b": "SF2 Winner",
+        "home_team": "SF1 Winner",
+        "away_team": "SF2 Winner",
         "scheduled_date": iso(final_date),
         "from_date": iso(final_date),
         "to_date": iso(final_date),
@@ -339,10 +343,11 @@ async def add_fixtures_multi_day(db, t: dict):
             })
             order += 1
 
-    # Semi-finals — 2026-09-18 to 2026-09-21 (4 days)
+    # Semi-finals — placeholders (SF1/SF2 Home vs Away) · 2026-09-18 to 2026-09-21
     sf_start = datetime(2026, 9, 18)
     sf_end = datetime(2026, 9, 21)
-    for a_idx, b_idx, label in [(0, 3, "Semi-final 1"), (1, 2, "Semi-final 2")]:
+    for team_a, team_b, label in [("SF1 Home", "SF1 Away", "Semi-final 1"),
+                                    ("SF2 Home", "SF2 Away", "Semi-final 2")]:
         rows.append({
             "id": uuid.uuid4().hex,
             "tournament_id": tid,
@@ -350,10 +355,10 @@ async def add_fixtures_multi_day(db, t: dict):
             "stage": "Knockouts",
             "pool_id": ko_pool_id,
             "pool_name": "Knockouts",
-            "team_a": DIV_CODES[a_idx],
-            "team_b": DIV_CODES[b_idx],
-            "home_team": DIV_CODES[a_idx],
-            "away_team": DIV_CODES[b_idx],
+            "team_a": team_a,
+            "team_b": team_b,
+            "home_team": team_a,
+            "away_team": team_b,
             "scheduled_date": iso(sf_start),
             "from_date": iso(sf_start),
             "to_date": iso(sf_end),
@@ -368,7 +373,7 @@ async def add_fixtures_multi_day(db, t: dict):
         })
         order += 1
 
-    # Final — 2026-09-24 to 2026-09-28 (5 days)
+    # Final — placeholder (SF1 Winner vs SF2 Winner) · 2026-09-24 to 2026-09-28
     final_start = datetime(2026, 9, 24)
     final_end = datetime(2026, 9, 28)
     rows.append({
@@ -378,10 +383,10 @@ async def add_fixtures_multi_day(db, t: dict):
         "stage": "Knockouts",
         "pool_id": ko_pool_id,
         "pool_name": "Knockouts",
-        "team_a": DIV_CODES[0],
-        "team_b": DIV_CODES[1],
-        "home_team": DIV_CODES[0],
-        "away_team": DIV_CODES[1],
+        "team_a": "SF1 Winner",
+        "team_b": "SF2 Winner",
+        "home_team": "SF1 Winner",
+        "away_team": "SF2 Winner",
         "scheduled_date": iso(final_start),
         "from_date": iso(final_start),
         "to_date": iso(final_end),

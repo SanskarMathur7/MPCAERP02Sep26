@@ -293,7 +293,9 @@ def test_travel_grant_host_no_travel():
     assert len(out["trips"]) == 1
     assert out["trips"][0]["division"] == "DIV-IND"
     # travel_rt = 2800 × 18 = 50,400 for the trip's per-pax RT head
-    assert out["trips"][0]["heads"]["travel_rt"] == 50400.0
+    heads = out["trips"][0]["heads"]
+    travel_rt = next(h for h in heads if h["key"] == "travel_rt")
+    assert travel_rt["amount"] == 50400.0
 
 
 def test_travel_grant_multi_visiting_multi_trip():

@@ -503,17 +503,30 @@ def compute_travel_grant(
             pax = int(ov.get("pax") if ov.get("pax") not in (None, "") else default_squad)
             md = int(ov.get("md") if ov.get("md") not in (None, "") else dm_md)
             nmd = int(ov.get("nmd") if ov.get("nmd") not in (None, "") else dm_nmd)
-            heads: Dict[str, float] = {}
+            heads: List[Dict[str, Any]] = []
             total = 0.0
             for h in TRAVEL_HEADS_META:
                 r = travel_rates.get(h["key"]) or {"md": 0, "nmd": 0}
+                md_rate = float(r.get("md", 0) or 0)
+                nmd_rate = float(r.get("nmd", 0) or 0)
                 if h["basis"] == "trip_pax":
-                    amt = float(r.get("md", 0) or 0) * pax
+                    amt = md_rate * pax
+                    calc = f"₹{md_rate:,.0f} × {pax} pax"
                 elif h["basis"] == "trip":
-                    amt = float(r.get("md", 0) or 0)
+                    amt = md_rate
+                    calc = f"₹{md_rate:,.0f} (flat)"
                 else:  # "day"
-                    amt = float(r.get("md", 0) or 0) * md + float(r.get("nmd", 0) or 0) * nmd
-                heads[h["key"]] = amt
+                    amt = md_rate * md + nmd_rate * nmd
+                    calc = f"₹{md_rate:,.0f} × {md}md + ₹{nmd_rate:,.0f} × {nmd}nmd"
+                heads.append({
+                    "key": h["key"],
+                    "name": h["name"],
+                    "basis": h["basis"],
+                    "md_rate": md_rate,
+                    "nmd_rate": nmd_rate,
+                    "amount": amt,
+                    "calc": calc,
+                })
                 total += amt
             trips.append({
                 "id": trip_id,
@@ -533,8 +546,8 @@ def compute_travel_grant(
     by_division: Dict[str, Dict[str, Any]] = {}
     grand = 0.0
     for tr in trips:
-        for k, v in tr["heads"].items():
-            by_head[k] += v
+        for h in tr["heads"]:
+            by_head[h["key"]] += h["amount"]
         d = tr["division"]
         if d not in by_division:
             by_division[d] = {"division": d, "trips": 0, "total": 0.0}

@@ -590,6 +590,7 @@ function TabButton({ active, onClick, children, icon, testId }) {
 function TripRow({ trip, canEdit, tournamentId, onSaved }) {
     const [edit, setEdit] = useState({ pax: trip.pax, md: trip.match_days, nmd: trip.non_match_days });
     const [saving, setSaving] = useState(false);
+    const [expanded, setExpanded] = useState(false);
     const dirty =
         Number(edit.pax) !== Number(trip.pax) ||
         Number(edit.md) !== Number(trip.match_days) ||
@@ -612,33 +613,74 @@ function TripRow({ trip, canEdit, tournamentId, onSaved }) {
     };
 
     const inputCls = "input-heritage !py-1 !text-xs font-mono w-16 text-right";
+    const heads = Array.isArray(trip.heads) ? trip.heads : [];
     return (
-        <tr className="border-t border-mpca-brass/10 hover:bg-mpca-parchment/40" data-testid={`ub-trip-${trip.id}`}>
-            <td className="px-3 py-2 font-serif text-mpca-green-dark">{trip.division}</td>
-            <td className="px-3 py-2 text-xs">{trip.pool_name}</td>
-            <td className="px-3 py-2 font-mono text-xs">{trip.host_code}</td>
-            <td className="px-3 py-2 text-right">
-                <input type="number" min={0} className={inputCls} value={edit.pax} disabled={!canEdit} onChange={(e) => setEdit({ ...edit, pax: e.target.value })} data-testid={`ub-trip-pax-${trip.id}`} />
-            </td>
-            <td className="px-3 py-2 text-right">
-                <input type="number" min={0} className={inputCls} value={edit.md} disabled={!canEdit} onChange={(e) => setEdit({ ...edit, md: e.target.value })} data-testid={`ub-trip-md-${trip.id}`} />
-            </td>
-            <td className="px-3 py-2 text-right">
-                <input type="number" min={0} className={inputCls} value={edit.nmd} disabled={!canEdit} onChange={(e) => setEdit({ ...edit, nmd: e.target.value })} data-testid={`ub-trip-nmd-${trip.id}`} />
-            </td>
-            <td className="px-3 py-2 text-right font-mono font-semibold">{INR(trip.total)}</td>
-            <td className="px-3 py-2 text-right">
-                {canEdit && dirty && (
-                    <button onClick={save} disabled={saving} className="text-[9px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 disabled:opacity-40" data-testid={`ub-trip-save-${trip.id}`}>
-                        {saving ? "…" : "Save"}
-                    </button>
-                )}
-                {canEdit && !dirty && (
-                    <button onClick={reset} disabled={saving} className="text-[9px] uppercase tracking-widest text-mpca-brass border border-mpca-brass/40 px-2 py-1 disabled:opacity-40" title="Clear override & restore auto values" data-testid={`ub-trip-reset-${trip.id}`}>
-                        Reset
-                    </button>
-                )}
-            </td>
-        </tr>
+        <Fragment>
+            <tr
+                className="border-t border-mpca-brass/10 hover:bg-mpca-parchment/40 cursor-pointer"
+                onClick={() => setExpanded(!expanded)}
+                data-testid={`ub-trip-${trip.id}`}
+            >
+                <td className="px-3 py-2 font-serif text-mpca-green-dark">
+                    <span className="text-mpca-brass mr-1.5 font-mono text-[10px]">{expanded ? "▾" : "▸"}</span>
+                    {trip.division}
+                </td>
+                <td className="px-3 py-2 text-xs">{trip.pool_name}</td>
+                <td className="px-3 py-2 font-mono text-xs">{trip.host_code}</td>
+                <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    <input type="number" min={0} className={inputCls} value={edit.pax} disabled={!canEdit} onChange={(e) => setEdit({ ...edit, pax: e.target.value })} data-testid={`ub-trip-pax-${trip.id}`} />
+                </td>
+                <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    <input type="number" min={0} className={inputCls} value={edit.md} disabled={!canEdit} onChange={(e) => setEdit({ ...edit, md: e.target.value })} data-testid={`ub-trip-md-${trip.id}`} />
+                </td>
+                <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    <input type="number" min={0} className={inputCls} value={edit.nmd} disabled={!canEdit} onChange={(e) => setEdit({ ...edit, nmd: e.target.value })} data-testid={`ub-trip-nmd-${trip.id}`} />
+                </td>
+                <td className="px-3 py-2 text-right font-mono font-semibold">{INR(trip.total)}</td>
+                <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    {canEdit && dirty && (
+                        <button onClick={save} disabled={saving} className="text-[9px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 disabled:opacity-40" data-testid={`ub-trip-save-${trip.id}`}>
+                            {saving ? "…" : "Save"}
+                        </button>
+                    )}
+                    {canEdit && !dirty && (
+                        <button onClick={reset} disabled={saving} className="text-[9px] uppercase tracking-widest text-mpca-brass border border-mpca-brass/40 px-2 py-1 disabled:opacity-40" title="Clear override & restore auto values" data-testid={`ub-trip-reset-${trip.id}`}>
+                            Reset
+                        </button>
+                    )}
+                </td>
+            </tr>
+            {expanded && heads.length > 0 && (
+                <tr className="bg-white" data-testid={`ub-trip-details-${trip.id}`}>
+                    <td colSpan={8} className="px-4 py-3">
+                        <div className="text-[10px] text-mpca-gray-dark italic mb-2">
+                            Drivers are editable in the row above — squad pax, match days and non-match days recompute every head instantly. Rates stay fixed at the Rate Card.
+                        </div>
+                        <table className="w-full text-xs border border-mpca-brass/20">
+                            <thead className="bg-mpca-parchment/60 text-mpca-brass uppercase text-[9px] tracking-widest">
+                                <tr>
+                                    <th className="text-left px-3 py-1.5">Head</th>
+                                    <th className="text-left px-3 py-1.5">Calculation</th>
+                                    <th className="text-right px-3 py-1.5 w-32">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {heads.map((h) => (
+                                    <tr key={h.key} className="border-t border-mpca-brass/10" data-testid={`ub-trip-head-${trip.id}-${h.key}`}>
+                                        <td className="px-3 py-1.5 font-serif text-mpca-green-dark">{h.name}</td>
+                                        <td className="px-3 py-1.5 font-mono text-[11px] text-mpca-charcoal">{h.calc}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono font-semibold">{INR(h.amount)}</td>
+                                    </tr>
+                                ))}
+                                <tr className="border-t-2 border-mpca-brass/40 bg-mpca-parchment/40 font-semibold">
+                                    <td colSpan={2} className="px-3 py-1.5 text-right uppercase tracking-widest text-[10px] text-mpca-brass">Trip total</td>
+                                    <td className="px-3 py-1.5 text-right font-mono text-mpca-oxblood">{INR(trip.total)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+            )}
+        </Fragment>
     );
 }

@@ -23,6 +23,7 @@ from routes import (  # noqa: F401
     reimbursement_schemes, reimbursement_claims, camps, squad_ai, grant_claims, scheme_calc,
     tournament_workspace, rbac, tournament_participations, body_documents, player_registrations,
     discussions, events, finance_console, tournament_master, rate_cards, unified_budget,
+    tournament_wiring,
 )
 from seed import seed_data
 
@@ -78,6 +79,9 @@ async def lifespan(app: FastAPI):
         # MPCA-219 · Sample match-officials roster
         from routes.match_officials import seed_match_officials
         await seed_match_officials()
+        # MPCA-235 · Tournament Wiring Console — seed the 9×8 progression matrix
+        from routes.tournament_wiring import seed_tournament_wiring
+        await seed_tournament_wiring()
     yield
     # ---- shutdown ----
     client.close()

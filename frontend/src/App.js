@@ -89,6 +89,7 @@ const CampsPage = lazy(() => import("@/pages/Camps"));
 const SchemesMaster = lazy(() => import("@/pages/SchemesMaster"));
 const TournamentMasterRegistry = lazy(() => import("@/pages/TournamentMasterRegistry"));
 const RateCardMaster = lazy(() => import("@/pages/RateCardMaster"));
+const TournamentWiringConsole = lazy(() => import("@/pages/TournamentWiringConsole"));
 const GrantClaims = lazy(() => import("@/pages/GrantClaims"));
 const TournamentCalendarPage = lazy(() => import("@/pages/TournamentCalendarPage"));
 const AccessControl = lazy(() => import("@/pages/AccessControl"));
@@ -234,6 +235,7 @@ function App() {
                             <Route path="/schemes" element={<Protected><SchemesMaster /></Protected>} />
                             <Route path="/tournament-master" element={<Protected><TournamentMasterRegistry /></Protected>} />
                             <Route path="/rate-cards" element={<Protected><RateCardMaster /></Protected>} />
+                            <Route path="/tournament-wiring" element={<Protected><TournamentWiringConsole /></Protected>} />
                             <Route path="/grant-claims" element={<Protected><GrantClaims /></Protected>} />
                             <Route path="/grant-claims/new" element={<Protected><GrantClaims /></Protected>} />
 

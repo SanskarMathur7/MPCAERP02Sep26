@@ -21,6 +21,31 @@ const MatchOfficialsPanel = ({ tournament, persona }) => {
     const [form, setForm] = useState({ official_id: "", role: "Umpire", notes: "" });
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState("");
+    // MPCA-238 · Wiring-driven assignment owner (Division / MPCA / Auto)
+    const [wiringOwner, setWiringOwner] = useState(null);
+
+    useEffect(() => {
+        if (!tournament?.id) return;
+        let alive = true;
+        api.get(`/tournaments/${tournament.id}/wiring-status`)
+            .then(r => {
+                if (!alive) return;
+                const step = (r.data.steps || []).find(s => s.key === "match_official_posting");
+                setWiringOwner(step?.owner || null);
+            })
+            .catch(() => { if (alive) setWiringOwner(null); });
+        return () => { alive = false; };
+    }, [tournament?.id]);
+
+    // Assignment permission derived from the wiring:
+    //   owner=MPCA     → only MPCA state persona can assign
+    //   owner=Division → MPCA state OR host Division persona can assign
+    //   owner=District → MPCA state OR Division OR District
+    //   otherwise (Auto / NA) → MPCA-only fallback
+    const canAssign =
+        isMPCA
+        || (wiringOwner === "Division" && persona?.body_type === "Division")
+        || (wiringOwner === "District" && ["Division", "District"].includes(persona?.body_type));
 
     const load = async () => {
         try {
@@ -63,17 +88,20 @@ const MatchOfficialsPanel = ({ tournament, persona }) => {
                 <div className="flex items-start gap-2 mb-3">
                     <ShieldCheck size={16} className="text-mpca-oxblood shrink-0 mt-0.5" />
                     <div>
-                        <div className="font-serif text-base text-mpca-green-dark">Match Officials · Central Assignment (MPCA)</div>
+                        <div className="font-serif text-base text-mpca-green-dark">
+                            Match Officials · {wiringOwner === "Division" ? "Division Assignment" : wiringOwner === "District" ? "District Assignment" : "Central Assignment (MPCA)"}
+                        </div>
                         <div className="text-[11px] text-mpca-gray-dark italic">
-                            MPCA-133 · Umpires, scorers, selectors and observers for this tournament are picked centrally by MPCA.
-                            Fees and DA are computed automatically by the Unified Budget Engine from the Match Calendar — no numbers to enter here.
-                            (Managers · Coaches · Trainers · Physios are selected by each Division as part of squad selection.)
+                            {wiringOwner === "Division" ? (
+                                <>The host Division picks umpires · scorers · referees for this tournament. Fees + DA compute automatically from the Match Calendar. (Managers · coaches · trainers · physios are selected by participating Districts as part of their squad.)</>
+                            ) : (
+                                <>MPCA-133 · Umpires, scorers, selectors and observers for this tournament are picked centrally by MPCA. Fees and DA are computed automatically by the Unified Budget Engine from the Match Calendar — no numbers to enter here. (Managers · Coaches · Trainers · Physios are selected by each Division as part of squad selection.)</>
+                            )}
                         </div>
                     </div>
                 </div>
 
-                {/* MPCA-only assign form — pure assignment, no days/fees */}
-                {isMPCA && (
+                {canAssign && (
                     <div className="grid md:grid-cols-[1.5fr_1fr_1.5fr_auto] gap-2 items-end" data-testid="mo-assign-form">
                         <label className="block">
                             <div className="overline text-[9px] mb-1">Match Official</div>
@@ -99,9 +127,9 @@ const MatchOfficialsPanel = ({ tournament, persona }) => {
                         </button>
                     </div>
                 )}
-                {!isMPCA && (
+                {!canAssign && (
                     <div className="text-[11px] text-mpca-gray-dark italic flex items-center gap-1">
-                        <Info size={12} /> Only MPCA can assign match officials centrally. Contact MPCA to raise a request.
+                        <Info size={12} /> {wiringOwner === "Division" ? "Only the host Division may assign match officials for this tournament." : "Only MPCA can assign match officials centrally. Contact MPCA to raise a request."}
                     </div>
                 )}
                 {err && <div className="text-[11px] text-mpca-oxblood mt-2 font-mono" data-testid="mo-error">{err}</div>}

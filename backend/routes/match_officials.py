@@ -205,6 +205,43 @@ def _mpca_only(x_body_type: Optional[str], x_role_id: Optional[str]):
         raise HTTPException(403, "Only MPCA office bearers may assign match officials.")
 
 
+async def _wiring_owner_guard(tid: str, x_body_type: Optional[str], x_role_id: Optional[str]):
+    """MPCA-238 · Wiring-driven assignment guard.
+
+    Reads the tournament's wiring config and allows the persona to assign
+    match officials if their body_type matches `match_official_posting.owner`.
+    Falls back to MPCA-only for tournaments whose owner is Auto/MPCA/unknown.
+    """
+    # Fallback to MPCA-only if we can't resolve the wiring (safest default)
+    try:
+        from routes.tournament_wiring_status import _resolve_type_id
+        from routes.tournament_wiring import _fetch_or_seed_wiring
+        t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+        if not t:
+            raise HTTPException(404, "Tournament not found")
+        type_id = await _resolve_type_id(t)
+        wiring = await _fetch_or_seed_wiring()
+        cell = wiring["cells"].get(type_id, {}).get("match_official_posting", {})
+        owner = cell.get("owner")
+    except HTTPException:
+        raise
+    except Exception:
+        owner = None
+
+    # Owner=Division → allow both State and Division personas to assign
+    if owner == "Division":
+        if x_body_type and x_body_type not in ("State", "Division"):
+            raise HTTPException(403, "Only MPCA or the host Division may assign match officials for this tournament type.")
+        return
+    # Owner=District → allow State + Division + District
+    if owner == "District":
+        if x_body_type and x_body_type not in ("State", "Division", "District"):
+            raise HTTPException(403, "Only MPCA, Division or District may assign match officials for this tournament type.")
+        return
+    # Default (owner=MPCA / Auto / NA / None) → MPCA-only
+    _mpca_only(x_body_type, x_role_id)
+
+
 @api_router.get("/tournaments/{tid}/match-officials", response_model=List[TournamentMatchOfficial])
 async def list_tournament_officials(tid: str):
     """MPCA-133 · List all officials assigned to this tournament."""
@@ -244,7 +281,7 @@ async def assign_tournament_official(
     x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
     x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
 ):
-    _mpca_only(x_body_type, x_role_id)
+    await _wiring_owner_guard(tid, x_body_type, x_role_id)
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
@@ -405,7 +442,7 @@ async def update_tournament_official(
     x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
     x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
 ):
-    _mpca_only(x_body_type, x_role_id)
+    await _wiring_owner_guard(tid, x_body_type, x_role_id)
     doc = await db.tournament_match_officials.find_one({"id": aid, "tournament_id": tid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Assignment not found")
@@ -423,7 +460,7 @@ async def remove_tournament_official(
     x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
     x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
 ):
-    _mpca_only(x_body_type, x_role_id)
+    await _wiring_owner_guard(tid, x_body_type, x_role_id)
     r = await db.tournament_match_officials.delete_one({"id": aid, "tournament_id": tid})
     if r.deleted_count == 0:
         raise HTTPException(404, "Assignment not found")

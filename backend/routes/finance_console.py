@@ -435,16 +435,17 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
             skipped.append({"body_code": body_code, "pool_id": pool_id, "reason": "no head allocations"})
             continue
 
-        # MPCA-233 · One budget per (body_code, pool_id) so a Division that's Host in
-        # one pool AND Visitor in another gets TWO independent TournamentBudget docs.
-        live_q = {
+        # MPCA-237 · Dedup existing budgets for this (body,pool) — INCLUDING legacy
+        # rows that pre-date pool_id storage (pool_id is null). Otherwise a legacy
+        # Approved row + a fresh Draft would both persist as phantom duplicates.
+        live_q: Dict[str, Any] = {
             "tournament_id": tid,
             "body_id": body_code,
             "fiscal_cycle": cycle,
             "status": {"$in": ["Submitted", "Approved", "Sent_To_Division", "Accepted_By_Division"]},
         }
         if pool_id:
-            live_q["pool_id"] = pool_id
+            live_q["$or"] = [{"pool_id": pool_id}, {"pool_id": {"$in": [None, ""]}}]
         live = await db.tournament_budgets.find_one(live_q, {"_id": 0})
         if live:
             skipped.append({
@@ -456,14 +457,15 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
             continue
 
         # Replace any Draft / Revision_Requested / Returned rows for this (body,pool)
-        draft_q = {
+        # + legacy pool_id-less siblings.
+        draft_q: Dict[str, Any] = {
             "tournament_id": tid,
             "body_id": body_code,
             "fiscal_cycle": cycle,
             "status": {"$in": ["Draft", "Revision_Requested", "Returned"]},
         }
         if pool_id:
-            draft_q["pool_id"] = pool_id
+            draft_q["$or"] = [{"pool_id": pool_id}, {"pool_id": {"$in": [None, ""]}}]
         old_draft = await db.tournament_budgets.find_one(draft_q, {"_id": 0})
         if old_draft:
             await db.tournament_budgets.delete_one({"id": old_draft["id"]})

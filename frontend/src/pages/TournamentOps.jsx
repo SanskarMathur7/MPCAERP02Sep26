@@ -1135,6 +1135,11 @@ const ExtraExpenseTab = ({ tournament, persona, onChanged }) => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showNew, setShowNew] = useState(false);
+    // MPCA-236 · Divisions with 2 approved budgets on the same tournament must
+    // tag each extra request with the target budget so MPCA-approved lines land
+    // in the right budget's per-head allocation.
+    const [approvedBudgets, setApprovedBudgets] = useState([]);
+    const [selectedBudgetId, setSelectedBudgetId] = useState("");
     const [form, setForm] = useState({
         head_choice: "GROUND_FEES", head_code: "GROUND_FEES", head_label: "Ground Fees",
         is_new_head: false, custom_head: "", amount_inr: 0, justification: "",
@@ -1150,12 +1155,19 @@ const ExtraExpenseTab = ({ tournament, persona, onChanged }) => {
     const load = async () => {
         setLoading(true);
         try {
-            const [r, ev] = await Promise.all([
+            const [r, ev, bud] = await Promise.all([
                 fetchExtraExpenseRequests({ tournament_id: tournament.id }),
                 fetchTournamentExpenseEvents(tournament.id),
+                canRequest
+                    ? fetchTournamentBudgets({ tournament_id: tournament.id, body_id: persona?.body_code, status: "Approved" }).catch(() => [])
+                    : Promise.resolve([]),
             ]);
             setRequests(r);
             setEvents(ev.events || []);
+            setApprovedBudgets(bud || []);
+            if ((bud || []).length && !selectedBudgetId) {
+                setSelectedBudgetId(bud[0].id);
+            }
         } finally { setLoading(false); }
     };
     useEffect(() => { load(); }, [tournament.id]);
@@ -1170,6 +1182,9 @@ const ExtraExpenseTab = ({ tournament, persona, onChanged }) => {
             await createExtraExpenseRequest({
                 tournament_id: tournament.id,
                 body_id: persona?.body_code || "DIV",
+                // MPCA-236 · Multi-pool: tag against the selected budget so the
+                // approved line item lands in the right budget's allocation.
+                budget_id: selectedBudgetId || undefined,
                 head_code: code,
                 head_label: label,
                 is_new_head: isNew,
@@ -1394,6 +1409,30 @@ const ExtraExpenseTab = ({ tournament, persona, onChanged }) => {
                             <button onClick={() => setShowNew(false)}><X className="text-mpca-gold-light" /></button>
                         </div>
                         <div className="p-6 space-y-4">
+                            {/* MPCA-236 · Budget picker for multi-pool tournaments */}
+                            {approvedBudgets.length > 1 && (
+                                <div className="border-2 border-mpca-oxblood/40 bg-mpca-oxblood/5 p-3" data-testid="eer-budget-picker">
+                                    <label className="label-heritage flex items-center gap-2 mb-2">
+                                        Which budget will this extra be added to?
+                                        <span className="text-[9px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-0.5">Multi-pool tournament</span>
+                                    </label>
+                                    <select
+                                        className="input-heritage w-full"
+                                        value={selectedBudgetId}
+                                        onChange={(e) => setSelectedBudgetId(e.target.value)}
+                                        data-testid="eer-budget-select"
+                                    >
+                                        {approvedBudgets.map((b) => (
+                                            <option key={b.id} value={b.id}>
+                                                {b.budget_no} · {b.pool_name || "—"} · {b.role_flavour || "—"} · ₹{Number(b.total_ceiling_inr || 0).toLocaleString("en-IN")}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="text-[10px] text-mpca-gray-dark mt-1 italic">
+                                        Once MPCA approves this extra, the line item is added to the selected budget&apos;s per-head allocation.
+                                    </div>
+                                </div>
+                            )}
                             <div>
                                 <label className="label-heritage">Head *</label>
                                 <select value={form.head_choice} onChange={(e) => {

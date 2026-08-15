@@ -2278,6 +2278,9 @@ class ExtraExpenseRequestBase(BaseModel):
     linked_invoice_id: Optional[str] = None      # if triggered by an invoice
     linked_invoice_ref: Optional[str] = None
     supporting_file_url: Optional[str] = None    # optional attachment
+    # MPCA-236 · Multi-pool: which budget this extra will augment on approval.
+    budget_id: Optional[str] = None
+    pool_id: Optional[str] = None
 
 
 class ExtraExpenseRequest(ExtraExpenseRequestBase):

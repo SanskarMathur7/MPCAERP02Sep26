@@ -25,6 +25,12 @@ export const ClaimsPanel = ({ tournament, persona }) => {
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [previewSummary, setPreviewSummary] = useState(null);
+    // MPCA-236 · Divisions with 2 approved budgets need 2 separate claims —
+    // gate the "Start Claim" button on `approvedBudgets.length > claims.length`
+    // and use an inline chip-style picker (no window.prompt).
+    const [approvedBudgets, setApprovedBudgets] = useState([]);
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [pickerChoice, setPickerChoice] = useState("");
     const navigate = useNavigate();
     const isMPCA = persona?.body_type === "State";
     const isDivision = persona?.body_type === "Division";
@@ -40,6 +46,17 @@ export const ClaimsPanel = ({ tournament, persona }) => {
             if (!isMPCA && myBody) params.body_id = myBody;
             const { data } = await api.get("/reimbursement-claims", { params });
             setClaims(data || []);
+
+            // MPCA-236 · Load Division's approved budgets so we can gate the
+            // "Start Claim" button on unclaimed budgets and drive the picker.
+            if (!isMPCA && myBody) {
+                try {
+                    const { data: appr } = await api.get("/tournament-budgets", {
+                        params: { tournament_id: tournament.id, body_id: myBody, status: "Approved" },
+                    });
+                    setApprovedBudgets(appr || []);
+                } catch { setApprovedBudgets([]); }
+            }
 
             if (!isMPCA && myBody && (!data || data.length === 0)) {
                 try {
@@ -69,41 +86,40 @@ export const ClaimsPanel = ({ tournament, persona }) => {
 
     useEffect(() => { setLoading(true); load(); }, [load]);
 
+    // MPCA-236 · Compute which budgets don't yet have a claim so the picker only
+    // offers the remaining ones. Legacy tournaments (no pool_id on budget) fall
+    // through with a single option.
+    const claimedBudgetIds = new Set((claims || []).map((c) => c.budget_id).filter(Boolean));
+    const unclaimedBudgets = approvedBudgets.filter((b) => !claimedBudgetIds.has(b.id));
+    // Legacy fallback: if budgets pre-date budget_id-scoped claims but a claim
+    // already exists, treat all as claimed.
+    const showStartButton = !isMPCA && myBody && (
+        approvedBudgets.length === 0
+            ? claims.length === 0                                   // legacy path
+            : unclaimedBudgets.length > 0                           // budget-scoped path
+    );
+
     const startDraft = async () => {
         if (!myBody) return;
+        // Open the inline picker when the Division has 2+ approved budgets.
+        if ((approvedBudgets || []).length > 1) {
+            const first = unclaimedBudgets[0] || approvedBudgets[0];
+            setPickerChoice(first?.id || "");
+            setPickerOpen(true);
+            return;
+        }
+        // Single-budget → straight-through
+        const only = approvedBudgets[0];
+        const scoped = only ? {
+            budget_id: only.id, pool_id: only.pool_id || null,
+            pool_name: only.pool_name || null, role_flavour: only.role_flavour || null,
+        } : {};
+        await postClaim(scoped);
+    };
+
+    const postClaim = async (scoped) => {
         setBusy(true);
         try {
-            // MPCA-235 · When the Division has TWO approved budgets on this tournament
-            // (Host + Visitor across pools), ask which one this claim covers so
-            // Invoice/Extras/DA aggregation stays scoped.
-            let scoped = {};
-            const { data: appr } = await api.get("/tournament-budgets", {
-                params: { tournament_id: tournament.id, body_id: myBody, status: "Approved" },
-            }).catch(() => ({ data: [] }));
-            if ((appr || []).length > 1) {
-                const opts = appr.map((b, i) => `${i + 1}. ${b.budget_no} · ${b.pool_name || "—"} · ${b.role_flavour || "—"} · ₹${Number(b.total_ceiling_inr || 0).toLocaleString("en-IN")}`).join("\n");
-                const pick = window.prompt(
-                    `This tournament has ${appr.length} separate budgets for ${myBody}. Which one does this Reimbursement Claim cover?\n\n${opts}\n\nEnter the number (1 or 2)…`,
-                    "1"
-                );
-                const idx = Number(pick) - 1;
-                if (!Number.isFinite(idx) || idx < 0 || idx >= appr.length) { setBusy(false); return; }
-                const picked = appr[idx];
-                scoped = {
-                    budget_id: picked.id,
-                    pool_id: picked.pool_id || null,
-                    pool_name: picked.pool_name || null,
-                    role_flavour: picked.role_flavour || null,
-                };
-            } else if ((appr || []).length === 1) {
-                const only = appr[0];
-                scoped = {
-                    budget_id: only.id,
-                    pool_id: only.pool_id || null,
-                    pool_name: only.pool_name || null,
-                    role_flavour: only.role_flavour || null,
-                };
-            }
             await api.post("/reimbursement-claims", {
                 tournament_id: tournament.id,
                 body_id: myBody,
@@ -113,9 +129,19 @@ export const ClaimsPanel = ({ tournament, persona }) => {
                 notes: `Auto-drafted from Finance Console by ${persona?.name || myBody}${scoped.pool_name ? ` · ${scoped.pool_name} · ${scoped.role_flavour}` : ""}`,
                 ...scoped,
             });
+            setPickerOpen(false);
             await load();
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
         finally { setBusy(false); }
+    };
+
+    const confirmPicker = async () => {
+        const b = approvedBudgets.find((x) => x.id === pickerChoice);
+        if (!b) return;
+        await postClaim({
+            budget_id: b.id, pool_id: b.pool_id || null,
+            pool_name: b.pool_name || null, role_flavour: b.role_flavour || null,
+        });
     };
 
     const uploadSigned = async (claim, file) => {
@@ -212,6 +238,52 @@ export const ClaimsPanel = ({ tournament, persona }) => {
 
     return (
         <div className="space-y-5" data-testid="claims-panel">
+            {/* MPCA-236 · Inline chip-style budget picker (replaces window.prompt) */}
+            {pickerOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-mpca-charcoal/60 p-6" onClick={() => setPickerOpen(false)} data-testid="claim-budget-picker-overlay">
+                    <div className="bg-mpca-parchment border-2 border-mpca-oxblood shadow-2xl max-w-xl w-full" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-mpca-navy text-mpca-parchment px-5 py-3 flex items-center justify-between">
+                            <div>
+                                <div className="text-[9px] uppercase tracking-widest text-mpca-gold-light">Start Reimbursement Claim</div>
+                                <div className="font-serif text-lg">Which budget does this claim cover?</div>
+                            </div>
+                            <button onClick={() => setPickerOpen(false)} className="text-mpca-gold-light hover:text-mpca-parchment text-xl leading-none">×</button>
+                        </div>
+                        <div className="p-5 space-y-3">
+                            <p className="text-[11px] text-mpca-charcoal/80">
+                                {approvedBudgets.length} separate budgets are approved for <b>{myBody}</b> on this tournament. Each claim scopes to <b>ONE</b> budget so invoices, extras, and DA don&apos;t get mixed between pools.
+                            </p>
+                            <div className="space-y-2">
+                                {approvedBudgets.map((b) => {
+                                    const claimed = claimedBudgetIds.has(b.id);
+                                    const selected = pickerChoice === b.id;
+                                    return (
+                                        <label key={b.id} className={`flex items-start gap-3 border-2 p-3 cursor-pointer transition-colors ${claimed ? "border-mpca-brass/20 bg-mpca-brass/5 opacity-60 cursor-not-allowed" : selected ? "border-mpca-oxblood bg-mpca-oxblood/10" : "border-mpca-brass/30 bg-white hover:border-mpca-oxblood/60"}`} data-testid={`claim-budget-option-${b.id}`}>
+                                            <input type="radio" name="claim-budget" value={b.id} checked={selected} disabled={claimed} onChange={() => setPickerChoice(b.id)} className="mt-1" />
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="font-serif text-mpca-green-dark font-semibold">{b.pool_name || "—"}</span>
+                                                    <span className="text-[9px] uppercase tracking-widest bg-mpca-brass/10 text-mpca-brass px-2 py-0.5">{b.role_flavour || "—"}</span>
+                                                    <span className="font-mono text-[10px] text-mpca-gray-dark">{b.budget_no}</span>
+                                                    {claimed && <span className="text-[9px] uppercase tracking-widest bg-mpca-charcoal text-mpca-parchment px-2 py-0.5">already claimed</span>}
+                                                </div>
+                                                <div className="font-mono text-mpca-oxblood text-lg mt-1">₹{Number(b.total_ceiling_inr || 0).toLocaleString("en-IN")}</div>
+                                                <div className="text-[10px] text-mpca-gray-dark">{(b.approved_head_allocations || b.head_allocations || []).length} approved heads</div>
+                                            </div>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            <div className="flex justify-end gap-2 pt-3 border-t border-mpca-brass/20">
+                                <button onClick={() => setPickerOpen(false)} className="text-[11px] uppercase tracking-widest px-3 py-2 text-mpca-charcoal hover:bg-mpca-charcoal/10">Cancel</button>
+                                <button onClick={confirmPicker} disabled={busy || !pickerChoice || claimedBudgetIds.has(pickerChoice)} className="text-[11px] uppercase tracking-widest px-3 py-2 bg-mpca-oxblood text-mpca-parchment hover:bg-mpca-oxblood/90 disabled:opacity-50" data-testid="claim-picker-confirm">
+                                    {busy ? "…" : "Start This Claim"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
                     <div className="overline text-[10px] font-semibold text-mpca-oxblood">Reimbursement Claim</div>
@@ -228,7 +300,7 @@ export const ClaimsPanel = ({ tournament, persona }) => {
                                     : "Divisions submit consolidated master claims here; each master rolls up their own spend + every Approved District claim under them."}
                     </p>
                 </div>
-                {!isMPCA && claims.length === 0 && (
+                {showStartButton && (
                     <button
                         onClick={startDraft}
                         disabled={busy}
@@ -236,7 +308,7 @@ export const ClaimsPanel = ({ tournament, persona }) => {
                         data-testid="claims-start-draft-btn"
                     >
                         {busy ? <Loader2 size={11} className="animate-spin" /> : <FileSignature size={11} />}
-                        Start Claim Draft
+                        {claims.length === 0 ? "Start Claim Draft" : `Start Claim ${claims.length + 1} of ${approvedBudgets.length}`}
                     </button>
                 )}
             </div>
@@ -386,6 +458,14 @@ const ClaimRow = ({ claim, isMPCA, busy, onUploadSigned, onSubmit, onOpen }) => 
                     <div className="font-serif text-sm text-mpca-green-dark truncate mt-0.5 font-semibold">
                         {c.body_name || c.body_id}
                     </div>
+                    {/* MPCA-236 · Show pool + role chip inline so Divisions know which budget this claim covers */}
+                    {(c.pool_name || c.role_flavour) && (
+                        <div className="mt-0.5 flex gap-1.5 flex-wrap">
+                            <span className="text-[9px] uppercase tracking-widest bg-mpca-oxblood/10 text-mpca-oxblood px-1.5 py-0.5 border border-mpca-oxblood/30" data-testid={`claim-row-scope-${c.id}`}>
+                                {c.pool_name}{c.pool_name && c.role_flavour ? " · " : ""}{c.role_flavour}
+                            </span>
+                        </div>
+                    )}
                     {c.is_master && (c.child_claim_ids || []).length > 0 && (
                         <div className="text-[10px] text-mpca-charcoal/70 mt-0.5">
                             + {c.child_claim_ids.length} District claim{c.child_claim_ids.length === 1 ? "" : "s"} inside
@@ -403,6 +483,25 @@ const ClaimRow = ({ claim, isMPCA, busy, onUploadSigned, onSubmit, onOpen }) => 
                     <div className="text-sm text-mpca-oxblood font-semibold">{fmt(c.summary?.eligible_total_inr || c.summary?.invoiced_total_inr || 0)}</div>
                     {c.approved_amount_inr > 0 && (
                         <div className="text-[10px] text-mpca-green-dark font-semibold">Approved {fmt(c.approved_amount_inr)}</div>
+                    )}
+                    {/* MPCA-236 · Mini summary: Allocated / Spent / Balance */}
+                    {(c.summary?.budget_total_inr || 0) > 0 && (
+                        <div className="mt-1 pt-1 border-t border-mpca-brass/20 text-[9px] leading-tight" data-testid={`claim-summary-${c.id}`}>
+                            <div className="flex justify-between gap-2">
+                                <span className="uppercase text-mpca-gray-dark tracking-widest">Allocated</span>
+                                <span className="font-mono text-mpca-charcoal">{fmt(c.summary?.budget_total_inr)}</span>
+                            </div>
+                            <div className="flex justify-between gap-2">
+                                <span className="uppercase text-mpca-gray-dark tracking-widest">Spent</span>
+                                <span className="font-mono text-mpca-navy">{fmt(c.summary?.invoiced_total_inr)}</span>
+                            </div>
+                            <div className="flex justify-between gap-2">
+                                <span className="uppercase text-mpca-gray-dark tracking-widest">Balance</span>
+                                <span className={`font-mono ${(Number(c.summary?.budget_total_inr || 0) - Number(c.summary?.invoiced_total_inr || 0)) >= 0 ? "text-mpca-green-dark" : "text-mpca-oxblood"}`}>
+                                    {fmt(Number(c.summary?.budget_total_inr || 0) - Number(c.summary?.invoiced_total_inr || 0))}
+                                </span>
+                            </div>
+                        </div>
                     )}
                 </div>
                 <div className="col-span-3 text-right flex justify-end gap-1.5 flex-wrap">

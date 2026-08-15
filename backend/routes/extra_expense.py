@@ -184,11 +184,17 @@ async def approve_extra_expense_request(rid: str, action: ExtraExpenseAction):
     t = await db.tournaments.find_one({"id": doc["tournament_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
-    tb = await db.tournament_budgets.find_one(
-        {"tournament_id": doc["tournament_id"], "body_id": doc["body_id"],
-         "status": {"$in": ["Approved", "Accepted_By_Division", "Sent_To_Division"]}},
-        {"_id": 0}, sort=[("created_at", -1)],
-    )
+    # MPCA-236 · Prefer the explicit budget_id captured on the request (multi-pool
+    # tournaments). Fall back to legacy latest-Approved lookup otherwise.
+    tb = None
+    if doc.get("budget_id"):
+        tb = await db.tournament_budgets.find_one({"id": doc["budget_id"]}, {"_id": 0})
+    if not tb:
+        tb = await db.tournament_budgets.find_one(
+            {"tournament_id": doc["tournament_id"], "body_id": doc["body_id"],
+             "status": {"$in": ["Approved", "Accepted_By_Division", "Sent_To_Division"]}},
+            {"_id": 0}, sort=[("created_at", -1)],
+        )
     if not tb and t.get("auto_budget_id"):
         tb = await db.tournament_budgets.find_one({"id": t["auto_budget_id"]}, {"_id": 0})
     if not tb:

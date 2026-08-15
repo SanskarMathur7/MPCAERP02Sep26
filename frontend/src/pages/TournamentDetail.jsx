@@ -304,8 +304,29 @@ const TournamentDetail = () => {
                     </div>
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="setup-boxes">
+                            {/* MPCA-237 · Ship 4a · Suppress the Accept banner when the current
+                                persona IS the tournament creator (Division that both created and
+                                hosts an Inter-District tournament). Show a tracker line instead.
+                                Blast radius: fires only when scope=Inter_District AND persona is
+                                the host Division. All other 7 tournament types unaffected. */}
+                            {(() => {
+                                const isDivisionCreator = t.scope === "Inter_District"
+                                    && persona?.body_type === "Division"
+                                    && persona?.body_code === t.host_body_id;
+                                if (!isDivisionCreator) return null;
+                                return (
+                                    <div className="col-span-2 md:col-span-4 bulletin-card p-3 border-l-4 border-mpca-brass bg-mpca-parchment/50 flex items-center gap-3"
+                                         data-testid="tournament-creator-tracker">
+                                        <BadgeCheck className="text-mpca-brass shrink-0" size={16} />
+                                        <div className="text-xs text-mpca-green-dark">
+                                            <b>You created this tournament</b> — acceptances will come in from the participating Districts. Track their status in the Participants Matrix below.
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                             {/* M39x · Prominent Accept Tournament banner for Divisions/Districts with Pending acceptance */}
-                            {myParticipation && myParticipation.acceptance_status === "Pending" && (
+                            {myParticipation && myParticipation.acceptance_status === "Pending"
+                                && !(t.scope === "Inter_District" && persona?.body_type === "Division" && persona?.body_code === t.host_body_id) && (
                                 <div className="col-span-2 md:col-span-4 bulletin-card p-5 border-l-4 border-mpca-oxblood bg-mpca-oxblood/5"
                                      data-testid="tournament-accept-banner">
                                     <div className="flex items-start justify-between gap-4 flex-wrap">

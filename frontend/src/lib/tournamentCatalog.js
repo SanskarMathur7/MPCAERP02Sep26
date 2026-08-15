@@ -129,7 +129,7 @@ export const TOURNAMENT_TYPE_CATALOG = [
         code: "inter_district",
         scheme_code: "2-B",
         name: "Inter-District Tournament",
-        family: "Inter_District",
+        family: "MPCA_Championship",
         default_format: "Multi_Day",
         default_scope: "Inter_District",
         one_liner: "Conducted by a Division within its own area to select the divisional team. Every Division must hold one. Subsidy is capped per match day on the travel profile of the fixture.",

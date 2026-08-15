@@ -2223,6 +2223,13 @@ class MatchOfficialDA(BaseModel):
     # ── Workflow ──
     status: DAStatus = "Draft"
     compliance_flags: List[DAComplianceFlag] = Field(default_factory=list)   # stamped on submit
+    # MPCA-234 · Signed-scan gates — Official signs the draft claim PDF and
+    # uploads the scan BEFORE submitting; MPCA signs their review PDF and
+    # uploads it BEFORE approving. Both are hard gates.
+    official_signed_claim_url: Optional[str] = None      # Official's signed draft PDF
+    mpca_signed_review_url: Optional[str] = None         # MPCA's signed review PDF
+    # MPCA-234 · MPCA deductions on individual heads during review
+    mpca_deductions: List[Dict[str, Any]] = Field(default_factory=list)   # [{head, amount_inr, reason, added_by, added_at}]
     submitted_at: Optional[str] = None
     approved_by: Optional[str] = None
     approved_at: Optional[str] = None

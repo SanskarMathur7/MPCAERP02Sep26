@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, XCircle, ClipboardEdit, FileText, ShieldCheck, Loader2, Landmark, FilePenLine, ExternalLink } from "lucide-react";
+import { CheckCircle2, XCircle, ClipboardEdit, FileText, ShieldCheck, Loader2, Landmark, FilePenLine, ExternalLink, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -22,6 +22,9 @@ const MyAssignments = () => {
     const [busy, setBusy] = useState(null); // aid being updated
     const [err, setErr] = useState("");
     const [loading, setLoading] = useState(true);
+    // MPCA-234 · Filter state
+    const [filter, setFilter] = useState("all");   // all | pending | accepted | approved | paid | rejected
+    const [search, setSearch] = useState("");
 
     const load = async () => {
         setLoading(true); setErr("");
@@ -62,6 +65,33 @@ const MyAssignments = () => {
         approvedPending: acc.approvedPending + (r.da_form_status === "Approved" ? (r.da_total_claim_inr || 0) : 0),
     }), { fee: 0, da: 0, pending: 0, accepted: 0, paid: 0, approvedPending: 0 });
 
+    // MPCA-234 · Filter chips + search
+    const FILTER_CHIPS = [
+        { key: "all",      label: "All",              count: rows.length },
+        { key: "pending",  label: "Awaiting Response", count: totals.pending },
+        { key: "accepted", label: "Accepted",         count: rows.filter(r => r.acceptance_status === "Accepted" && r.da_form_status !== "Paid" && r.da_form_status !== "Approved").length },
+        { key: "approved", label: "Approved",         count: rows.filter(r => r.da_form_status === "Approved").length },
+        { key: "paid",     label: "Paid",             count: rows.filter(r => r.da_form_status === "Paid").length },
+        { key: "rejected", label: "Rejected",         count: rows.filter(r => r.acceptance_status === "Rejected" || r.da_form_status === "Rejected").length },
+    ];
+
+    const visibleRows = useMemo(() => {
+        return rows.filter((r) => {
+            if (search) {
+                const q = search.toLowerCase();
+                const hay = `${r.tournament_name || ""} ${r.role || ""} ${r.da_ref || ""}`.toLowerCase();
+                if (!hay.includes(q)) return false;
+            }
+            if (filter === "all") return true;
+            if (filter === "pending")  return r.acceptance_status === "Pending";
+            if (filter === "accepted") return r.acceptance_status === "Accepted" && r.da_form_status !== "Paid" && r.da_form_status !== "Approved";
+            if (filter === "approved") return r.da_form_status === "Approved";
+            if (filter === "paid")     return r.da_form_status === "Paid";
+            if (filter === "rejected") return r.acceptance_status === "Rejected" || r.da_form_status === "Rejected";
+            return true;
+        });
+    }, [rows, filter, search]);
+
     return (
         <div className="max-w-7xl mx-auto px-6 md:px-10 py-8" data-testid="my-assignments-page">
             <div className="flex items-center gap-3 mb-6">
@@ -101,6 +131,38 @@ const MyAssignments = () => {
 
             {loading && <div className="flex items-center gap-2 text-mpca-gray-dark text-sm py-8"><Loader2 className="animate-spin" size={14} /> Loading…</div>}
             {err && <div className="text-[11px] text-mpca-oxblood font-mono mb-3" data-testid="my-assignments-error">{err}</div>}
+
+            {/* MPCA-234 · Filter chips + search */}
+            {!loading && rows.length > 0 && (
+                <div className="flex items-center gap-2 mb-4 flex-wrap" data-testid="my-assignments-filters">
+                    {FILTER_CHIPS.map((c) => (
+                        <button
+                            key={c.key}
+                            onClick={() => setFilter(c.key)}
+                            className={`text-[10px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${
+                                filter === c.key
+                                    ? "bg-mpca-oxblood text-mpca-ivory border-mpca-oxblood"
+                                    : "bg-mpca-ivory text-mpca-gray-dark border-mpca-brass/40 hover:border-mpca-oxblood hover:text-mpca-oxblood"
+                            }`}
+                            data-testid={`ma-filter-${c.key}`}
+                        >
+                            {c.label} <span className="ml-1 font-mono">{c.count}</span>
+                        </button>
+                    ))}
+                    <div className="relative ml-auto">
+                        <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-mpca-brass" />
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Filter by tournament / role / ref"
+                            className="input-heritage !py-1.5 !text-[11px] pl-7 w-64"
+                            data-testid="ma-search"
+                        />
+                    </div>
+                </div>
+            )}
+
             {!loading && rows.length === 0 && (
                 <div className="py-16 text-center border border-dashed border-mpca-brass/30 text-[12px] italic text-mpca-gray-dark" data-testid="my-assignments-empty">
                     You have no assignments yet. MPCA will notify you when you&apos;re posted to a tournament.
@@ -125,7 +187,14 @@ const MyAssignments = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.map((a) => {
+                            {visibleRows.length === 0 && (
+                                <tr>
+                                    <td colSpan={10} className="px-4 py-8 text-center italic text-mpca-gray-dark text-[12px]" data-testid="ma-empty-filter">
+                                        No assignments match this filter. <button onClick={() => { setFilter("all"); setSearch(""); }} className="text-mpca-oxblood underline">Clear filters</button>
+                                    </td>
+                                </tr>
+                            )}
+                            {visibleRows.map((a) => {
                                 const status = a.acceptance_status || "Pending";
                                 const daStatus = a.da_form_status;  // Draft/Submitted/Approved/Rejected/Paid/null
                                 const pillCls =
@@ -208,7 +277,7 @@ const MyAssignments = () => {
                                             )}
                                             {status === "Accepted" && !daStatus && (
                                                 <Link
-                                                    to={`/tournaments/${a.tournament_id}?open=my-da`}
+                                                    to={`/my-finance/${a.tournament_id}`}
                                                     className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2.5 py-1 hover:opacity-90 inline-flex items-center gap-1"
                                                     data-testid={`ma-submit-da-${a.id}`}
                                                 >
@@ -217,7 +286,7 @@ const MyAssignments = () => {
                                             )}
                                             {status === "Accepted" && (daStatus === "Draft" || daStatus === "Rejected") && (
                                                 <Link
-                                                    to={`/tournaments/${a.tournament_id}?open=my-da`}
+                                                    to={`/my-finance/${a.tournament_id}`}
                                                     className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2.5 py-1 hover:opacity-90 inline-flex items-center gap-1"
                                                     data-testid={`ma-continue-da-${a.id}`}
                                                 >
@@ -226,7 +295,7 @@ const MyAssignments = () => {
                                             )}
                                             {status === "Accepted" && daStatus === "Submitted" && (
                                                 <Link
-                                                    to={`/tournaments/${a.tournament_id}?open=my-da`}
+                                                    to={`/my-finance/${a.tournament_id}`}
                                                     className="text-[10px] uppercase tracking-widest border border-mpca-brass text-mpca-brass px-2.5 py-1 hover:bg-mpca-brass/10 inline-flex items-center gap-1"
                                                     data-testid={`ma-view-da-${a.id}`}
                                                 >

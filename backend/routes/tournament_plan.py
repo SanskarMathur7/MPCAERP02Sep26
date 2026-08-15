@@ -1,7 +1,7 @@
 """Routes · Phase T1-T4 — Tournament Plan, Grant Scheme, Auto-Budget, Match Official DA."""
 from datetime import datetime, timezone
 from typing import List, Optional, Literal
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Header
 from pydantic import BaseModel, Field, ConfigDict
 
 import re
@@ -695,19 +695,29 @@ async def self_create_da_form(
         raise HTTPException(404, "Match official profile not found — please ensure your profile exists first.")
 
     name = off["full_name"]
-    # M37 · A match-official can only self-create a DA for a tournament they're allocated to
+    # MPCA-234 · A match-official can self-create a DA for any tournament they
+    # have been centrally assigned to (via `tournament_match_officials`) OR
+    # named in a Division's `squads.match_officials` block. Central assignment
+    # is the modern flow (MPCA-133) — the legacy squad lookup is retained for
+    # backward compatibility with older tournaments.
     if scope.is_official and scope.name and scope.name == name:
-        squad_hit = await db.squads.find_one({
+        central_hit = await db.tournament_match_officials.find_one({
             "tournament_id": tournament_id,
-            "$or": [
-                {"match_officials.umpire_1": name},
-                {"match_officials.umpire_2": name},
-                {"match_officials.scorer": name},
-                {"match_officials.referee": name},
-            ],
+            "official_name": name,
         }, {"_id": 0, "id": 1})
-        if not squad_hit:
-            raise HTTPException(403, "You are not allocated to this tournament — please contact your Division/MPCA to be added to the squad first.")
+        squad_hit = None
+        if not central_hit:
+            squad_hit = await db.squads.find_one({
+                "tournament_id": tournament_id,
+                "$or": [
+                    {"match_officials.umpire_1": name},
+                    {"match_officials.umpire_2": name},
+                    {"match_officials.scorer": name},
+                    {"match_officials.referee": name},
+                ],
+            }, {"_id": 0, "id": 1})
+        if not central_hit and not squad_hit:
+            raise HTTPException(403, "You are not allocated to this tournament — please contact MPCA to be assigned first.")
 
     # Return existing draft if present
     exists = await db.match_official_da.find_one({
@@ -761,6 +771,9 @@ async def submit_da_form(did: str):
         raise HTTPException(409, f"Cannot submit from status {doc['status']}")
     if float(doc.get("total_inr") or 0) <= 0:
         raise HTTPException(400, "Cannot submit an empty DA form. Please fill days + amounts first.")
+    # MPCA-234 · Official must upload signed draft PDF before submitting
+    if not (doc.get("official_signed_claim_url") or "").strip():
+        raise HTTPException(400, "Please download the draft claim PDF, sign it, and upload the scan before submitting.")
 
     # Compliance snapshot — advisory only, does NOT block submission
     flags = await _compute_da_compliance(doc)
@@ -792,9 +805,16 @@ async def approve_da_form(did: str, actor_name: str, actor_body_id: str = "MPCA"
         raise HTTPException(404, "DA form not found")
     if doc["status"] != "Submitted":
         raise HTTPException(409, "Only submitted DA forms can be approved.")
+    # MPCA-234 · MPCA must upload signed review PDF before approving
+    if not (doc.get("mpca_signed_review_url") or "").strip():
+        raise HTTPException(400, "Please download the MPCA review PDF, sign it, and upload the scan before approving.")
     now = datetime.now(timezone.utc).isoformat()
+    # Compute post-deduction approved total
+    deducted = sum(float(d.get("amount_inr") or 0) for d in (doc.get("mpca_deductions") or []))
+    approved_total = max(0.0, float(doc.get("total_inr") or 0) - deducted)
     await db.match_official_da.update_one({"id": did}, {"$set": {
         "status": "Approved", "approved_by": actor_name, "approved_at": now,
+        "total_inr": approved_total,
     }})
     # Notify the match official
     await _create_notification(
@@ -830,6 +850,163 @@ async def reject_da_form(did: str, actor_name: str, reason: str, actor_body_id: 
         related_type="match_official_da", related_id=did,
         severity="warning", kind="info",
     )
+    return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+# ─────────────────── MPCA-234 · Match Official Finance Page ───────────────────
+
+@api_router.get("/tournaments/{tid}/my-finance-page")
+async def my_finance_page(
+    tid: str,
+    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+):
+    """MPCA-234 · Consolidated payload for Match Official finance page + progress bar."""
+    if not x_persona_name:
+        raise HTTPException(400, "X-Persona-Name header required.")
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+
+    # Match my assignment
+    import re as _re
+    name_pat = _re.compile(f"^{_re.escape(x_persona_name.strip())}$", _re.IGNORECASE)
+    assignment = await db.tournament_match_officials.find_one({
+        "tournament_id": tid, "official_name": {"$regex": name_pat},
+    }, {"_id": 0})
+    if not assignment:
+        raise HTTPException(404, "You have no assignment for this tournament.")
+
+    # Compute allocated Fee + DA from the assignment (already snapshot from rate card at assign-time)
+    days = int(assignment.get("days") or 0)
+    fee_rate = float(assignment.get("per_day_fee_inr") or 0)
+    da_rate = float(assignment.get("per_day_da_inr") or 0)
+    fee_alloc = fee_rate * days
+    da_alloc = da_rate * days
+
+    # Find DA form (if any)
+    da_form = await db.match_official_da.find_one({
+        "tournament_id": tid, "official_name": {"$regex": name_pat},
+    }, {"_id": 0})
+
+    # 6-stage progress derivation
+    is_budget_locked = bool(((t.get("unified_budget_snapshot") or {}).get("is_locked")))
+    da_status = (da_form or {}).get("status")
+    stages = [
+        {"key": "budget_allocated",     "label": "Budget Allocated",    "done": assignment.get("acceptance_status") == "Accepted"},
+        {"key": "tournament_running",   "label": "Tournament Running",  "done": is_budget_locked},
+        {"key": "tournament_completed", "label": "Tournament Completed","done": t.get("status") == "Completed" or bool((da_form or {}).get("played_days") and int(da_form.get("played_days") or 0) > 0)},
+        {"key": "claim_submitted",      "label": "Claim Submitted",     "done": da_status in ("Submitted", "Approved", "Paid")},
+        {"key": "mpca_approved",        "label": "MPCA Approved",       "done": da_status in ("Approved", "Paid")},
+        {"key": "mpca_paid",            "label": "MPCA Paid",           "done": da_status == "Paid"},
+    ]
+    current_stage_idx = 0
+    for i, s in enumerate(stages):
+        if s["done"]:
+            current_stage_idx = i
+    # Advance current-stage-idx by 1 if the current one is done (unless it's the last)
+    if stages[current_stage_idx]["done"] and current_stage_idx < len(stages) - 1:
+        current_stage_idx += 1
+
+    return {
+        "tournament": {
+            "id": t.get("id"),
+            "name": t.get("name"),
+            "short_name": t.get("short_name"),
+            "fiscal_cycle": t.get("fiscal_cycle"),
+            "venue_city": t.get("venue_city"),
+            "status": t.get("status"),
+            "start_date": t.get("start_date"),
+            "end_date": t.get("end_date"),
+            "budget_locked": is_budget_locked,
+        },
+        "assignment": {
+            "id": assignment.get("id"),
+            "role": assignment.get("role"),
+            "days": days,
+            "per_day_fee_inr": fee_rate,
+            "per_day_da_inr": da_rate,
+            "fee_allocated_inr": fee_alloc,
+            "da_allocated_inr": da_alloc,
+            "grand_allocated_inr": fee_alloc + da_alloc,
+            "acceptance_status": assignment.get("acceptance_status"),
+        },
+        "da_form": da_form,
+        "stages": stages,
+        "current_stage_index": current_stage_idx,
+    }
+
+
+# ─────────────────── MPCA-234 · Signed-scan uploads + Deductions ───────────────────
+
+class _SignedScanPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    url: str = Field(..., min_length=1)
+
+
+@api_router.post("/match-official-da/{did}/official-signed-scan", response_model=MatchOfficialDA)
+async def upload_official_signed(did: str, payload: _SignedScanPayload):
+    """Official uploads their signed draft claim PDF scan. Required before Submit."""
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    if doc.get("status") not in ("Draft", "Rejected"):
+        raise HTTPException(409, f"Signed scan can only be attached in Draft/Rejected — current status: {doc['status']}")
+    await db.match_official_da.update_one({"id": did}, {"$set": {"official_signed_claim_url": payload.url.strip()}})
+    return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+@api_router.post("/match-official-da/{did}/mpca-signed-scan", response_model=MatchOfficialDA)
+async def upload_mpca_signed(did: str, payload: _SignedScanPayload):
+    """MPCA uploads their signed review PDF scan. Required before Approve."""
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    if doc.get("status") != "Submitted":
+        raise HTTPException(409, f"MPCA-signed scan can only be attached on Submitted — current status: {doc['status']}")
+    await db.match_official_da.update_one({"id": did}, {"$set": {"mpca_signed_review_url": payload.url.strip()}})
+    return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+class _DeductionPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    head: str = Field(..., min_length=1)                   # e.g. "Travel Fare" | "Night Halt" | "Misc"
+    amount_inr: float = Field(..., gt=0)
+    reason: str = Field(..., min_length=1)
+
+
+@api_router.post("/match-official-da/{did}/deductions", response_model=MatchOfficialDA)
+async def add_deduction(did: str, payload: _DeductionPayload, actor_name: str = "MPCA Reviewer"):
+    """MPCA-234 · MPCA reviewer adds a per-head deduction on a Submitted DA
+    form. Deductions accumulate until Approve, at which point they reduce
+    total_inr."""
+    import uuid as _uuid
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    if doc.get("status") != "Submitted":
+        raise HTTPException(409, "Deductions can only be added on Submitted forms.")
+    dedns = list(doc.get("mpca_deductions") or [])
+    dedns.append({
+        "id": str(_uuid.uuid4()),
+        "head": payload.head.strip(),
+        "amount_inr": float(payload.amount_inr),
+        "reason": payload.reason.strip(),
+        "added_by": actor_name,
+        "added_at": datetime.now(timezone.utc).isoformat(),
+    })
+    await db.match_official_da.update_one({"id": did}, {"$set": {"mpca_deductions": dedns}})
+    return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+@api_router.delete("/match-official-da/{did}/deductions/{dedn_id}", response_model=MatchOfficialDA)
+async def remove_deduction(did: str, dedn_id: str):
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    if doc.get("status") != "Submitted":
+        raise HTTPException(409, "Deductions can only be edited on Submitted forms.")
+    dedns = [d for d in (doc.get("mpca_deductions") or []) if d.get("id") != dedn_id]
+    await db.match_official_da.update_one({"id": did}, {"$set": {"mpca_deductions": dedns}})
     return await db.match_official_da.find_one({"id": did}, {"_id": 0})
 
 

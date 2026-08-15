@@ -166,6 +166,10 @@ const TournamentDetail = () => {
         && hostIsDistrict
         && (t.host_body_id || "").endsWith(`-${myBody.slice(-3)}`);
     const canEdit = isState || isHostBody || isParentDivOfHostDist;
+    // MPCA-234 · Match officials get READ-ONLY view of Tournament Basics + Match Calendar.
+    // They're allocated to officiate — not to modify the schedule or pool composition.
+    const isMatchOfficial = persona?.id === "match-official" || persona?.body_type === "Match_Official";
+    const canEditSetup = canEdit && !isMatchOfficial;
     const canEditSquad = (t.status === "Upcoming" || t.status === "Squad_Selection");
     const divisions = bodies.filter((b) => b.body_type === "Division");
     const districts = bodies.filter((b) => b.body_type === "District");
@@ -293,7 +297,9 @@ const TournamentDetail = () => {
                     {persona?.id === "match-official" ? (
                         <>
                             <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked · view fixtures" : "View fixtures"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
-                            <SetupBox testId="box-my-da" icon={ClipboardEdit} label="My DA / TA Form" note="Fill T.A. & D.A. claim for this tournament" onClick={() => setOpenBox(openBox === "my-da" ? null : "my-da")} active={openBox === "my-da"} />
+                            <Link to={`/my-finance/${t.id}`} className="block" data-testid="box-my-finance-link">
+                                <SetupBox testId="box-my-da" icon={ClipboardEdit} label="My DA / TA Form" note="Open dedicated finance page (Budget · Claim · Payment)" onClick={() => {}} active={false} />
+                            </Link>
                         </>
                     ) : (
                         <>
@@ -330,7 +336,7 @@ const TournamentDetail = () => {
                     )}
                 </div>
                 {openBox === "basics" && (
-                    <div className="mt-4"><TournamentBasicsPanel tournament={t} canEdit={canEdit || persona?.body_code === t.host_body_id} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div className="mt-4"><TournamentBasicsPanel tournament={t} canEdit={canEditSetup && (canEdit || persona?.body_code === t.host_body_id)} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "participants" && (
                     <div className="mt-4"><ParticipantsMatrix tournament={t} persona={persona} canManage={canEdit} onChange={() => { refreshProgress(); load(); }} /></div>
@@ -342,7 +348,7 @@ const TournamentDetail = () => {
                     <div className="mt-4"><InputVariablesPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "calendar" && (
-                    <div className="mt-4"><MatchCalendarPanel tournament={t} canEdit={canEdit || persona?.body_code === t.host_body_id} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div className="mt-4"><MatchCalendarPanel tournament={t} canEdit={canEditSetup && (canEdit || persona?.body_code === t.host_body_id)} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "days-engine" && (
                     <div className="mt-4"><DaysEnginePanel tournament={t} canEdit={canEdit || persona?.body_code === t.host_body_id} /></div>

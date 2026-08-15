@@ -71,6 +71,7 @@ const ReimbursementClaimDetail = lazy(() =>
 const DivisionReimbursementClaimForm = lazy(() => import("@/pages/DivisionReimbursementClaimForm"));
 const MpcaClaimReviewForm = lazy(() => import("@/pages/MpcaClaimReviewForm"));
 const MatchOfficialDAVoucher = lazy(() => import("@/pages/MatchOfficialDAVoucher"));
+const MatchOfficialFinancePage = lazy(() => import("@/pages/MatchOfficialFinancePage"));
 const MyDAForms = lazy(() => import("@/pages/MyDAForms"));
 const SquadReview = lazy(() => import("@/pages/SquadReview"));
 const SquadDetail = lazy(() => import("@/pages/SquadDetail"));
@@ -215,6 +216,7 @@ function App() {
                             <Route path="/reimbursement-claims/:id/division-form" element={<Protected><DivisionReimbursementClaimForm /></Protected>} />
                             <Route path="/reimbursement-claims/:id/mpca-review-form" element={<Protected><MpcaClaimReviewForm /></Protected>} />
                             <Route path="/match-official-da/:did/voucher" element={<Protected><MatchOfficialDAVoucher /></Protected>} />
+                            <Route path="/my-finance/:tid" element={<Protected><MatchOfficialFinancePage /></Protected>} />
                             <Route path="/my-da-forms" element={<Protected><MyDAForms /></Protected>} />
                             <Route path="/da-review" element={<Protected><DAReview /></Protected>} />
                             <Route path="/action-center" element={<Protected><ActionCenter /></Protected>} />

@@ -250,19 +250,44 @@ export default function MatchFixtureCard({
                     </div>
 
                     {/* Row 2: Team A · Team B · Squad · Umpires */}
+                    {/* MPCA-231 · For knockout matches, prepend "SF1/2 Home/Away" + "SFn Winner"
+                        placeholders so MPCA can schedule KO fixtures before league standings finalise. */}
+                    {(() => {
+                        const isKO = form.stage === "Semi Final" || form.stage === "Final" || form.stage === "Knockouts";
+                        const placeholders = isKO
+                            ? (form.stage === "Final"
+                                ? ["SF1 Winner", "SF2 Winner"]
+                                : ["SF1 Home", "SF1 Away", "SF2 Home", "SF2 Away"])
+                            : [];
+                        const mergedOptions = [...placeholders, ...teamOptions.filter((t) => !placeholders.includes(t))];
+                        return (
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                         <div>
-                            <div className={labelCls}>Team A</div>
+                            <div className={labelCls}>Team A {isKO && <span className="text-mpca-oxblood normal-case tracking-normal">· placeholders allowed</span>}</div>
                             <select className={inputCls} value={form.home_team} onChange={(e) => setField("home_team", e.target.value)} disabled={!canEdit} data-testid="fx-team-a">
                                 <option value="">— pick —</option>
-                                {teamOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                                {placeholders.length > 0 && (
+                                    <optgroup label="Placeholders (fill later)">
+                                        {placeholders.map((t) => <option key={t} value={t}>{t}</option>)}
+                                    </optgroup>
+                                )}
+                                <optgroup label={placeholders.length ? "Divisions" : ""}>
+                                    {teamOptions.filter((t) => !placeholders.includes(t)).map((t) => <option key={t} value={t}>{t}</option>)}
+                                </optgroup>
                             </select>
                         </div>
                         <div>
-                            <div className={labelCls}>Team B</div>
+                            <div className={labelCls}>Team B {isKO && <span className="text-mpca-oxblood normal-case tracking-normal">· placeholders allowed</span>}</div>
                             <select className={inputCls} value={form.away_team} onChange={(e) => setField("away_team", e.target.value)} disabled={!canEdit} data-testid="fx-team-b">
                                 <option value="">— pick —</option>
-                                {teamOptions.filter((t) => t !== form.home_team).map((t) => <option key={t} value={t}>{t}</option>)}
+                                {placeholders.length > 0 && (
+                                    <optgroup label="Placeholders (fill later)">
+                                        {placeholders.filter((t) => t !== form.home_team).map((t) => <option key={t} value={t}>{t}</option>)}
+                                    </optgroup>
+                                )}
+                                <optgroup label={placeholders.length ? "Divisions" : ""}>
+                                    {teamOptions.filter((t) => !placeholders.includes(t) && t !== form.home_team).map((t) => <option key={t} value={t}>{t}</option>)}
+                                </optgroup>
                             </select>
                         </div>
                         <div>
@@ -279,6 +304,8 @@ export default function MatchFixtureCard({
                             disabled={!canEdit}
                         />
                     </div>
+                        );
+                    })()}
 
                     {/* Row 3: Scorers · Selectors · Observers · Other pax */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">

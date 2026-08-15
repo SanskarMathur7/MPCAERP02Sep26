@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2, Save, X, Loader2, Lock, LockOpen, Calendar as CalIcon, Upload } from "lucide-react";
+import { Plus, Trash2, Save, X, Loader2, Lock, LockOpen, Calendar as CalIcon, Upload, FileDown } from "lucide-react";
 import Papa from "papaparse";
 import { api } from "@/lib/api";
 import MatchFixtureCard from "@/components/MatchFixtureCard";
@@ -203,6 +203,12 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <a href={`/tournaments/${tournament.id}/schedule`} target="_blank" rel="noreferrer"
+                        className="text-[10px] uppercase tracking-widest border border-mpca-oxblood/40 text-mpca-oxblood px-2 py-1 flex items-center gap-1 hover:bg-mpca-oxblood/5"
+                        title="Print-ready Match Schedule (Save as PDF)"
+                        data-testid="calendar-export-pdf-btn">
+                        <FileDown size={11} /> Schedule PDF
+                    </a>
                     {canEdit && (
                         locked ? (
                             <button onClick={() => lockCalendar(false)} className="text-[10px] uppercase tracking-widest bg-mpca-brass/20 text-mpca-brass border border-mpca-brass px-2 py-1 flex items-center gap-1" data-testid="calendar-unlock-btn">

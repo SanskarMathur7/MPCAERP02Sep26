@@ -34,31 +34,35 @@ import MatchOfficialsPanel from "@/pages/finance/MatchOfficialsPanel";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-const SetupBox = ({ testId, icon: Icon, label, note, onClick, active, flag }) => (
+const SetupBox = ({ testId, icon: Icon, label, note, onClick, active, flag }) => {
+    // MPCA-235 · Ship 3 · flag prop may be a raw string ("M"/"O"/"NA"/"INFO")
+    // OR an object {flag, owner}. Normalise to a string for badge rendering.
+    const flagChar = typeof flag === "object" && flag !== null ? flag.flag : flag;
+    return (
     <button
         onClick={onClick}
         className={`text-left border p-3 hover:bg-mpca-cream/30 transition-all group relative ${active ? "border-mpca-oxblood bg-mpca-cream/40" : "border-mpca-brass/30"}`}
         data-testid={testId}
     >
-        {flag && (
+        {flagChar && (
             <span
                 data-testid={`${testId}-flag`}
                 title={
-                    flag === "M"    ? "Mandatory — required for this tournament type" :
-                    flag === "O"    ? "Optional — you may fill this if useful" :
-                    flag === "NA"   ? "Not required for this tournament type — you may still add data, but it won't be used elsewhere" :
-                    flag === "INFO" ? "Informational / audit trail" : ""
+                    flagChar === "M"    ? "Mandatory — required for this tournament type" :
+                    flagChar === "O"    ? "Optional — you may fill this if useful" :
+                    flagChar === "NA"   ? "Not required for this tournament type — you may still add data, but it won't be used elsewhere" :
+                    flagChar === "INFO" ? "Informational / audit trail" : ""
                 }
                 className={
                     "absolute top-2 right-2 text-[8px] font-mono px-1 py-px border " +
-                    (flag === "M"    ? "bg-mpca-oxblood/10 border-mpca-oxblood/40 text-mpca-oxblood" :
-                     flag === "O"    ? "bg-mpca-brass/15 border-mpca-brass/40 text-mpca-brass" :
-                     flag === "NA"   ? "bg-mpca-ivory border-dashed border-mpca-gray/40 text-mpca-gray" :
-                     flag === "INFO" ? "bg-mpca-brass/10 border-mpca-brass/30 text-mpca-brass" :
+                    (flagChar === "M"    ? "bg-mpca-oxblood/10 border-mpca-oxblood/40 text-mpca-oxblood" :
+                     flagChar === "O"    ? "bg-mpca-brass/15 border-mpca-brass/40 text-mpca-brass" :
+                     flagChar === "NA"   ? "bg-mpca-ivory border-dashed border-mpca-gray/40 text-mpca-gray" :
+                     flagChar === "INFO" ? "bg-mpca-brass/10 border-mpca-brass/30 text-mpca-brass" :
                                        "border-mpca-gray/30 text-mpca-gray")
                 }
             >
-                {flag === "NA" ? "OPTIONAL·NOT USED" : flag === "M" ? "REQUIRED" : flag === "O" ? "OPTIONAL" : "INFO"}
+                {flagChar === "NA" ? "OPTIONAL·NOT USED" : flagChar === "M" ? "REQUIRED" : flagChar === "O" ? "OPTIONAL" : "INFO"}
             </span>
         )}
         <div className="flex items-center gap-2 mb-1">
@@ -68,7 +72,8 @@ const SetupBox = ({ testId, icon: Icon, label, note, onClick, active, flag }) =>
         <div className="font-serif text-sm text-mpca-green-dark group-hover:text-mpca-oxblood">{label}</div>
         <div className="text-[10px] text-mpca-gray-dark mt-1 font-mono">{note}</div>
     </button>
-);
+    );
+};
 
 const TournamentDetail = () => {
     const { id } = useParams();
@@ -83,26 +88,26 @@ const TournamentDetail = () => {
     const [myParticipation, setMyParticipation] = useState(null);   // M39x
     const [wiringFlags, setWiringFlags] = useState({});             // MPCA-235 · Ship 3 · flag per box
 
-    // MPCA-235 · Ship 3 · Read the wiring status once and build a box-testid → flag map
-    // so each SetupBox shows a Mandatory / Optional / Optional·Not Used badge.
-    // NA cells stay fully functional — the badge just tells the user this data
-    // won't be used elsewhere in the ERP for this tournament type.
+    // MPCA-235 · Ship 3 · Read the wiring status once and build a box-testid → {flag, owner} map
+    // so each SetupBox shows a Mandatory / Optional / Optional·Not Used badge AND the note text
+    // reflects who actually acts (Division vs MPCA) for this tournament type.
     useEffect(() => {
         let alive = true;
         api.get(`/tournaments/${id}/wiring-status`)
             .then(r => {
                 if (!alive) return;
-                const stepFlag = Object.fromEntries((r.data.steps || []).map(s => [s.key, s.flag]));
+                const byStep = Object.fromEntries((r.data.steps || []).map(s => [s.key, s]));
+                const cell = (k) => byStep[k] ? { flag: byStep[k].flag, owner: byStep[k].owner } : {};
                 setWiringFlags({
-                    "box-basics":         stepFlag.pool_basics,
-                    "box-participants":   stepFlag.pool_basics,
-                    "box-officials":      stepFlag.match_official_posting,
-                    "box-squads":         stepFlag.squad,
-                    "box-calendar":       stepFlag.match_calendar,
-                    "box-days-engine":    stepFlag.match_calendar,
-                    "box-unified-budget": stepFlag.unified_budget,
-                    "box-finance":        stepFlag.finance_console,
-                    "box-my-da":          stepFlag.finance_console,
+                    "box-basics":         cell("pool_basics"),
+                    "box-participants":   cell("pool_basics"),
+                    "box-officials":      cell("match_official_posting"),
+                    "box-squads":         cell("squad"),
+                    "box-calendar":       cell("match_calendar"),
+                    "box-days-engine":    cell("match_calendar"),
+                    "box-unified-budget": cell("unified_budget"),
+                    "box-finance":        cell("finance_console"),
+                    "box-my-da":          cell("finance_console"),
                 });
             })
             .catch(() => { if (alive) setWiringFlags({}); });
@@ -381,8 +386,22 @@ const TournamentDetail = () => {
                             {/* MPCA-235 · Ship A · Boxes ordered to match the 9-step wiring progression */}
                             {/* 2 · Pool / Participants */}
                             <SetupBox testId="box-participants" icon={UsersRound} label="Participants Matrix" note={(() => { const pools = (t.setup_meta?.division_pools || []).concat(t.setup_meta?.district_pools || []); const totalCodes = pools.flatMap(p => p.division_codes || p.district_codes || []).length; return pools.length ? `${totalCodes} bodies · ${pools.length} pool(s)` : "Set pools first"; })()} onClick={() => setOpenBox(openBox === "participants" ? null : "participants")} active={openBox === "participants"} flag={wiringFlags["box-participants"]} />
-                            {/* 3 · Match Official Posting (moved up from utility footer) */}
-                            <SetupBox testId="box-officials" icon={ShieldCheck} label="Match Officials" note="MPCA assigns umpires · scorers · referees · physios centrally" onClick={() => setOpenBox(openBox === "officials" ? null : "officials")} active={openBox === "officials"} flag={wiringFlags["box-officials"]} />
+                            {/* 3 · Match Official Posting (moved up from utility footer). MPCA-238 · Note is wiring-owner driven. */}
+                            <SetupBox
+                                testId="box-officials"
+                                icon={ShieldCheck}
+                                label="Match Officials"
+                                note={
+                                    wiringFlags["box-officials"]?.owner === "Division"
+                                        ? "Division posts umpires · scorers · referees · physios for this tournament"
+                                        : wiringFlags["box-officials"]?.owner === "MPCA"
+                                            ? "MPCA assigns umpires · scorers · referees · physios centrally"
+                                            : "Umpires · scorers · referees · physios"
+                                }
+                                onClick={() => setOpenBox(openBox === "officials" ? null : "officials")}
+                                active={openBox === "officials"}
+                                flag={wiringFlags["box-officials"]}
+                            />
                             {/* 4 · Squad */}
                             <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body · click to open selection" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} flag={wiringFlags["box-squads"]} />
                             {/* 6 · Match Calendar */}

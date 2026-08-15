@@ -23,6 +23,30 @@ _SCOPE_TO_TYPE = {
     # 'Championship' + 'Invitational' fall through to master-registry lookup
 }
 
+# Ship 4 tournament_type_code prefix → wiring type_id (used when master-registry
+# lookup fails or the code is a slug that doesn't match a registry row).
+_CODE_TO_TYPE = {
+    "bcci":                      "bcci",
+    "ranji":                     "bcci",
+    "vijay_hazare":              "bcci",
+    "syed_mushtaq_ali":          "bcci",
+    "duleep":                    "bcci",
+    "irani":                     "bcci",
+    "nayudu":                    "bcci",
+    "inter_div":                 "interdiv",
+    "mpca_inter_div":            "interdiv",
+    "inter_district":            "district",
+    "inter_school":              "interschool",
+    "school":                    "interschool",
+    "inter_club":                "interclub",
+    "club":                      "interclub",
+    "coaching_camp":             "coachingcamp",
+    "periodical_coaching_camp":  "coachingcamp",
+    "vacation_camp":             "vacationcamp",
+    "pre_tournament_camp":       "camp",
+}
+
+
 _CATEGORY_TO_TYPE = {
     "BCCI":                     "bcci",
     "Inter_Divisional":         "interdiv",
@@ -41,10 +65,15 @@ async def _resolve_type_id(t: Dict[str, Any]) -> str:
     if code:
         master = await db.tournament_master.find_one({"id": code}, {"category": 1, "_id": 0})
         if not master:
-            # tournament_type_code sometimes stores a slug-like name; try by name too
             master = await db.tournament_master.find_one({"name": code}, {"category": 1, "_id": 0})
         if master and master.get("category") in _CATEGORY_TO_TYPE:
             return _CATEGORY_TO_TYPE[master["category"]]
+        # 1b · Ship 4 · Slug-based lookup for seeded tournaments whose codes are
+        # human slugs rather than registry UUIDs (e.g. "inter_school", "vacation_camp").
+        code_lc = code.lower()
+        for prefix, type_id in _CODE_TO_TYPE.items():
+            if code_lc.startswith(prefix):
+                return type_id
 
     # 2. Pre-Tournament Camp — the Camps collection links back to a parent Inter-Div tournament
     if t.get("is_pre_tournament_camp") or t.get("parent_tournament_id"):

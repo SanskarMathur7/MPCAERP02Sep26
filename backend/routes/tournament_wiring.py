@@ -345,6 +345,18 @@ async def reset_tournament_wiring():
         "created_at": existing.get("created_at", now) if existing else now,
     }
     await db.tournament_wiring.replace_one({"id": "singleton"}, doc, upsert=True)
+    # Governance audit trail — reset is a wholesale reversion, log it.
+    await db.tournament_wiring_audit.insert_one({
+        "id":          str(uuid.uuid4()),
+        "type_id":     "*",
+        "step_key":    "*",
+        "diff":        {"__reset__": ["custom", "defaults"]},
+        "before":      {"version_before": existing.get("version") if existing else None},
+        "after":       {"version_after":  next_version},
+        "version":     next_version,
+        "changed_by":  "mpca_reset",
+        "changed_at":  now,
+    })
     return {"ok": True, "version": doc["version"], "updated_at": now}
 
 

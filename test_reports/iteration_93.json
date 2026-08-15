@@ -1,0 +1,31 @@
+{
+  "summary": "MPCA-235 Tournament Wiring Console end-to-end backend verification. 30/30 pytests passing in test_mpca_235_wiring_e2e.py covering matrix shape, wiring-status derivation for all 7 seeded tournaments (bcci/interdiv/district/interschool/interclub/coachingcamp/vacationcamp type_id resolution all correct), Ship 4 visibility filter behaviour, PATCH cell + audit log write-through + wiring-status reflection, freeze-season snapshot revision incrementing + immutability against wiring edits, and MPCA-236 inter-district creation via API.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mpca_235_wiring_e2e.py",
+    "/app/test_reports/pytest/mpca235_e2e.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "tournament_wiring_status._resolve_type_id: the slug-prefix map handles seeded human slugs correctly, but ordering is dict-insertion dependent. Longer prefixes are placed before shorter ones (e.g. 'inter_district' before 'inter_div' would be a bug, but current order 'inter_div' comes before 'inter_district' — verified via test that 'inter_district_men_open' correctly resolves to 'district'. Consider sorting prefixes by length desc for future safety.",
+    "PATCH /tournament-wiring/cell mutates the fetched cell in-place before persisting; a concurrent read between $set and audit insert could observe the change without the audit row. Non-blocking but worth a note.",
+    "reset_tournament_wiring does not write an audit row — a bulk reset could silently wipe the visibility a user might have configured. Consider inserting a synthetic audit entry.",
+    "Ship 4 filter fetches all docs first then filters in Python — acceptable at current scale (<200 tournaments) but should be pushed into the mongo query for scale."
+  ],
+  "updated_files": ["/app/backend/tests/test_mpca_235_wiring_e2e.py"],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "N/A (backend-only)"},
+  "test_credentials": "Not required — endpoints accept X-User-Persona: secretary header for Ship 4 filter tests",
+  "seed_data_creation": "Test creates ephemeral snapshots with cycle=TEST-* and IMMUT-* prefixes (not cleaned up — snapshots are meant to be immutable). Inter-District test tournament is created and deleted within same test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New test file test_mpca_235_wiring_e2e.py adds 30 e2e tests on top of the 18 pre-existing MPCA-235 tests. All 7 seeded tournaments (TRN-2026-27-001..007) resolve to correct wiring type_ids via the _CODE_TO_TYPE slug map. Ship 4 filter correctly hides Championship-scope tournaments from State persona when include_camp_scoped=false. Audit log write-through works. Snapshot revision increments (1,2,3...) per cycle and snapshots are immutable against subsequent PATCH edits.",
+  "rca of the issue": "No issues found — all functionality per review request verified."
+}

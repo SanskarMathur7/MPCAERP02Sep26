@@ -150,17 +150,20 @@ def _match(tid: str, day: int, mno: str, host_body: str, home: str, away: str, w
     }
 
 
-def _official(tid: str, name: str, role: str, phone: str, body: str):
+def _official(tid: str, name: str, role: str, phone: str, body: str, per_day_fee_inr: float = 2500, per_day_da_inr: float = 1500):
     return {
-        "id":              str(uuid.uuid4()),
-        "tournament_id":   tid,
-        "name":            name,
-        "role":            role,           # Umpire / Scorer / Referee / Physio
-        "phone":           phone,
-        "email":           None,
-        "body_code":       body,
+        "id":               str(uuid.uuid4()),
+        "official_id":      f"OFF-{uuid.uuid4().hex[:8]}",  # required by unified budget compute
+        "tournament_id":    tid,
+        "name":             name,
+        "role":             role,           # Umpire / Scorer / Referee / Physio
+        "phone":            phone,
+        "email":            None,
+        "body_code":        body,
+        "per_day_fee_inr":  per_day_fee_inr,
+        "per_day_da_inr":   per_day_da_inr,
         "matches_assigned": [],
-        "created_at":      NOW.isoformat(),
+        "created_at":       NOW.isoformat(),
     }
 
 

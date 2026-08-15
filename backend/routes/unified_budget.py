@@ -768,7 +768,9 @@ async def compute_unified_budget_for_tournament(tid: str, save: bool = False):
     # DA   = per_day_da_inr  × actual_days   (only when match actually played).
     # Owner=Common → MPCA state books (not a Division claim).
     off_assigns = await db.tournament_match_officials.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
-    off_by_id = {a["official_id"]: a for a in off_assigns}
+    # MPCA-236 · Defensive — some legacy rows carry only `id` (not `official_id`).
+    # Fall back to `id` so a missing key never 500s the compute.
+    off_by_id = {(a.get("official_id") or a.get("id")): a for a in off_assigns if (a.get("official_id") or a.get("id"))}
     off_fees_total = 0.0
     off_da_total = 0.0
     for m in matches:

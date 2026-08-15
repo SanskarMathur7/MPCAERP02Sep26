@@ -337,6 +337,14 @@ export default function TournamentWiringConsole() {
                     <button data-testid="wiring-export" onClick={exportJson} style={btnGhost}>
                         <Download size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Export JSON
                     </button>
+                    <a
+                        href={`${API}/tournament-wiring/lifecycle-pdf`}
+                        target="_blank" rel="noreferrer"
+                        data-testid="wiring-lifecycle-pdf"
+                        style={{ ...btnGhost, textDecoration: "none", display: "inline-flex", alignItems: "center", color: "#3b2a3a" }}
+                    >
+                        <FileCheck size={14} style={{ marginRight: 6 }} />Lifecycle PDF
+                    </a>
                     {isMpca && (
                         <button data-testid="wiring-freeze" onClick={freezeSeason} disabled={freezing} style={{ ...btnGhost, background: "#3b2a3a", color: "#fff", borderColor: "#3b2a3a" }}>
                             <Snowflake size={14} style={{ marginRight: 6, verticalAlign: -2 }} />{freezing ? "Freezing…" : "Freeze season"}

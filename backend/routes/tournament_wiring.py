@@ -446,3 +446,38 @@ async def get_wiring_snapshot(snap_id: str):
     if not snap:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     return snap
+
+
+@api_router.get("/tournament-wiring/lifecycle-pdf")
+async def download_lifecycle_pdf():
+    """Board-quality PDF · full 9-step lifecycle for all 8 tournament types.
+
+    Regenerated on-demand so it always reflects the currently-committed
+    wiring narrative. Returns a stream with Content-Disposition inline so
+    the browser opens it in a new tab.
+    """
+    import subprocess
+    from fastapi.responses import FileResponse
+
+    pdf_path = "/app/docs/mpca_tournament_lifecycle_reference.pdf"
+    # Rebuild fresh — the generator is deterministic and cheap (< 1s)
+    try:
+        subprocess.run(
+            ["python", "-m", "scripts.build_lifecycle_pdf"],
+            cwd="/app/backend",
+            check=True,
+            timeout=15,
+            capture_output=True,
+        )
+    except Exception:
+        # If regeneration fails but a prior PDF exists, still serve it.
+        import os
+        if not os.path.exists(pdf_path):
+            raise HTTPException(status_code=500, detail="PDF generation failed")
+
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename="mpca-tournament-lifecycle-reference.pdf",
+        headers={"Content-Disposition": 'inline; filename="mpca-tournament-lifecycle-reference.pdf"'},
+    )

@@ -98,6 +98,26 @@ _DEFAULT_TRAVEL_RATES = {
     },
 }
 
+# MPCA-232 · Default Match Officials pay rates — per-format group. Referee &
+# Observer share a single UI row; both keys are seeded identically so the
+# assignment endpoint can look up either exact role.
+_DEFAULT_OFFICIALS_RATES = {
+    "ltd_overs": {
+        "Umpire":   {"fee_per_day": 700.0,  "da_per_day": 500.0},
+        "Scorer":   {"fee_per_day": 500.0,  "da_per_day": 400.0},
+        "Selector": {"fee_per_day": 800.0,  "da_per_day": 600.0},
+        "Observer": {"fee_per_day": 1500.0, "da_per_day": 700.0},
+        "Referee":  {"fee_per_day": 1500.0, "da_per_day": 700.0},
+    },
+    "multi_day": {
+        "Umpire":   {"fee_per_day": 1000.0, "da_per_day": 700.0},
+        "Scorer":   {"fee_per_day": 700.0,  "da_per_day": 500.0},
+        "Selector": {"fee_per_day": 1000.0, "da_per_day": 700.0},
+        "Observer": {"fee_per_day": 2000.0, "da_per_day": 900.0},
+        "Referee":  {"fee_per_day": 2000.0, "da_per_day": 900.0},
+    },
+}
+
 SEED_TOURNAMENT_TYPES: List[str] = [
     "Inter_Divisional",
     "Inter_District",
@@ -110,12 +130,14 @@ SEED_TOURNAMENT_TYPES: List[str] = [
 def _build_default_card(tournament_type: str, format_group: str, season: str) -> RateCard:
     budget = {k: RateHead(**v) for k, v in _DEFAULT_BUDGET_RATES[format_group].items()}
     travel = {k: RateHead(**v) for k, v in _DEFAULT_TRAVEL_RATES[format_group].items()}
+    officials = {k: dict(v) for k, v in _DEFAULT_OFFICIALS_RATES[format_group].items()}
     return RateCard(
         tournament_type=tournament_type,
         format_group=format_group,
         season=season,
         budget_rates=budget,
         travel_rates=travel,
+        officials_rates=officials,
     )
 
 
@@ -136,6 +158,7 @@ async def seed_rate_cards(season: str = "2026-27") -> dict:
             # Nested RateHead → dict
             doc["budget_rates"] = {k: v.model_dump() if hasattr(v, "model_dump") else v for k, v in card.budget_rates.items()}
             doc["travel_rates"] = {k: v.model_dump() if hasattr(v, "model_dump") else v for k, v in card.travel_rates.items()}
+            doc["officials_rates"] = {k: dict(v) for k, v in (card.officials_rates or {}).items()}
             await db.rate_cards.insert_one(doc)
             created += 1
     return {"created": created, "season": season}
@@ -182,6 +205,14 @@ async def get_rate_card(tournament_type: str, format_group: str, season: str = "
         payload["travel_rates"] = {k: v.model_dump() if hasattr(v, "model_dump") else v for k, v in card.travel_rates.items()}
         await db.rate_cards.insert_one(payload)
         return payload
+    # MPCA-232 · Legacy cards may not have officials_rates seeded yet. Backfill.
+    if not doc.get("officials_rates") and format_group in _DEFAULT_OFFICIALS_RATES:
+        officials = {k: dict(v) for k, v in _DEFAULT_OFFICIALS_RATES[format_group].items()}
+        await db.rate_cards.update_one(
+            {"id": doc["id"]},
+            {"$set": {"officials_rates": officials, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        doc["officials_rates"] = officials
     return doc
 
 
@@ -195,6 +226,17 @@ async def patch_rate_card(card_id: str, patch: RateCardPatch):
         payload["budget_rates"] = {k: (v.model_dump() if hasattr(v, "model_dump") else v) for k, v in patch.budget_rates.items()}
     if patch.travel_rates is not None:
         payload["travel_rates"] = {k: (v.model_dump() if hasattr(v, "model_dump") else v) for k, v in patch.travel_rates.items()}
+    if patch.officials_rates is not None:
+        # MPCA-232 · Sanitise incoming rates — only allow known roles + numeric values.
+        _ALLOWED_ROLES = {"Umpire", "Scorer", "Selector", "Observer", "Referee"}
+        clean_off: Dict[str, Dict[str, float]] = {}
+        for role, vals in (patch.officials_rates or {}).items():
+            if role not in _ALLOWED_ROLES:
+                continue
+            fee = float((vals or {}).get("fee_per_day") or 0)
+            da = float((vals or {}).get("da_per_day") or 0)
+            clean_off[role] = {"fee_per_day": max(0.0, fee), "da_per_day": max(0.0, da)}
+        payload["officials_rates"] = clean_off
     if not payload:
         return existing
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -213,6 +255,7 @@ async def reset_rate_card(card_id: str):
     payload = {
         "budget_rates": _DEFAULT_BUDGET_RATES[fg],
         "travel_rates": _DEFAULT_TRAVEL_RATES[fg],
+        "officials_rates": {k: dict(v) for k, v in _DEFAULT_OFFICIALS_RATES.get(fg, {}).items()},
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.rate_cards.update_one({"id": card_id}, {"$set": payload})

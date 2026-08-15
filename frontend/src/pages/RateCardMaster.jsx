@@ -2,7 +2,7 @@
 // rate cards. One card per (tournament_type, format_group, season). Values
 // mirror the MPCA Inter-Division Utility HTML (v20).
 import { useEffect, useMemo, useState } from "react";
-import { Save, Loader2, RotateCcw, Wallet, Plane, Plus, Trash2, X } from "lucide-react";
+import { Save, Loader2, RotateCcw, Wallet, Plane, Plus, Trash2, X, Gavel } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 
@@ -38,6 +38,16 @@ const DRIVERS = [
 ];
 
 const INR = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
+
+// MPCA-232 · Match Official role rows shown in the Master Rate Card. The
+// "Observer / Referee" row writes to BOTH `Observer` and `Referee` keys so
+// assignments under either role name resolve to the same fee/DA.
+const OFFICIAL_ROLE_ROWS = [
+    { key: "Umpire",   label: "Umpire",              writes: ["Umpire"] },
+    { key: "Scorer",   label: "Scorer",              writes: ["Scorer"] },
+    { key: "Selector", label: "Selector",            writes: ["Selector"] },
+    { key: "Observer", label: "Observer / Referee",  writes: ["Observer", "Referee"] },
+];
 
 export default function RateCardMaster() {
     const { persona } = useAuth();
@@ -102,6 +112,18 @@ export default function RateCardMaster() {
         setCard(next); setDirty(true);
     };
 
+    // MPCA-232 · Officials rates setter — updates ALL role keys mirrored by a
+    // single UI row (e.g. Observer / Referee share one editor).
+    const setOfficialRate = (roleKeys, field, val) => {
+        const numeric = Number(val) || 0;
+        const nextOff = { ...(card.officials_rates || {}) };
+        roleKeys.forEach((r) => {
+            nextOff[r] = { ...(nextOff[r] || { fee_per_day: 0, da_per_day: 0 }), [field]: numeric };
+        });
+        setCard({ ...card, officials_rates: nextOff });
+        setDirty(true);
+    };
+
     const save = async () => {
         if (!card) return;
         setSaving(true); setErr(null); setMsg(null);
@@ -109,6 +131,7 @@ export default function RateCardMaster() {
             const { data } = await api.patch(`/rate-cards/${card.id}`, {
                 budget_rates: card.budget_rates,
                 travel_rates: card.travel_rates,
+                officials_rates: card.officials_rates || {},
             });
             setCard(data); setDirty(false); setMsg("Saved.");
             setTimeout(() => setMsg(null), 2000);
@@ -418,6 +441,67 @@ export default function RateCardMaster() {
                             </tbody>
                         </table>
                     )}
+                </div>
+
+                {/* MPCA-232 · Match Officials Rates */}
+                <div className="border border-mpca-brass/30 bg-mpca-ivory mb-8" data-testid="rc-officials-table">
+                    <div className="px-4 py-2 bg-mpca-navy text-mpca-gold-light flex items-center gap-2">
+                        <Gavel size={13} />
+                        <div className="font-serif text-sm">Match Officials Rates · per role</div>
+                        <div className="text-[10px] uppercase tracking-widest opacity-80 ml-auto">
+                            Fee/day + DA/day · propagates to new assignments in {fg === "multi_day" ? "Multi-Day / 4-Day" : "Ltd Overs / T20"} tournaments
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                            <thead className="bg-mpca-parchment/60 text-mpca-brass uppercase text-[9px] tracking-widest">
+                                <tr>
+                                    <th className="px-3 py-2 text-left w-1/3">Role</th>
+                                    <th className="px-3 py-2 text-right w-40">Fee / day (₹)</th>
+                                    <th className="px-3 py-2 text-right w-40">DA / day (₹)</th>
+                                    <th className="px-3 py-2 text-left text-[9px] italic">Note</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {OFFICIAL_ROLE_ROWS.map((row) => {
+                                    const rate = (card.officials_rates || {})[row.key] || { fee_per_day: 0, da_per_day: 0 };
+                                    return (
+                                        <tr key={row.key} className="border-b border-mpca-brass/10" data-testid={`rc-off-row-${row.key}`}>
+                                            <td className="px-3 py-2 font-serif text-mpca-green-dark">{row.label}</td>
+                                            <td className="px-3 py-2 text-right">
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    className="input-heritage !py-1 !text-xs font-mono w-32 text-right"
+                                                    value={rate.fee_per_day ?? 0}
+                                                    disabled={!canEdit}
+                                                    onChange={(e) => setOfficialRate(row.writes, "fee_per_day", e.target.value)}
+                                                    data-testid={`rc-off-fee-${row.key}`}
+                                                />
+                                            </td>
+                                            <td className="px-3 py-2 text-right">
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    className="input-heritage !py-1 !text-xs font-mono w-32 text-right"
+                                                    value={rate.da_per_day ?? 0}
+                                                    disabled={!canEdit}
+                                                    onChange={(e) => setOfficialRate(row.writes, "da_per_day", e.target.value)}
+                                                    data-testid={`rc-off-da-${row.key}`}
+                                                />
+                                            </td>
+                                            <td className="px-3 py-2 text-[9px] text-mpca-brass italic">
+                                                {row.writes.length > 1 ? `shared across ${row.writes.join(" & ")}` : "—"}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="px-4 py-2 bg-mpca-parchment/40 border-t border-mpca-brass/20 text-[10px] text-mpca-brass italic">
+                        Fee is paid on <b>scheduled</b> days. DA is paid on <b>actual</b> days played. Existing assignments keep their snapshot rates — new assignments will inherit these values.
+                    </div>
                 </div>
 
                 {/* Travel-grant heads (8) */}

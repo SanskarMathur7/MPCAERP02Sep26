@@ -1071,6 +1071,12 @@ class RateCard(BaseModel):
     # {head_key: {name?, driver?, owner?, rooms?, basis?}}. Compute engine
     # merges these on top of BUDGET_HEADS_META.
     head_meta_overrides: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    # MPCA-232 · Match Officials pay rates — per-season, per-format defaults.
+    # Shape: {role: {fee_per_day: float, da_per_day: float}}. Roles managed
+    # here: Umpire, Scorer, Selector, Observer, Referee. These propagate to
+    # newly-created `tournament_match_officials` at assignment time. Existing
+    # assignments retain the snapshot rates they were created with.
+    officials_rates: Dict[str, Dict[str, float]] = Field(default_factory=dict)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: Optional[str] = None
     updated_by: Optional[str] = None
@@ -1092,6 +1098,7 @@ class RateCardPatch(BaseModel):
     model_config = ConfigDict(extra="ignore")
     budget_rates: Optional[Dict[str, RateHead]] = None
     travel_rates: Optional[Dict[str, RateHead]] = None
+    officials_rates: Optional[Dict[str, Dict[str, float]]] = None
 
 
 class SquadTimeline(BaseModel):

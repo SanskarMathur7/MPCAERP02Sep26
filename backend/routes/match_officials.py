@@ -254,9 +254,23 @@ async def assign_tournament_official(
     role = payload.role
     if role not in STANDARD_MO_FEES_INR:
         raise HTTPException(400, f"Unsupported role {role} — expected one of {list(STANDARD_MO_FEES_INR)}")
-    # Standard rate resolution — override only if MPCA passes an explicit value.
-    fee = payload.per_day_fee_inr if payload.per_day_fee_inr is not None else STANDARD_MO_FEES_INR[role]
-    da  = payload.per_day_da_inr  if payload.per_day_da_inr  is not None else STANDARD_MO_DA_INR[role]
+    # MPCA-232 · Standard rate resolution — prefer the tournament's active
+    # Master Rate Card (officials_rates), fall back to the hard-coded STANDARD
+    # constants, and finally allow an explicit MPCA override.
+    rc_fee, rc_da = None, None
+    try:
+        from routes.unified_budget import _load_rate_card_for_tournament  # local import to avoid circular
+        card = await _load_rate_card_for_tournament(t)
+        off_rates = (card or {}).get("officials_rates") or {}
+        row = off_rates.get(role) or {}
+        if row.get("fee_per_day") is not None:
+            rc_fee = float(row.get("fee_per_day") or 0)
+        if row.get("da_per_day") is not None:
+            rc_da = float(row.get("da_per_day") or 0)
+    except Exception:
+        pass
+    fee = payload.per_day_fee_inr if payload.per_day_fee_inr is not None else (rc_fee if rc_fee is not None else STANDARD_MO_FEES_INR[role])
+    da  = payload.per_day_da_inr  if payload.per_day_da_inr  is not None else (rc_da if rc_da is not None else STANDARD_MO_DA_INR[role])
     tmo = TournamentMatchOfficial(
         tournament_id=tid,
         official_id=off["id"],

@@ -10,9 +10,12 @@ import { api } from "@/lib/api";
 const CATEGORIES = [
     { code: "BCCI", label: "BCCI", subtitle: "Ranji · Vijay Hazare · SMAT · Duleep etc.", managed_by: "MPCA", flow: "MPCA → Division" },
     { code: "Inter_Divisional", label: "Inter-Divisional", subtitle: "MPCA-hosted trophies across Divisions", managed_by: "MPCA", flow: "MPCA → Division" },
-    { code: "Championship", label: "Championship", subtitle: "MPCA-hosted championship series (age-group / gender-based)", managed_by: "MPCA", flow: "MPCA → Division" },
     { code: "Pre_Tournament_Camp", label: "Pre-Tournament Camp", subtitle: "Auto-mirrors Inter-Divisional entries", managed_by: "MPCA", flow: "MPCA → Division", readOnly: true },
     { code: "Inter_District", label: "Inter-District", subtitle: "Division-hosted trophies across Districts", managed_by: "Division", flow: "Division → District" },
+    { code: "Inter_School", label: "Inter-School", subtitle: "Division-hosted trophies across schools", managed_by: "Division", flow: "Division → District" },
+    { code: "Inter_Club", label: "Inter-Club (A-Grade)", subtitle: "Division-hosted trophies across A-grade clubs", managed_by: "Division", flow: "Division → District" },
+    { code: "Vacation_Camp", label: "Vacation Camp", subtitle: "Off-season coaching camps hosted by Divisions", managed_by: "Division", flow: "Division → District" },
+    { code: "Periodical_Coaching_Camp", label: "Periodical Coaching Camp", subtitle: "District-level coaching for young players", managed_by: "Division", flow: "Division → District" },
 ];
 
 const MANAGED_BY_STYLE = {
@@ -34,7 +37,7 @@ const PLAY_TYPE_LABEL = { Multi_Day: "Multi Day", Limited_Overs: "Ltd Overs" };
 export default function TournamentMasterRegistry() {
     const { persona } = useAuth();
     const canEdit = persona?.body_type === "State" || persona?.body_code === "MPCA";
-    const [buckets, setBuckets] = useState({ BCCI: [], Inter_Divisional: [], Championship: [], Pre_Tournament_Camp: [], Inter_District: [] });
+    const [buckets, setBuckets] = useState({ BCCI: [], Inter_Divisional: [], Pre_Tournament_Camp: [], Inter_District: [], Inter_School: [], Inter_Club: [], Vacation_Camp: [], Periodical_Coaching_Camp: [] });
     const [tab, setTab] = useState("BCCI");
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);

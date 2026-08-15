@@ -10,8 +10,11 @@ const TOURNAMENT_TYPES = [
     { code: "Inter_Divisional",  label: "Inter-Divisional" },
     { code: "Inter_District",    label: "Inter-District" },
     { code: "BCCI",              label: "BCCI" },
-    { code: "Championship",      label: "Championship" },
     { code: "Pre_Tournament_Camp", label: "Pre-Tournament Camp" },
+    { code: "Inter_School",      label: "Inter-School" },
+    { code: "Inter_Club",        label: "Inter-Club (A-Grade)" },
+    { code: "Vacation_Camp",     label: "Vacation Camp" },
+    { code: "Periodical_Coaching_Camp", label: "Periodical Coaching Camp" },
 ];
 
 const FORMAT_GROUPS = [

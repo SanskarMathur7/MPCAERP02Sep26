@@ -388,19 +388,24 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                     <label className="block">
                         <div className="overline text-[9px] mb-1">Tournament Name *</div>
                         {(() => {
-                            // MPCA-205 · Prefer master registry entries; fallback to legacy directory.
+                            // MPCA-236 · Fix Inter-District dropdown showing Inter-Division names.
+                            // Key registry lookup off the `tournament_type_code` (unambiguous),
+                            // with scope as a secondary fallback. Earlier map used
+                            // `tournament_type` which collides across scopes (e.g. Inter-District
+                            // and Inter-Div both used MPCA_Championship/MPCA_InterDivisional).
                             const registryCategory = ({
-                                MPCA_InterDivisional: "Inter_Divisional",
-                                MPCA_Championship: "Inter_Divisional",
-                                BCCI: "BCCI",
-                                Inter_District: "Inter_District",
-                                inter_div: "Inter_Divisional",
-                                inter_district: "Inter_District",
-                                bcci: "BCCI",
-                            })[form.tournament_type] || ({
-                                MPCA_InterDivisional: "Inter_Divisional",
-                                BCCI: "BCCI",
-                            })[form.tournament_type_code];
+                                bcci_staging:       "BCCI",
+                                away_participation: "BCCI",
+                                inter_div:          "Inter_Divisional",
+                                inter_district:     "Inter_District",
+                                inter_school:       "Inter_School",
+                                inter_club:         "Inter_Club",
+                                coaching_camp:      "Periodical_Coaching_Camp",
+                                vacation_camp:      "Vacation_Camp",
+                            })[form.tournament_type_code] || ({
+                                Inter_Divisional: "Inter_Divisional",
+                                Inter_District:   "Inter_District",
+                            })[form.scope];
                             const registryEntries = registryCategory
                                 ? (masterByType[registryCategory] || []).map((m) => ({
                                     name: m.name,

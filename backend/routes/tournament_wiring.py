@@ -257,6 +257,7 @@ async def patch_wiring_cell(patch: WiringCellPatch):
 
     # Validate enum values on the way in
     cell = doc["cells"][patch.type_id][patch.step_key]
+    before_snapshot = {k: cell.get(k) for k in ("flag", "owner", "approver", "mode", "visibility", "blocks_next", "sla_days", "text")}
     updates: Dict[str, Any] = {}
     if patch.flag is not None:
         if patch.flag not in FLAG_VALUES:
@@ -302,6 +303,23 @@ async def patch_wiring_cell(patch: WiringCellPatch):
         }, "$inc": {"version": 1}},
     )
     fresh = await db.tournament_wiring.find_one({"id": "singleton"}, {"_id": 0})
+
+    # MPCA-235 · Ship B · Write an audit row so every wiring edit is traceable
+    after_snapshot = {k: cell.get(k) for k in ("flag", "owner", "approver", "mode", "visibility", "blocks_next", "sla_days", "text")}
+    diff = {k: [before_snapshot.get(k), after_snapshot.get(k)]
+            for k in after_snapshot if before_snapshot.get(k) != after_snapshot.get(k)}
+    await db.tournament_wiring_audit.insert_one({
+        "id":          str(uuid.uuid4()),
+        "type_id":     patch.type_id,
+        "step_key":    patch.step_key,
+        "diff":        diff,
+        "before":      before_snapshot,
+        "after":       after_snapshot,
+        "version":     fresh["version"],
+        "changed_by":  "mpca_console",
+        "changed_at":  now,
+    })
+
     return {
         "ok": True,
         "cell": cell,
@@ -358,3 +376,61 @@ async def export_tournament_wiring():
             for t in doc.get("types", TYPES_META)
         ],
     }
+
+
+# ─────────────── MPCA-235 · Ship B · Audit log + Season freeze ───────────────
+
+@api_router.get("/tournament-wiring/audit")
+async def list_wiring_audit(limit: int = 200, type_id: Optional[str] = None, step_key: Optional[str] = None):
+    """Chronological trail of wiring cell edits. Optional filters by type_id / step_key."""
+    q: Dict[str, Any] = {}
+    if type_id:
+        q["type_id"] = type_id
+    if step_key:
+        q["step_key"] = step_key
+    limit = min(max(limit, 1), 1000)
+    rows = await db.tournament_wiring_audit.find(q, {"_id": 0}).sort("changed_at", -1).limit(limit).to_list(limit)
+    return {"count": len(rows), "rows": rows}
+
+
+@api_router.post("/tournament-wiring/freeze-season/{cycle}")
+async def freeze_season(cycle: str):
+    """Snapshot the current matrix as immutable + versioned. Multiple snapshots
+    per season are allowed (revisions). Each snapshot carries its own version and
+    can be printed as a signed PDF via the /snapshot/{cycle}/{version} route."""
+    doc = await _fetch_or_seed_wiring()
+    now = datetime.now(timezone.utc).isoformat()
+    # Find prior snapshots for this cycle to compute revision number
+    prior_count = await db.tournament_wiring_snapshots.count_documents({"cycle": cycle})
+    snap = {
+        "id":           str(uuid.uuid4()),
+        "cycle":        cycle,
+        "revision":     prior_count + 1,
+        "wiring_version": doc.get("version"),
+        "steps":        doc.get("steps", STEPS_META),
+        "types":        doc.get("types", TYPES_META),
+        "flags":        doc.get("flags", FLAG_LABELS),
+        "cells":        doc.get("cells", {}),
+        "frozen_at":    now,
+        "frozen_by":    "mpca_secretary",
+    }
+    await db.tournament_wiring_snapshots.insert_one(snap)
+    snap.pop("_id", None)
+    return {"ok": True, "snapshot": snap}
+
+
+@api_router.get("/tournament-wiring/snapshots")
+async def list_wiring_snapshots(cycle: Optional[str] = None):
+    q: Dict[str, Any] = {}
+    if cycle:
+        q["cycle"] = cycle
+    rows = await db.tournament_wiring_snapshots.find(q, {"_id": 0, "cells": 0}).sort("frozen_at", -1).to_list(500)
+    return {"count": len(rows), "rows": rows}
+
+
+@api_router.get("/tournament-wiring/snapshots/{snap_id}")
+async def get_wiring_snapshot(snap_id: str):
+    snap = await db.tournament_wiring_snapshots.find_one({"id": snap_id}, {"_id": 0})
+    if not snap:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return snap

@@ -357,20 +357,22 @@ const TournamentDetail = () => {
                         </>
                     ) : (
                         <>
+                            {/* MPCA-235 · Ship A · Boxes ordered to match the 9-step wiring progression */}
+                            {/* 2 · Pool / Participants */}
                             <SetupBox testId="box-participants" icon={UsersRound} label="Participants Matrix" note={(() => { const pools = (t.setup_meta?.division_pools || []).concat(t.setup_meta?.district_pools || []); const totalCodes = pools.flatMap(p => p.division_codes || p.district_codes || []).length; return pools.length ? `${totalCodes} bodies · ${pools.length} pool(s)` : "Set pools first"; })()} onClick={() => setOpenBox(openBox === "participants" ? null : "participants")} active={openBox === "participants"} flag={wiringFlags["box-participants"]} />
+                            {/* 3 · Match Official Posting (moved up from utility footer) */}
+                            <SetupBox testId="box-officials" icon={ShieldCheck} label="Match Officials" note="MPCA assigns umpires · scorers · referees · physios centrally" onClick={() => setOpenBox(openBox === "officials" ? null : "officials")} active={openBox === "officials"} flag={wiringFlags["box-officials"]} />
+                            {/* 4 · Squad */}
                             <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body · click to open selection" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} flag={wiringFlags["box-squads"]} />
+                            {/* 6 · Match Calendar */}
                             <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} flag={wiringFlags["box-calendar"]} />
+                            {/* 6a · Days Engine (support for Match Calendar) */}
                             <SetupBox testId="box-days-engine" icon={CalendarClock} label="Days Engine" note="Match Days · Non-Match Days · calendar" onClick={() => setOpenBox(openBox === "days-engine" ? null : "days-engine")} active={openBox === "days-engine"} flag={wiringFlags["box-days-engine"]} />
+                            {/* 7 · Unified Budget */}
                             <SetupBox testId="box-unified-budget" icon={Wallet} label="Unified Budget" note="Auto ₹ from Calendar × Rate Card × Officials" onClick={() => setOpenBox(openBox === "unified-budget" ? null : "unified-budget")} active={openBox === "unified-budget"} flag={wiringFlags["box-unified-budget"]} />
-                            {/* MPCA-125 · Removed the duplicate "Squad Selection" box — the
-                                "Squads" box above is now the ONLY entry point (multi-body
-                                view for MPCA, direct link to my squad for Division/District). */}
-                            {/* M39t · Consolidated Finance action card — replaces the 6 individual finance boxes */}
+                            {/* 8 · Finance Console (banner-style consolidated card) */}
                             <TournamentFinanceCard tournament={t} persona={persona} />
-                            {/* Aug 2026 · Restored direct-access Closure Letter box.
-                                MPCA generates + signs; Division/District can view once
-                                generated. The panel is still available via
-                                Finance Console → Closure Letter tab for MPCA. */}
+                            {/* 9 · Closure Letter — end of tournament */}
                             <SetupBox
                                 testId="box-closure"
                                 icon={ScrollText}
@@ -379,8 +381,7 @@ const TournamentDetail = () => {
                                 onClick={() => setOpenBox(openBox === "closure" ? null : "closure")}
                                 active={openBox === "closure"}
                             />
-                            {/* MPCA-133+ · Match Officials (moved out of Finance Console per user request). */}
-                            <SetupBox testId="box-officials" icon={ShieldCheck} label="Match Officials" note="MPCA assigns umpires · scorers · referees · physios centrally" onClick={() => setOpenBox(openBox === "officials" ? null : "officials")} active={openBox === "officials"} flag={wiringFlags["box-officials"]} />
+                            {/* Utility footer — audit + comms */}
                             <SetupBox testId="box-activity" icon={History} label="Activity Log" note="Chronological trail of all actions" onClick={() => setOpenBox(openBox === "activity" ? null : "activity")} active={openBox === "activity"} />
                             <SetupBox testId="box-discussion" icon={MessageSquare} label="Discussion" note="Broadcast to all Divisions · or chat privately with one" onClick={() => setOpenBox(openBox === "discussion" ? null : "discussion")} active={openBox === "discussion"} />
                             {t.tournament_scope === "Inter_Divisional" && (

@@ -9,7 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import {
     Cable, Download, RotateCcw, X, Save, Pencil, Info,
-    ChevronRight, LayoutGrid, Layers,
+    ChevronRight, LayoutGrid, Layers, History, Snowflake, FileCheck,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -208,14 +208,23 @@ export default function TournamentWiringConsole() {
 
     const [doc, setDoc]       = useState(null);
     const [loading, setLoad]  = useState(true);
-    const [tab, setTab]       = useState("matrix");   // matrix | bytype
+    const [tab, setTab]       = useState("matrix");   // matrix | bytype | audit | snapshots
     const [editing, setEdit]  = useState(null);       // { type_id, step_key }
+    const [audit, setAudit]   = useState([]);
+    const [snaps, setSnaps]   = useState([]);
+    const [freezing, setFreezing] = useState(false);
 
     const load = async () => {
         setLoad(true);
         try {
-            const r = await axios.get(`${API}/tournament-wiring`);
+            const [r, a, s] = await Promise.all([
+                axios.get(`${API}/tournament-wiring`),
+                axios.get(`${API}/tournament-wiring/audit?limit=200`).catch(() => ({ data: { rows: [] } })),
+                axios.get(`${API}/tournament-wiring/snapshots`).catch(() => ({ data: { rows: [] } })),
+            ]);
             setDoc(r.data);
+            setAudit(a.data.rows || []);
+            setSnaps(s.data.rows || []);
         } catch (e) {
             toast.error("Failed to load wiring matrix");
         } finally {
@@ -223,6 +232,23 @@ export default function TournamentWiringConsole() {
         }
     };
     useEffect(() => { load(); }, []);
+
+    const freezeSeason = async () => {
+        const cycle = window.prompt("Enter the season/cycle to freeze (e.g. 2026-27):", "2026-27");
+        if (!cycle) return;
+        setFreezing(true);
+        try {
+            const r = await axios.post(`${API}/tournament-wiring/freeze-season/${encodeURIComponent(cycle)}`);
+            toast.success(`Snapshot revision ${r.data.snapshot.revision} · ${cycle} frozen`);
+            const s = await axios.get(`${API}/tournament-wiring/snapshots`);
+            setSnaps(s.data.rows || []);
+            setTab("snapshots");
+        } catch (e) {
+            toast.error(e.response?.data?.detail || "Freeze failed");
+        } finally {
+            setFreezing(false);
+        }
+    };
 
     const saveCell = async (draft) => {
         try {
@@ -245,6 +271,10 @@ export default function TournamentWiringConsole() {
                     },
                 },
             }));
+            // Refresh audit log so the new row appears without a page reload
+            axios.get(`${API}/tournament-wiring/audit?limit=200`)
+                .then(a => setAudit(a.data.rows || []))
+                .catch(() => {});
         } catch (e) {
             toast.error(e.response?.data?.detail || "Save failed");
             throw e;
@@ -308,6 +338,11 @@ export default function TournamentWiringConsole() {
                         <Download size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Export JSON
                     </button>
                     {isMpca && (
+                        <button data-testid="wiring-freeze" onClick={freezeSeason} disabled={freezing} style={{ ...btnGhost, background: "#3b2a3a", color: "#fff", borderColor: "#3b2a3a" }}>
+                            <Snowflake size={14} style={{ marginRight: 6, verticalAlign: -2 }} />{freezing ? "Freezing…" : "Freeze season"}
+                        </button>
+                    )}
+                    {isMpca && (
                         <button data-testid="wiring-reset" onClick={resetAll} style={{ ...btnGhost, color: "#b91c1c", borderColor: "#fecaca" }}>
                             <RotateCcw size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Reset to defaults
                         </button>
@@ -330,23 +365,36 @@ export default function TournamentWiringConsole() {
                 <TabBtn active={tab === "bytype"} onClick={() => setTab("bytype")} icon={Layers} testid="wiring-tab-bytype">
                     By Type
                 </TabBtn>
+                <TabBtn active={tab === "audit"} onClick={() => setTab("audit")} icon={History} testid="wiring-tab-audit">
+                    Audit Log <span style={{ marginLeft: 6, fontSize: 10, background: "#f1f5f9", padding: "1px 6px", borderRadius: 999, color: "#334155" }}>{audit.length}</span>
+                </TabBtn>
+                <TabBtn active={tab === "snapshots"} onClick={() => setTab("snapshots")} icon={FileCheck} testid="wiring-tab-snapshots">
+                    Snapshots <span style={{ marginLeft: 6, fontSize: 10, background: "#f1f5f9", padding: "1px 6px", borderRadius: 999, color: "#334155" }}>{snaps.length}</span>
+                </TabBtn>
                 <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14, fontSize: 11, color: "#64748b", paddingBottom: 8 }}>
-                    <Legend />
+                    {(tab === "matrix" || tab === "bytype") && <Legend />}
                 </div>
             </div>
 
-            {tab === "matrix" ? (
+            {tab === "matrix" && (
                 <MatrixView
                     steps={steps} types={types} cells={cells}
                     canEdit={isMpca}
                     onEdit={(type_id, step_key) => setEdit({ type_id, step_key })}
                 />
-            ) : (
+            )}
+            {tab === "bytype" && (
                 <ByTypeView
                     steps={steps} types={types} cells={cells}
                     canEdit={isMpca}
                     onEdit={(type_id, step_key) => setEdit({ type_id, step_key })}
                 />
+            )}
+            {tab === "audit" && (
+                <AuditView audit={audit} typesById={Object.fromEntries(types.map(t => [t.id, t]))} stepsByKey={Object.fromEntries(steps.map(s => [s.key, s]))} />
+            )}
+            {tab === "snapshots" && (
+                <SnapshotsView snapshots={snaps} />
             )}
 
             <CellEditor
@@ -505,6 +553,111 @@ function ByTypeView({ steps, types, cells, canEdit, onEdit }) {
                                 </div>
                             );
                         })}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// ─── Audit view — chronological trail of cell edits ──────────────────────────
+function AuditView({ audit, typesById, stepsByKey }) {
+    if (audit.length === 0) {
+        return (
+            <div data-testid="wiring-audit-empty" style={{ padding: 60, textAlign: "center", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, color: "#64748b", fontSize: 13 }}>
+                No wiring edits yet. Every cell change from now on will be logged here for governance review.
+            </div>
+        );
+    }
+    const fmt = (v) => v === null || v === undefined ? "—" : String(v);
+    return (
+        <div data-testid="wiring-audit-table" style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                        <th style={{ ...thStyle }}>When</th>
+                        <th style={{ ...thStyle }}>Type</th>
+                        <th style={{ ...thStyle }}>Step</th>
+                        <th style={{ ...thStyle }}>Changed</th>
+                        <th style={{ ...thStyle }}>By</th>
+                        <th style={{ ...thStyle, textAlign: "right" }}>Wiring v</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {audit.map((r) => (
+                        <tr key={r.id} style={{ borderTop: "1px solid #f1f5f9" }} data-testid={`wiring-audit-row-${r.id}`}>
+                            <td style={{ ...tdStyle, fontFamily: "ui-monospace, monospace", color: "#475569" }}>
+                                {new Date(r.changed_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                            </td>
+                            <td style={{ ...tdStyle }}>{typesById[r.type_id]?.name || r.type_id}</td>
+                            <td style={{ ...tdStyle }}>{stepsByKey[r.step_key]?.label || r.step_key}</td>
+                            <td style={{ ...tdStyle }}>
+                                {Object.keys(r.diff || {}).length === 0 ? (
+                                    <span style={{ color: "#94a3b8", fontStyle: "italic" }}>no change</span>
+                                ) : (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                        {Object.entries(r.diff).map(([k, [before, after]]) => (
+                                            <div key={k} style={{ fontSize: 11, lineHeight: 1.4 }}>
+                                                <span style={{ ...metaPill, background: "#f1f5f9", borderColor: "#cbd5e1" }}>{k}</span>{" "}
+                                                <span style={{ color: "#b91c1c", textDecoration: "line-through" }}>{fmt(before)}</span>{" → "}
+                                                <span style={{ color: "#166534", fontWeight: 600 }}>{fmt(after)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </td>
+                            <td style={{ ...tdStyle, fontSize: 11, color: "#475569" }}>{r.changed_by}</td>
+                            <td style={{ ...tdStyle, textAlign: "right", fontFamily: "ui-monospace, monospace", color: "#3b2a3a", fontWeight: 700 }}>v{r.version}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+// ─── Snapshots view — frozen season records ──────────────────────────────────
+function SnapshotsView({ snapshots }) {
+    if (snapshots.length === 0) {
+        return (
+            <div data-testid="wiring-snapshots-empty" style={{ padding: 60, textAlign: "center", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, color: "#64748b", fontSize: 13 }}>
+                No frozen snapshots yet. Click <b>Freeze season</b> in the header to lock the current matrix as the signed 2026-27 wiring for board approval.
+            </div>
+        );
+    }
+    return (
+        <div data-testid="wiring-snapshots-list" style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+            {snapshots.map((s) => (
+                <div key={s.id} data-testid={`wiring-snapshot-${s.id}`} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
+                    <div style={{ background: "linear-gradient(180deg, #3b2a3a 0%, #2a1e2e 100%)", padding: "12px 16px", color: "#fff" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Snowflake size={14} />
+                            <span style={{ fontWeight: 700, fontSize: 14 }}>Season {s.cycle}</span>
+                            <span style={{ marginLeft: "auto", fontSize: 11, background: "rgba(255,255,255,0.15)", padding: "2px 8px", borderRadius: 999 }}>rev {s.revision}</span>
+                        </div>
+                    </div>
+                    <div style={{ padding: "14px 16px", fontSize: 12, color: "#475569" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                            <span>Wiring version</span>
+                            <span style={{ fontWeight: 700, color: "#3b2a3a" }}>v{s.wiring_version}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                            <span>Frozen at</span>
+                            <span style={{ fontFamily: "ui-monospace, monospace" }}>{new Date(s.frozen_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                            <span>Frozen by</span>
+                            <span>{s.frozen_by}</span>
+                        </div>
+                        <a
+                            href={`${API}/tournament-wiring/snapshots/${s.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            data-testid={`wiring-snapshot-download-${s.id}`}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", background: "#fbf7ed", border: "1px solid #b8860b", color: "#3b2a3a", fontSize: 11, textDecoration: "none", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}
+                        >
+                            <Download size={12} /> Download JSON
+                        </a>
                     </div>
                 </div>
             ))}

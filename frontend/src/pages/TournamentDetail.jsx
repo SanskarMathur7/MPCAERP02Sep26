@@ -11,6 +11,7 @@ import {
 import CricketLoader from "@/components/CricketLoader";
 import TournamentSubTabs from "@/components/TournamentSubTabs";
 import TournamentProgress from "@/components/TournamentProgress";
+import TournamentProgressionRibbon from "@/components/TournamentProgressionRibbon";
 import InputVariablesPanel from "@/components/InputVariablesPanel";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
 import TournamentInvoicesPanel from "@/components/TournamentInvoicesPanel";
@@ -238,6 +239,11 @@ const TournamentDetail = () => {
             {/* Sprint M19 · Progress stepper (5 phases) */}
             <div className="mb-8">
                 <TournamentProgress tournamentId={id} refreshKey={progressKey} />
+            </div>
+
+            {/* MPCA-235 · Ship 2 · Tournament Progression Ribbon (Wiring-driven) */}
+            <div className="mb-8">
+                <TournamentProgressionRibbon tournamentId={id} refreshKey={progressKey} />
             </div>
 
             {/* Sprint M19 · 8 setup boxes grid */}

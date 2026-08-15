@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentCreateModal from "@/components/TournamentCreateModal";
+import { TournamentProgressionRibbonMini } from "@/components/TournamentProgressionRibbon";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -293,6 +294,10 @@ const Tournaments = () => {
                                             })}
                                         </div>
                                     )}
+                                    {/* MPCA-235 · Ship 2 · mini wiring ribbon */}
+                                    <div className="mt-2">
+                                        <TournamentProgressionRibbonMini tournament={t} />
+                                    </div>
                                 </div>
                                 <span className="font-mono text-[11px] text-mpca-gray-dark uppercase tracking-wider w-20 text-right">{ageLabel(t)}</span>
                                 <Pill tone={tm.tone} label={tm.label} testId={"trn-type-" + t.tournament_type} />

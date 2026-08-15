@@ -40,7 +40,7 @@ async def list_tournament_master_grouped(include_inactive: bool = False):
     docs = await db.tournament_master.find(q, {"_id": 0}).sort([
         ("category", 1), ("sort_order", 1), ("name", 1),
     ]).to_list(500)
-    buckets: dict = {"BCCI": [], "Inter_Divisional": [], "Inter_District": []}
+    buckets: dict = {"BCCI": [], "Inter_Divisional": [], "Championship": [], "Inter_District": []}
     for d in docs:
         buckets.setdefault(d["category"], []).append(d)
     # Pre-Tournament Camps mirror Inter_Divisional entries (auto-derived).

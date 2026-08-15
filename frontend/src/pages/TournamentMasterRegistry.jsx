@@ -8,11 +8,17 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 
 const CATEGORIES = [
-    { code: "BCCI", label: "BCCI", subtitle: "Ranji · Vijay Hazare · SMAT · Duleep etc." },
-    { code: "Inter_Divisional", label: "Inter-Divisional", subtitle: "MPCA-hosted trophies across Divisions" },
-    { code: "Pre_Tournament_Camp", label: "Pre-Tournament Camp", subtitle: "Auto-mirrors Inter-Divisional entries", readOnly: true },
-    { code: "Inter_District", label: "Inter-District", subtitle: "Division-hosted trophies across Districts" },
+    { code: "BCCI", label: "BCCI", subtitle: "Ranji · Vijay Hazare · SMAT · Duleep etc.", managed_by: "MPCA", flow: "MPCA → Division" },
+    { code: "Inter_Divisional", label: "Inter-Divisional", subtitle: "MPCA-hosted trophies across Divisions", managed_by: "MPCA", flow: "MPCA → Division" },
+    { code: "Championship", label: "Championship", subtitle: "MPCA-hosted championship series (age-group / gender-based)", managed_by: "MPCA", flow: "MPCA → Division" },
+    { code: "Pre_Tournament_Camp", label: "Pre-Tournament Camp", subtitle: "Auto-mirrors Inter-Divisional entries", managed_by: "MPCA", flow: "MPCA → Division", readOnly: true },
+    { code: "Inter_District", label: "Inter-District", subtitle: "Division-hosted trophies across Districts", managed_by: "Division", flow: "Division → District" },
 ];
+
+const MANAGED_BY_STYLE = {
+    MPCA:     "bg-mpca-navy text-mpca-ivory border-mpca-navy",
+    Division: "bg-mpca-brass text-mpca-ivory border-mpca-brass",
+};
 
 const emptyForm = () => ({
     name: "", short_name: "", description: "",
@@ -28,7 +34,7 @@ const PLAY_TYPE_LABEL = { Multi_Day: "Multi Day", Limited_Overs: "Ltd Overs" };
 export default function TournamentMasterRegistry() {
     const { persona } = useAuth();
     const canEdit = persona?.body_type === "State" || persona?.body_code === "MPCA";
-    const [buckets, setBuckets] = useState({ BCCI: [], Inter_Divisional: [], Pre_Tournament_Camp: [], Inter_District: [] });
+    const [buckets, setBuckets] = useState({ BCCI: [], Inter_Divisional: [], Championship: [], Pre_Tournament_Camp: [], Inter_District: [] });
     const [tab, setTab] = useState("BCCI");
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
@@ -155,6 +161,24 @@ export default function TournamentMasterRegistry() {
                 </label>
             </div>
 
+            <div className="bg-mpca-parchment/40 border border-mpca-brass/30 p-4 mb-6" data-testid="registry-flow-legend">
+                <div className="text-[10px] uppercase tracking-widest text-mpca-brass mb-2">Governance Flow · Depends on the Category&apos;s Owner</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
+                    <div className="flex items-start gap-2">
+                        <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 border ${MANAGED_BY_STYLE.MPCA} shrink-0`}>MPCA</span>
+                        <div>
+                            <b>MPCA → Division</b> approval chain. MPCA sanctions the budget and locks the snapshot; Divisions file invoices, extras and reimbursement claims against it.
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                        <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 border ${MANAGED_BY_STYLE.Division} shrink-0`}>Division</span>
+                        <div>
+                            <b>Division → District</b> approval chain. The hosting Division sanctions and locks; Districts file their invoices and claims upward.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div className="flex flex-wrap gap-2 mb-6" data-testid="registry-tabs">
                 {CATEGORIES.map((c) => {
                     const n = (buckets[c.code] || []).length;
@@ -168,6 +192,9 @@ export default function TournamentMasterRegistry() {
                         >
                             <div className="text-xs uppercase tracking-widest font-mono flex items-center gap-2">
                                 {c.label} · <span className="opacity-70">{n}</span>
+                                <span className={`text-[8px] px-1.5 py-0.5 border ${MANAGED_BY_STYLE[c.managed_by]} ${isActive ? "" : "opacity-90"}`} data-testid={`registry-managedby-${c.code}`}>
+                                    {c.managed_by}
+                                </span>
                             </div>
                             <div className={`text-[10px] mt-1 ${isActive ? "text-mpca-gold-light/70" : "text-mpca-brass"}`}>{c.subtitle}</div>
                         </button>
@@ -181,7 +208,19 @@ export default function TournamentMasterRegistry() {
 
             <div className="bulletin-card p-0 overflow-hidden">
                 <div className="bg-mpca-navy text-mpca-gold-light px-4 py-3 flex items-center justify-between">
-                    <div className="text-[10px] uppercase tracking-widest">{activeCategory?.label} · {rows.length} entries</div>
+                    <div className="flex items-center gap-3">
+                        <div className="text-[10px] uppercase tracking-widest">{activeCategory?.label} · {rows.length} entries</div>
+                        {activeCategory?.managed_by && (
+                            <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 border ${MANAGED_BY_STYLE[activeCategory.managed_by]}`} data-testid="registry-active-managedby">
+                                Managed by {activeCategory.managed_by}
+                            </span>
+                        )}
+                        {activeCategory?.flow && (
+                            <span className="text-[9px] italic opacity-80" data-testid="registry-active-flow">
+                                Flow: {activeCategory.flow}
+                            </span>
+                        )}
+                    </div>
                     {!isReadOnly && (
                         <button
                             onClick={() => { setAdding((s) => !s); setForm(emptyForm()); }}

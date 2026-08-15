@@ -373,28 +373,38 @@ def compute_tournament_budget(
     tot_md = sum(r["md_amount"] for r in match_rows)
     tot_nmd = sum(r["nmd_amount"] for r in match_rows)
 
-    # MPCA-225 · Owner-attributed per-body rollup — feeds Finance Console.
-    # Attribution rules:
-    #   • Host  owner heads   → host body of the pool the match is in
-    #   • Officials heads     → host body (they front-pay; MPCA reimburses via claim)
-    #   • Common heads (MOM)  → MPCA (State-level)
-    #   • Visitor heads       → away team of the match (the non-host side)
-    by_body: Dict[str, Dict[str, float]] = {}
-    # MPCA-226 · Per-body per-head allocations (feeds Finance Console prepare-budgets)
+    # MPCA-225/233 · Owner-attributed per-body-per-pool rollup — feeds Finance Console.
+    # Attribution rules (evaluated per match, tagged with its pool):
+    #   • Host  owner heads   → (host body, pool)
+    #   • Officials heads     → (host body, pool)
+    #   • Common heads (MOM)  → (MPCA, pool)
+    #   • Visitor heads       → (away team, pool)
+    # A Division that is Host in one pool AND Visitor in another gets TWO separate
+    # rows so Finance Console can materialise TWO independent TournamentBudget docs.
+    by_body: Dict[str, Dict[str, Any]] = {}   # key = f"{body_code}|{pool_id or ''}"
     by_body_heads: Dict[str, Dict[str, Dict[str, Any]]] = {}
-    def _bump(code: str, key: str, amt: float):
+
+    def _row_key(code: str, pool_id: Optional[str]) -> str:
+        return f"{code}|{pool_id or ''}"
+
+    def _bump(code: str, pool_id: Optional[str], pool_name: Optional[str], role: str, key: str, amt: float):
         if not code:
             return
-        if code not in by_body:
-            by_body[code] = {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
-        by_body[code][key] = by_body[code].get(key, 0.0) + amt
-        by_body[code]["total"] = by_body[code].get("budget", 0.0) + by_body[code].get("travel_grant", 0.0)
+        rk = _row_key(code, pool_id)
+        if rk not in by_body:
+            by_body[rk] = {
+                "body_code": code, "pool_id": pool_id, "pool_name": pool_name, "role": role,
+                "budget": 0.0, "travel_grant": 0.0, "total": 0.0,
+            }
+        by_body[rk][key] = by_body[rk].get(key, 0.0) + amt
+        by_body[rk]["total"] = by_body[rk].get("budget", 0.0) + by_body[rk].get("travel_grant", 0.0)
 
-    def _bump_head(code: str, head_key: str, head_name: str, owner: str, amt: float):
+    def _bump_head(code: str, pool_id: Optional[str], head_key: str, head_name: str, owner: str, amt: float):
         if not code or amt == 0:
             return
-        by_body_heads.setdefault(code, {})
-        row = by_body_heads[code].setdefault(head_key, {
+        rk = _row_key(code, pool_id)
+        by_body_heads.setdefault(rk, {})
+        row = by_body_heads[rk].setdefault(head_key, {
             "head_key": head_key, "head": head_name, "owner": owner, "limit_inr": 0.0,
         })
         row["limit_inr"] = float(row.get("limit_inr", 0.0)) + float(amt)
@@ -403,11 +413,11 @@ def compute_tournament_budget(
     for m in valid_matches:
         pool = _pool_of_match(m, pools)
         host_code = (pool.get("host_division_code") or pool.get("host_district_code")) if pool else None
+        pool_id = (pool.get("id") or pool.get("pool_id")) if pool else None
+        pool_name = (pool.get("name") or pool.get("pool_name")) if pool else None
         team_a = m.get("team_a") or m.get("teamA") or m.get("home_team")
         team_b = m.get("team_b") or m.get("teamB") or m.get("away_team")
-        # Away side (visitor) — whichever side isn't the host
         away_code = team_b if host_code == team_a else team_a
-        # Iterate per-head amounts for this match
         for h in all_heads:
             per = next((mr["per_head"].get(h["key"]) for mr in match_rows if mr["id"] == m.get("id")), None)
             if not per:
@@ -417,21 +427,22 @@ def compute_tournament_budget(
                 continue
             owner = h.get("owner", "Common")
             target = None
+            role = None
             if owner == "Host":
-                target = host_code
+                target, role = host_code, "Host"
             elif owner == "Officials":
-                target = host_code
+                target, role = host_code, "Host"
             elif owner == "Common":
-                target = "MPCA"
+                target, role = "MPCA", "Common"
             elif owner == "Visitor":
-                target = away_code
+                target, role = away_code, "Visitor"
             if target:
-                _bump(target, "budget", amt)
-                _bump_head(target, h["key"], h["name"], owner, amt)
+                _bump(target, pool_id, pool_name, role, "budget", amt)
+                _bump_head(target, pool_id, h["key"], h["name"], owner, amt)
 
-    # MPCA-226 · Attach per-body head allocations onto by_body rows
-    for code, row in by_body.items():
-        row["head_allocations"] = list(by_body_heads.get(code, {}).values())
+    # MPCA-226/233 · Attach per-(body,pool) head allocations onto by_body rows
+    for rk, row in by_body.items():
+        row["head_allocations"] = list(by_body_heads.get(rk, {}).values())
 
     return {
         "format_group": rate_card.get("format_group"),
@@ -731,22 +742,25 @@ async def compute_unified_budget_for_tournament(tid: str, save: bool = False):
     budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
     travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=trip_overrides)
 
-    # MPCA-225 · Merge travel-grant per-Division into budget.by_body_totals so
-    # a single source of truth carries both budget + travel for each body.
-    # MPCA-226 · Also append a synthetic "Travel Grant" head_allocation so the
-    # Finance Console prepare-budgets sees travel as a distinct line item.
-    body_map = {b["body_code"]: b for b in budget.get("by_body_totals") or []}
-    for d in (travel.get("by_division") or []):
-        code = d.get("division")
-        amt = float(d.get("total", 0) or 0)
-        row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0, "head_allocations": []}
+    # MPCA-225/233 · Merge travel-grant per-Division-per-pool into by_body_totals.
+    # Use `trips` (not by_division) because trips carry pool_id — critical when
+    # a Division is Host in one pool and Visitor in another (they get 2 separate
+    # TournamentBudget rows so they can accept/reject independently).
+    body_map = {f"{b['body_code']}|{b.get('pool_id') or ''}": b for b in budget.get("by_body_totals") or []}
+    for tr in (travel.get("trips") or []):
+        code = tr.get("division")
+        pool_id = tr.get("pool_id")
+        pool_name = tr.get("pool_name")
+        amt = float(tr.get("total", 0) or 0)
+        rk = f"{code}|{pool_id or ''}"
+        row = body_map.get(rk) or {"body_code": code, "pool_id": pool_id, "pool_name": pool_name, "role": "Visitor", "budget": 0.0, "travel_grant": 0.0, "total": 0.0, "head_allocations": []}
         row["travel_grant"] = row.get("travel_grant", 0.0) + amt
         row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
         allocs = list(row.get("head_allocations") or [])
         if amt > 0 and not any(a.get("head_key") == "travel_grant" for a in allocs):
             allocs.append({"head_key": "travel_grant", "head": "Travel Grant", "owner": "Visitor", "limit_inr": amt})
         row["head_allocations"] = allocs
-        body_map[code] = row
+        body_map[rk] = row
     budget["by_body_totals"] = list(body_map.values())
 
     snapshot = {
@@ -900,19 +914,22 @@ async def lock_unified_budget(tid: str):
     budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
     travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=t.get("trip_overrides") or {})
 
-    # Merge travel-grant totals + synthetic head_allocations into by_body_totals
-    body_map = {b["body_code"]: b for b in budget.get("by_body_totals") or []}
-    for d in (travel.get("by_division") or []):
-        code = d.get("division")
-        amt = float(d.get("total", 0) or 0)
-        row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0, "head_allocations": []}
+    # Merge travel-grant per-(body,pool) with synthetic head_allocations
+    body_map = {f"{b['body_code']}|{b.get('pool_id') or ''}": b for b in budget.get("by_body_totals") or []}
+    for tr in (travel.get("trips") or []):
+        code = tr.get("division")
+        pool_id = tr.get("pool_id")
+        pool_name = tr.get("pool_name")
+        amt = float(tr.get("total", 0) or 0)
+        rk = f"{code}|{pool_id or ''}"
+        row = body_map.get(rk) or {"body_code": code, "pool_id": pool_id, "pool_name": pool_name, "role": "Visitor", "budget": 0.0, "travel_grant": 0.0, "total": 0.0, "head_allocations": []}
         row["travel_grant"] = row.get("travel_grant", 0.0) + amt
         row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
         allocs = list(row.get("head_allocations") or [])
         if amt > 0 and not any(a.get("head_key") == "travel_grant" for a in allocs):
             allocs.append({"head_key": "travel_grant", "head": "Travel Grant", "owner": "Visitor", "limit_inr": amt})
         row["head_allocations"] = allocs
-        body_map[code] = row
+        body_map[rk] = row
     budget["by_body_totals"] = list(body_map.values())
 
     prev_version = ((t.get("unified_budget_snapshot") or {}).get("locked_version") or 0)
@@ -977,15 +994,18 @@ async def unified_budget_status(tid: str):
     default_squad = int(t.get("max_squad_size") or 18)
     live_budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
     live_travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=t.get("trip_overrides") or {})
-    # Merge travel into live_by_body — same merge as compute endpoint
-    body_map = {b["body_code"]: b for b in live_budget.get("by_body_totals") or []}
-    for d in (live_travel.get("by_division") or []):
-        code = d.get("division")
-        amt = float(d.get("total", 0) or 0)
-        row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
+    # Merge travel into live_by_body — per-(body,pool)
+    body_map = {f"{b['body_code']}|{b.get('pool_id') or ''}": b for b in live_budget.get("by_body_totals") or []}
+    for tr in (live_travel.get("trips") or []):
+        code = tr.get("division")
+        pool_id = tr.get("pool_id")
+        pool_name = tr.get("pool_name")
+        amt = float(tr.get("total", 0) or 0)
+        rk = f"{code}|{pool_id or ''}"
+        row = body_map.get(rk) or {"body_code": code, "pool_id": pool_id, "pool_name": pool_name, "role": "Visitor", "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
         row["travel_grant"] = row.get("travel_grant", 0.0) + amt
         row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
-        body_map[code] = row
+        body_map[rk] = row
     live_grand = float(live_budget.get("grand_total") or 0) + float(live_travel.get("grand_total") or 0)
 
     has_drift = is_locked and abs(live_grand - locked_grand) > 1.0

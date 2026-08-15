@@ -63,6 +63,25 @@ export default function TournamentSchedulePDF() {
         return g;
     }, [matches]);
 
+    // MPCA-233 · Grounds-used rollup — group matches by their assigned ground and
+    // list which stage(s) each venue hosts so recipients can eyeball venue plan.
+    const groundsUsed = useMemo(() => {
+        const map = {};
+        matches.forEach((m) => {
+            const gid = m.ground_id;
+            const label = groundsMap[gid] || m.ground_name || m.venue_name;
+            if (!label) return;
+            const stage = m.stage || "Other";
+            const bucket = map[label] = map[label] || { name: label, ground_id: gid, stages: new Set(), match_count: 0, dates: new Set() };
+            bucket.stages.add(stage === "Semi Final" || stage === "Final" ? "Knockouts" : stage);
+            bucket.match_count += 1;
+            bucket.dates.add(m.match_date || m.from_date);
+        });
+        return Object.values(map)
+            .map((b) => ({ ...b, stages: [...b.stages].join(" · "), dates: [...b.dates].filter(Boolean).sort() }))
+            .sort((a, b) => b.match_count - a.match_count);
+    }, [matches, groundsMap]);
+
     if (loading || !t) {
         return <div className="flex items-center justify-center h-64 text-mpca-brass"><Loader2 className="animate-spin" size={16} /> Loading schedule…</div>;
     }
@@ -128,8 +147,35 @@ export default function TournamentSchedulePDF() {
                 </>
             )}
 
+            {/* Grounds Used */}
+            {groundsUsed.length > 0 && (
+                <>
+                    <h3 className="text-lg border-b border-black mb-2 mt-4">2. Grounds Used</h3>
+                    <table className="w-full text-[11px] border-collapse mb-4" data-testid="schedule-grounds-table">
+                        <thead>
+                            <tr className="border-b border-black">
+                                <th className="text-left py-1 pr-2">Ground / Venue</th>
+                                <th className="text-left py-1 pr-2 w-32">Stage(s)</th>
+                                <th className="text-right py-1 pr-2 w-16">Matches</th>
+                                <th className="text-left py-1 pr-2">Dates</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {groundsUsed.map((g, i) => (
+                                <tr key={i} className="border-b border-gray-300 align-top" data-testid={`schedule-ground-${i}`}>
+                                    <td className="py-1 pr-2 font-bold">{g.name}</td>
+                                    <td className="py-1 pr-2">{g.stages}</td>
+                                    <td className="py-1 pr-2 text-right font-mono">{g.match_count}</td>
+                                    <td className="py-1 pr-2 font-mono text-[10px]">{g.dates.slice(0, 5).map((d) => fmtDate(d)).join(" · ")}{g.dates.length > 5 ? ` +${g.dates.length - 5} more` : ""}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </>
+            )}
+
             {/* Match Schedule */}
-            <h3 className="text-lg border-b border-black mb-2 mt-4">2. Match Schedule</h3>
+            <h3 className="text-lg border-b border-black mb-2 mt-4">3. Match Schedule</h3>
             {["League", "Knockouts", "Other"].map((stageName) => {
                 const rows = grouped[stageName];
                 if (!rows.length) return null;

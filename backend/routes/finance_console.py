@@ -390,19 +390,22 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
         default_squad = int(t.get("max_squad_size") or 18)
         budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
         travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=t.get("trip_overrides") or {})
-        # Merge travel per body + synthetic head allocation
-        body_map = {b["body_code"]: b for b in budget.get("by_body_totals") or []}
-        for d in (travel.get("by_division") or []):
-            code = d.get("division")
-            amt = float(d.get("total", 0) or 0)
-            row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0, "head_allocations": []}
+        # Merge travel per (body,pool) + synthetic head allocation
+        body_map = {f"{b['body_code']}|{b.get('pool_id') or ''}": b for b in budget.get("by_body_totals") or []}
+        for tr in (travel.get("trips") or []):
+            code = tr.get("division")
+            pool_id = tr.get("pool_id")
+            pool_name = tr.get("pool_name")
+            amt = float(tr.get("total", 0) or 0)
+            rk = f"{code}|{pool_id or ''}"
+            row = body_map.get(rk) or {"body_code": code, "pool_id": pool_id, "pool_name": pool_name, "role": "Visitor", "budget": 0.0, "travel_grant": 0.0, "total": 0.0, "head_allocations": []}
             row["travel_grant"] = row.get("travel_grant", 0.0) + amt
             row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
             allocs = list(row.get("head_allocations") or [])
             if amt > 0 and not any(a.get("head_key") == "travel_grant" for a in allocs):
                 allocs.append({"head_key": "travel_grant", "head": "Travel Grant", "owner": "Visitor", "limit_inr": amt})
             row["head_allocations"] = allocs
-            body_map[code] = row
+            body_map[rk] = row
         budget["by_body_totals"] = list(body_map.values())
         source = "live"
 
@@ -417,6 +420,9 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
 
     for row in by_body:
         body_code = row.get("body_code")
+        pool_id = row.get("pool_id")
+        pool_name = row.get("pool_name") or ""
+        role = row.get("role") or ("Host" if float(row.get("budget", 0)) >= float(row.get("travel_grant", 0)) else "Visitor")
         if not body_code:
             continue
         # Skip MPCA — it's the sanctioning authority, not a claimant
@@ -426,37 +432,42 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
 
         allocs = list(row.get("head_allocations") or [])
         if not allocs:
-            skipped.append({"body_code": body_code, "reason": "no head allocations"})
+            skipped.append({"body_code": body_code, "pool_id": pool_id, "reason": "no head allocations"})
             continue
 
-        # Skip if a live budget already exists for this body
-        live = await db.tournament_budgets.find_one({
+        # MPCA-233 · One budget per (body_code, pool_id) so a Division that's Host in
+        # one pool AND Visitor in another gets TWO independent TournamentBudget docs.
+        live_q = {
             "tournament_id": tid,
             "body_id": body_code,
             "fiscal_cycle": cycle,
-            "status": {"$in": [
-                "Submitted", "Approved", "Sent_To_Division",
-                "Accepted_By_Division",
-            ]},
-        }, {"_id": 0})
+            "status": {"$in": ["Submitted", "Approved", "Sent_To_Division", "Accepted_By_Division"]},
+        }
+        if pool_id:
+            live_q["pool_id"] = pool_id
+        live = await db.tournament_budgets.find_one(live_q, {"_id": 0})
         if live:
             skipped.append({
                 "body_code": body_code,
+                "pool_id": pool_id,
                 "budget_no": live.get("budget_no"),
                 "reason": f"already {live.get('status')}",
             })
             continue
 
-        # Replace any Draft / Revision_Requested / Returned rows
-        old_draft = await db.tournament_budgets.find_one({
+        # Replace any Draft / Revision_Requested / Returned rows for this (body,pool)
+        draft_q = {
             "tournament_id": tid,
             "body_id": body_code,
             "fiscal_cycle": cycle,
             "status": {"$in": ["Draft", "Revision_Requested", "Returned"]},
-        }, {"_id": 0})
+        }
+        if pool_id:
+            draft_q["pool_id"] = pool_id
+        old_draft = await db.tournament_budgets.find_one(draft_q, {"_id": 0})
         if old_draft:
             await db.tournament_budgets.delete_one({"id": old_draft["id"]})
-            replaced.append({"body_code": body_code, "budget_no": old_draft.get("budget_no")})
+            replaced.append({"body_code": body_code, "pool_id": pool_id, "budget_no": old_draft.get("budget_no")})
 
         head_allocs = [BudgetHeadAllocation(
             head=a["head"], limit_inr=float(a["limit_inr"]),
@@ -491,7 +502,6 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
 
         total = round(sum(h.limit_inr for h in head_allocs), 2)
         body = await db.bodies.find_one({"code": body_code}, {"_id": 0})
-        role = "Host" if float(row.get("budget", 0)) >= float(row.get("travel_grant", 0)) else "Visitor"
 
         tb = TournamentBudget(
             budget_no=await _next_budget_no(cycle),
@@ -500,11 +510,13 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
             body_id=body_code,
             body_name=(body or {}).get("name", body_code),
             fiscal_cycle=cycle,
+            pool_id=pool_id,
+            pool_name=pool_name,
             head_allocations=[h.model_dump() for h in head_allocs],
             total_ceiling_inr=total,
             status="Draft",
             notes=(f"MPCA prepared · Unified Budget {source} · {role} allocation · "
-                   f"{len(head_allocs)} heads · ₹{total:,.0f}"),
+                   f"Pool: {pool_name or '—'} · {len(head_allocs)} heads · ₹{total:,.0f}"),
             participant_body_code=body_code,
             prepared_by_name=payload.prepared_by_name,
             role_flavour=role,
@@ -518,6 +530,7 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
         created.append({
             "budget_id": tb.id, "budget_no": tb.budget_no,
             "body_code": body_code, "role": role,
+            "pool_id": pool_id, "pool_name": pool_name,
             "total_inr": total, "heads_count": len(head_allocs),
         })
 

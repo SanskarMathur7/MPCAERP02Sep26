@@ -101,6 +101,11 @@ const Tournaments = () => {
     const [createOpen, setCreateOpen] = useState(false);
     const [viewMode, setViewMode] = useState("list"); // 'list' | 'calendar'
     const [accBusy, setAccBusy] = useState(null); // tournament id being acted on
+    // MPCA-235 · Ship 4 · MPCA state persona defaults to hiding Camp/School/Club
+    // tournaments until their Finance claim is submitted. Toggle to show all.
+    const isMpcaState = persona?.body_type === "State";
+    const [includeCampScoped, setIncludeCampScoped] = useState(!isMpcaState);
+    const [hiddenCount, setHiddenCount] = useState(0);
 
     const handleAcceptance = async (tid, action) => {
         const note = action === "reject" ? window.prompt("Optional note explaining the rejection (leave blank if none):") : null;
@@ -118,18 +123,23 @@ const Tournaments = () => {
 
     const load = async () => {
         try {
-            const [l, s, b] = await Promise.all([
-                fetchTournaments(),
+            // MPCA-235 · Ship 4 · Fetch full + filtered counts so we can show
+            // the "N hidden — Show all" chip when MPCA state is looking.
+            const params = includeCampScoped ? {} : { include_camp_scoped: false };
+            const [l, lAll, s, b] = await Promise.all([
+                fetchTournaments(params),
+                isMpcaState && !includeCampScoped ? fetchTournaments({}) : Promise.resolve(null),
                 fetchTournamentStats(),
                 fetchBodies().catch(() => []),
             ]);
             setList(l);
             setStats(s);
             setBodies(b);
+            setHiddenCount(lAll ? Math.max(0, lAll.length - l.length) : 0);
         } finally { setLoading(false); }
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => { load(); }, [includeCampScoped]);
 
     const filtered = useMemo(() => {
         let r = list;
@@ -227,6 +237,24 @@ const Tournaments = () => {
                     </button>
                 ))}
             </div>
+
+            {/* MPCA-235 · Ship 4 · MPCA state visibility toggle */}
+            {isMpcaState && (hiddenCount > 0 || includeCampScoped) && (
+                <div className="mb-4 flex items-center gap-3 text-[11px]" data-testid="mpca-visibility-toggle">
+                    <span className="uppercase tracking-widest text-mpca-brass">
+                        {includeCampScoped
+                            ? "Showing all tournaments including Camps · School · Club (visibility · on-submit)"
+                            : `${hiddenCount} tournament${hiddenCount === 1 ? "" : "s"} hidden until their Finance claim is submitted`}
+                    </span>
+                    <button
+                        onClick={() => setIncludeCampScoped(v => !v)}
+                        data-testid="mpca-visibility-toggle-btn"
+                        className="px-2.5 py-1 text-[10px] uppercase tracking-widest font-semibold border border-mpca-brass/50 text-mpca-brass hover:bg-mpca-brass/10"
+                    >
+                        {includeCampScoped ? "Focus on core" : "Show all"}
+                    </button>
+                </div>
+            )}
 
             {(
             <div className="bulletin-card overflow-hidden" data-testid="trn-list">

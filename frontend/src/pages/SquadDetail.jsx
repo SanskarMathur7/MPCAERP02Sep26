@@ -74,6 +74,24 @@ const SquadDetail = () => {
     const [roleFilter, setRoleFilter] = useState("all");
     const [catFilter, setCatFilter] = useState("all");
     const [err, setErr] = useState("");
+    // MPCA-235 · Ship 6 · Wiring-driven squad-mode hint (Manual PDF vs Register-linked)
+    const [wiringSquadMode, setWiringSquadMode] = useState(null);
+
+    // Fetch the wiring status for this squad's tournament and read the 'squad'
+    // step's `mode` attribute. Advisory only — both PDF upload and player picker
+    // remain available regardless of mode.
+    useEffect(() => {
+        if (!tournament?.id) return;
+        let alive = true;
+        api.get(`/tournaments/${tournament.id}/wiring-status`)
+            .then(r => {
+                if (!alive) return;
+                const squadStep = (r.data.steps || []).find(s => s.key === "squad");
+                setWiringSquadMode(squadStep ? { mode: squadStep.mode, owner: squadStep.owner, text: squadStep.text } : null);
+            })
+            .catch(() => { if (alive) setWiringSquadMode(null); });
+        return () => { alive = false; };
+    }, [tournament?.id]);
 
     const bootstrap = useCallback(async () => {
         setLoading(true);
@@ -465,6 +483,42 @@ const SquadDetail = () => {
                     <Info size={12} className="mt-0.5 shrink-0" />
                     <div>
                         This tournament is still in <b>Draft</b>. You can build the squad now — once MPCA moves the tournament to <b>Upcoming</b>, the roster will be locked to changes until squad selection formally opens.
+                    </div>
+                </div>
+            )}
+
+            {/* MPCA-235 · Ship 6 · Wiring-driven squad-mode banner (advisory) */}
+            {wiringSquadMode && wiringSquadMode.mode !== "NA" && (
+                <div
+                    data-testid="squad-wiring-mode-banner"
+                    className={
+                        "mb-4 border px-4 py-3 text-[11px] flex items-start gap-3 " +
+                        (wiringSquadMode.mode === "Manual_PDF"
+                            ? "border-mpca-brass/40 bg-mpca-parchment/70 text-mpca-green-dark"
+                            : "border-mpca-green-dark/30 bg-mpca-ivory text-mpca-green-dark")
+                    }
+                >
+                    <Info size={14} className="mt-0.5 shrink-0 text-mpca-brass" />
+                    <div className="flex-1">
+                        <div className="uppercase tracking-widest text-[10px] text-mpca-brass mb-1">
+                            Wired for this tournament type · {wiringSquadMode.owner} owned
+                        </div>
+                        {wiringSquadMode.mode === "Manual_PDF" ? (
+                            <div>
+                                <b>Manual · PDF only</b> — the recommended flow is to upload a signed squad-list PDF (see the “Signed Copy” section below). The player picker still works and you may use it for record-keeping, but MPCA officially accepts the signed PDF for this tournament type.
+                            </div>
+                        ) : wiringSquadMode.mode === "Register_Linked" ? (
+                            <div>
+                                <b>Register-linked</b> — select players from your Player Register below. Once the squad is submitted, upload the signed copy for MPCA to approve.
+                            </div>
+                        ) : (
+                            <div>
+                                <b>Auto-computed</b> — squad is derived automatically. Manual edits below are advisory only.
+                            </div>
+                        )}
+                        {wiringSquadMode.text && (
+                            <div className="mt-1 text-[10px] text-mpca-gray-dark italic">{wiringSquadMode.text}</div>
+                        )}
                     </div>
                 </div>
             )}

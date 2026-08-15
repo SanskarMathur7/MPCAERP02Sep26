@@ -118,6 +118,7 @@ async def list_tournaments(
     scope: Optional[TournamentScope] = None,
     fiscal_cycle: Optional[str] = None,
     format: Optional[TournamentFormat] = None,
+    include_camp_scoped: bool = True,   # MPCA-235 · Ship 4 · Visibility filter
     skip: int = 0,
     limit: int = 200,
 ):
@@ -157,6 +158,26 @@ async def list_tournaments(
             else:
                 query.update(scope_q)
     docs = await db.tournaments.find(query, {"_id": 0}).sort("start_date", 1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
+
+    # MPCA-235 · Ship 4 · MPCA-scoped visibility filter.
+    # When the caller is at MPCA (State) scope AND include_camp_scoped=false,
+    # hide tournaments whose scope is Championship/Invitational (Camps / School
+    # / Club / Coaching) UNLESS they already have a submitted reimbursement
+    # claim. Advisory only — the state persona can re-request with
+    # include_camp_scoped=true to see them all.
+    if (not include_camp_scoped) and req_scope.body_type == "State" and not req_scope.is_official:
+        camp_scopes = {"Championship", "Invitational"}
+        camp_ids = [d["id"] for d in docs if d.get("scope") in camp_scopes]
+        submitted_tids = set()
+        if camp_ids:
+            async for c in db.reimbursement_claims.find(
+                {"tournament_id": {"$in": camp_ids},
+                 "status": {"$in": ["Submitted", "Under_Review", "Approved", "Rejected", "Disbursed"]}},
+                {"tournament_id": 1, "_id": 0},
+            ):
+                submitted_tids.add(c["tournament_id"])
+        docs = [d for d in docs if d.get("scope") not in camp_scopes or d["id"] in submitted_tids]
+
     return docs
 
 

@@ -34,12 +34,33 @@ import MatchOfficialsPanel from "@/pages/finance/MatchOfficialsPanel";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-const SetupBox = ({ testId, icon: Icon, label, note, onClick, active }) => (
+const SetupBox = ({ testId, icon: Icon, label, note, onClick, active, flag }) => (
     <button
         onClick={onClick}
-        className={`text-left border p-3 hover:bg-mpca-cream/30 transition-all group ${active ? "border-mpca-oxblood bg-mpca-cream/40" : "border-mpca-brass/30"}`}
+        className={`text-left border p-3 hover:bg-mpca-cream/30 transition-all group relative ${active ? "border-mpca-oxblood bg-mpca-cream/40" : "border-mpca-brass/30"}`}
         data-testid={testId}
     >
+        {flag && (
+            <span
+                data-testid={`${testId}-flag`}
+                title={
+                    flag === "M"    ? "Mandatory — required for this tournament type" :
+                    flag === "O"    ? "Optional — you may fill this if useful" :
+                    flag === "NA"   ? "Not required for this tournament type — you may still add data, but it won't be used elsewhere" :
+                    flag === "INFO" ? "Informational / audit trail" : ""
+                }
+                className={
+                    "absolute top-2 right-2 text-[8px] font-mono px-1 py-px border " +
+                    (flag === "M"    ? "bg-mpca-oxblood/10 border-mpca-oxblood/40 text-mpca-oxblood" :
+                     flag === "O"    ? "bg-mpca-brass/15 border-mpca-brass/40 text-mpca-brass" :
+                     flag === "NA"   ? "bg-mpca-ivory border-dashed border-mpca-gray/40 text-mpca-gray" :
+                     flag === "INFO" ? "bg-mpca-brass/10 border-mpca-brass/30 text-mpca-brass" :
+                                       "border-mpca-gray/30 text-mpca-gray")
+                }
+            >
+                {flag === "NA" ? "OPTIONAL·NOT USED" : flag === "M" ? "REQUIRED" : flag === "O" ? "OPTIONAL" : "INFO"}
+            </span>
+        )}
         <div className="flex items-center gap-2 mb-1">
             <Icon size={14} className="text-mpca-brass" strokeWidth={1.6} />
             <span className="text-[10px] uppercase tracking-widest text-mpca-brass">Setup</span>
@@ -60,6 +81,33 @@ const TournamentDetail = () => {
     const [openBox, setOpenBox] = useState(null); // "calendar"|"receipts"|"summary"|"closure"
     const [progressKey, setProgressKey] = useState(0);
     const [myParticipation, setMyParticipation] = useState(null);   // M39x
+    const [wiringFlags, setWiringFlags] = useState({});             // MPCA-235 · Ship 3 · flag per box
+
+    // MPCA-235 · Ship 3 · Read the wiring status once and build a box-testid → flag map
+    // so each SetupBox shows a Mandatory / Optional / Optional·Not Used badge.
+    // NA cells stay fully functional — the badge just tells the user this data
+    // won't be used elsewhere in the ERP for this tournament type.
+    useEffect(() => {
+        let alive = true;
+        api.get(`/tournaments/${id}/wiring-status`)
+            .then(r => {
+                if (!alive) return;
+                const stepFlag = Object.fromEntries((r.data.steps || []).map(s => [s.key, s.flag]));
+                setWiringFlags({
+                    "box-basics":         stepFlag.pool_basics,
+                    "box-participants":   stepFlag.pool_basics,
+                    "box-officials":      stepFlag.match_official_posting,
+                    "box-squads":         stepFlag.squad,
+                    "box-calendar":       stepFlag.match_calendar,
+                    "box-days-engine":    stepFlag.match_calendar,
+                    "box-unified-budget": stepFlag.unified_budget,
+                    "box-finance":        stepFlag.finance_console,
+                    "box-my-da":          stepFlag.finance_console,
+                });
+            })
+            .catch(() => { if (alive) setWiringFlags({}); });
+        return () => { alive = false; };
+    }, [id, progressKey]);
 
     // M39x · Fetch this body's participation row (if any) so we can show the
     // "Accept Tournament" banner when their acceptance_status is Pending.
@@ -299,21 +347,21 @@ const TournamentDetail = () => {
                                     </div>
                                 </div>
                             )}
-                    <SetupBox testId="box-basics" icon={ListChecks} label="Tournament Basics" note={t.setup_meta?.category ? `${t.setup_meta.category} · ${t.setup_meta.age_group}` : "Category, teams, grounds"} onClick={() => setOpenBox(openBox === "basics" ? null : "basics")} active={openBox === "basics"} />
+                    <SetupBox testId="box-basics" icon={ListChecks} label="Tournament Basics" note={t.setup_meta?.category ? `${t.setup_meta.category} · ${t.setup_meta.age_group}` : "Category, teams, grounds"} onClick={() => setOpenBox(openBox === "basics" ? null : "basics")} active={openBox === "basics"} flag={wiringFlags["box-basics"]} />
                     {persona?.id === "match-official" ? (
                         <>
-                            <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked · view fixtures" : "View fixtures"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
+                            <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked · view fixtures" : "View fixtures"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} flag={wiringFlags["box-calendar"]} />
                             <Link to={`/my-finance/${t.id}`} className="block" data-testid="box-my-finance-link">
-                                <SetupBox testId="box-my-da" icon={ClipboardEdit} label="My DA / TA Form" note="Open dedicated finance page (Budget · Claim · Payment)" onClick={() => {}} active={false} />
+                                <SetupBox testId="box-my-da" icon={ClipboardEdit} label="My DA / TA Form" note="Open dedicated finance page (Budget · Claim · Payment)" onClick={() => {}} active={false} flag={wiringFlags["box-my-da"]} />
                             </Link>
                         </>
                     ) : (
                         <>
-                            <SetupBox testId="box-participants" icon={UsersRound} label="Participants Matrix" note={(() => { const pools = (t.setup_meta?.division_pools || []).concat(t.setup_meta?.district_pools || []); const totalCodes = pools.flatMap(p => p.division_codes || p.district_codes || []).length; return pools.length ? `${totalCodes} bodies · ${pools.length} pool(s)` : "Set pools first"; })()} onClick={() => setOpenBox(openBox === "participants" ? null : "participants")} active={openBox === "participants"} />
-                            <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body · click to open selection" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} />
-                            <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} />
-                            <SetupBox testId="box-days-engine" icon={CalendarClock} label="Days Engine" note="Match Days · Non-Match Days · calendar" onClick={() => setOpenBox(openBox === "days-engine" ? null : "days-engine")} active={openBox === "days-engine"} />
-                            <SetupBox testId="box-unified-budget" icon={Wallet} label="Unified Budget" note="Auto ₹ from Calendar × Rate Card × Officials" onClick={() => setOpenBox(openBox === "unified-budget" ? null : "unified-budget")} active={openBox === "unified-budget"} />
+                            <SetupBox testId="box-participants" icon={UsersRound} label="Participants Matrix" note={(() => { const pools = (t.setup_meta?.division_pools || []).concat(t.setup_meta?.district_pools || []); const totalCodes = pools.flatMap(p => p.division_codes || p.district_codes || []).length; return pools.length ? `${totalCodes} bodies · ${pools.length} pool(s)` : "Set pools first"; })()} onClick={() => setOpenBox(openBox === "participants" ? null : "participants")} active={openBox === "participants"} flag={wiringFlags["box-participants"]} />
+                            <SetupBox testId="box-squads" icon={Users} label="Squads" note="One per participating body · click to open selection" onClick={() => setOpenBox(openBox === "squads" ? null : "squads")} active={openBox === "squads"} flag={wiringFlags["box-squads"]} />
+                            <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked" : "Editable"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} flag={wiringFlags["box-calendar"]} />
+                            <SetupBox testId="box-days-engine" icon={CalendarClock} label="Days Engine" note="Match Days · Non-Match Days · calendar" onClick={() => setOpenBox(openBox === "days-engine" ? null : "days-engine")} active={openBox === "days-engine"} flag={wiringFlags["box-days-engine"]} />
+                            <SetupBox testId="box-unified-budget" icon={Wallet} label="Unified Budget" note="Auto ₹ from Calendar × Rate Card × Officials" onClick={() => setOpenBox(openBox === "unified-budget" ? null : "unified-budget")} active={openBox === "unified-budget"} flag={wiringFlags["box-unified-budget"]} />
                             {/* MPCA-125 · Removed the duplicate "Squad Selection" box — the
                                 "Squads" box above is now the ONLY entry point (multi-body
                                 view for MPCA, direct link to my squad for Division/District). */}
@@ -332,7 +380,7 @@ const TournamentDetail = () => {
                                 active={openBox === "closure"}
                             />
                             {/* MPCA-133+ · Match Officials (moved out of Finance Console per user request). */}
-                            <SetupBox testId="box-officials" icon={ShieldCheck} label="Match Officials" note="MPCA assigns umpires · scorers · referees · physios centrally" onClick={() => setOpenBox(openBox === "officials" ? null : "officials")} active={openBox === "officials"} />
+                            <SetupBox testId="box-officials" icon={ShieldCheck} label="Match Officials" note="MPCA assigns umpires · scorers · referees · physios centrally" onClick={() => setOpenBox(openBox === "officials" ? null : "officials")} active={openBox === "officials"} flag={wiringFlags["box-officials"]} />
                             <SetupBox testId="box-activity" icon={History} label="Activity Log" note="Chronological trail of all actions" onClick={() => setOpenBox(openBox === "activity" ? null : "activity")} active={openBox === "activity"} />
                             <SetupBox testId="box-discussion" icon={MessageSquare} label="Discussion" note="Broadcast to all Divisions · or chat privately with one" onClick={() => setOpenBox(openBox === "discussion" ? null : "discussion")} active={openBox === "discussion"} />
                             {t.tournament_scope === "Inter_Divisional" && (

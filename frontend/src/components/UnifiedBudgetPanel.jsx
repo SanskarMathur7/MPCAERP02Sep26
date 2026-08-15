@@ -613,7 +613,7 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                         <div className="border border-mpca-brass/30 overflow-x-auto mb-4" data-testid="ub-off-rate-card">
                             <div className="px-4 py-2 bg-mpca-navy text-mpca-gold-light font-serif text-sm flex items-center justify-between">
                                 <span>Match Officials · Per-day Rate Card</span>
-                                <span className="text-[10px] uppercase tracking-widest opacity-80">Edit Fee/day & DA/day inline · Auto-recomputes rollup</span>
+                                <span className="text-[10px] uppercase tracking-widest opacity-80">Rates fixed by Season × Tournament Type · Edit in Tournament Registry → Master Rate Card</span>
                             </div>
                             <table className="w-full text-sm">
                                 <thead className="bg-mpca-parchment/60 text-mpca-brass uppercase text-[9px] tracking-widest">
@@ -669,37 +669,26 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
 
 // MPCA-238 · Editable per-official rate row (Fee/day, DA/day)
 function OfficialRateRow({ row, canEdit, busy, onSave }) {
-    const [fee, setFee] = useState(row.per_day_fee_inr);
-    const [da, setDa] = useState(row.per_day_da_inr);
-    const dirty = Number(fee) !== Number(row.per_day_fee_inr) || Number(da) !== Number(row.per_day_da_inr);
-    const inputCls = "input-heritage !py-1 !text-xs font-mono w-20 text-right";
+    // MPCA-239 · Fee/Day + DA/Day are FIXED per Season × Tournament Type.
+    // Edited exclusively in Tournament Registry → Master Rate Card.
+    // Row is read-only in the Unified Budget officials tab.
+    const inputCls = "input-heritage !py-1 !text-xs font-mono w-20 text-right bg-mpca-parchment/40 cursor-not-allowed";
     return (
         <tr className="border-t border-mpca-brass/10" data-testid={`ub-off-row-${row.official_id}`}>
             <td className="px-3 py-2 font-serif text-mpca-green-dark">{row.name}</td>
             <td className="px-3 py-2 text-xs">{row.role}</td>
             <td className="px-3 py-2 text-right">
-                <input type="number" min={0} className={inputCls} value={fee} disabled={!canEdit} onChange={(e) => setFee(e.target.value)} data-testid={`ub-off-fee-${row.official_id}`} />
+                <input type="number" min={0} className={inputCls} value={row.per_day_fee_inr} readOnly disabled title="Rate managed in Tournament Registry → Master Rate Card" data-testid={`ub-off-fee-${row.official_id}`} />
             </td>
             <td className="px-3 py-2 text-right">
-                <input type="number" min={0} className={inputCls} value={da} disabled={!canEdit} onChange={(e) => setDa(e.target.value)} data-testid={`ub-off-da-${row.official_id}`} />
+                <input type="number" min={0} className={inputCls} value={row.per_day_da_inr} readOnly disabled title="Rate managed in Tournament Registry → Master Rate Card" data-testid={`ub-off-da-${row.official_id}`} />
             </td>
             <td className="px-3 py-2 text-center font-mono">{row.matches}</td>
             <td className="px-3 py-2 text-right font-mono">{row.scheduled_days}</td>
             <td className="px-3 py-2 text-right font-mono">{row.actual_days}</td>
             <td className="px-3 py-2 text-right font-mono">{INR(row.fees)}</td>
             <td className="px-3 py-2 text-right font-mono">{INR(row.da)}</td>
-            <td className="px-3 py-2 text-right font-mono font-semibold text-mpca-oxblood">
-                {dirty ? (
-                    <button
-                        disabled={busy}
-                        onClick={() => onSave({ per_day_fee_inr: Number(fee) || 0, per_day_da_inr: Number(da) || 0 })}
-                        className="text-[9px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 disabled:opacity-40"
-                        data-testid={`ub-off-save-${row.official_id}`}
-                    >
-                        {busy ? "…" : "Save"}
-                    </button>
-                ) : INR(row.total)}
-            </td>
+            <td className="px-3 py-2 text-right font-mono font-semibold text-mpca-oxblood">{INR(row.total)}</td>
         </tr>
     );
 }

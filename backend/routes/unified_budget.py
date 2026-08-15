@@ -763,6 +763,45 @@ async def compute_unified_budget_for_tournament(tid: str, save: bool = False):
         body_map[rk] = row
     budget["by_body_totals"] = list(body_map.values())
 
+    # MPCA-239 · Merge Match Officials fees + DA as two synthetic heads.
+    # Fees = per_day_fee_inr × scheduled_days (paid even on early conclusion).
+    # DA   = per_day_da_inr  × actual_days   (only when match actually played).
+    # Owner=Common → MPCA state books (not a Division claim).
+    off_assigns = await db.tournament_match_officials.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
+    off_by_id = {a["official_id"]: a for a in off_assigns}
+    off_fees_total = 0.0
+    off_da_total = 0.0
+    for m in matches:
+        sched = int(m.get("days") or 1)
+        actual = m.get("actual_days")
+        actual = int(actual) if actual is not None else sched
+        oi = m.get("officials_ids") or {}
+        for role_key in ("umpires", "scorers", "selectors", "observers"):
+            for oid in (oi.get(role_key) or []):
+                a = off_by_id.get(oid) or {}
+                off_fees_total += float(a.get("per_day_fee_inr") or 0) * sched
+                off_da_total += float(a.get("per_day_da_inr") or 0) * actual
+
+    if off_fees_total > 0 or off_da_total > 0:
+        heads = budget.get("head_totals") or []
+        heads.append({"key": "off_fees", "name": "Match Officials · Fees", "owner": "Common", "is_custom": False,
+                       "md_amount": off_fees_total, "nmd_amount": 0.0, "total": off_fees_total})
+        heads.append({"key": "off_da", "name": "Match Officials · DA", "owner": "Common", "is_custom": False,
+                       "md_amount": off_da_total, "nmd_amount": 0.0, "total": off_da_total})
+        budget["head_totals"] = heads
+        budget["grand_total"] = float(budget.get("grand_total") or 0) + off_fees_total + off_da_total
+        mpca_row = next((b for b in budget["by_body_totals"] if b.get("body_code") == "MPCA" and not b.get("pool_id")), None)
+        if not mpca_row:
+            mpca_row = {"body_code": "MPCA", "pool_id": None, "pool_name": None, "role": "Common",
+                         "budget": 0.0, "travel_grant": 0.0, "total": 0.0, "head_allocations": []}
+            budget["by_body_totals"].append(mpca_row)
+        mpca_row["budget"] = float(mpca_row.get("budget") or 0) + off_fees_total + off_da_total
+        mpca_row["total"] = float(mpca_row.get("budget") or 0) + float(mpca_row.get("travel_grant") or 0)
+        allocs = list(mpca_row.get("head_allocations") or [])
+        allocs.append({"head_key": "off_fees", "head": "Match Officials · Fees", "owner": "Common", "limit_inr": off_fees_total})
+        allocs.append({"head_key": "off_da", "head": "Match Officials · DA", "owner": "Common", "limit_inr": off_da_total})
+        mpca_row["head_allocations"] = allocs
+
     snapshot = {
         "rate_card_id": card.get("id"),
         "tournament_type": card.get("tournament_type"),

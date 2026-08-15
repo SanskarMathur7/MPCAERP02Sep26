@@ -116,16 +116,6 @@ const ProblemCard = ({ icon: Icon, problem, solution, impact, tint = "brass" }) 
     );
 };
 
-const ScreenshotCard = ({ src, caption, blurb }) => (
-    <figure className="border border-mpca-brass/30 bg-mpca-ivory break-inside-avoid">
-        <img src={src} alt={caption} className="w-full h-auto border-b border-mpca-brass/20" />
-        <figcaption className="p-3">
-            <div className="font-serif text-mpca-oxblood text-sm mb-1">{caption}</div>
-            <p className="text-[11px] text-mpca-charcoal leading-snug">{blurb}</p>
-        </figcaption>
-    </figure>
-);
-
 const MPCAShowcase = () => {
     useEffect(() => { document.title = "MPCA ERP · Stakeholder Deck"; }, []);
 
@@ -136,7 +126,7 @@ const MPCAShowcase = () => {
                 <div className="flex items-center gap-3">
                     <Trophy size={20} className="text-mpca-gold-light" />
                     <div>
-                        <div className="text-[9px] uppercase tracking-widest text-mpca-gold-light/70">Stakeholder Deck · Confidential</div>
+                        <div className="text-[9px] uppercase tracking-widest text-mpca-gold-light/70">Internal Reference · Confidential</div>
                         <div className="font-serif text-lg">MPCA ERP · Effort, Journey &amp; Impact</div>
                     </div>
                 </div>
@@ -370,39 +360,26 @@ const MPCAShowcase = () => {
                     </div>
                 </Section>
 
-                {/* ─────── LIVE SCREENSHOTS ─────── */}
-                <Section title="4 · What It Looks Like Today" subtitle="Live screenshots from the running platform" breakBefore>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <ScreenshotCard
-                            src="/showcase/01-my-assignments.png"
-                            caption="Match Official Portal · My Assignments"
-                            blurb="Umpires and scorers land here on login. KPI strip shows Total Paid + Awaiting Payment. Filter chips + search let them narrow to Paid / Approved / Draft. Each row&apos;s CTA adapts to the lifecycle stage."
-                        />
-                        <ScreenshotCard
-                            src="/showcase/02-finance-page.png"
-                            caption="Per-Tournament Finance Page · 6-Stage Progress"
-                            blurb="Dedicated workspace per tournament. 6-stage progress bar (Budget Allocated → Running → Completed → Submitted → Approved → Paid), Budget Allocated card auto-derived from Master Rate Card × days, embedded TA/DA claim form."
-                        />
-                        <ScreenshotCard
-                            src="/showcase/03-voucher-paid.png"
-                            caption="Payment Voucher PDF · MPCA Letterhead + PAID Watermark"
-                            blurb="Auto-generated on MPCA letterhead with head-wise breakup, 12°-rotated green PAID stamp, Payment Recorded block (UTR / Mode / Date / Recorded By), and 3 signature blocks. Ctrl+P → audit-ready PDF in 3 seconds."
-                        />
-                        <ScreenshotCard
-                            src="/showcase/04-rate-card.png"
-                            caption="Master Rate Card · 17 Heads + Officials + Travel"
-                            blurb="Single source of truth for every rupee. Per-format editable heads with Driver / Owner / MD-rate / NMD-rate columns. All new budgets and assignments snapshot these rates automatically."
-                        />
-                        <ScreenshotCard
-                            src="/showcase/05-finance-console-ta-da.png"
-                            caption="Finance Console · Officials Payments Tracker"
-                            blurb="MPCA Secretariat view. 6 rollup tiles (Fee / DA / Travel / Approved / Paid) + per-official row with Review / Mark-Paid / Reverse actions. Every DA/TA form for the tournament in one glance."
-                        />
-                        <ScreenshotCard
-                            src="/showcase/06-unified-budget.png"
-                            caption="Tournament Workspace · 8 Setup Boxes + Progress"
-                            blurb="Every tournament has a single URL with 8 setup boxes (Basics · Participants · Squads · Calendar · Days Engine · Budget · Grounds · Officials). Progress meter tracks Setup / Squad / Play / Claim / Payment phases."
-                        />
+                {/* ─────── LIVE URLS ─────── */}
+                <Section title="4 · Live URLs to Explore" subtitle="Every claim in this document is walkable on the running platform" breakBefore>
+                    <p className="text-[12px] leading-relaxed mb-4">
+                        The platform is fully live and demo-ready. Every persona has a dedicated login and workspace. Use the URLs below (relative to the deployment root) to open the six flagship modules and see the engineering claims in this document play out in real time.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {[
+                            { title: "Match Official · My Assignments", url: "/my-assignments", desc: "KPI strip · filter chips · adaptive CTAs per lifecycle stage. Login as Match Official persona (Chandrakant Pandit)." },
+                            { title: "Per-Tournament Finance Page", url: "/my-finance/:tid", desc: "6-stage progress bar · Budget Allocated card auto-derived from Master Rate Card × days · embedded TA/DA claim form." },
+                            { title: "Payment Voucher PDF", url: "/match-official-da/:did/voucher", desc: "MPCA letterhead · head-wise breakup · green PAID watermark · Payment Recorded block · 3 signature blocks." },
+                            { title: "Master Rate Card", url: "/rate-cards", desc: "Single source of truth for every rupee. 17 heads + 8 travel heads + officials rates. MPCA-only editable." },
+                            { title: "Finance Console · TA/DA Payments", url: "/tournaments/:tid/finance", desc: "MPCA Secretariat view. 6 rollup tiles + per-official Review / Mark-Paid / Reverse actions with deduction workflow." },
+                            { title: "Tournament Workspace", url: "/tournaments/:tid", desc: "Single URL per tournament with 8 setup boxes (Basics · Participants · Squads · Calendar · Days Engine · Budget · Grounds · Officials)." },
+                        ].map((r) => (
+                            <div key={r.url} className="border-l-4 border-mpca-oxblood bg-mpca-ivory p-4 break-inside-avoid">
+                                <div className="font-serif text-mpca-green-dark text-base">{r.title}</div>
+                                <div className="font-mono text-[11px] text-mpca-oxblood mt-1 mb-2 bg-mpca-parchment/50 px-2 py-1 inline-block">{r.url}</div>
+                                <p className="text-[11px] text-mpca-charcoal leading-snug">{r.desc}</p>
+                            </div>
+                        ))}
                     </div>
                 </Section>
 
@@ -502,12 +479,6 @@ const MPCAShowcase = () => {
                             </ul>
                         </div>
                     </div>
-                    <div className="mt-4 bg-mpca-navy text-mpca-ivory p-4 text-center">
-                        <div className="text-[10px] uppercase tracking-widest text-mpca-gold-light/70 mb-1">If Contracted Externally</div>
-                        <div className="text-sm">
-                            At industry-standard blended rates of <b>₹2,500–₹4,500 per engineering hour</b>, the {STATS.total_hours} hours invested here represent a <b className="text-mpca-gold-light">₹60–₹108 lakh</b> professional services engagement — before licensing, deployment, and multi-year support.
-                        </div>
-                    </div>
                 </Section>
 
                 {/* ─────── STAKEHOLDER IMPACT ─────── */}
@@ -556,26 +527,8 @@ const MPCAShowcase = () => {
                     </div>
                 </Section>
 
-                {/* ─────── MONETISATION ─────── */}
-                <Section title="9 · Monetisation Pathways">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="border-l-4 border-mpca-oxblood p-4 bg-mpca-ivory">
-                            <div className="font-serif text-mpca-oxblood text-base mb-2">White-Label to State Associations</div>
-                            <p className="text-[12px]">28 state cricket associations across India face the same governance pain. The ERP&apos;s core engine (Rate Card + Unified Budget + Reimbursement + Voucher) is federation-agnostic — swap the branding and it&apos;s live.</p>
-                        </div>
-                        <div className="border-l-4 border-mpca-brass p-4 bg-mpca-ivory">
-                            <div className="font-serif text-mpca-brass text-base mb-2">SaaS for Other Sports</div>
-                            <p className="text-[12px]">Football, hockey, and Kabaddi state bodies run near-identical workflows. A single sports federation SaaS platform with pluggable rate cards would command a ₹3–5L annual licence per state body.</p>
-                        </div>
-                        <div className="border-l-4 border-mpca-green-dark p-4 bg-mpca-ivory">
-                            <div className="font-serif text-mpca-green-dark text-base mb-2">BCCI-Level Rollout</div>
-                            <p className="text-[12px]">BCCI already sanctions grants to every state association. The ERP can serve as the standard reporting rail — every state files claims against their locked BCCI grant snapshot on a shared platform.</p>
-                        </div>
-                    </div>
-                </Section>
-
                 {/* ─────── FINAL NUMBERS ─────── */}
-                <Section title="10 · The Final Tally">
+                <Section title="9 · The Final Tally">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                         <KPI label="Total Effort" value={STATS.total_hours} sub="engineering hours" icon={Clock} tint="oxblood" />
                         <KPI label="Backend Python" value={STATS.backend_loc + " LOC"} sub={`${STATS.route_files} route modules`} icon={Server} tint="brass" />
@@ -590,19 +543,19 @@ const MPCAShowcase = () => {
                     <div className="bg-mpca-navy text-mpca-ivory p-6">
                         <div className="font-serif text-2xl text-mpca-gold-light mb-3">In Perspective</div>
                         <p className="text-[13px] leading-relaxed">
-                            <b>{STATS.total_hours} engineering hours</b>. <b>~100,000 lines of code</b>. <b>{STATS.releases} numbered releases</b>. <b>{STATS.git_commits} audited commits</b>. Every one of the <b>{STATS.endpoints} API endpoints</b> is documented, tested via pytest or a live Playwright pass, and wired into a persona-scoped React frontend with <b>{STATS.frontend_pages} distinct pages</b>. The end product is not a demo — it is a production-grade governance platform ready to run a state cricket federation, adaptable to any sports body in the country.
+                            <b>{STATS.total_hours} engineering hours</b>. <b>~100,000 lines of code</b>. <b>{STATS.releases} numbered releases</b>. <b>{STATS.git_commits} audited commits</b>. Every one of the <b>{STATS.endpoints} API endpoints</b> is documented, tested via pytest or a live Playwright pass, and wired into a persona-scoped React frontend with <b>{STATS.frontend_pages} distinct pages</b>. The end product is a production-grade governance platform purpose-built to run the Madhya Pradesh Cricket Association at every level — from the state secretariat down to individual officiating umpires and registered players.
                         </p>
                     </div>
                 </Section>
 
                 {/* ─────── FOOTER ─────── */}
                 <div className="border-t-4 border-double border-mpca-oxblood pt-6 mt-10 text-center">
-                    <p className="text-[10px] uppercase tracking-widest text-mpca-brass mb-2">Prepared for Stakeholder Review</p>
+                    <p className="text-[10px] uppercase tracking-widest text-mpca-brass mb-2">Internal Reference Document · Confidential</p>
                     <p className="text-[11px] italic text-mpca-gray-dark">
-                        MPCA ERP · A digital backbone for state-level cricket governance · Confidential
+                        MPCA ERP · A digital backbone for state-level cricket governance
                     </p>
                     <p className="text-[10px] text-mpca-gray-dark mt-1">
-                        Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })} · Contact secretariat@mpcaonline.com for licensing / white-label enquiries
+                        Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}
                     </p>
                 </div>
             </div>

@@ -73,13 +73,45 @@ export const ClaimsPanel = ({ tournament, persona }) => {
         if (!myBody) return;
         setBusy(true);
         try {
+            // MPCA-235 · When the Division has TWO approved budgets on this tournament
+            // (Host + Visitor across pools), ask which one this claim covers so
+            // Invoice/Extras/DA aggregation stays scoped.
+            let scoped = {};
+            const { data: appr } = await api.get("/tournament-budgets", {
+                params: { tournament_id: tournament.id, body_id: myBody, status: "Approved" },
+            }).catch(() => ({ data: [] }));
+            if ((appr || []).length > 1) {
+                const opts = appr.map((b, i) => `${i + 1}. ${b.budget_no} · ${b.pool_name || "—"} · ${b.role_flavour || "—"} · ₹${Number(b.total_ceiling_inr || 0).toLocaleString("en-IN")}`).join("\n");
+                const pick = window.prompt(
+                    `This tournament has ${appr.length} separate budgets for ${myBody}. Which one does this Reimbursement Claim cover?\n\n${opts}\n\nEnter the number (1 or 2)…`,
+                    "1"
+                );
+                const idx = Number(pick) - 1;
+                if (!Number.isFinite(idx) || idx < 0 || idx >= appr.length) { setBusy(false); return; }
+                const picked = appr[idx];
+                scoped = {
+                    budget_id: picked.id,
+                    pool_id: picked.pool_id || null,
+                    pool_name: picked.pool_name || null,
+                    role_flavour: picked.role_flavour || null,
+                };
+            } else if ((appr || []).length === 1) {
+                const only = appr[0];
+                scoped = {
+                    budget_id: only.id,
+                    pool_id: only.pool_id || null,
+                    pool_name: only.pool_name || null,
+                    role_flavour: only.role_flavour || null,
+                };
+            }
             await api.post("/reimbursement-claims", {
                 tournament_id: tournament.id,
                 body_id: myBody,
                 fiscal_cycle: tournament.fiscal_cycle,
                 scheme_code: tournament.scheme_code,
                 claimed_by: persona?.name,
-                notes: `Auto-drafted from Finance Console by ${persona?.name || myBody}`,
+                notes: `Auto-drafted from Finance Console by ${persona?.name || myBody}${scoped.pool_name ? ` · ${scoped.pool_name} · ${scoped.role_flavour}` : ""}`,
+                ...scoped,
             });
             await load();
         } catch (e) { alert(e?.response?.data?.detail || e.message); }

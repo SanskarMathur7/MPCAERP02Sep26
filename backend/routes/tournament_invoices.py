@@ -200,7 +200,8 @@ async def create_invoice(payload: TournamentInvoiceCreate):
         if not body.get("budget_head_code"):
             body["budget_head_code"] = allocs[0].get("head_code")
 
-    # Resolve budget if not set
+    # Resolve budget if not set (single-budget tournaments) — but only when
+    # the caller didn't already scope to a specific budget_id.
     if not body.get("budget_id"):
         tb = await db.tournament_budgets.find_one({
             "tournament_id": payload.tournament_id,

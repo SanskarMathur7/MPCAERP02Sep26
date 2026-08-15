@@ -167,14 +167,26 @@ async def create_tournament(
 
 
 async def add_participations(db, tid: str, tname: str):
-    """Insert one tournament_participation per Division per pool."""
+    """Insert one tournament_participation per Division per pool — but only for
+    Divisions that actually appear in fixtures for that pool. Pools with only
+    placeholder teams (e.g. KO with Team SF1/SF2) will have only the HOST row.
+    Visitors get created lazily once MPCA replaces placeholders with real Divisions."""
     rows = []
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     for p in (t.get("setup_meta") or {}).get("division_pools") or []:
         pool_id = p["id"]
         pool_name = p["name"]
         host_code = p.get("host_division_code")
-        for code in p["division_codes"]:
+        # Real Division codes appearing in this pool's fixtures
+        real = set()
+        async for m in db.tournament_matches.find({"tournament_id": tid, "pool_id": pool_id}, {"_id": 0, "team_a": 1, "team_b": 1, "home_team": 1, "away_team": 1}):
+            for f in ("team_a", "team_b", "home_team", "away_team"):
+                v = m.get(f)
+                if v and v.startswith(("DIV-", "DIS-")):
+                    real.add(v)
+        # Include HOST always; visitors only if they actually play a real match
+        eligible = (real | {host_code}) if host_code else real
+        for code in eligible:
             body = await db.bodies.find_one({"code": code}, {"_id": 0})
             role = "Host" if code == host_code else "Visitor"
             rows.append({
@@ -192,7 +204,7 @@ async def add_participations(db, tid: str, tname: str):
             })
     if rows:
         await db.tournament_participations.insert_many(rows)
-    print(f"  ✓ {len(rows)} participations (Divisions × 2 pools)")
+    print(f"  ✓ {len(rows)} participations (only Divisions actually playing in each pool)")
 
 
 async def add_fixtures_ltd_overs(db, t: dict):

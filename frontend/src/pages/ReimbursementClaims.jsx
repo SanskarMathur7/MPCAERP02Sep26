@@ -97,7 +97,14 @@ export const ReimbursementClaimsList = () => {
                                 <div className="font-mono text-mpca-brass text-xs">{c.claim_ref}</div>
                                 <div className="text-[10px] text-mpca-gray-dark">{c.submitted_at ? new Date(c.submitted_at).toLocaleDateString() : "—"}</div>
                             </div>
-                            <div className="col-span-3 font-serif text-sm text-mpca-green-dark">{c.tournament_name}</div>
+                            <div className="col-span-3 font-serif text-sm text-mpca-green-dark">
+                                {c.tournament_name}
+                                {(c.pool_name || c.role_flavour) && (
+                                    <div className="text-[9px] uppercase tracking-widest text-mpca-oxblood mt-0.5" data-testid={`claim-scope-${c.id}`}>
+                                        {c.pool_name}{c.pool_name && c.role_flavour ? " · " : ""}{c.role_flavour}
+                                    </div>
+                                )}
+                            </div>
                             <div className="col-span-2 text-xs">{c.body_name}</div>
                             <div className="col-span-2 text-right font-mono text-sm text-mpca-green-dark">{fmt((c.summary || {}).eligible_total_inr)}</div>
                             <div className="col-span-2"><StatusBadge status={c.status} /></div>
@@ -442,6 +449,11 @@ export const ReimbursementClaimDetail = () => {
                         <span className="text-mpca-gray-dark">·</span>
                         <span>{claim.body_name}</span>
                         {claim.scheme_code && <><span className="text-mpca-gray-dark">·</span><span className="font-mono text-mpca-green-dark">Scheme {claim.scheme_code}</span></>}
+                        {(claim.pool_name || claim.role_flavour) && (
+                            <span className="inline-flex items-center gap-1.5 border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest" data-testid="claim-scope-chip">
+                                {claim.pool_name}{claim.pool_name && claim.role_flavour ? " · " : ""}{claim.role_flavour}
+                            </span>
+                        )}
                         {tournament?.unified_budget_snapshot?.is_locked && (
                             <span className="ml-2 inline-flex items-center gap-1.5 border border-mpca-oxblood bg-mpca-oxblood/5 text-mpca-oxblood px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest" data-testid="claim-locked-snapshot-chip">
                                 <span aria-hidden>🔒</span>

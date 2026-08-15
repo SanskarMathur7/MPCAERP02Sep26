@@ -5,7 +5,7 @@ sheet aggregating all approved invoices vs budget heads. MPCA Secretary reviews,
 comments, approves (with optional lowered amount) or rejects.
 """
 from datetime import datetime, timezone
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
@@ -27,14 +27,21 @@ async def _next_claim_ref(cycle: str) -> str:
     return f"TRC-{cycle}-{seq:04d}"
 
 
-async def _compute_summary(tournament_id: str, body_id: str) -> dict:
+async def _compute_summary(tournament_id: str, body_id: str, budget_id: Optional[str] = None) -> dict:
     """Build the summary sheet: all invoices + extra-expense approvals for this
-    tournament + body, aggregated per budget head."""
+    tournament + body, aggregated per budget head.
+
+    MPCA-235 · When `budget_id` is passed, aggregation is scoped to that specific
+    budget so a Division's Host claim doesn't mix with its Visitor claim on the
+    same tournament (multi-pool case)."""
     tournament = await db.tournaments.find_one({"id": tournament_id}, {"_id": 0})
-    budget_id = (tournament or {}).get("auto_budget_id")
     tb = None
     if budget_id:
         tb = await db.tournament_budgets.find_one({"id": budget_id}, {"_id": 0})
+    if not tb:
+        auto_bid = (tournament or {}).get("auto_budget_id")
+        if auto_bid:
+            tb = await db.tournament_budgets.find_one({"id": auto_bid}, {"_id": 0})
     if not tb:
         # Fallback: latest Approved budget for this tournament+body
         tb = await db.tournament_budgets.find_one(
@@ -48,17 +55,24 @@ async def _compute_summary(tournament_id: str, body_id: str) -> dict:
             {"_id": 0}, sort=[("created_at", -1)],
         )
 
-    invoices = await db.tournament_invoices.find({
+    # MPCA-235 · Scope invoices/extras/DA by budget_id when available
+    inv_q: Dict[str, Any] = {
         "tournament_id": tournament_id,
         "body_id": body_id,
         "status": {"$in": ["Approved", "Submitted"]},
-    }, {"_id": 0}).to_list(500)
+    }
+    if tb and tb.get("id"):
+        inv_q["budget_id"] = tb["id"]
+    invoices = await db.tournament_invoices.find(inv_q, {"_id": 0}).to_list(500)
 
-    extras = await db.extra_expense_requests.find({
+    ex_q: Dict[str, Any] = {
         "tournament_id": tournament_id,
         "body_id": body_id,
         "status": "Approved",
-    }, {"_id": 0}).to_list(200)
+    }
+    if tb and tb.get("id"):
+        ex_q["budget_id"] = tb["id"]
+    extras = await db.extra_expense_requests.find(ex_q, {"_id": 0}).to_list(200)
 
     # M37 · Approved DA forms for this tournament — bundled into the Division's claim
     # (No separate MPCA approval for DA; Division-approved DAs auto-attach here)
@@ -293,15 +307,20 @@ async def create_claim(payload: TournamentReimbursementCreate):
     body = await db.bodies.find_one({"code": payload.body_id}, {"_id": 0})
     if not body:
         raise HTTPException(404, f"Body '{payload.body_id}' not found")
-    # Idempotency: one Draft/Submitted claim per (tournament, body, cycle)
-    existing = await db.tournament_reimbursement_claims.find_one({
+    # MPCA-235 · Idempotency now scoped by budget_id: a Division with TWO
+    # approved budgets (Host + Visitor across pools) can raise ONE claim per
+    # budget. Legacy single-budget tournaments still get single-claim behaviour.
+    idem_q: Dict[str, Any] = {
         "tournament_id": payload.tournament_id,
         "body_id": payload.body_id,
         "fiscal_cycle": payload.fiscal_cycle,
         "status": {"$in": ["Draft", "Submitted", "Under_Review", "Approved"]},
-    }, {"_id": 0})
+    }
+    if payload.budget_id:
+        idem_q["budget_id"] = payload.budget_id
+    existing = await db.tournament_reimbursement_claims.find_one(idem_q, {"_id": 0})
     if existing:
-        raise HTTPException(409, f"A {existing['status']} reimbursement claim already exists for this tournament.")
+        raise HTTPException(409, f"A {existing['status']} reimbursement claim already exists for this tournament{' & budget' if payload.budget_id else ''}.")
 
     claim_ref = await _next_claim_ref(payload.fiscal_cycle)
     payload_dict = payload.model_dump()
@@ -389,18 +408,24 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
         notify_recipient_role = "secretary"
         notify_recipient_body = "MPCA"
 
-    # Compute summary at submit time
-    summary = await _compute_summary(doc["tournament_id"], doc["body_id"])
-    invoices = await db.tournament_invoices.find({
+    # Compute summary at submit time — scoped by claim's budget_id (multi-pool)
+    summary = await _compute_summary(doc["tournament_id"], doc["body_id"], budget_id=doc.get("budget_id"))
+    inv_q: Dict[str, Any] = {
         "tournament_id": doc["tournament_id"],
         "body_id": doc["body_id"],
         "status": {"$in": ["Approved", "Submitted"]},
-    }, {"_id": 0}).to_list(500)
-    extras = await db.extra_expense_requests.find({
+    }
+    if doc.get("budget_id"):
+        inv_q["budget_id"] = doc["budget_id"]
+    invoices = await db.tournament_invoices.find(inv_q, {"_id": 0}).to_list(500)
+    ex_q: Dict[str, Any] = {
         "tournament_id": doc["tournament_id"],
         "body_id": doc["body_id"],
         "status": "Approved",
-    }, {"_id": 0}).to_list(200)
+    }
+    if doc.get("budget_id"):
+        ex_q["budget_id"] = doc["budget_id"]
+    extras = await db.extra_expense_requests.find(ex_q, {"_id": 0}).to_list(200)
     da_forms = await db.match_official_da.find({
         "tournament_id": doc["tournament_id"], "status": "Approved",
     }, {"_id": 0}).to_list(500)
@@ -634,12 +659,16 @@ async def get_review_summary(cid: str):
     # back to the tournament's live invoices for this body so the Division PDF
     # + review summary reflect the actual spending shown on the Budget & Extras
     # tracker widget. Once the claim is Submitted, `invoice_ids` is authoritative.
+    # MPCA-235 · Live-invoice fallback (Draft claims) scoped by budget_id
     if not invoices:
-        invoices = await db.tournament_invoices.find({
+        live_q: Dict[str, Any] = {
             "tournament_id": doc["tournament_id"],
             "body_id": doc["body_id"],
             "status": {"$in": ["Draft", "Submitted", "Approved"]},
-        }, {"_id": 0}).to_list(500)
+        }
+        if doc.get("budget_id"):
+            live_q["budget_id"] = doc["budget_id"]
+        invoices = await db.tournament_invoices.find(live_q, {"_id": 0}).to_list(500)
     reviews_by_iid = {r["invoice_id"]: r for r in (doc.get("mpca_invoice_reviews") or [])}
 
     per_head: Dict[str, Dict[str, float]] = {}
@@ -689,11 +718,15 @@ async def get_review_summary(cid: str):
 
     # Overlay budget totals per head from the approved budget
     try:
-        tb = await db.tournament_budgets.find_one({
-            "tournament_id": doc["tournament_id"],
-            "body_id": doc["body_id"],
-            "status": "Approved",
-        }, {"_id": 0}, sort=[("created_at", -1)])
+        # MPCA-235 · When claim carries budget_id, use THAT budget for head budget totals.
+        if doc.get("budget_id"):
+            tb = await db.tournament_budgets.find_one({"id": doc["budget_id"]}, {"_id": 0})
+        else:
+            tb = await db.tournament_budgets.find_one({
+                "tournament_id": doc["tournament_id"],
+                "body_id": doc["body_id"],
+                "status": "Approved",
+            }, {"_id": 0}, sort=[("created_at", -1)])
     except Exception:
         tb = None
     for h in ((tb or {}).get("approved_head_allocations") or (tb or {}).get("head_allocations") or []):

@@ -2399,6 +2399,13 @@ class TournamentReimbursementClaimBase(BaseModel):
     fiscal_cycle: str = "2025-26"
     scheme_code: Optional[str] = None
     notes: Optional[str] = None
+    # MPCA-235 · Multi-pool budget separation. When a Division has 2 budgets
+    # on the same tournament (Host + Visitor across pools), each claim must
+    # scope to ONE of them so Invoice/Extras/DA aggregation stays clean.
+    budget_id: Optional[str] = None
+    pool_id: Optional[str] = None
+    pool_name: Optional[str] = None
+    role_flavour: Optional[str] = None            # "Host" | "Visitor"
 
 
 class TournamentReimbursementClaim(TournamentReimbursementClaimBase):

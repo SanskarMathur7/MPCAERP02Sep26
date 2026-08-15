@@ -553,6 +553,10 @@ async def my_official_assignments(
 ):
     """Match-Official portal · list every assignment addressed to the caller.
     Match uses the persona name (case-insensitive) against `official_name` snapshot.
+
+    MPCA-233 · Each row is enriched with the linked DA form's status + payment
+    info (UTR / mode / date) so the official's `/my-assignments` view can
+    render the full lifecycle (Accept → DA Draft → Submitted → Approved → Paid).
     """
     if not x_persona_name:
         raise HTTPException(400, "X-Persona-Name header required.")
@@ -562,12 +566,33 @@ async def my_official_assignments(
     rows = await db.tournament_match_officials.find(
         {"official_name": {"$regex": name_pat}}, {"_id": 0},
     ).sort("assigned_at", -1).to_list(500)
-    # Enrich with computed totals
+    # Batch-fetch DA forms for the caller so we can attach status/payment info
+    da_forms = await db.match_official_da.find(
+        {"official_name": {"$regex": name_pat}}, {"_id": 0},
+    ).to_list(500)
+    da_by_key = {}
+    for f in da_forms:
+        da_by_key[(f.get("tournament_id") or "", (f.get("official_role") or "").lower())] = f
+    # Enrich with computed totals + DA linkage
     for r in rows:
         d = int(r.get("days") or 0)
         r["fee_total_inr"] = float(r.get("per_day_fee_inr") or 0) * d
         r["da_total_inr"] = float(r.get("per_day_da_inr") or 0) * d
         r["grand_total_inr"] = r["fee_total_inr"] + r["da_total_inr"]
+        # Attach DA form details if one exists for this (tournament, role)
+        f = da_by_key.get((r.get("tournament_id") or "", (r.get("role") or "").lower()))
+        if f:
+            r["da_form_id"] = f.get("id")
+            r["da_ref"] = f.get("da_ref")
+            r["da_form_status"] = f.get("status")
+            r["da_total_claim_inr"] = float(f.get("total_inr") or 0)
+            r["da_paid_amount_inr"] = float(f.get("paid_amount_inr") or 0)
+            r["da_payment_ref"] = f.get("payment_ref")
+            r["da_payment_mode"] = f.get("payment_mode")
+            r["da_paid_at"] = f.get("paid_at")
+            r["da_rejection_reason"] = f.get("rejection_reason")
+        else:
+            r["da_form_status"] = None
     return {"count": len(rows), "assignments": rows}
 
 

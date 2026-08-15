@@ -2227,6 +2227,15 @@ class MatchOfficialDA(BaseModel):
     approved_by: Optional[str] = None
     approved_at: Optional[str] = None
     rejection_reason: Optional[str] = None
+    # MPCA-233 · Payment tracking — MPCA Treasurer records the disbursement in
+    # the Finance Console TA/DA tab; the Match Official sees the UTR + date
+    # on their portal so they know exactly when and how they were paid.
+    paid_at: Optional[str] = None
+    paid_amount_inr: float = 0.0                # actual amount transferred (may equal or differ from approved)
+    payment_ref: Optional[str] = None           # NEFT UTR / cheque no. / UPI txn id
+    payment_mode: Optional[str] = None          # "NEFT" | "UPI" | "Cheque" | "Cash"
+    payment_notes: Optional[str] = None
+    paid_by: Optional[str] = None               # persona name of the treasurer who marked it paid
     notes: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

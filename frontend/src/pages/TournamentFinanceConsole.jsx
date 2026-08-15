@@ -13,6 +13,7 @@ import CricketLoader from "@/components/CricketLoader";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
 import TournamentSchemeBadge from "@/components/TournamentSchemeBadge";
 import MatchOfficialDAPanel from "@/components/MatchOfficialDAPanel";
+import FinanceMatchOfficialsDAPaymentsPanel from "@/pages/finance/FinanceMatchOfficialsDAPaymentsPanel";
 import {
     TournamentReceiptsPanel, FinancialSummaryPanel, ClosureLetterPanel,
 } from "@/components/TournamentWorkspacePanels";
@@ -662,7 +663,15 @@ const TournamentFinanceConsole = () => {
             )}
             {activeTab === "da" && (
                 <div className="bulletin-card p-4" data-testid="fc-tab-da-panel">
-                    <MatchOfficialDAPanel tournamentId={id} onChange={load} />
+                    <FinanceMatchOfficialsDAPaymentsPanel tournament={tournament} />
+                    <details className="mt-6 border-t border-mpca-brass/20 pt-4">
+                        <summary className="text-[11px] uppercase tracking-widest text-mpca-brass cursor-pointer hover:text-mpca-oxblood" data-testid="fc-da-legacy-toggle">
+                            Legacy · Single-Form editor (view / assist an official)
+                        </summary>
+                        <div className="mt-4">
+                            <MatchOfficialDAPanel tournamentId={id} onChange={load} />
+                        </div>
+                    </details>
                 </div>
             )}
             {activeTab === "actuals" && (

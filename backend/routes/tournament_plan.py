@@ -1,7 +1,8 @@
 """Routes · Phase T1-T4 — Tournament Plan, Grant Scheme, Auto-Budget, Match Official DA."""
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Literal
 from fastapi import HTTPException, Request
+from pydantic import BaseModel, Field, ConfigDict
 
 import re
 from core.infra import db, api_router
@@ -830,6 +831,120 @@ async def reject_da_form(did: str, actor_name: str, reason: str, actor_body_id: 
         severity="warning", kind="info",
     )
     return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+# ─────────────────── MPCA-233 · Payment marking (Treasurer) ───────────────────
+
+class _MarkPaidPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    payment_ref: str = Field(..., min_length=1)                # UTR / cheque no. / UPI txn id
+    payment_mode: Literal["NEFT", "UPI", "Cheque", "Cash", "RTGS"] = "NEFT"
+    paid_amount_inr: Optional[float] = None                    # defaults to approved total_inr
+    paid_at: Optional[str] = None                              # ISO date; defaults to now
+    payment_notes: Optional[str] = None
+    actor_name: str = "MPCA Treasurer"
+
+
+@api_router.post("/match-official-da/{did}/mark-paid", response_model=MatchOfficialDA)
+async def mark_da_paid(did: str, payload: _MarkPaidPayload):
+    """MPCA-233 · Treasurer records the DA disbursement.
+    Only Approved forms may transition → Paid. Recorded UTR / mode / date show
+    up on the Match Official's `/my-assignments` portal so they know their
+    payment has landed.
+    """
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    if doc["status"] not in ("Approved", "Paid"):
+        raise HTTPException(409, f"Only Approved forms can be marked Paid — current status: {doc['status']}")
+    now = datetime.now(timezone.utc).isoformat()
+    paid_amount = float(payload.paid_amount_inr if payload.paid_amount_inr is not None else (doc.get("total_inr") or 0))
+    await db.match_official_da.update_one({"id": did}, {"$set": {
+        "status": "Paid",
+        "paid_at": payload.paid_at or now,
+        "paid_amount_inr": max(0.0, paid_amount),
+        "payment_ref": payload.payment_ref.strip(),
+        "payment_mode": payload.payment_mode,
+        "payment_notes": (payload.payment_notes or "").strip() or None,
+        "paid_by": payload.actor_name,
+    }})
+    await _create_notification(
+        recipient_role_id="match-official",
+        recipient_body_id=doc.get("body_id") or "MPCA",
+        title=f"Payment made · {doc.get('da_ref')}",
+        message=f"Rs {paid_amount:,.0f} paid via {payload.payment_mode} · Ref {payload.payment_ref}",
+        link="/my-assignments",
+        related_type="match_official_da", related_id=did,
+        severity="info", kind="info",
+    )
+    return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+@api_router.post("/match-official-da/{did}/mark-unpaid", response_model=MatchOfficialDA)
+async def mark_da_unpaid(did: str, actor_name: str = "MPCA Treasurer"):
+    """Reverse a Paid marking (e.g. bank return, UTR entered wrong).
+    Rolls status back to Approved and clears payment fields.
+    """
+    doc = await db.match_official_da.find_one({"id": did}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "DA form not found")
+    if doc["status"] != "Paid":
+        raise HTTPException(409, f"Only Paid forms can be reversed — current status: {doc['status']}")
+    await db.match_official_da.update_one({"id": did}, {"$set": {
+        "status": "Approved",
+        "paid_at": None,
+        "paid_amount_inr": 0.0,
+        "payment_ref": None,
+        "payment_mode": None,
+        "payment_notes": f"Payment reversed by {actor_name} on {datetime.now(timezone.utc).isoformat()}",
+        "paid_by": None,
+    }})
+    return await db.match_official_da.find_one({"id": did}, {"_id": 0})
+
+
+@api_router.get("/tournaments/{tid}/match-official-payments")
+async def list_tournament_da_payments(tid: str):
+    """MPCA-233 · Aggregate view for the Finance Console TA/DA tab.
+    Returns every DA form for the tournament + assignment linkage + rollups
+    grouped by status. Consumed by `FinanceMatchOfficialsDAPaymentsPanel`.
+    """
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    forms = await db.match_official_da.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
+    # Snapshot central assignments so we can show role/days from the assignment
+    # even if the DA form's played_days is still 0.
+    assigns = await db.tournament_match_officials.find(
+        {"tournament_id": tid}, {"_id": 0}
+    ).to_list(500)
+    assign_by_name = {}
+    for a in assigns:
+        assign_by_name[(a.get("official_name") or "", a.get("role") or "")] = a
+    rollup = {"submitted": 0.0, "approved": 0.0, "paid": 0.0, "count": len(forms), "total_approved": 0.0}
+    for f in forms:
+        s = (f.get("status") or "").lower()
+        total = float(f.get("total_inr") or 0)
+        if s == "submitted":
+            rollup["submitted"] += total
+        elif s == "approved":
+            rollup["approved"] += total
+            rollup["total_approved"] += total
+        elif s == "paid":
+            rollup["paid"] += float(f.get("paid_amount_inr") or total)
+            rollup["total_approved"] += total
+        a = assign_by_name.get((f.get("official_name") or "", f.get("official_role") or ""))
+        if a:
+            f["assignment_id"] = a.get("id")
+            f["assignment_status"] = a.get("acceptance_status")
+    forms.sort(key=lambda x: (x.get("official_name") or "").lower())
+    return {
+        "tournament_id": tid,
+        "tournament_name": t.get("name"),
+        "forms": forms,
+        "rollup": rollup,
+    }
+
+
 
 
 @api_router.post("/tournaments/{tid}/da-forms/rebuild")

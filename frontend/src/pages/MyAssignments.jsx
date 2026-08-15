@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, XCircle, ClipboardEdit, FileText, ShieldCheck, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, ClipboardEdit, FileText, ShieldCheck, Loader2, Landmark, FilePenLine, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -58,7 +58,9 @@ const MyAssignments = () => {
         da: acc.da + (r.da_total_inr || 0),
         pending: acc.pending + (r.acceptance_status === "Pending" ? 1 : 0),
         accepted: acc.accepted + (r.acceptance_status === "Accepted" ? 1 : 0),
-    }), { fee: 0, da: 0, pending: 0, accepted: 0 });
+        paid: acc.paid + (r.da_form_status === "Paid" ? (r.da_paid_amount_inr || 0) : 0),
+        approvedPending: acc.approvedPending + (r.da_form_status === "Approved" ? (r.da_total_claim_inr || 0) : 0),
+    }), { fee: 0, da: 0, pending: 0, accepted: 0, paid: 0, approvedPending: 0 });
 
     return (
         <div className="max-w-7xl mx-auto px-6 md:px-10 py-8" data-testid="my-assignments-page">
@@ -74,7 +76,7 @@ const MyAssignments = () => {
             </div>
 
             {/* KPI strip */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6" data-testid="my-assignments-kpis">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6" data-testid="my-assignments-kpis">
                 <div className="bulletin-card p-3">
                     <div className="text-[10px] text-mpca-gray-dark uppercase">Total Assignments</div>
                     <div className="font-mono text-2xl text-mpca-green-dark">{rows.length}</div>
@@ -87,9 +89,13 @@ const MyAssignments = () => {
                     <div className="text-[10px] text-mpca-green-dark uppercase">Accepted</div>
                     <div className="font-mono text-2xl text-mpca-green-dark">{totals.accepted}</div>
                 </div>
-                <div className="bulletin-card p-3">
-                    <div className="text-[10px] text-mpca-oxblood uppercase">Total Earning (Accepted)</div>
-                    <div className="font-mono text-2xl text-mpca-oxblood">{fmt(rows.filter(r => r.acceptance_status === "Accepted").reduce((s, r) => s + (r.grand_total_inr || 0), 0))}</div>
+                <div className="bulletin-card p-3" data-testid="kpi-approved-pending">
+                    <div className="text-[10px] text-mpca-oxblood uppercase">Approved · Awaiting Payment</div>
+                    <div className="font-mono text-2xl text-mpca-oxblood">{fmt(totals.approvedPending)}</div>
+                </div>
+                <div className="bulletin-card p-3" data-testid="kpi-paid">
+                    <div className="text-[10px] text-mpca-navy uppercase">Total Paid</div>
+                    <div className="font-mono text-2xl text-mpca-navy">{fmt(totals.paid)}</div>
                 </div>
             </div>
 
@@ -112,17 +118,29 @@ const MyAssignments = () => {
                                 <th className="text-right py-2 px-3">Fee</th>
                                 <th className="text-right py-2 px-3">DA</th>
                                 <th className="text-right py-2 px-3">Total</th>
-                                <th className="text-center py-2 px-3">Status</th>
+                                <th className="text-center py-2 px-3">Assignment</th>
+                                <th className="text-center py-2 px-3">DA Form</th>
+                                <th className="text-center py-2 px-3">Payment</th>
                                 <th className="text-right py-2 px-3">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {rows.map((a) => {
                                 const status = a.acceptance_status || "Pending";
+                                const daStatus = a.da_form_status;  // Draft/Submitted/Approved/Rejected/Paid/null
                                 const pillCls =
                                     status === "Accepted" ? "bg-mpca-green-dark text-mpca-ivory"
                                     : status === "Rejected" ? "bg-mpca-oxblood text-mpca-ivory"
                                     : "bg-mpca-brass text-mpca-ivory animate-pulse";
+                                const daPill = (() => {
+                                    if (!daStatus) return { text: "Not Started", cls: "bg-mpca-gray-dark/20 text-mpca-gray-dark" };
+                                    if (daStatus === "Draft") return { text: "Draft", cls: "bg-mpca-brass/30 text-mpca-brass" };
+                                    if (daStatus === "Submitted") return { text: "Submitted", cls: "bg-mpca-oxblood/20 text-mpca-oxblood" };
+                                    if (daStatus === "Approved") return { text: "Approved", cls: "bg-mpca-green-dark/20 text-mpca-green-dark" };
+                                    if (daStatus === "Rejected") return { text: "Rejected", cls: "bg-mpca-oxblood text-mpca-ivory" };
+                                    if (daStatus === "Paid") return { text: "Paid", cls: "bg-mpca-navy text-mpca-ivory" };
+                                    return { text: daStatus, cls: "bg-mpca-gray-dark/20 text-mpca-gray-dark" };
+                                })();
                                 return (
                                     <tr key={a.id} className="border-b border-mpca-brass/15 hover:bg-mpca-parchment/30" data-testid={`ma-row-${a.id}`}>
                                         <td className="py-3 px-3">
@@ -133,6 +151,9 @@ const MyAssignments = () => {
                                             {status === "Rejected" && a.rejection_reason && (
                                                 <div className="text-[10px] text-mpca-oxblood italic mt-0.5">Rejected — {a.rejection_reason}</div>
                                             )}
+                                            {daStatus === "Rejected" && a.da_rejection_reason && (
+                                                <div className="text-[10px] text-mpca-oxblood italic mt-0.5">DA returned — {a.da_rejection_reason}</div>
+                                            )}
                                         </td>
                                         <td className="py-3 px-3 text-mpca-charcoal">{a.role}</td>
                                         <td className="py-3 px-3 text-right font-mono">{a.days}</td>
@@ -141,6 +162,28 @@ const MyAssignments = () => {
                                         <td className="py-3 px-3 text-right font-mono font-semibold text-mpca-oxblood">{fmt(a.grand_total_inr)}</td>
                                         <td className="py-3 px-3 text-center">
                                             <span className={`text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 ${pillCls}`} data-testid={`ma-status-${a.id}`}>{status}</span>
+                                        </td>
+                                        <td className="py-3 px-3 text-center">
+                                            <span className={`text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 ${daPill.cls}`} data-testid={`ma-da-status-${a.id}`}>{daPill.text}</span>
+                                            {a.da_ref && (
+                                                <div className="text-[9px] text-mpca-gray-dark font-mono mt-0.5">{a.da_ref}</div>
+                                            )}
+                                        </td>
+                                        <td className="py-3 px-3 text-center">
+                                            {daStatus === "Paid" ? (
+                                                <div className="inline-flex flex-col items-center gap-0.5" data-testid={`ma-payment-${a.id}`}>
+                                                    <span className="text-[11px] font-mono font-semibold text-mpca-navy">{fmt(a.da_paid_amount_inr)}</span>
+                                                    <span className="text-[9px] font-mono text-mpca-gray-dark">
+                                                        <Landmark size={9} className="inline mr-0.5" />
+                                                        {a.da_payment_mode || "—"} · {a.da_payment_ref || "—"}
+                                                    </span>
+                                                    {a.da_paid_at && (
+                                                        <span className="text-[9px] italic text-mpca-gray-dark">{new Date(a.da_paid_at).toLocaleDateString("en-IN")}</span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] italic text-mpca-gray-dark">—</span>
+                                            )}
                                         </td>
                                         <td className="py-3 px-3 text-right">
                                             {status === "Pending" && (
@@ -163,13 +206,40 @@ const MyAssignments = () => {
                                                     </button>
                                                 </div>
                                             )}
-                                            {status === "Accepted" && (
+                                            {status === "Accepted" && !daStatus && (
                                                 <Link
                                                     to={`/tournaments/${a.tournament_id}?open=my-da`}
                                                     className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2.5 py-1 hover:opacity-90 inline-flex items-center gap-1"
                                                     data-testid={`ma-submit-da-${a.id}`}
                                                 >
-                                                    <ClipboardEdit size={11} /> Submit DA
+                                                    <ClipboardEdit size={11} /> Fill DA Form
+                                                </Link>
+                                            )}
+                                            {status === "Accepted" && (daStatus === "Draft" || daStatus === "Rejected") && (
+                                                <Link
+                                                    to={`/tournaments/${a.tournament_id}?open=my-da`}
+                                                    className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2.5 py-1 hover:opacity-90 inline-flex items-center gap-1"
+                                                    data-testid={`ma-continue-da-${a.id}`}
+                                                >
+                                                    <FilePenLine size={11} /> Continue
+                                                </Link>
+                                            )}
+                                            {status === "Accepted" && daStatus === "Submitted" && (
+                                                <Link
+                                                    to={`/tournaments/${a.tournament_id}?open=my-da`}
+                                                    className="text-[10px] uppercase tracking-widest border border-mpca-brass text-mpca-brass px-2.5 py-1 hover:bg-mpca-brass/10 inline-flex items-center gap-1"
+                                                    data-testid={`ma-view-da-${a.id}`}
+                                                >
+                                                    <ExternalLink size={11} /> View
+                                                </Link>
+                                            )}
+                                            {status === "Accepted" && (daStatus === "Approved" || daStatus === "Paid") && a.da_form_id && (
+                                                <Link
+                                                    to={`/match-official-da/${a.da_form_id}/voucher`}
+                                                    className="text-[10px] uppercase tracking-widest bg-mpca-navy text-mpca-ivory px-2.5 py-1 hover:opacity-90 inline-flex items-center gap-1"
+                                                    data-testid={`ma-voucher-${a.id}`}
+                                                >
+                                                    <FileText size={11} /> Voucher
                                                 </Link>
                                             )}
                                             {status === "Rejected" && (

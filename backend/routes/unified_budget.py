@@ -941,6 +941,63 @@ async def unlock_unified_budget(tid: str):
     return snap
 
 
+@api_router.get("/tournaments/{tid}/unified-budget/status")
+async def unified_budget_status(tid: str):
+    """MPCA-226 follow-up · Compare the LOCKED snapshot against a LIVE recompute
+    and flag drift. Feeds Finance Console's blinking 'budget out-of-sync' banner.
+    Returns:
+        - is_locked, locked_version, locked_at
+        - locked_grand_total  (₹ from snapshot at freeze-time)
+        - live_grand_total    (₹ from a fresh compute NOW)
+        - has_drift           (True if diff > ₹1)
+        - live_by_body        (fresh compute's by_body_totals — for pipeline drift row)
+    """
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    snap = t.get("unified_budget_snapshot") or {}
+    is_locked = bool(snap.get("is_locked"))
+    locked_budget_grand = float((snap.get("budget") or {}).get("grand_total") or 0)
+    locked_travel_grand = float((snap.get("travel_grant") or {}).get("grand_total") or 0)
+    locked_grand = locked_budget_grand + locked_travel_grand
+
+    # Live compute (same code path as compute endpoint)
+    setup_meta = t.get("setup_meta") or {}
+    pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
+    matches: List[Dict[str, Any]] = []
+    async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
+        matches.append(m)
+    async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
+        matches.append(f)
+    card = await _load_rate_card_for_tournament(t)
+    default_squad = int(t.get("max_squad_size") or 18)
+    live_budget = compute_tournament_budget(matches, pools, card, default_squad=default_squad)
+    live_travel = compute_travel_grant(matches, pools, card, default_squad=default_squad, trip_overrides=t.get("trip_overrides") or {})
+    # Merge travel into live_by_body — same merge as compute endpoint
+    body_map = {b["body_code"]: b for b in live_budget.get("by_body_totals") or []}
+    for d in (live_travel.get("by_division") or []):
+        code = d.get("division")
+        amt = float(d.get("total", 0) or 0)
+        row = body_map.get(code) or {"body_code": code, "budget": 0.0, "travel_grant": 0.0, "total": 0.0}
+        row["travel_grant"] = row.get("travel_grant", 0.0) + amt
+        row["total"] = row.get("budget", 0.0) + row.get("travel_grant", 0.0)
+        body_map[code] = row
+    live_grand = float(live_budget.get("grand_total") or 0) + float(live_travel.get("grand_total") or 0)
+
+    has_drift = is_locked and abs(live_grand - locked_grand) > 1.0
+
+    return {
+        "is_locked": is_locked,
+        "locked_version": snap.get("locked_version"),
+        "locked_at": snap.get("locked_at"),
+        "locked_grand_total": locked_grand,
+        "live_grand_total": live_grand,
+        "has_drift": has_drift,
+        "delta_inr": live_grand - locked_grand,
+        "live_by_body": list(body_map.values()),
+    }
+
+
 @api_router.get("/tournaments/{tid}/unified-budget/proposed/{body_code}")
 async def proposed_budget_for_body(tid: str, body_code: str):
     """Finance Console linkage — returns the frozen or live "Proposed ₹" for

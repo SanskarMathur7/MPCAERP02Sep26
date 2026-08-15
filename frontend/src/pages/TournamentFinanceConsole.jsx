@@ -5,7 +5,7 @@ import {
     ArrowRight, CheckCircle2, Circle, Loader2, ShieldCheck, PackageOpen,
     Calculator, Wallet, ClipboardCheck, ChevronRight, MessagesSquare,
     Receipt, Activity, HandCoins, ScrollText, ClipboardEdit, LayoutGrid,
-    Gavel, FileSignature,
+    Gavel, FileSignature, Lock, LockOpen, RadioTower,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +21,12 @@ import { fmt, StatusPill } from "./finance/financeShared";
 import { MatrixRow, PoolGroup } from "./finance/MatrixRow";
 import { DivisionBudgetCard } from "./finance/DivisionBudgetCard";
 import { ClaimsPanel } from "./finance/ClaimsPanel";
+
+const UNIFIED_SCOPES = new Set([
+    "Inter_Divisional", "Inter_District", "BCCI",
+    "Championship", "Pre_Tournament_Camp",
+]);
+const INR = (n) => `₹${Math.round(Number(n || 0)).toLocaleString("en-IN")}`;
 
 /** M39r · Tournament Finance Console
  * ────────────────────────────────────
@@ -344,8 +350,23 @@ const TournamentFinanceConsole = () => {
                 </div>
             </div>
 
+            {/* MPCA-230 · Unified Budget → Finance Console linkage.
+                For tournaments covered by the Unified Budget engine, replace
+                the legacy scheme-based PreparePanel with a compact link panel
+                that surfaces lock state + drift alerts and calls the unified
+                prepare endpoint. Legacy PreparePanel stays for other scopes. */}
+            {isMPCA && UNIFIED_SCOPES.has(tournament?.scope) && (
+                <UnifiedBudgetLinkPanel
+                    tournament={tournament}
+                    anyBudgetsExist={anyBudgetsExist}
+                    busy={busy}
+                    onPrepare={prepareBudgets}
+                    onRefresh={load}
+                />
+            )}
+
             {/* Prepare panel — MPCA-only, shown when no budgets have been prepared yet */}
-            {isMPCA && !anyBudgetsExist && (
+            {isMPCA && !anyBudgetsExist && !UNIFIED_SCOPES.has(tournament?.scope) && (
                 <PreparePanel
                     tournament={tournament}
                     schemeSpec={schemeSpec}
@@ -391,12 +412,14 @@ const TournamentFinanceConsole = () => {
                             <ShieldCheck size={12} /> {rows.filter((r) => r.budget_status === "Accepted_By_Division").length} legacy budget(s) still awaiting manual sanction — new acceptances auto-sanction.
                         </div>
                     )}
-                    <button onClick={() => { setIvDraft(matrix.input_variables || {}); prepareBudgets(); }}
-                        disabled={busy}
-                        className="ml-auto text-[11px] text-mpca-brass hover:text-mpca-oxblood underline"
-                        data-testid="fc-reprepare-btn">
-                        Re-prepare from current IVs
-                    </button>
+                    {!UNIFIED_SCOPES.has(tournament?.scope) && (
+                        <button onClick={() => { setIvDraft(matrix.input_variables || {}); prepareBudgets(); }}
+                            disabled={busy}
+                            className="ml-auto text-[11px] text-mpca-brass hover:text-mpca-oxblood underline"
+                            data-testid="fc-reprepare-btn">
+                            Re-prepare from current IVs
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -1161,3 +1184,147 @@ const BudgetPreviewPanel = ({ title, subtitle, icon: Icon, heads, total, tone })
 };
 
 export default TournamentFinanceConsole;
+
+
+// ─────────────────────────────────────────────────────────────
+// MPCA-230 · Unified Budget Link Panel
+// ─────────────────────────────────────────────────────────────
+// Replaces the legacy scheme-based PreparePanel for tournaments covered by
+// the Unified Budget engine. Shows lock state, drift alerts, and calls the
+// prepare-budgets-unified endpoint. No input variables required — the math
+// lives in the Unified Budget compute engine (Match Calendar × Rate Card).
+function UnifiedBudgetLinkPanel({ tournament, anyBudgetsExist, busy, onPrepare, onRefresh }) {
+    const [status, setStatus] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState(null);
+
+    const load = useCallback(async () => {
+        if (!tournament?.id) return;
+        setLoading(true); setErr(null);
+        try {
+            const { data } = await api.get(`/tournaments/${tournament.id}/unified-budget/status`);
+            setStatus(data);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setLoading(false); }
+    }, [tournament?.id]);
+    useEffect(() => { load(); }, [load, tournament?.unified_budget_snapshot?.locked_version]);
+
+    if (loading && !status) {
+        return (
+            <div className="bulletin-card p-4 mb-6 text-center text-mpca-brass text-sm flex items-center gap-2 justify-center" data-testid="fc-unified-link-loading">
+                <Loader2 size={14} className="animate-spin" /> Reading Unified Budget state…
+            </div>
+        );
+    }
+
+    const isLocked = !!status?.is_locked;
+    const hasDrift = !!status?.has_drift;
+    const liveGrand = Number(status?.live_grand_total || 0);
+    const lockedGrand = Number(status?.locked_grand_total || 0);
+    const delta = Number(status?.delta_inr || 0);
+    const workspaceUrl = `/tournaments/${tournament.id}`;
+
+    return (
+        <div className="bulletin-card p-6 mb-6" data-testid="fc-unified-link-panel">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <Wallet size={16} className="text-mpca-oxblood" />
+                <div className="overline">Step 1 · Budget Source</div>
+                <span className="ml-2 text-[10px] font-semibold uppercase tracking-widest bg-mpca-oxblood/10 text-mpca-oxblood px-2 py-0.5 border border-mpca-oxblood/30 inline-flex items-center gap-1" data-testid="fc-unified-engine-badge">
+                    Unified Budget engine
+                </span>
+                {isLocked && (
+                    <span className="text-[10px] font-semibold uppercase tracking-widest bg-mpca-green-dark/10 text-mpca-green-dark px-2 py-0.5 border border-mpca-green-dark/30 inline-flex items-center gap-1" data-testid="fc-locked-chip">
+                        <Lock size={10} /> v{status?.locked_version}
+                    </span>
+                )}
+                {hasDrift && (
+                    <span className="text-[10px] font-semibold uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-0.5 inline-flex items-center gap-1 animate-pulse" data-testid="fc-drift-chip">
+                        <AlertTriangle size={10} /> Budget out-of-sync · re-lock
+                    </span>
+                )}
+                <span className="text-[10px] italic text-mpca-gray-dark ml-auto">
+                    Legacy scheme calculators (2-B / 2-D) are deprecated for this scope.
+                </span>
+            </div>
+
+            <h2 className="font-serif text-2xl text-mpca-green-dark mb-1">
+                {!isLocked && "Compute + lock the Unified Budget first"}
+                {isLocked && !hasDrift && "Budget is locked — ready to send to Divisions"}
+                {isLocked && hasDrift && "Budget drifted from the locked snapshot"}
+            </h2>
+            <p className="text-sm text-mpca-gray-dark mb-4">
+                {!isLocked && (<>Open the <b>Tournament Workspace</b> → <b>Unified Budget</b> setup box, verify the Match Calendar × Rate Card × Officials math, then click <b>Lock Budget</b>. The locked snapshot is what Divisions will see and claim against.</>)}
+                {isLocked && !hasDrift && (<>The locked snapshot is <b>{INR(lockedGrand)}</b>. Click <b>Prepare Division Budgets</b> to materialise one Draft per body (Host + Visitors) from the locked head allocations. Divisions receive them on Send.</>)}
+                {isLocked && hasDrift && (<>Live compute now reads <b>{INR(liveGrand)}</b> vs locked <b>{INR(lockedGrand)}</b> (Δ <b>{delta >= 0 ? "+" : ""}{INR(delta)}</b>). This usually means a cost driver changed (KO team names replaced, rate card edited, fixture dates moved). Go to the Unified Budget panel, click <b>Unlock</b>, then <b>Lock</b> again to freeze the new snapshot before re-issuing to Divisions.</>)}
+            </p>
+
+            {err && (
+                <div className="bg-mpca-oxblood/10 border border-mpca-oxblood/40 p-3 text-xs text-mpca-oxblood mb-3" data-testid="fc-unified-err">{err}</div>
+            )}
+
+            {/* Snapshot summary tiles */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div className="border border-mpca-brass/30 bg-white px-4 py-3">
+                    <div className="overline text-[9px]">Live compute</div>
+                    <div className="font-mono text-xl text-mpca-charcoal">{INR(liveGrand)}</div>
+                    <div className="text-[9px] text-mpca-gray-dark">Match Calendar × Rate Card × Officials</div>
+                </div>
+                <div className={`border px-4 py-3 ${isLocked ? "border-mpca-green-dark/40 bg-mpca-green-dark/5" : "border-mpca-brass/30 bg-mpca-parchment/40"}`}>
+                    <div className="overline text-[9px]">Locked snapshot</div>
+                    <div className="font-mono text-xl text-mpca-green-dark">{isLocked ? INR(lockedGrand) : "—"}</div>
+                    <div className="text-[9px] text-mpca-gray-dark">
+                        {isLocked ? `v${status?.locked_version} · ${status?.locked_at ? new Date(status.locked_at).toLocaleString("en-IN") : ""}` : "Not locked yet"}
+                    </div>
+                </div>
+                <div className={`border px-4 py-3 ${hasDrift ? "border-mpca-oxblood bg-mpca-oxblood/5 animate-pulse" : "border-mpca-brass/30 bg-white"}`}>
+                    <div className="overline text-[9px]">Drift</div>
+                    <div className={`font-mono text-xl ${hasDrift ? "text-mpca-oxblood" : "text-mpca-charcoal"}`}>
+                        {hasDrift ? `${delta >= 0 ? "+" : ""}${INR(delta)}` : "None"}
+                    </div>
+                    <div className="text-[9px] text-mpca-gray-dark">
+                        {hasDrift ? "Locked ≠ Live · re-lock recommended" : "Locked matches live"}
+                    </div>
+                </div>
+                <div className="border border-mpca-brass/30 bg-white px-4 py-3">
+                    <div className="overline text-[9px]">Divisions ready</div>
+                    <div className="font-mono text-xl text-mpca-charcoal">
+                        {(status?.live_by_body || []).filter((b) => b.body_code !== "MPCA" && b.total > 0).length}
+                    </div>
+                    <div className="text-[9px] text-mpca-gray-dark">bodies with non-zero total</div>
+                </div>
+            </div>
+
+            <div className="flex gap-3 flex-wrap items-center">
+                <Link to={workspaceUrl}
+                    className="text-[11px] uppercase tracking-widest border border-mpca-brass text-mpca-brass px-3 py-2 hover:bg-mpca-brass/10 flex items-center gap-1.5"
+                    data-testid="fc-goto-unified-btn">
+                    <RadioTower size={12} /> Open Unified Budget panel
+                </Link>
+                {isLocked && !anyBudgetsExist && (
+                    <button onClick={onPrepare} disabled={busy}
+                        className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-2 hover:bg-mpca-oxblood/90 flex items-center gap-1.5 disabled:opacity-40"
+                        data-testid="fc-prepare-unified-btn">
+                        {busy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Prepare Division Budgets from v{status?.locked_version}
+                    </button>
+                )}
+                {isLocked && anyBudgetsExist && !hasDrift && (
+                    <div className="text-[11px] text-mpca-green-dark flex items-center gap-1.5" data-testid="fc-in-sync-note">
+                        <CheckCircle2 size={12} /> Division budgets in sync with locked snapshot
+                    </div>
+                )}
+                {hasDrift && anyBudgetsExist && (
+                    <button onClick={onPrepare} disabled={busy}
+                        className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-2 hover:bg-mpca-oxblood/90 flex items-center gap-1.5 disabled:opacity-40 animate-pulse"
+                        data-testid="fc-reprepare-drift-btn">
+                        {busy ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />} Re-prepare from new lock
+                    </button>
+                )}
+                <button onClick={load} className="text-[11px] uppercase tracking-widest text-mpca-brass hover:text-mpca-oxblood underline ml-auto"
+                    data-testid="fc-status-refresh">
+                    <RotateCcw size={10} className="inline mr-1" /> Refresh state
+                </button>
+            </div>
+        </div>
+    );
+}
+

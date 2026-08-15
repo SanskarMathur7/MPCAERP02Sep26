@@ -60,7 +60,16 @@ async def create_tournament_master(payload: TournamentMasterCreate):
     }, {"_id": 0, "id": 1})
     if existing:
         raise HTTPException(409, f"'{payload.name}' already exists under {payload.category}.")
-    doc = TournamentMaster(**payload.model_dump())
+    data = payload.model_dump()
+    # Coerce nullable ints/bool to defaults (Create schema allows None; final model needs concrete values)
+    for k in ("max_guest_mp_domicile", "max_guest_education", "max_guest_out_of_mp"):
+        if data.get(k) is None:
+            data[k] = 0
+    if data.get("medical_required") is None:
+        data["medical_required"] = False
+    if data.get("sort_order") is None:
+        data["sort_order"] = 100
+    doc = TournamentMaster(**data)
     await db.tournament_master.insert_one(doc.model_dump())
     return doc
 

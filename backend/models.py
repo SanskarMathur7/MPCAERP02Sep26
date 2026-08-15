@@ -906,6 +906,10 @@ TournamentMasterCategory = Literal[
     "BCCI",
     "Inter_Divisional",
     "Inter_District",
+    "Inter_School",
+    "Inter_Club",
+    "Vacation_Camp",
+    "Periodical_Coaching_Camp",
 ]
 
 

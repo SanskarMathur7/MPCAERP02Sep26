@@ -72,6 +72,7 @@ const DivisionReimbursementClaimForm = lazy(() => import("@/pages/DivisionReimbu
 const MpcaClaimReviewForm = lazy(() => import("@/pages/MpcaClaimReviewForm"));
 const MatchOfficialDAVoucher = lazy(() => import("@/pages/MatchOfficialDAVoucher"));
 const MatchOfficialFinancePage = lazy(() => import("@/pages/MatchOfficialFinancePage"));
+const MPCAShowcase = lazy(() => import("@/pages/MPCAShowcase"));
 const MyDAForms = lazy(() => import("@/pages/MyDAForms"));
 const SquadReview = lazy(() => import("@/pages/SquadReview"));
 const SquadDetail = lazy(() => import("@/pages/SquadDetail"));
@@ -125,6 +126,7 @@ function App() {
                             <Route path="/" element={<Landing />} />
                             <Route path="/login" element={<Login />} />
                             <Route path="/disclosures-public" element={<Disclosures publicView />} />
+                            <Route path="/showcase" element={<MPCAShowcase />} />
                             <Route path="/verify/:uid" element={<Verify />} />
                             <Route path="/member-profile/:uid" element={<MemberProfile />} />
                             <Route path="/register/player/:token" element={<PublicPlayerRegistration />} />

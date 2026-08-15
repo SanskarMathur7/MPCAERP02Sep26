@@ -116,13 +116,42 @@ async def submit_selection(
         raise HTTPException(400, "A Captain must be marked before submission.")
 
     now = datetime.now(timezone.utc).isoformat()
-    updates = {
-        "submission_status": "Awaiting_MPCA_Approval",
-        "submitted_at": now,
-        "submitted_by": x_user_name or x_role_id,
-        "submitted_by_body": x_body_code,
-        "review_note": payload.note,
-    }
+
+    # MPCA-239 · Wiring-driven auto-approve.
+    # If the tournament type's wiring says squad_approval.flag == "NA"
+    # (BCCI, Inter-District, School, Club, Coaching Camp, Vacation Camp,
+    # Pre-Tournament Camp), the squad self-approves on submit — no MPCA
+    # step exists per the wiring. Only Inter-Divisional (flag = "M") keeps
+    # the Awaiting_MPCA_Approval → MPCA review flow.
+    try:
+        from routes.tournament_wiring_status import _resolve_type_id
+        from routes.tournament_wiring import _fetch_or_seed_wiring
+        type_id = await _resolve_type_id(t)
+        wiring  = await _fetch_or_seed_wiring()
+        squad_approval_flag = wiring["cells"].get(type_id, {}).get("squad_approval", {}).get("flag")
+    except Exception:
+        squad_approval_flag = "M"   # safe fallback — retain MPCA approval
+
+    if squad_approval_flag == "NA":
+        new_status = "Approved"
+        updates = {
+            "submission_status":  new_status,
+            "submitted_at":       now,
+            "submitted_by":       x_user_name or x_role_id,
+            "submitted_by_body":  x_body_code,
+            "review_note":        payload.note,
+            "reviewed_at":        now,
+            "reviewed_by":        "auto-wiring",
+            "review_decision":    "auto_approved_no_mpca_step",
+        }
+    else:
+        updates = {
+            "submission_status":  "Awaiting_MPCA_Approval",
+            "submitted_at":       now,
+            "submitted_by":       x_user_name or x_role_id,
+            "submitted_by_body":  x_body_code,
+            "review_note":        payload.note,
+        }
     await db.squads.update_one({"tournament_id": tid}, {"$set": updates})
     return await db.squads.find_one({"tournament_id": tid}, {"_id": 0})
 
@@ -222,13 +251,37 @@ async def submit_squad_to_mpca(
         )
 
     now = datetime.now(timezone.utc).isoformat()
-    updates = {
-        "submission_status": "Awaiting_MPCA_Approval",
-        "submitted_at": now,
-        "submitted_by": x_user_name or x_role_id,
-        "submitted_by_body": x_body_code,
-        "review_note": payload.note,
-    }
+
+    # MPCA-239 · Wiring-driven auto-approve (same logic as tournament-level submit).
+    try:
+        from routes.tournament_wiring_status import _resolve_type_id
+        from routes.tournament_wiring import _fetch_or_seed_wiring
+        t = await db.tournaments.find_one({"id": doc.get("tournament_id")}, {"_id": 0}) or {}
+        type_id = await _resolve_type_id(t) if t else "interdiv"
+        wiring  = await _fetch_or_seed_wiring()
+        squad_approval_flag = wiring["cells"].get(type_id, {}).get("squad_approval", {}).get("flag")
+    except Exception:
+        squad_approval_flag = "M"
+
+    if squad_approval_flag == "NA":
+        updates = {
+            "submission_status":  "Approved",
+            "submitted_at":       now,
+            "submitted_by":       x_user_name or x_role_id,
+            "submitted_by_body":  x_body_code,
+            "review_note":        payload.note,
+            "reviewed_at":        now,
+            "reviewed_by":        "auto-wiring",
+            "review_decision":    "auto_approved_no_mpca_step",
+        }
+    else:
+        updates = {
+            "submission_status":  "Awaiting_MPCA_Approval",
+            "submitted_at":       now,
+            "submitted_by":       x_user_name or x_role_id,
+            "submitted_by_body":  x_body_code,
+            "review_note":        payload.note,
+        }
     if payload.signed_copy_url:
         updates["signed_copy_url"] = payload.signed_copy_url
         updates["signed_copy_uploaded_at"] = now

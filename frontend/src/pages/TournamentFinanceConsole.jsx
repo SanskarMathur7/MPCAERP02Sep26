@@ -209,6 +209,10 @@ const TournamentFinanceConsole = () => {
     const anyAccepted = filteredRows.some((r) => r.budget_status === "Accepted_By_Division");
     const anyRevision = filteredRows.some((r) => r.budget_status === "Revision_Requested");
     const myRow = !isMPCA ? rows.find((r) => r.body_code === myBody) : null;
+    // MPCA-234 · A Division that's Host in one pool AND Visitor in another
+    // has TWO independent budgets on the same tournament — render both as
+    // separate cards so the Division picks the right one at invoice-upload time.
+    const myRows = !isMPCA ? rows.filter((r) => r.body_code === myBody) : [];
 
     // M39s · Rows grouped by pool for the matrix + prepare UI
     const rowsByPool = pools.map((p) => ({
@@ -423,14 +427,32 @@ const TournamentFinanceConsole = () => {
                 </div>
             )}
 
-            {/* Division-side · My budget card */}
-            {!isMPCA && myRow && (
-                <DivisionBudgetCard
-                    row={myRow}
-                    onAccept={() => divisionAccept(myRow.budget_id)}
-                    onRequestRevision={() => divisionRequestRevision(myRow.budget_id)}
-                    busy={busy}
-                />
+            {/* Division-side · Two independent budget cards (one per pool) when
+                the Division participates in multiple pools of the same tournament. */}
+            {!isMPCA && myRows.length > 0 && (
+                <div className="space-y-4 mb-4" data-testid="my-budgets-list">
+                    {myRows.length > 1 && (
+                        <div className="border-l-4 border-mpca-oxblood bg-mpca-oxblood/5 px-4 py-2 text-[11px] text-mpca-oxblood" data-testid="my-budgets-multi-hint">
+                            <b>Two separate budgets under the same tournament.</b> Each pool has its own budget with a distinct ceiling. When you upload an invoice, pick the budget & head that matches the actual spend so MPCA can reconcile correctly.
+                        </div>
+                    )}
+                    {myRows.map((r, i) => (
+                        <div key={r.budget_id || i} data-testid={`my-budget-card-${r.pool_id || i}`}>
+                            {myRows.length > 1 && (
+                                <div className="text-[10px] uppercase tracking-widest text-mpca-brass mb-1 flex items-center gap-2">
+                                    <span className="bg-mpca-brass/10 px-2 py-0.5 border border-mpca-brass/30">Budget {i + 1} of {myRows.length}</span>
+                                    <span>Pool: <b>{r.pool_name || "—"}</b> · Role: <b>{r.role}</b></span>
+                                </div>
+                            )}
+                            <DivisionBudgetCard
+                                row={r}
+                                onAccept={() => divisionAccept(r.budget_id)}
+                                onRequestRevision={() => divisionRequestRevision(r.budget_id)}
+                                busy={busy}
+                            />
+                        </div>
+                    ))}
+                </div>
             )}
 
             {/* MPCA-120 · District Scope filter for Division supervisors

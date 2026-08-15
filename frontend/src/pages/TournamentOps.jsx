@@ -310,12 +310,17 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
     const [aiExtracting, setAiExtracting] = useState(false);
     const [aiPreview, setAiPreview] = useState(null);
     const [approvedBudget, setApprovedBudget] = useState(null);
+    // MPCA-234 · Multi-pool: expose ALL approved budgets so Divisions can pick
+    // which one an invoice belongs to at upload time.
+    const [approvedBudgets, setApprovedBudgets] = useState([]);
+    const [selectedBudgetId, setSelectedBudgetId] = useState("");
     const [activeClaim, setActiveClaim] = useState(null);         // MPCA-201 · lock flag
     const emptyForm = () => ({
         vendor_name: "", invoice_no: "", invoice_date: "",
         amount_inr: 0, gst_inr: 0, total_inr: 0,
         allocations: [{ head_code: "", head_label: "", amount_inr: 0 }],
         file_url: "", filename: "", ai_extracted: false,
+        budget_id: "",   // MPCA-234 · which budget this invoice claims against
     });
     const [form, setForm] = useState(emptyForm());
     const inputRef = useRef(null);
@@ -340,6 +345,16 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
         const entry = Object.entries(HEAD_CODE_TO_LABEL).find(([, l]) => l === label);
         return entry ? entry[0] : (label || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_");
     };
+
+    // Keep budgetHeads reactive to the currently-selected budget.
+    useEffect(() => {
+        if (!selectedBudgetId) return;
+        const b = approvedBudgets.find((x) => x.id === selectedBudgetId);
+        if (b) {
+            setApprovedBudget(b);
+            setForm((f) => ({ ...f, budget_id: b.id }));
+        }
+    }, [selectedBudgetId, approvedBudgets]);
 
     // Approved budget heads → options for the dropdown. Falls back to empty list.
     const budgetHeads = useMemo(() => {
@@ -368,7 +383,13 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                 }).catch(() => []),
             ]);
             setInvoices(inv);
-            setApprovedBudget((budgets && budgets.length) ? budgets[0] : null);
+            const list = budgets || [];
+            setApprovedBudgets(list);
+            // Prefer keeping the current selection if still valid, else pick first.
+            const stillValid = list.find((b) => b.id === selectedBudgetId);
+            const active = stillValid || list[0] || null;
+            setApprovedBudget(active);
+            setSelectedBudgetId(active?.id || "");
             // MPCA-201 · detect active reimbursement claim (Division-side lock).
             try {
                 const claims = await api.get("/reimbursement-claims", { params: {
@@ -549,8 +570,9 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
             await createTournamentInvoice({
                 tournament_id: tournament.id,
                 body_id: persona?.body_code || "MPCA",
-                // MPCA-124 · budget_id resolved server-side from Approved
-                // budget of (tournament, body).
+                // MPCA-234 · Explicit budget picker when a Division has 2+ approved
+                // budgets on the same tournament (Host in one pool + Visitor in another).
+                budget_id: selectedBudgetId || approvedBudget?.id,
                 vendor_name: form.vendor_name,
                 invoice_no: form.invoice_no,
                 invoice_date: form.invoice_date,
@@ -726,6 +748,31 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                             <button onClick={() => { setAddOpen(false); setEditing(null); setForm(emptyForm()); setAiPreview(null); }}><X className="text-mpca-gold-light" /></button>
                         </div>
                         <div className="p-6 space-y-4">
+                            {/* MPCA-234 · Budget picker for multi-pool tournaments */}
+                            {approvedBudgets.length > 1 && (
+                                <div className="border-2 border-mpca-oxblood/40 bg-mpca-oxblood/5 p-3" data-testid="inv-budget-picker">
+                                    <label className="label-heritage flex items-center gap-2 mb-2">
+                                        Which budget does this invoice claim against?
+                                        <span className="text-[9px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-0.5">Multi-pool tournament</span>
+                                    </label>
+                                    <select
+                                        className="input-heritage w-full"
+                                        value={selectedBudgetId}
+                                        onChange={(e) => setSelectedBudgetId(e.target.value)}
+                                        disabled={!!editing}
+                                        data-testid="inv-budget-select"
+                                    >
+                                        {approvedBudgets.map((b) => (
+                                            <option key={b.id} value={b.id}>
+                                                {b.budget_no} · {b.pool_name || "—"} · {b.role_flavour || "—"} · ₹{Number(b.total_ceiling_inr || 0).toLocaleString("en-IN")}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="text-[10px] text-mpca-gray-dark mt-1 italic">
+                                        The head list below changes based on the selected budget. Invoice will be tagged with this budget for MPCA reconciliation.
+                                    </div>
+                                </div>
+                            )}
                             <div>
                                 <label className="label-heritage">Invoice File (PDF / JPG / PNG)</label>
                                 <button

@@ -110,10 +110,26 @@ async def submit_selection(
         raise HTTPException(400, "Squad is already approved.")
 
     members = doc.get("members") or []
-    if len(members) < 11:
-        raise HTTPException(400, f"Squad has {len(members)} players — need at least 11 to submit.")
-    if not any(m.get("is_captain") for m in members):
-        raise HTTPException(400, "A Captain must be marked before submission.")
+    # MPCA-240 · For Manual_PDF wiring types, the signed PDF IS the roster —
+    # so the 11-player / captain gates only apply to Register-linked squads.
+    try:
+        from routes.tournament_wiring_status import _resolve_type_id
+        from routes.tournament_wiring import _fetch_or_seed_wiring
+        t = await db.tournaments.find_one({"id": tid}, {"_id": 0}) or {}
+        type_id = await _resolve_type_id(t)
+        w = await _fetch_or_seed_wiring()
+        squad_mode = w["cells"].get(type_id, {}).get("squad", {}).get("mode")
+    except Exception:
+        squad_mode = "Register_Linked"
+
+    if squad_mode == "Manual_PDF":
+        if not doc.get("signed_copy_url"):
+            raise HTTPException(400, "Signed squad PDF is required — please upload before submitting.")
+    else:
+        if len(members) < 11:
+            raise HTTPException(400, f"Squad has {len(members)} players — need at least 11 to submit.")
+        if not any(m.get("is_captain") for m in members):
+            raise HTTPException(400, "A Captain must be marked before submission.")
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -236,10 +252,22 @@ async def submit_squad_to_mpca(
         raise HTTPException(400, f"Squad is already {doc.get('submission_status').replace('_', ' ').lower()}.")
 
     members = doc.get("members") or []
-    if len(members) < 11:
-        raise HTTPException(400, f"Squad has {len(members)} players — need at least 11 to submit.")
-    if not any(m.get("is_captain") for m in members):
-        raise HTTPException(400, "A Captain must be marked before submission.")
+    # MPCA-240 · Manual_PDF wiring types: PDF is the roster, no 11-player check.
+    try:
+        from routes.tournament_wiring_status import _resolve_type_id
+        from routes.tournament_wiring import _fetch_or_seed_wiring
+        t2 = await db.tournaments.find_one({"id": doc.get("tournament_id")}, {"_id": 0}) or {}
+        type_id_m = await _resolve_type_id(t2)
+        w2 = await _fetch_or_seed_wiring()
+        squad_mode_m = w2["cells"].get(type_id_m, {}).get("squad", {}).get("mode")
+    except Exception:
+        squad_mode_m = "Register_Linked"
+
+    if squad_mode_m != "Manual_PDF":
+        if len(members) < 11:
+            raise HTTPException(400, f"Squad has {len(members)} players — need at least 11 to submit.")
+        if not any(m.get("is_captain") for m in members):
+            raise HTTPException(400, "A Captain must be marked before submission.")
 
     # ── M37 · Signed nomination copy is MANDATORY for Division / District submissions ──
     # MPCA host-body drafts (self-approving) are exempt.

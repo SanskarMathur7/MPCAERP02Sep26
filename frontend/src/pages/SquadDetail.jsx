@@ -408,26 +408,31 @@ const SquadDetail = () => {
                                 <FileCheck size={12} /> View Signed Copy
                             </a>
                         )}
-                        {canSubmit && !isMPCA && members.length >= 11 && captain && (
+                        {canSubmit && !isMPCA && (members.length >= 11 && captain || wiringSquadMode?.mode === "Manual_PDF") && (
                             <>
-                                <a href={`/squads/${squad.id}/nomination-form`} target="_blank" rel="noreferrer" className="text-[11px] uppercase tracking-widest bg-mpca-ivory text-mpca-green-dark px-3 py-2 flex items-center gap-1 hover:bg-mpca-gold-light transition-colors" data-testid="squad-download-nomination-btn">
-                                    <Download size={12} /> Download Nomination
-                                </a>
+                                {members.length >= 11 && captain && (
+                                    <a href={`/squads/${squad.id}/nomination-form`} target="_blank" rel="noreferrer" className="text-[11px] uppercase tracking-widest bg-mpca-ivory text-mpca-green-dark px-3 py-2 flex items-center gap-1 hover:bg-mpca-gold-light transition-colors" data-testid="squad-download-nomination-btn">
+                                        <Download size={12} /> Download Nomination
+                                    </a>
+                                )}
                                 <label className="text-[11px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-3 py-2 flex items-center gap-1 cursor-pointer hover:bg-mpca-brass/80 transition-colors" data-testid="squad-upload-signed-btn">
-                                    <Upload size={12} /> {squad.signed_copy_url ? "Replace Signed Copy" : "Upload Signed Copy"}
+                                    <Upload size={12} /> {squad.signed_copy_url ? "Replace Signed Copy" : "Upload Signed Squad PDF"}
                                     <input type="file" className="hidden" accept="application/pdf,image/*" onChange={handleSignedCopyUpload} />
                                 </label>
                             </>
                         )}
-                        {canSubmit && members.length >= 11 && captain && (
+                        {canSubmit && (
+                            (members.length >= 11 && captain) ||
+                            (wiringSquadMode?.mode === "Manual_PDF" && squad.signed_copy_url)
+                        ) && (
                             <button
                                 onClick={handleSubmit}
                                 disabled={busy || (!isMPCA && !squad.signed_copy_url)}
-                                title={!isMPCA && !squad.signed_copy_url ? "Upload signed nomination copy first" : ""}
+                                title={!isMPCA && !squad.signed_copy_url ? "Upload signed squad PDF first" : ""}
                                 className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-4 py-2 flex items-center gap-1 disabled:opacity-40 hover:bg-mpca-burgundy-dark transition-colors"
                                 data-testid="squad-submit-mpca-btn"
                             >
-                                {busy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Submit to MPCA
+                                {busy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} {wiringSquadMode?.mode === "Manual_PDF" ? "Submit Squad" : "Submit to MPCA"}
                             </button>
                         )}
                         {canReview && (

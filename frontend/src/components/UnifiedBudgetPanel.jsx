@@ -30,6 +30,25 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
     const [printMode, setPrintMode] = useState(false);
     const [expandedMatch, setExpandedMatch] = useState(null);
     const [savedMsg, setSavedMsg] = useState(null);
+    // MPCA-238 · Match Officials sub-tab (Fees vs DA split)
+    const [officialsRollup, setOfficialsRollup] = useState(null);
+    const [officialsBusy, setOfficialsBusy] = useState(false);
+
+    const loadOfficials = async () => {
+        try {
+            const { data: r } = await api.get(`/tournaments/${tournament.id}/match-officials/rollup`);
+            setOfficialsRollup(r);
+        } catch { /* ignore */ }
+    };
+    useEffect(() => { if (tournament?.id) loadOfficials(); }, [tournament?.id]);
+
+    const patchOfficialRate = async (aid, patch) => {
+        setOfficialsBusy(true);
+        try {
+            await api.patch(`/tournaments/${tournament.id}/match-officials/${aid}`, patch);
+            await loadOfficials();
+        } finally { setOfficialsBusy(false); }
+    };
 
     const handlePrint = () => {
         setPrintMode(true);
@@ -264,6 +283,7 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                     <TabButton active={tab === "body"} onClick={() => setTab("body")} icon={<UsersIcon size={12} />} testId="ub-tab-body">Budget by Body</TabButton>
                     <TabButton active={tab === "match"} onClick={() => setTab("match")} icon={<Wallet size={12} />} testId="ub-tab-match">Budget by Match</TabButton>
                     <TabButton active={tab === "travel"} onClick={() => setTab("travel")} icon={<Plane size={12} />} testId="ub-tab-travel">Travel Grant · {INR(travel.grand_total || 0)}</TabButton>
+                    <TabButton active={tab === "officials"} onClick={() => setTab("officials")} icon={<UsersIcon size={12} />} testId="ub-tab-officials">Match Officials{officialsRollup?.grand_total ? ` · ${INR(officialsRollup.grand_total)}` : ""}</TabButton>
                 </div>
 
                 {(tab === "head" || printMode) && (
@@ -568,9 +588,119 @@ export default function UnifiedBudgetPanel({ tournament, canEdit }) {
                         )}
                     </div>
                 )}
+
+                {/* MPCA-238 · Match Officials Fees & DA */}
+                {(tab === "officials" || printMode) && (
+                    <div>
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                            <div className={TILE} data-testid="ub-off-fees-tile">
+                                <span className="overline">Officials · Fees (scheduled days)</span>
+                                <span className="font-mono text-2xl text-mpca-oxblood">{INR(officialsRollup?.grand_fees || 0)}</span>
+                                <span className="text-[10px] text-mpca-gray-dark">Paid for every match-day on the schedule — even if a match ends early.</span>
+                            </div>
+                            <div className={TILE} data-testid="ub-off-da-tile">
+                                <span className="overline">Officials · DA (actual days)</span>
+                                <span className="font-mono text-2xl text-mpca-oxblood">{INR(officialsRollup?.grand_da || 0)}</span>
+                                <span className="text-[10px] text-mpca-gray-dark">Paid only for days the match actually took place.</span>
+                            </div>
+                            <div className={TILE + " bg-mpca-oxblood/5"} data-testid="ub-off-grand-tile">
+                                <span className="overline">Officials · Grand total</span>
+                                <span className="font-mono text-2xl text-mpca-oxblood">{INR(officialsRollup?.grand_total || 0)}</span>
+                                <span className="text-[10px] text-mpca-gray-dark">Landed on MPCA state books (owner: Common).</span>
+                            </div>
+                        </div>
+
+                        <div className="border border-mpca-brass/30 overflow-x-auto mb-4" data-testid="ub-off-rate-card">
+                            <div className="px-4 py-2 bg-mpca-navy text-mpca-gold-light font-serif text-sm flex items-center justify-between">
+                                <span>Match Officials · Per-day Rate Card</span>
+                                <span className="text-[10px] uppercase tracking-widest opacity-80">Edit Fee/day & DA/day inline · Auto-recomputes rollup</span>
+                            </div>
+                            <table className="w-full text-sm">
+                                <thead className="bg-mpca-parchment/60 text-mpca-brass uppercase text-[9px] tracking-widest">
+                                    <tr>
+                                        <th className="px-3 py-2 text-left">Official</th>
+                                        <th className="px-3 py-2 text-left">Role</th>
+                                        <th className="px-3 py-2 text-right w-24">Fee/Day ₹</th>
+                                        <th className="px-3 py-2 text-right w-24">DA/Day ₹</th>
+                                        <th className="px-3 py-2 text-center w-12">Matches</th>
+                                        <th className="px-3 py-2 text-right w-16">Sched d</th>
+                                        <th className="px-3 py-2 text-right w-16">Actual d</th>
+                                        <th className="px-3 py-2 text-right">Fees ₹</th>
+                                        <th className="px-3 py-2 text-right">DA ₹</th>
+                                        <th className="px-3 py-2 text-right">Total ₹</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(officialsRollup?.per_official || []).map((p) => (
+                                        <OfficialRateRow
+                                            key={p.official_id + (p.assignment_id || "")}
+                                            row={p}
+                                            canEdit={canEdit}
+                                            busy={officialsBusy}
+                                            onSave={(patch) => patchOfficialRate(p.assignment_id, patch)}
+                                        />
+                                    ))}
+                                    {(officialsRollup?.per_official || []).length === 0 && (
+                                        <tr><td colSpan={10} className="px-3 py-6 text-center text-mpca-gray-dark italic text-xs">No officials assigned to matches yet. Post officials in the Match Officials panel first.</td></tr>
+                                    )}
+                                </tbody>
+                                {officialsRollup?.per_role?.length > 0 && (
+                                    <tfoot className="bg-mpca-parchment/40 font-semibold text-mpca-charcoal">
+                                        {(officialsRollup.per_role || []).map((r) => (
+                                            <tr key={r.role} className="border-t border-mpca-brass/30" data-testid={`ub-off-role-${r.role}`}>
+                                                <td colSpan={2} className="px-3 py-1.5 text-right uppercase tracking-widest text-[10px] text-mpca-brass">{r.role} · {r.count} pax</td>
+                                                <td colSpan={5}></td>
+                                                <td className="px-3 py-1.5 text-right font-mono">{INR(r.fees)}</td>
+                                                <td className="px-3 py-1.5 text-right font-mono">{INR(r.da)}</td>
+                                                <td className="px-3 py-1.5 text-right font-mono text-mpca-oxblood">{INR(r.total)}</td>
+                                            </tr>
+                                        ))}
+                                    </tfoot>
+                                )}
+                            </table>
+                        </div>
+                    </div>
+                )}
                 </>
             )}
         </div>
+    );
+}
+
+// MPCA-238 · Editable per-official rate row (Fee/day, DA/day)
+function OfficialRateRow({ row, canEdit, busy, onSave }) {
+    const [fee, setFee] = useState(row.per_day_fee_inr);
+    const [da, setDa] = useState(row.per_day_da_inr);
+    const dirty = Number(fee) !== Number(row.per_day_fee_inr) || Number(da) !== Number(row.per_day_da_inr);
+    const inputCls = "input-heritage !py-1 !text-xs font-mono w-20 text-right";
+    return (
+        <tr className="border-t border-mpca-brass/10" data-testid={`ub-off-row-${row.official_id}`}>
+            <td className="px-3 py-2 font-serif text-mpca-green-dark">{row.name}</td>
+            <td className="px-3 py-2 text-xs">{row.role}</td>
+            <td className="px-3 py-2 text-right">
+                <input type="number" min={0} className={inputCls} value={fee} disabled={!canEdit} onChange={(e) => setFee(e.target.value)} data-testid={`ub-off-fee-${row.official_id}`} />
+            </td>
+            <td className="px-3 py-2 text-right">
+                <input type="number" min={0} className={inputCls} value={da} disabled={!canEdit} onChange={(e) => setDa(e.target.value)} data-testid={`ub-off-da-${row.official_id}`} />
+            </td>
+            <td className="px-3 py-2 text-center font-mono">{row.matches}</td>
+            <td className="px-3 py-2 text-right font-mono">{row.scheduled_days}</td>
+            <td className="px-3 py-2 text-right font-mono">{row.actual_days}</td>
+            <td className="px-3 py-2 text-right font-mono">{INR(row.fees)}</td>
+            <td className="px-3 py-2 text-right font-mono">{INR(row.da)}</td>
+            <td className="px-3 py-2 text-right font-mono font-semibold text-mpca-oxblood">
+                {dirty ? (
+                    <button
+                        disabled={busy}
+                        onClick={() => onSave({ per_day_fee_inr: Number(fee) || 0, per_day_da_inr: Number(da) || 0 })}
+                        className="text-[9px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 disabled:opacity-40"
+                        data-testid={`ub-off-save-${row.official_id}`}
+                    >
+                        {busy ? "…" : "Save"}
+                    </button>
+                ) : INR(row.total)}
+            </td>
+        </tr>
     );
 }
 

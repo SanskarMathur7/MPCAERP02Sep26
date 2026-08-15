@@ -4,7 +4,7 @@ managing a squad picks officials from their own body when submitting to MPCA.
 """
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict, Any
 from fastapi import HTTPException, Header
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -298,6 +298,89 @@ class _TmoPatch(BaseModel):
     per_day_fee_inr: Optional[float] = None
     per_day_da_inr: Optional[float] = None
     notes: Optional[str] = None
+
+
+@api_router.get("/tournaments/{tid}/match-officials/rollup")
+async def officials_rollup(tid: str):
+    """MPCA-238 · Compute per-official + per-match + grand rollup of
+    Match Officials FEES and DA.
+
+    Rule (per user MPCA-238):
+      • FEES = per_day_fee_inr × SCHEDULED days       (paid regardless of early conclusion)
+      • DA   = per_day_da_inr  × ACTUAL days played   (actual_days or fallback to scheduled)
+
+    Assignments are read from tournament_match_officials (rate card per official).
+    Actual per-fixture attribution is derived from tournament_matches.officials_ids.
+    """
+    # Load all assignments (rate card) + matches
+    assigns = await db.tournament_match_officials.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
+    matches = await db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
+
+    by_id: Dict[str, Dict[str, Any]] = {a["official_id"]: a for a in assigns}
+    per_official: Dict[str, Dict[str, Any]] = {}
+    per_match: List[Dict[str, Any]] = []
+    grand_fees = 0.0
+    grand_da = 0.0
+
+    for m in matches:
+        scheduled = int(m.get("days") or 1)
+        actual = m.get("actual_days")
+        actual = int(actual) if actual is not None else scheduled
+        oi = m.get("officials_ids") or {}
+        match_fees = 0.0
+        match_da = 0.0
+        for role_key, role_label in [("umpires", "Umpire"), ("scorers", "Scorer"),
+                                       ("selectors", "Selector"), ("observers", "Observer")]:
+            for oid in (oi.get(role_key) or []):
+                a = by_id.get(oid)
+                if not a:
+                    continue
+                fee = float(a.get("per_day_fee_inr") or 0) * scheduled
+                da = float(a.get("per_day_da_inr") or 0) * actual
+                po = per_official.setdefault(oid, {
+                    "official_id": oid, "name": a.get("official_name"),
+                    "role": a.get("role") or role_label,
+                    "per_day_fee_inr": float(a.get("per_day_fee_inr") or 0),
+                    "per_day_da_inr": float(a.get("per_day_da_inr") or 0),
+                    "scheduled_days": 0, "actual_days": 0,
+                    "matches": 0, "fees": 0.0, "da": 0.0, "total": 0.0,
+                    "assignment_id": a.get("id"),
+                })
+                po["scheduled_days"] += scheduled
+                po["actual_days"] += actual
+                po["matches"] += 1
+                po["fees"] += fee
+                po["da"] += da
+                po["total"] = po["fees"] + po["da"]
+                match_fees += fee
+                match_da += da
+                grand_fees += fee
+                grand_da += da
+        per_match.append({
+            "match_id": m.get("id"), "label": m.get("label") or m.get("round") or "",
+            "stage": m.get("stage"), "scheduled_days": scheduled, "actual_days": actual,
+            "team_a": m.get("home_team") or m.get("team_a"),
+            "team_b": m.get("away_team") or m.get("team_b"),
+            "officials_count": sum(len(oi.get(k) or []) for k in ("umpires", "scorers", "selectors", "observers")),
+            "fees": match_fees, "da": match_da, "total": match_fees + match_da,
+        })
+
+    per_role: Dict[str, Dict[str, float]] = {}
+    for po in per_official.values():
+        r = per_role.setdefault(po["role"], {"role": po["role"], "count": 0, "fees": 0.0, "da": 0.0, "total": 0.0})
+        r["count"] += 1
+        r["fees"] += po["fees"]
+        r["da"] += po["da"]
+        r["total"] += po["total"]
+
+    return {
+        "per_official": list(per_official.values()),
+        "per_match": per_match,
+        "per_role": list(per_role.values()),
+        "grand_fees": grand_fees,
+        "grand_da": grand_da,
+        "grand_total": grand_fees + grand_da,
+    }
 
 
 @api_router.patch("/tournaments/{tid}/match-officials/{aid}", response_model=TournamentMatchOfficial)

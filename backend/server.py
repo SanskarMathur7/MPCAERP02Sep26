@@ -82,6 +82,10 @@ async def lifespan(app: FastAPI):
         # MPCA-235 · Tournament Wiring Console — seed the 9×8 progression matrix
         from routes.tournament_wiring import seed_tournament_wiring
         await seed_tournament_wiring()
+        # MPCA-242 · Heal legacy squads stuck at Awaiting_MPCA_Approval whose
+        # wiring says squad_approval.flag != "M" (no MPCA step). Idempotent.
+        from routes.selection_console import heal_legacy_stuck_squads
+        await heal_legacy_stuck_squads()
     yield
     # ---- shutdown ----
     client.close()

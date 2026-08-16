@@ -350,7 +350,30 @@ RECOMMENDED XV (top 5): {[{'name': r['full_name'], 'role': r['role'], 'score': r
 @api_router.post("/squads/{sid}/notify-ai-review")
 async def notify_ai_review(sid: str):
     """Called after Division submits squad for MPCA approval — sends the AI verdict
-    summary as an in-app notification to MPCA Secretary."""
+    summary as an in-app notification to MPCA Secretary.
+
+    MPCA-242 · Wiring guard — if the tournament type's `squad_approval.flag`
+    is not Mandatory ("M"), no MPCA approval step exists, so we short-circuit
+    and skip the notification entirely. Prevents notification spam for
+    Inter-District, Inter-School, Inter-Club, BCCI, and camp tournaments."""
+    from motor.motor_asyncio import AsyncIOMotorClient  # local to avoid cycle
+    import os
+    _client = AsyncIOMotorClient(os.environ.get("MONGO_URL"))
+    _db = _client[os.environ.get("DB_NAME")]
+    _squad = await _db.squads.find_one({"id": sid}, {"_id": 0, "tournament_id": 1})
+    if _squad:
+        try:
+            from routes.tournament_wiring_status import _resolve_type_id
+            from routes.tournament_wiring import _fetch_or_seed_wiring
+            _t = await _db.tournaments.find_one({"id": _squad.get("tournament_id")}, {"_id": 0}) or {}
+            _type_id = await _resolve_type_id(_t) if _t else "interdiv"
+            _wiring  = await _fetch_or_seed_wiring()
+            _flag = _wiring["cells"].get(_type_id, {}).get("squad_approval", {}).get("flag")
+        except Exception:
+            _flag = "M"
+        if _flag != "M":
+            return {"notified": False, "skipped": "wiring_squad_approval_not_mandatory", "flag": _flag}
+
     verdict = await squad_recommendation(sid)
     summary_lines = [
         f"Quality: {verdict['quality_score']}/100",

@@ -86,6 +86,20 @@ const SelectionConsole = () => {
     const [saving, setSaving] = useState(false);
     const [busyAction, setBusyAction] = useState(null);
     const [officialsPool, setOfficialsPool] = useState([]);
+    // MPCA-242 · Wiring-driven approval flag governs Submit copy + notification.
+    const [wiringApprovalFlag, setWiringApprovalFlag] = useState(null);
+    useEffect(() => {
+        if (!tid) return;
+        let alive = true;
+        api.get(`/tournaments/${tid}/wiring-status`)
+            .then(r => {
+                if (!alive) return;
+                const step = (r.data.steps || []).find(s => s.key === "squad_approval");
+                setWiringApprovalFlag(step?.flag ?? null);
+            })
+            .catch(() => { if (alive) setWiringApprovalFlag(null); });
+        return () => { alive = false; };
+    }, [tid]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -224,11 +238,14 @@ const SelectionConsole = () => {
         try {
             const updated = await submitSelection(tid, null);
             setSelection(updated);
-            // Sprint M13-C: notify MPCA Secretary with AI verdict summary
+            // MPCA-242 · notify-ai-review no-ops backend-side when wiring flag != M
             if (updated?.id) {
                 try { await api.post(`/squads/${updated.id}/notify-ai-review`); } catch (_) { /* non-fatal */ }
             }
-            alert("Submitted to MPCA for approval. AI verdict summary has been sent.");
+            const needsMpca = wiringApprovalFlag === "M";
+            alert(needsMpca
+                ? "Submitted to MPCA for approval. AI verdict summary has been sent."
+                : "Squad locked. No MPCA approval is required for this tournament type per the wiring.");
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
         finally { setBusyAction(null); }
     };
@@ -345,7 +362,7 @@ const SelectionConsole = () => {
                     )}
                     {canEdit && persona?.body_type !== "State" && (
                         <button className="btn-heritage-primary" onClick={doSubmit} disabled={busyAction === "submit"} data-testid="submit-mpca-btn">
-                            <Send size={12} /> {busyAction === "submit" ? "Submitting…" : "Submit to MPCA"}
+                            <Send size={12} /> {busyAction === "submit" ? "Submitting…" : (wiringApprovalFlag === "M" ? "Submit to MPCA" : "Lock Squad")}
                         </button>
                     )}
                     {submissionStatus === "Awaiting_MPCA_Approval" && persona?.body_type === "State" && (
@@ -360,12 +377,23 @@ const SelectionConsole = () => {
                 </div>
             </div>
 
-            {/* MPCA-125 · MPCA on non-BCCI tournaments — read/alter mode banner */}
-            {isMPCA && !isBCCI && (
+            {/* MPCA-125 · MPCA on non-BCCI tournaments — read/alter mode banner
+                 MPCA-242 · Copy is now wiring-driven: banner only shows the
+                 "review/approve" language when squad_approval.flag == "M".
+                 For O/NA types MPCA is a read-only observer. */}
+            {isMPCA && !isBCCI && wiringApprovalFlag === "M" && (
                 <div className="mb-4 border-l-4 border-mpca-brass bg-mpca-brass/10 text-mpca-charcoal px-4 py-3 text-[11px]" data-testid="mpca-alter-mode-banner">
                     <div className="font-semibold text-mpca-oxblood uppercase tracking-widest mb-1">MPCA Review Mode · Alter &amp; Return</div>
                     <div>
                         For <b>{tournament?.tournament_type?.replace(/_/g, " ") || "this tournament"}</b>, MPCA cannot create the squad from scratch — Divisions submit their squad and MPCA reviews it. You can <b>alter the roster and return</b> to the Division via <b>Reject with note</b>, or <b>Approve</b> if the squad is acceptable. Fresh-squad creation is reserved for BCCI tournaments only.
+                    </div>
+                </div>
+            )}
+            {isMPCA && !isBCCI && wiringApprovalFlag && wiringApprovalFlag !== "M" && (
+                <div className="mb-4 border-l-4 border-mpca-green-dark/60 bg-mpca-parchment/60 text-mpca-charcoal px-4 py-3 text-[11px]" data-testid="mpca-observer-mode-banner">
+                    <div className="font-semibold text-mpca-green-dark uppercase tracking-widest mb-1">MPCA Observer Mode</div>
+                    <div>
+                        For <b>{tournament?.tournament_type?.replace(/_/g, " ") || "this tournament"}</b>, MPCA does not approve the squad per the wiring — the participating body locks it locally. You have real-time read-only visibility.
                     </div>
                 </div>
             )}

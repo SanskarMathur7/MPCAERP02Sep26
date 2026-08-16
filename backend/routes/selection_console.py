@@ -13,6 +13,64 @@ _DIVISION_ROLES = {"division-secretary", "district-secretary", "president", "sec
 _MPCA_APPROVER_ROLES = {"secretary", "president"}
 
 
+async def heal_legacy_stuck_squads() -> dict:
+    """MPCA-242 · Idempotent startup migration.
+
+    Auto-flip legacy squads that were submitted BEFORE MPCA-239 landed
+    (or before wiring was reset) and are now stranded at
+    Awaiting_MPCA_Approval even though their tournament's wiring says
+    squad_approval.flag != "M" (i.e. no MPCA approval step exists).
+
+    Returns a small dict for logging. Safe to run on every boot — the
+    idempotency comes from the target status set which we only match
+    once per squad."""
+    try:
+        from routes.tournament_wiring_status import _resolve_type_id
+        from routes.tournament_wiring import _fetch_or_seed_wiring
+    except Exception:
+        return {"healed": 0, "reason": "wiring modules unavailable"}
+
+    wiring = await _fetch_or_seed_wiring()
+    cells  = wiring.get("cells") or {}
+
+    stuck = await db.squads.find(
+        {"submission_status": "Awaiting_MPCA_Approval"},
+        {"_id": 0, "id": 1, "tournament_id": 1, "body_id": 1, "team_name": 1},
+    ).to_list(length=500)
+
+    now = datetime.now(timezone.utc).isoformat()
+    healed = 0
+    for sq in stuck:
+        tid = sq.get("tournament_id")
+        if not tid:
+            continue
+        t = await db.tournaments.find_one({"id": tid}, {"_id": 0}) or {}
+        if not t:
+            continue
+        try:
+            type_id = await _resolve_type_id(t)
+        except Exception:
+            type_id = "interdiv"
+        flag = cells.get(type_id, {}).get("squad_approval", {}).get("flag")
+        if flag == "M":
+            continue  # Mandatory approval — leave alone
+        await db.squads.update_one({"id": sq["id"]}, {"$set": {
+            "submission_status": "Approved",
+            "reviewed_at":       now,
+            "reviewed_by":       "auto-wiring-migration",
+            "review_decision":   "mpca242_legacy_heal_no_mpca_step",
+        }})
+        healed += 1
+
+    if healed:
+        import logging
+        logging.getLogger("mpca-erp").info(
+            "MPCA-242 · Healed %d legacy Awaiting_MPCA_Approval squads (wiring flag != M).",
+            healed,
+        )
+    return {"healed": healed, "scanned": len(stuck)}
+
+
 async def _tournament_or_404(tid: str) -> dict:
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not t:
@@ -133,12 +191,11 @@ async def submit_selection(
 
     now = datetime.now(timezone.utc).isoformat()
 
-    # MPCA-239 · Wiring-driven auto-approve.
-    # If the tournament type's wiring says squad_approval.flag == "NA"
-    # (BCCI, Inter-District, School, Club, Coaching Camp, Vacation Camp,
-    # Pre-Tournament Camp), the squad self-approves on submit — no MPCA
-    # step exists per the wiring. Only Inter-Divisional (flag = "M") keeps
-    # the Awaiting_MPCA_Approval → MPCA review flow.
+    # MPCA-239 + MPCA-242 · Wiring-driven auto-approve.
+    # If the tournament type's wiring says squad_approval.flag != "M" (i.e.
+    # Optional or NA), the squad self-approves on submit — no MPCA step is
+    # invoked per the wiring. Only Mandatory ("M") retains the
+    # Awaiting_MPCA_Approval → MPCA review flow (Inter-Divisional default).
     try:
         from routes.tournament_wiring_status import _resolve_type_id
         from routes.tournament_wiring import _fetch_or_seed_wiring
@@ -148,7 +205,7 @@ async def submit_selection(
     except Exception:
         squad_approval_flag = "M"   # safe fallback — retain MPCA approval
 
-    if squad_approval_flag == "NA":
+    if squad_approval_flag != "M":
         new_status = "Approved"
         updates = {
             "submission_status":  new_status,
@@ -280,7 +337,9 @@ async def submit_squad_to_mpca(
 
     now = datetime.now(timezone.utc).isoformat()
 
-    # MPCA-239 · Wiring-driven auto-approve (same logic as tournament-level submit).
+    # MPCA-239 + MPCA-242 · Wiring-driven auto-approve (same logic as the
+    # tournament-level submit). If squad_approval.flag != "M", the squad
+    # self-approves — no MPCA notification, no review queue entry.
     try:
         from routes.tournament_wiring_status import _resolve_type_id
         from routes.tournament_wiring import _fetch_or_seed_wiring
@@ -291,7 +350,7 @@ async def submit_squad_to_mpca(
     except Exception:
         squad_approval_flag = "M"
 
-    if squad_approval_flag == "NA":
+    if squad_approval_flag != "M":
         updates = {
             "submission_status":  "Approved",
             "submitted_at":       now,

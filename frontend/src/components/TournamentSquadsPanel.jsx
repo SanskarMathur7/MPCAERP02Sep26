@@ -10,10 +10,15 @@ import { api } from "@/lib/api";
  * their squad — Draft / Submitted / Approved, member count, warnings. MPCA
  * Secretary gets a bird's-eye view; each body's Secretary can drill into
  * their squad detail page to add players.
+ *
+ * MPCA-242 · The section header and status pills are wiring-driven: when the
+ * tournament's `squad_approval.flag != "M"`, MPCA does not approve — the copy
+ * reflects "lock" instead of "review/approve", and Approved shows as LOCKED.
  */
 const STATUS_TONE = {
     Draft: "bg-mpca-brass/20 text-mpca-brass",
     Submitted: "bg-mpca-navy/20 text-mpca-navy",
+    Awaiting_MPCA_Approval: "bg-mpca-navy/20 text-mpca-navy",
     Under_Review: "bg-mpca-navy/20 text-mpca-navy",
     Approved: "bg-mpca-green-dark/15 text-mpca-green-dark",
     Rejected: "bg-mpca-oxblood/15 text-mpca-oxblood",
@@ -23,6 +28,22 @@ const TournamentSquadsPanel = ({ tournament, persona, canManage, onChange: _onCh
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState("");
+    // MPCA-242 · Read the wiring's squad_approval.flag so header + status pills
+    // stay aligned with the governance intent. "M" → MPCA approves; otherwise
+    // squad locks locally with no MPCA step.
+    const [approvalFlag, setApprovalFlag] = useState(null);
+
+    useEffect(() => {
+        let alive = true;
+        api.get(`/tournaments/${tournament.id}/wiring-status`)
+            .then(r => {
+                if (!alive) return;
+                const step = (r.data.steps || []).find(s => s.key === "squad_approval");
+                setApprovalFlag(step?.flag ?? null);
+            })
+            .catch(() => { if (alive) setApprovalFlag(null); });
+        return () => { alive = false; };
+    }, [tournament.id]);
 
     useEffect(() => {
         let cancelled = false;
@@ -64,8 +85,12 @@ const TournamentSquadsPanel = ({ tournament, persona, canManage, onChange: _onCh
         </div>
     );
 
-    const submittedCount = rows.filter((r) => r.squad && ["Submitted", "Under_Review", "Approved"].includes(r.squad.submission_status)).length;
+    const submittedCount = rows.filter((r) => r.squad && ["Submitted", "Awaiting_MPCA_Approval", "Under_Review", "Approved"].includes(r.squad.submission_status)).length;
     const approvedCount = rows.filter((r) => r.squad?.submission_status === "Approved").length;
+    // MPCA-242 · Wiring-driven copy — "M" means MPCA approves; otherwise the
+    // Division/District self-locks and there is no MPCA review step.
+    const mpcaApproves = approvalFlag === "M";
+    const approvedLabel = mpcaApproves ? "Approved" : "Locked";
 
     return (
         <div className="border border-mpca-brass/30 bg-mpca-ivory p-5 space-y-4" data-testid="panel-squads">
@@ -73,12 +98,14 @@ const TournamentSquadsPanel = ({ tournament, persona, canManage, onChange: _onCh
                 <div>
                     <div className="overline text-[9px]">MPCA Multi-Body Squads</div>
                     <div className="font-serif text-lg text-mpca-green-dark mt-1">
-                        Squads · {rows.length} bodies · {submittedCount} submitted · {approvedCount} approved
+                        Squads · {rows.length} bodies · {submittedCount} {mpcaApproves ? "submitted" : "locked"} · {approvedCount} {mpcaApproves ? "approved" : "final"}
                     </div>
-                    <div className="text-[11px] text-mpca-gray-dark mt-1 max-w-2xl">
-                        One card per participating Division/District. Each body's Secretary
-                        builds their own squad; MPCA reviews and approves. Cards flip to
-                        &quot;Approved&quot; once selection is locked.
+                    <div className="text-[11px] text-mpca-gray-dark mt-1 max-w-2xl" data-testid="squads-panel-subheader">
+                        {mpcaApproves ? (
+                            <>One card per participating Division/District. Each body&apos;s Secretary builds their own squad; MPCA reviews and approves. Cards flip to &quot;Approved&quot; once selection is locked.</>
+                        ) : (
+                            <>One card per participating Division/District. Each body&apos;s Secretary builds and locks their own squad — MPCA sees the roster in real time but does not approve for this tournament type per the wiring.</>
+                        )}
                     </div>
                 </div>
             </div>
@@ -104,7 +131,7 @@ const TournamentSquadsPanel = ({ tournament, persona, canManage, onChange: _onCh
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className={`text-[9px] uppercase tracking-widest px-1.5 py-0.5 ${STATUS_TONE[status] || "bg-mpca-gray-dark/15 text-mpca-gray-dark"}`}>
-                                    {status.replace(/_/g, " ")}
+                                    {status === "Approved" ? approvedLabel.toUpperCase() : status.replace(/_/g, " ")}
                                 </span>
                                 <span className="text-[10px] font-mono text-mpca-charcoal">
                                     <Users size={10} className="inline" /> {memberCount}/{tournament.max_squad_size || 18}

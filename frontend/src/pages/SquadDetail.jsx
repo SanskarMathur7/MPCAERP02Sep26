@@ -76,6 +76,10 @@ const SquadDetail = () => {
     const [err, setErr] = useState("");
     // MPCA-235 · Ship 6 · Wiring-driven squad-mode hint (Manual PDF vs Register-linked)
     const [wiringSquadMode, setWiringSquadMode] = useState(null);
+    // MPCA-242 · Wiring-driven approval flag (M/O/NA) — governs button copy,
+    // notification firing, and section headers so users are never told
+    // "Submit to MPCA" when the wiring says no MPCA approval exists.
+    const [wiringApprovalFlag, setWiringApprovalFlag] = useState(null);
 
     // Fetch the wiring status for this squad's tournament and read the 'squad'
     // step's `mode` attribute. Advisory only — both PDF upload and player picker
@@ -88,8 +92,10 @@ const SquadDetail = () => {
                 if (!alive) return;
                 const squadStep = (r.data.steps || []).find(s => s.key === "squad");
                 setWiringSquadMode(squadStep ? { mode: squadStep.mode, owner: squadStep.owner, text: squadStep.text } : null);
+                const approvalStep = (r.data.steps || []).find(s => s.key === "squad_approval");
+                setWiringApprovalFlag(approvalStep?.flag ?? null);
             })
-            .catch(() => { if (alive) setWiringSquadMode(null); });
+            .catch(() => { if (alive) { setWiringSquadMode(null); setWiringApprovalFlag(null); } });
         return () => { alive = false; };
     }, [tournament?.id]);
 
@@ -198,15 +204,19 @@ const SquadDetail = () => {
     const handleSubmit = async () => {
         // M37 · Signed nomination copy is mandatory for Division/District submissions to MPCA.
         if (!isMPCA && !squad.signed_copy_url) {
-            alert("Signed nomination copy is required. Please download the nomination form, get it signed by the Division office bearers, and upload the signed PDF before submitting to MPCA.");
+            alert("Signed nomination copy is required. Please download the nomination form, get it signed by the Division office bearers, and upload the signed PDF before submitting.");
             return;
         }
-        const note = window.prompt("Optional note for MPCA reviewer:") ?? "";
+        // MPCA-242 · Wiring-driven copy — only prompt "for MPCA reviewer" when
+        // the wiring says approval IS mandatory. Otherwise this is a self-lock.
+        const needsMpca = wiringApprovalFlag === "M";
+        const note = window.prompt(needsMpca ? "Optional note for MPCA reviewer:" : "Optional internal note:") ?? "";
         await guardAsync(async () => {
             const { data: updated } = await api.post(`/squads/${squad.id}/submit`, { note: note || null });
             setSquad(updated);
+            // notify-ai-review no-ops on the backend when wiring != M (MPCA-242).
             try { await api.post(`/squads/${updated.id}/notify-ai-review`); } catch (_) { /* non-fatal */ }
-            alert("Submitted to MPCA for review.");
+            alert(needsMpca ? "Submitted to MPCA for review." : "Squad locked. No MPCA approval is required for this tournament type per the wiring.");
         });
     };
 
@@ -432,7 +442,7 @@ const SquadDetail = () => {
                                 className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-4 py-2 flex items-center gap-1 disabled:opacity-40 hover:bg-mpca-burgundy-dark transition-colors"
                                 data-testid="squad-submit-mpca-btn"
                             >
-                                {busy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} {wiringSquadMode?.mode === "Manual_PDF" ? "Submit Squad" : "Submit to MPCA"}
+                                {busy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} {wiringApprovalFlag === "M" ? "Submit to MPCA" : "Lock Squad"}
                             </button>
                         )}
                         {canReview && (

@@ -13,7 +13,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Literal
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Header
 from pydantic import BaseModel, ConfigDict, Field
 
 import asyncio
@@ -23,7 +23,7 @@ from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 
 
-GrantClaimStatus = Literal["Draft", "Documents_Pending", "Submitted", "Under_Review", "Approved", "Rejected", "Sanctioned"]
+GrantClaimStatus = Literal["Draft", "Documents_Pending", "Submitted", "Under_Review", "Approved", "Rejected", "Sanctioned", "Payment_Made"]
 
 
 class GrantClaimDoc(BaseModel):
@@ -82,6 +82,20 @@ class GrantClaim(GrantClaimBase):
     approved_amount_inr: Optional[float] = None
     mpca_comments: List[dict] = Field(default_factory=list)
     ai_summary: Optional[GrantClaimAiSummary] = None    # M38 · Claim-level AI verdict
+    # MPCA-245 · Signed-artifact workflow (matches Squad flow)
+    signed_submission_url: Optional[str] = None
+    signed_submission_at: Optional[str] = None
+    signed_submission_by: Optional[str] = None
+    signed_approval_url:   Optional[str] = None
+    signed_approval_at:    Optional[str] = None
+    signed_approval_by:    Optional[str] = None
+    # MPCA-245 · Payment_Made stage
+    payment_utr:         Optional[str] = None
+    payment_amount_inr:  Optional[float] = None
+    payment_date:        Optional[str] = None
+    payment_receipt_url: Optional[str] = None
+    payment_made_by:     Optional[str] = None
+    payment_made_at:     Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -256,6 +270,14 @@ async def submit_grant_claim(cid: str, actor_name: Optional[str] = None):
     missing = [d["required_label"] for d in doc.get("documents", []) if not d.get("file_url")]
     if missing:
         raise HTTPException(422, f"Missing required documents: {', '.join(missing)}")
+    # MPCA-245 · Signed submission summary PDF is mandatory before submission.
+    if not doc.get("signed_submission_url"):
+        raise HTTPException(
+            400,
+            "Signed submission summary is required. Download the summary PDF from "
+            "'/grant-claims/{cid}/summary-pdf', get it signed, then upload via "
+            "'/grant-claims/{cid}/signed-upload' before submitting.",
+        )
     now = datetime.now(timezone.utc).isoformat()
     await db.grant_claims.update_one({"id": cid}, {"$set": {
         "status": "Submitted", "submitted_by": actor_name, "submitted_at": now, "updated_at": now,
@@ -421,6 +443,15 @@ async def approve_grant_claim(cid: str, approved_amount_inr: float, actor_name: 
         raise HTTPException(404, "Claim not found")
     if doc["status"] not in ("Submitted", "Under_Review"):
         raise HTTPException(409, f"Cannot approve from status {doc['status']}")
+    # MPCA-245 · Signed MPCA-approval summary is mandatory before approval.
+    if not doc.get("signed_approval_url"):
+        raise HTTPException(
+            400,
+            "Signed approval summary is required. Download the approval summary from "
+            "'/grant-claims/{cid}/summary-pdf?variant=approval', get it signed by MPCA "
+            "office-bearers, then upload via '/grant-claims/{cid}/mpca-signed-upload' "
+            "before approving.",
+        )
     now = datetime.now(timezone.utc).isoformat()
     await db.grant_claims.update_one({"id": cid}, {"$set": {
         "status": "Approved", "approved_amount_inr": float(approved_amount_inr),
@@ -468,6 +499,267 @@ async def reject_grant_claim(cid: str, actor_name: str, reason: str):
         import logging
         logging.getLogger("grant_claims").warning("Rejection email failed: %s", e)
     return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+# ═══════════════════ MPCA-245 · Signed workflow + Payment + Discussions ═══════════════════
+
+class SignedUploadPayload(BaseModel):
+    signed_url: str
+
+
+class MpcaPaymentPayload(BaseModel):
+    utr: str
+    amount_inr: float
+    payment_date: str
+    receipt_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class GrantDiscussionCreate(BaseModel):
+    author_name: str
+    author_body: Optional[str] = None
+    author_body_type: Optional[str] = None
+    message: str
+
+
+@api_router.get("/grant-claims/{cid}/summary-pdf")
+async def grant_summary_pdf(cid: str, variant: str = "submission"):
+    """Generate a signable summary PDF for the grant claim.
+
+    variant=submission → Division-side (claim details, purpose, requested amount, docs list)
+    variant=approval   → MPCA-side (adds reviewer notes, approved amount placeholder)
+    """
+    from fastapi.responses import Response
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    import io
+
+    doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+
+    buf = io.BytesIO()
+    pdf = SimpleDocTemplate(buf, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm,
+                            leftMargin=1.5*cm, rightMargin=1.5*cm,
+                            title=f"Grant Claim {doc.get('claim_ref')}")
+    styles = getSampleStyleSheet()
+    story = []
+
+    title = "GRANT CLAIM · MPCA APPROVAL SUMMARY" if variant == "approval" else "GRANT CLAIM · DIVISION SUBMISSION SUMMARY"
+    story.append(Paragraph(f"<b>{title}</b>", styles["Title"]))
+    story.append(Paragraph(f"Ref: {doc.get('claim_ref')} · Cycle: {doc.get('fiscal_cycle')}",
+                           styles["Normal"]))
+    story.append(Spacer(1, 12))
+
+    meta = [
+        ["Scheme",       doc.get("scheme_code") or ""],
+        ["Scheme Name",  doc.get("scheme_name") or ""],
+        ["Body",         f"{doc.get('body_name') or ''} ({doc.get('body_id') or ''})"],
+        ["Claimed",      f"INR {(doc.get('claimed_amount_inr') or 0):,.0f}"],
+        ["Status",       doc.get("status") or ""],
+    ]
+    if variant == "approval":
+        meta.append(["Approved",     f"INR {(doc.get('approved_amount_inr') or 0):,.0f}"])
+        meta.append(["Reviewed by",  doc.get("reviewed_by") or "________________"])
+    tbl = Table(meta, colWidths=[5*cm, 12*cm])
+    tbl.setStyle(TableStyle([
+        ("BOX",         (0, 0), (-1, -1), 0.5, colors.grey),
+        ("INNERGRID",   (0, 0), (-1, -1), 0.25, colors.lightgrey),
+        ("FONTNAME",    (0, 0), (0, -1), "Helvetica-Bold"),
+        ("BACKGROUND",  (0, 0), (0, -1), colors.HexColor("#f4ede0")),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 14))
+
+    if doc.get("notes"):
+        story.append(Paragraph("<b>Purpose / Notes</b>", styles["Heading3"]))
+        story.append(Paragraph(doc["notes"], styles["Normal"]))
+        story.append(Spacer(1, 10))
+
+    # Documents table
+    docs = doc.get("documents") or []
+    if docs:
+        story.append(Paragraph("<b>Documents Attached</b>", styles["Heading3"]))
+        rows = [["#", "Required Label", "Filename", "AI Verified"]]
+        for i, d in enumerate(docs, 1):
+            rows.append([
+                str(i),
+                d.get("required_label") or "",
+                d.get("filename") or "—",
+                "✓" if d.get("ai_verified") else ("—" if not d.get("file_url") else "pending"),
+            ])
+        t2 = Table(rows, colWidths=[1*cm, 7*cm, 7*cm, 2*cm])
+        t2.setStyle(TableStyle([
+            ("BOX",         (0, 0), (-1, -1), 0.5, colors.grey),
+            ("INNERGRID",   (0, 0), (-1, -1), 0.25, colors.lightgrey),
+            ("BACKGROUND",  (0, 0), (-1, 0), colors.HexColor("#3b5540")),
+            ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
+            ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+        ]))
+        story.append(t2)
+        story.append(Spacer(1, 14))
+
+    # AI verdict (approval variant only)
+    if variant == "approval" and doc.get("ai_summary"):
+        s = doc["ai_summary"]
+        story.append(Paragraph("<b>AI Verdict</b>", styles["Heading3"]))
+        story.append(Paragraph(
+            f"Verdict: <b>{s.get('overall_verdict')}</b> · "
+            f"Confidence: {(s.get('overall_confidence') or 0)*100:.0f}% · "
+            f"Docs verified: {s.get('docs_verified')}/{s.get('docs_total')}",
+            styles["Normal"],
+        ))
+        story.append(Spacer(1, 10))
+
+    # Signature block
+    story.append(Spacer(1, 24))
+    if variant == "approval":
+        sig_rows = [
+            ["MPCA Secretary", "MPCA Treasurer"],
+            ["", ""],
+            ["", ""],
+            ["_______________________", "_______________________"],
+            ["Signature & Date", "Signature & Date"],
+        ]
+    else:
+        sig_rows = [
+            ["Division Secretary", "Division Treasurer"],
+            ["", ""],
+            ["", ""],
+            ["_______________________", "_______________________"],
+            ["Signature & Date", "Signature & Date"],
+        ]
+    sig_tbl = Table(sig_rows, colWidths=[8*cm, 8*cm])
+    sig_tbl.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, -1), (-1, -1), 8),
+    ]))
+    story.append(sig_tbl)
+
+    pdf.build(story)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(), media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{doc.get("claim_ref")}-{variant}.pdf"'},
+    )
+
+
+@api_router.post("/grant-claims/{cid}/signed-upload", response_model=GrantClaim)
+async def upload_division_signed(
+    cid: str, payload: SignedUploadPayload,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+):
+    """Division uploads the signed submission summary PDF (URL)."""
+    if not payload.signed_url:
+        raise HTTPException(400, "signed_url is required")
+    doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if x_body_type == "State":
+        raise HTTPException(403, "MPCA cannot upload the Division-side signed summary; use /mpca-signed-upload for the approval signature.")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.grant_claims.update_one({"id": cid}, {"$set": {
+        "signed_submission_url": payload.signed_url,
+        "signed_submission_at":  now,
+        "signed_submission_by":  x_user_name or x_body_code,
+        "updated_at":            now,
+    }})
+    return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.post("/grant-claims/{cid}/mpca-signed-upload", response_model=GrantClaim)
+async def upload_mpca_signed(
+    cid: str, payload: SignedUploadPayload,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+):
+    """MPCA uploads the signed approval summary PDF (URL)."""
+    if not payload.signed_url:
+        raise HTTPException(400, "signed_url is required")
+    doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if (x_body_type or "").lower() != "state":
+        raise HTTPException(403, "Only MPCA can upload the approval-side signed summary.")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.grant_claims.update_one({"id": cid}, {"$set": {
+        "signed_approval_url": payload.signed_url,
+        "signed_approval_at":  now,
+        "signed_approval_by":  x_user_name or x_body_code,
+        "updated_at":          now,
+    }})
+    return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.post("/grant-claims/{cid}/payment", response_model=GrantClaim)
+async def mark_grant_payment_made(
+    cid: str, payload: MpcaPaymentPayload,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+):
+    """MPCA records the payment made against an approved grant claim."""
+    doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Claim not found")
+    if (x_body_type or "").lower() != "state":
+        raise HTTPException(403, "Only MPCA can mark payment made.")
+    if doc["status"] not in ("Approved", "Sanctioned"):
+        raise HTTPException(409, f"Cannot record payment from status {doc['status']}")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.grant_claims.update_one({"id": cid}, {"$set": {
+        "status":              "Payment_Made",
+        "payment_utr":         payload.utr,
+        "payment_amount_inr":  float(payload.amount_inr),
+        "payment_date":        payload.payment_date,
+        "payment_receipt_url": payload.receipt_url,
+        "payment_made_by":     x_user_name,
+        "payment_made_at":     now,
+        "updated_at":          now,
+    }})
+    await _create_notification(
+        recipient_role_id="division-secretary", recipient_body_id=doc["body_id"],
+        title=f"Grant Payment Made · {doc['claim_ref']}",
+        message=f"UTR {payload.utr} · ₹{payload.amount_inr:,.0f} · {payload.payment_date}",
+        link=f"/grant-claims/{cid}", related_type="grant_claim", related_id=cid,
+        severity="info", kind="info",
+    )
+    return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+# ─────── Discussions ───────
+
+@api_router.get("/grant-claims/{cid}/discussions")
+async def list_discussions(cid: str):
+    if not await db.grant_claims.find_one({"id": cid}, {"_id": 1}):
+        raise HTTPException(404, "Claim not found")
+    rows = await db.grant_claim_discussions.find({"claim_id": cid}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    return rows
+
+
+@api_router.post("/grant-claims/{cid}/discussions")
+async def add_discussion(cid: str, payload: GrantDiscussionCreate):
+    if not await db.grant_claims.find_one({"id": cid}, {"_id": 1}):
+        raise HTTPException(404, "Claim not found")
+    if not payload.message.strip():
+        raise HTTPException(400, "Message is required")
+    entry = {
+        "id":         str(uuid.uuid4()),
+        "claim_id":   cid,
+        "author_name": payload.author_name,
+        "author_body": payload.author_body,
+        "author_body_type": payload.author_body_type,
+        "message":    payload.message.strip(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.grant_claim_discussions.insert_one(entry)
+    entry.pop("_id", None)  # avoid ObjectId serialization crash
+    return entry
 
 
 # ═══════════════════ AI Eligibility Recommender ═══════════════════

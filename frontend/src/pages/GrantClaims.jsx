@@ -1,10 +1,28 @@
 import { useEffect, useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Upload, CheckCircle2, AlertTriangle, Send, IndianRupee, Sparkles, FileText, XCircle } from "lucide-react";
+import { Upload, CheckCircle2, AlertTriangle, Send, IndianRupee, Sparkles, FileText, XCircle, Download, Lock, MessageSquare, Filter } from "lucide-react";
 import { api, BACKEND_URL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import VaultDocumentPicker from "@/components/VaultDocumentPicker";
+
+// MPCA-245 · Progress ribbon steps for grant claim lifecycle
+const GRANT_STEPS = [
+    { key: "Draft",           label: "Draft" },
+    { key: "Submitted",       label: "Submitted" },
+    { key: "Under_Review",    label: "Under MPCA Review" },
+    { key: "Approved",        label: "Approved" },
+    { key: "Payment_Made",    label: "Payment Made" },
+];
+const _stepIndex = (status) => {
+    if (status === "Rejected") return -1;
+    const idx = GRANT_STEPS.findIndex((s) => s.key === status);
+    // Documents_Pending + Sanctioned map to closest visible stage
+    if (idx >= 0) return idx;
+    if (status === "Documents_Pending") return 0;
+    if (status === "Sanctioned") return 3;
+    return 0;
+};
 
 // M33 · Best-effort mapping of a scheme's `required_label` (free-text) to
 // the closest Data Warehouse doc_kind so the picker only shows relevant docs.
@@ -44,6 +62,12 @@ const GrantClaims = () => {
     const [creating, setCreating] = useState(false);
     const [newClaim, setNewClaim] = useState({ scheme_code: preSchemeCode || "", claimed_amount_inr: 0, notes: "" });
     const [uploadingDoc, setUploadingDoc] = useState(null);
+    // MPCA-245 · Discussions + division filter + tab state
+    const [tab, setTab] = useState("details");
+    const [discussions, setDiscussions] = useState([]);
+    const [newMessage, setNewMessage] = useState("");
+    const [bodies, setBodies] = useState([]);
+    const [divisionFilter, setDivisionFilter] = useState("all");
 
     const isMPCA = persona?.body_type === "State";
 
@@ -60,6 +84,20 @@ const GrantClaims = () => {
         } finally { setLoading(false); }
     };
     useEffect(() => { load(); }, []);
+
+    // MPCA-245 · Load bodies list once for the MPCA "filter by division" dropdown
+    useEffect(() => {
+        if (!isMPCA) return;
+        api.get("/bodies").then(({ data }) => setBodies((data || []).filter(b => b.body_type === "Division" || b.body_type === "District")))
+            .catch(() => {});
+    }, [isMPCA]);
+
+    // MPCA-245 · Load discussions when a claim is selected + on tab switch
+    const loadDiscussions = async (cid) => {
+        try { const { data } = await api.get(`/grant-claims/${cid}/discussions`); setDiscussions(data || []); }
+        catch { setDiscussions([]); }
+    };
+    useEffect(() => { if (selected?.id) loadDiscussions(selected.id); else setDiscussions([]); }, [selected?.id]);
 
     const createClaim = async () => {
         try {
@@ -165,14 +203,78 @@ const GrantClaims = () => {
         finally { setAiReviewing(false); }
     };
 
+    // ─────────── MPCA-245 · Signed-artifact + payment + discussion handlers ───────────
+    const downloadSummaryPdf = (variant = "submission") => {
+        if (!selected) return;
+        window.open(`${BACKEND_URL}/api/grant-claims/${selected.id}/summary-pdf?variant=${variant}`, "_blank");
+    };
+    const uploadSignedSubmission = async () => {
+        const url = window.prompt("Paste URL of the SIGNED submission summary PDF (Google Drive / S3 / any public link):");
+        if (!url) return;
+        try {
+            const { data } = await api.post(`/grant-claims/${selected.id}/signed-upload`, { signed_url: url });
+            setSelected(data);
+            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const uploadMpcaSignedApproval = async () => {
+        const url = window.prompt("Paste URL of the SIGNED MPCA approval summary PDF:");
+        if (!url) return;
+        try {
+            const { data } = await api.post(`/grant-claims/${selected.id}/mpca-signed-upload`, { signed_url: url });
+            setSelected(data);
+            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const markPaymentMade = async () => {
+        const utr = window.prompt("UTR / transaction reference:");
+        if (!utr) return;
+        const amountStr = window.prompt("Payment amount (₹):", selected?.approved_amount_inr ?? "");
+        if (!amountStr) return;
+        const date = window.prompt("Payment date (YYYY-MM-DD):", new Date().toISOString().slice(0, 10));
+        if (!date) return;
+        const receipt_url = window.prompt("Payment receipt URL (optional — press OK to skip):") || null;
+        try {
+            const { data } = await api.post(`/grant-claims/${selected.id}/payment`, {
+                utr, amount_inr: parseFloat(amountStr), payment_date: date, receipt_url,
+            });
+            setSelected(data);
+            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const sendMessage = async () => {
+        if (!newMessage.trim() || !selected) return;
+        try {
+            const { data } = await api.post(`/grant-claims/${selected.id}/discussions`, {
+                author_name: persona?.name || "Anonymous",
+                author_body: persona?.body_code,
+                author_body_type: persona?.body_type,
+                message: newMessage.trim(),
+            });
+            setDiscussions((prev) => [...prev, data]);
+            setNewMessage("");
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
+    // MPCA-245 · Client-side division filter for MPCA — must be declared
+    // before any conditional early-return per React hook rules.
+    const filteredClaims = useMemo(() => {
+        if (!isMPCA || divisionFilter === "all") return claims;
+        return claims.filter(c => c.body_id === divisionFilter);
+    }, [claims, isMPCA, divisionFilter]);
+
     if (loading) return <CricketLoader label="Loading grant claims..." />;
 
     const allDocsUploaded = selected && (selected.documents || []).every((d) => d.file_url);
-    // Only Division/District (non-MPCA) can submit; MPCA is approval authority only
-    const canSubmit = !isMPCA && selected && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status) && allDocsUploaded;
-    const canReview = isMPCA && selected && ["Submitted", "Under_Review"].includes(selected.status);
-    // MPCA-112 · MPCA can also REJECT a claim after it was Approved (audit
-    // finding, invoice discrepancy). Approve stays disabled post-approval.
+    // MPCA-245 · Signed submission PDF is a submission pre-req for Division
+    const canUploadSignedSubmission = !isMPCA && selected && allDocsUploaded && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status);
+    const canSubmit = !isMPCA && selected && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status) && allDocsUploaded && !!selected.signed_submission_url;
+    // MPCA-245 · MPCA must upload signed approval PDF before Approve unlocks
+    const canUploadMpcaSigned = isMPCA && selected && ["Submitted", "Under_Review"].includes(selected.status);
+    const canReview = isMPCA && selected && ["Submitted", "Under_Review"].includes(selected.status) && !!selected.signed_approval_url;
+    // MPCA-245 · Payment_Made — MPCA marks after approval
+    const canMarkPayment = isMPCA && selected && ["Approved", "Sanctioned"].includes(selected.status);
+    // MPCA-112 · MPCA can also REJECT a claim after it was Approved
     const canPostApprovalReject = isMPCA && selected && selected.status === "Approved";
     const scheme = selected ? schemes.find((s) => s.scheme_code === selected.scheme_code) : null;
 
@@ -197,9 +299,27 @@ const GrantClaims = () => {
             <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
                 {/* Claims list */}
                 <div className="space-y-2" data-testid="claims-list">
-                    {claims.length === 0 ? (
+                    {isMPCA && (
+                        <div className="border border-mpca-brass/30 bg-mpca-parchment/40 p-2 mb-1 flex items-center gap-2" data-testid="claims-division-filter">
+                            <Filter size={11} className="text-mpca-brass" />
+                            <select
+                                className="input-heritage !text-[11px] flex-1"
+                                value={divisionFilter}
+                                onChange={(e) => setDivisionFilter(e.target.value)}
+                                data-testid="claims-division-filter-select"
+                            >
+                                <option value="all">All Divisions / Districts ({claims.length})</option>
+                                {bodies.map(b => {
+                                    const count = claims.filter(c => c.body_id === b.code).length;
+                                    if (count === 0) return null;
+                                    return <option key={b.code} value={b.code}>{b.name} ({count})</option>;
+                                })}
+                            </select>
+                        </div>
+                    )}
+                    {filteredClaims.length === 0 ? (
                         <div className="bulletin-card p-8 text-center text-sm text-mpca-gray-dark">No grant claims yet.</div>
-                    ) : claims.map((c) => {
+                    ) : filteredClaims.map((c) => {
                         // M38 · AI verdict badge on list — reviewers can triage without opening each claim
                         const v = c.ai_summary?.overall_verdict;
                         const aiBadge = v === "Recommend_Approve"
@@ -265,8 +385,38 @@ const GrantClaims = () => {
                                     >
                                         <Sparkles size={11} className={aiReviewing ? "animate-pulse" : ""} /> {aiReviewing ? "AI Reviewing…" : "AI Review"}
                                     </button>
+                                    {/* MPCA-245 · Download signable summary PDF */}
+                                    {selected && (
+                                        <button
+                                            className="text-[10px] uppercase tracking-widest px-3 py-1.5 border border-mpca-brass text-mpca-brass flex items-center gap-1 hover:bg-mpca-brass/10"
+                                            onClick={() => downloadSummaryPdf(isMPCA ? "approval" : "submission")}
+                                            data-testid="download-summary-pdf-btn"
+                                        >
+                                            <Download size={11} /> Summary PDF
+                                        </button>
+                                    )}
+                                    {/* MPCA-245 · Division upload signed submission PDF */}
+                                    {canUploadSignedSubmission && (
+                                        <button
+                                            className="text-[10px] uppercase tracking-widest px-3 py-1.5 bg-mpca-brass text-mpca-ivory flex items-center gap-1"
+                                            onClick={uploadSignedSubmission}
+                                            data-testid="upload-signed-submission-btn"
+                                        >
+                                            <Upload size={11} /> {selected?.signed_submission_url ? "Replace Signed" : "Upload Signed"}
+                                        </button>
+                                    )}
                                     {canSubmit && (
                                         <button className="btn-heritage-primary" onClick={submitClaim} data-testid="submit-claim-btn"><Send size={12} /> Submit</button>
+                                    )}
+                                    {/* MPCA-245 · MPCA upload signed approval PDF */}
+                                    {canUploadMpcaSigned && (
+                                        <button
+                                            className="text-[10px] uppercase tracking-widest px-3 py-1.5 bg-mpca-brass text-mpca-ivory flex items-center gap-1"
+                                            onClick={uploadMpcaSignedApproval}
+                                            data-testid="upload-mpca-signed-btn"
+                                        >
+                                            <Upload size={11} /> {selected?.signed_approval_url ? "Replace MPCA Signed" : "Upload MPCA Signed"}
+                                        </button>
                                     )}
                                     {canReview && (
                                         <>
@@ -274,9 +424,16 @@ const GrantClaims = () => {
                                             <button className="border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 text-[11px] uppercase tracking-widest" onClick={rejectClaim} data-testid="reject-claim-btn"><XCircle size={12} className="inline mr-1" /> Reject</button>
                                         </>
                                     )}
-                                    {/* MPCA-112 · Post-approval audit reject —
-                                        stays in the Approved column but flips
-                                        to a Rejected pill with the reason. */}
+                                    {/* MPCA-245 · Payment_Made stage */}
+                                    {canMarkPayment && (
+                                        <button
+                                            className="text-[10px] uppercase tracking-widest px-3 py-1.5 bg-mpca-green-dark text-mpca-ivory flex items-center gap-1"
+                                            onClick={markPaymentMade}
+                                            data-testid="mark-payment-made-btn"
+                                        >
+                                            <IndianRupee size={11} /> Mark Payment Made
+                                        </button>
+                                    )}
                                     {canPostApprovalReject && (
                                         <button
                                             className="border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 text-[11px] uppercase tracking-widest hover:bg-mpca-oxblood hover:text-mpca-ivory transition-colors"
@@ -290,6 +447,63 @@ const GrantClaims = () => {
                                 </div>
                             </div>
 
+                            {/* MPCA-245 · Progress ribbon */}
+                            {selected.status !== "Rejected" && (
+                                <div className="mb-5 border border-mpca-brass/30 bg-mpca-parchment/40 p-3" data-testid="grant-progress-ribbon">
+                                    <div className="flex items-center justify-between gap-1 relative">
+                                        {GRANT_STEPS.map((step, i) => {
+                                            const currentIdx = _stepIndex(selected.status);
+                                            const done = i < currentIdx;
+                                            const active = i === currentIdx;
+                                            return (
+                                                <div key={step.key} className="flex-1 flex flex-col items-center relative" data-testid={`ribbon-step-${step.key}`}>
+                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 text-[10px] font-mono ${
+                                                        done ? "bg-mpca-green-dark text-mpca-ivory border-mpca-green-dark" :
+                                                        active ? "bg-mpca-brass text-mpca-ivory border-mpca-brass animate-pulse" :
+                                                        "bg-mpca-ivory text-mpca-brass border-mpca-brass/30"
+                                                    }`}>
+                                                        {done ? "✓" : i + 1}
+                                                    </div>
+                                                    <div className={`text-[9px] uppercase tracking-widest mt-1 text-center ${active ? "text-mpca-brass font-semibold" : done ? "text-mpca-green-dark" : "text-mpca-gray-dark"}`}>
+                                                        {step.label}
+                                                    </div>
+                                                    {i < GRANT_STEPS.length - 1 && (
+                                                        <div className={`absolute top-3.5 left-[calc(50%+14px)] right-[calc(-50%+14px)] h-0.5 ${done ? "bg-mpca-green-dark" : "bg-mpca-brass/30"}`}></div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                            {selected.status === "Rejected" && (
+                                <div className="mb-5 border-2 border-mpca-oxblood bg-mpca-oxblood/5 p-3 text-[11px] text-mpca-oxblood" data-testid="grant-rejected-banner">
+                                    <b>REJECTED</b> — {selected.rejection_reason || "no reason recorded"}
+                                </div>
+                            )}
+
+                            {/* MPCA-245 · Tabs */}
+                            <div className="border-b border-mpca-brass/30 mb-4 flex gap-1" data-testid="grant-tabs">
+                                {[
+                                    { key: "details",     label: "Details" },
+                                    { key: "documents",   label: `Documents (${(selected.documents || []).length})` },
+                                    { key: "discussion",  label: `Discussion (${discussions.length})` },
+                                    { key: "history",     label: "History" },
+                                ].map(t => (
+                                    <button
+                                        key={t.key}
+                                        onClick={() => setTab(t.key)}
+                                        className={`px-3 py-1.5 text-[10px] uppercase tracking-widest ${tab === t.key ? "border-b-2 border-mpca-oxblood text-mpca-oxblood" : "text-mpca-gray-dark hover:text-mpca-brass"}`}
+                                        data-testid={`grant-tab-${t.key}`}
+                                    >
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* MPCA-245 · Tab content — Details tab keeps existing AI summary + docs */}
+                            {(tab === "details" || tab === "documents") && (
+                            <>
                             {/* M38 · Claim-level AI Summary — visible whenever AI has run at least once */}
                             {selected.ai_summary && (
                                 <div className={`mb-4 p-4 border-2 ${
@@ -412,6 +626,97 @@ const GrantClaims = () => {
                                 <div className="mt-4 p-3 bg-mpca-oxblood/10 border border-mpca-oxblood/40">
                                     <div className="overline text-[9px] text-mpca-oxblood mb-1">Rejection Reason</div>
                                     <div className="text-sm text-mpca-oxblood">{selected.rejection_reason}</div>
+                                </div>
+                            )}
+                            </>
+                            )}
+
+                            {/* MPCA-245 · Discussion tab */}
+                            {tab === "discussion" && (
+                                <div className="space-y-3" data-testid="grant-discussion-panel">
+                                    <div className="border border-mpca-brass/30 bg-mpca-parchment/30 max-h-96 overflow-y-auto p-3 space-y-2">
+                                        {discussions.length === 0 ? (
+                                            <div className="text-center text-[11px] text-mpca-gray-dark italic py-6">
+                                                No messages yet. Start a dialogue with {isMPCA ? "the Division" : "MPCA"} below.
+                                            </div>
+                                        ) : discussions.map(m => {
+                                            const mine = m.author_body === persona?.body_code;
+                                            return (
+                                                <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                                                    <div className={`max-w-[75%] p-2 border ${mine ? "bg-mpca-cream border-mpca-brass" : "bg-mpca-ivory border-mpca-brass/30"}`}>
+                                                        <div className="text-[9px] uppercase tracking-widest text-mpca-brass mb-0.5">
+                                                            {m.author_name}{m.author_body ? ` · ${m.author_body}` : ""}
+                                                        </div>
+                                                        <div className="text-[12px] text-mpca-charcoal whitespace-pre-wrap">{m.message}</div>
+                                                        <div className="text-[9px] text-mpca-gray-dark mt-1 text-right font-mono">
+                                                            {new Date(m.created_at).toLocaleString("en-IN")}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            className="input-heritage flex-1"
+                                            placeholder={`Send a message to ${isMPCA ? "the Division" : "MPCA"}…`}
+                                            value={newMessage}
+                                            onChange={(e) => setNewMessage(e.target.value)}
+                                            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                                            data-testid="grant-discussion-input"
+                                        />
+                                        <button
+                                            className="btn-heritage-primary"
+                                            onClick={sendMessage}
+                                            disabled={!newMessage.trim()}
+                                            data-testid="grant-discussion-send"
+                                        >
+                                            <MessageSquare size={12} /> Send
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* MPCA-245 · History tab — chronological audit trail */}
+                            {tab === "history" && (
+                                <div className="space-y-2 text-[11px]" data-testid="grant-history-panel">
+                                    <div className="border border-mpca-brass/30 p-3">
+                                        <div className="overline text-[9px] mb-1">Timeline</div>
+                                        <ul className="space-y-1.5 text-mpca-charcoal">
+                                            <li className="flex gap-3"><span className="font-mono text-mpca-brass w-40">Created</span> {new Date(selected.created_at).toLocaleString("en-IN")}</li>
+                                            {selected.signed_submission_at && (
+                                                <li className="flex gap-3"><span className="font-mono text-mpca-brass w-40">Div Signed Uploaded</span> {new Date(selected.signed_submission_at).toLocaleString("en-IN")} by {selected.signed_submission_by}</li>
+                                            )}
+                                            {selected.submitted_at && (
+                                                <li className="flex gap-3"><span className="font-mono text-mpca-brass w-40">Submitted</span> {new Date(selected.submitted_at).toLocaleString("en-IN")} by {selected.submitted_by}</li>
+                                            )}
+                                            {selected.signed_approval_at && (
+                                                <li className="flex gap-3"><span className="font-mono text-mpca-brass w-40">MPCA Signed Uploaded</span> {new Date(selected.signed_approval_at).toLocaleString("en-IN")} by {selected.signed_approval_by}</li>
+                                            )}
+                                            {selected.reviewed_at && (
+                                                <li className="flex gap-3"><span className="font-mono text-mpca-brass w-40">{selected.status === "Rejected" ? "Rejected" : "Approved"}</span> {new Date(selected.reviewed_at).toLocaleString("en-IN")} by {selected.reviewed_by}</li>
+                                            )}
+                                            {selected.payment_made_at && (
+                                                <li className="flex gap-3"><span className="font-mono text-mpca-green-dark w-40">Payment Made</span> {new Date(selected.payment_made_at).toLocaleString("en-IN")} · UTR {selected.payment_utr} · ₹{Math.round(selected.payment_amount_inr || 0).toLocaleString("en-IN")}</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                    {selected.signed_submission_url && (
+                                        <a href={selected.signed_submission_url} target="_blank" rel="noreferrer" className="block text-mpca-oxblood underline text-[11px]" data-testid="signed-submission-link">
+                                            View Division-signed submission PDF ↗
+                                        </a>
+                                    )}
+                                    {selected.signed_approval_url && (
+                                        <a href={selected.signed_approval_url} target="_blank" rel="noreferrer" className="block text-mpca-oxblood underline text-[11px]" data-testid="signed-approval-link">
+                                            View MPCA-signed approval PDF ↗
+                                        </a>
+                                    )}
+                                    {selected.payment_receipt_url && (
+                                        <a href={selected.payment_receipt_url} target="_blank" rel="noreferrer" className="block text-mpca-oxblood underline text-[11px]" data-testid="payment-receipt-link">
+                                            View payment receipt ↗
+                                        </a>
+                                    )}
                                 </div>
                             )}
                         </>

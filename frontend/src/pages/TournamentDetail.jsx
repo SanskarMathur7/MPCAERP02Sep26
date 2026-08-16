@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentSubTabs from "@/components/TournamentSubTabs";
-import TournamentProgress from "@/components/TournamentProgress";
 import TournamentProgressionRibbon from "@/components/TournamentProgressionRibbon";
 import InputVariablesPanel from "@/components/InputVariablesPanel";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
@@ -289,10 +288,8 @@ const TournamentDetail = () => {
             {/* Sprint M30 · Status stepper + Pending With Me */}
             <TournamentStatusStepper tournament={t} persona={persona} onAction={() => { refreshProgress(); load(); }} />
 
-            {/* Sprint M19 · Progress stepper (5 phases) */}
-            <div className="mb-8">
-                <TournamentProgress tournamentId={id} refreshKey={progressKey} />
-            </div>
+            {/* MPCA-241 · Old 5-phase progress bar retired in favour of the wiring-driven ribbon below.
+                The `/tournaments/{id}/progress` endpoint stays alive for any external consumers. */}
 
             {/* MPCA-235 · Ship 2 · Tournament Progression Ribbon (Wiring-driven) */}
             <div className="mb-8">

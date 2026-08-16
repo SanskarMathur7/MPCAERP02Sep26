@@ -35,7 +35,7 @@ def test_wiring_status_shape():
                              "interschool", "interclub", "coachingcamp", "vacationcamp"}
     assert d["type_name"]
     assert 0 <= d["progress_pct"] <= 100
-    assert len(d["steps"]) == 9
+    assert len(d["steps"]) == 10
     valid_statuses = {"done", "current", "pending", "na", "info"}
     for s in d["steps"]:
         assert s["key"]

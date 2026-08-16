@@ -581,8 +581,20 @@ async def reject_tournament(tid: str, actor_name: str, actor_body_id: str = "MPC
 
 
 @api_router.post("/tournaments/{tid}/status/{new_status}", response_model=Tournament)
-async def set_tournament_status(tid: str, new_status: TournamentStatus):
-    """Manually transition a tournament between Upcoming → Squad_Selection → In_Progress → Completed (or Cancelled)."""
+async def set_tournament_status(
+    tid: str, new_status: TournamentStatus,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+):
+    """Manually transition a tournament between lifecycle states.
+
+    MPCA-243 · Ship 3 · Wiring-driven guard — persona's body_type must
+    match `tournament_creation.owner` for this tournament type. Enables
+    Division/District Secretaries to drive the progress bar on the
+    tournaments they own (Inter-District, School, Club, Camp)."""
+    from core.wiring_guard import assert_wiring_owner
+    await assert_wiring_owner(tid, "tournament_creation", x_body_type, x_body_code,
+                              action_label="tournament status transition")
     doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Tournament not found")

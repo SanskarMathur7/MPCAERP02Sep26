@@ -141,6 +141,8 @@ async def _gather_state(tid: str, t: Dict[str, Any]) -> Dict[str, Any]:
         "officials_count": officials_count,
         "tournament_status": status,
         "acceptance_status": (t.get("acceptance") or {}).get("status") or "Not_Required",
+        "closure_letter_generated": bool(t.get("closure_letter_generated_at")),
+        "closure_signed":  bool(t.get("closure_signed_url")),
     }
 
 
@@ -157,6 +159,7 @@ _ANCHOR = {
     "match_calendar":         "box-calendar",
     "unified_budget":         "box-unified-budget",
     "finance_console":        "box-finance",
+    "tournament_closure":     "box-closure-letter",
     "mpca_visibility":        "trn-header",
 }
 
@@ -199,6 +202,15 @@ def _derive_status(step_key: str, cell: Dict[str, Any], state: Dict[str, Any]) -
             current_note = "Approved · awaiting UTR"
         elif state["claim_submitted"]:
             current_note = "Under MPCA review"
+    elif step_key == "tournament_closure":
+        # MPCA-244 · Done only when signed closure PDF is uploaded AND
+        # tournament.status == "Completed". Signed URL lives on the tournament
+        # doc as `closure_signed_url`.
+        done = bool(state.get("closure_signed") and state["tournament_status"] == "Completed")
+        if state.get("closure_signed") and state["tournament_status"] != "Completed":
+            current_note = "Signed · awaiting close"
+        elif state.get("closure_letter_generated"):
+            current_note = "Draft generated · awaiting signed upload"
 
     if done:
         return {"status": "done", "note": current_note or cell.get("text") or "Complete"}

@@ -35,6 +35,7 @@ STEP_KEYS: List[str] = [
     "match_calendar",
     "unified_budget",
     "finance_console",
+    "tournament_closure",
     "mpca_visibility",
 ]
 
@@ -47,6 +48,7 @@ STEPS_META: List[Dict[str, str]] = [
     {"key": "match_calendar",          "label": "Match Calendar",        "bucket": "In_Tournament"},
     {"key": "unified_budget",          "label": "Unified Budget",        "bucket": "In_Tournament"},
     {"key": "finance_console",         "label": "Finance Console",       "bucket": "Post_Tournament"},
+    {"key": "tournament_closure",      "label": "Tournament Closure",    "bucket": "Post_Tournament"},
     {"key": "mpca_visibility",         "label": "MPCA Visibility",       "bucket": "Post_Tournament"},
 ]
 
@@ -106,6 +108,7 @@ def _default_cells() -> Dict[str, Dict[str, Dict[str, Any]]]:
             "match_calendar":         C("M",  "MPCA", "None", "Manual_PDF", "Realtime", True, 7,  "MANUAL team names (away = other states)"),
             "unified_budget":         C("M",  "MPCA", "MPCA", "Auto_Compute", "Realtime", True, 5,  "Auto per rate card; budget owned by host. Both teams' full squads = AWAY pax (no home-side exemption)"),
             "finance_console":        C("M",  "MPCA", "MPCA", "Auto_Compute", "Realtime", False, 30, "Normal / full"),
+            "tournament_closure":     C("M",  "MPCA",     "MPCA", "Manual_PDF", "Realtime",  True,  15, "MPCA drafts, signs & closes"),
             "mpca_visibility":        C("INFO","MPCA", "None", "Auto_Compute", "Realtime", False, None, "Real time"),
         },
         "interdiv": {
@@ -117,6 +120,7 @@ def _default_cells() -> Dict[str, Dict[str, Dict[str, Any]]]:
             "match_calendar":         C("M",  "MPCA",     "None", "Auto_Compute",    "Realtime", True, 7,  "Full / auto (max)"),
             "unified_budget":         C("M",  "MPCA",     "MPCA", "Auto_Compute",    "Realtime", True, 5,  "Normal / full (auto per rate card)"),
             "finance_console":        C("M",  "MPCA",     "MPCA", "Auto_Compute",    "Realtime", False, 30, "Normal / full (same as BCCI)"),
+            "tournament_closure":     C("M",  "MPCA",     "MPCA", "Manual_PDF",      "Realtime", True,  15, "MPCA drafts, signs & closes"),
             "mpca_visibility":        C("INFO","MPCA",    "None", "Auto_Compute",    "Realtime", False, None, "Real time"),
         },
         "camp": {
@@ -128,6 +132,7 @@ def _default_cells() -> Dict[str, Dict[str, Dict[str, Any]]]:
             "match_calendar":         C("O",  "Division", "None", "Manual_PDF",   "Realtime",  False, None, "Division may make; of no relevance"),
             "unified_budget":         C("M",  "Division", "None", "Auto_Compute", "On_Submit", True, 15, "Auto per rate card; DIVISION creates & uploads; MPCA has no role"),
             "finance_console":        C("M",  "Division", "MPCA", "Auto_Compute", "On_Submit", False, 30, "Normal — shown to MPCA only on claim submission"),
+            "tournament_closure":     C("M",  "Division", "MPCA", "Manual_PDF", "On_Submit", True,  15, "Division drafts, signs & closes; MPCA sees on submission"),
             "mpca_visibility":        C("INFO","Division","None", "Auto_Compute", "On_Submit", False, None, "On final submission of claim"),
         },
         "district": {
@@ -139,6 +144,7 @@ def _default_cells() -> Dict[str, Dict[str, Dict[str, Any]]]:
             "match_calendar":         C("M",  "Division", "None", "Auto_Compute", "Realtime", True, 7,  "Division makes"),
             "unified_budget":         C("M",  "Division", "None", "Auto_Compute", "Realtime", True, 5,  "Normal (auto per rate card), Division-created"),
             "finance_console":        C("M",  "Division", "MPCA", "Auto_Compute", "On_Submit", False, 30, "Normal / same"),
+            "tournament_closure":     C("M",  "Division", "MPCA", "Manual_PDF", "Realtime",  True,  15, "Division drafts, signs & closes"),
             "mpca_visibility":        C("INFO","Division","None", "Auto_Compute", "On_Submit", False, None, "Real-time match calendar visible; tournament shown when Division SUBMITS"),
         },
         "interschool": {
@@ -150,6 +156,7 @@ def _default_cells() -> Dict[str, Dict[str, Dict[str, Any]]]:
             "match_calendar":         C("O",  "Division", "None", "Manual_PDF",   "Realtime", False, None, "Division may make, all manual fields"),
             "unified_budget":         C("M",  "Division", "None", "Auto_Compute", "On_Submit", True, 15, "Auto from (players × rate card); no MPCA role; division creates & LOCKS"),
             "finance_console":        C("M",  "Division", "MPCA", "Auto_Compute", "On_Submit", False, 30, "Normal / same — entry fee collected by host, declared with the claim"),
+            "tournament_closure":     C("M",  "Division", "MPCA", "Manual_PDF", "On_Submit", True,  15, "Division drafts, signs & closes; MPCA sees on submission"),
             "mpca_visibility":        C("INFO","Division","None", "Auto_Compute", "On_Submit", False, None, "On final claim submission only"),
         },
         "interclub": {
@@ -161,6 +168,7 @@ def _default_cells() -> Dict[str, Dict[str, Dict[str, Any]]]:
             "match_calendar":         C("O",  "Division", "None", "Manual_PDF",   "Realtime", False, None, "Division may make, all manual fields"),
             "unified_budget":         C("M",  "Division", "None", "Auto_Compute", "On_Submit", True, 15, "Auto from (players × rate card); no MPCA role; division creates & LOCKS. Only the two-day knockout is reimbursed — one-day / league-cum-knockout formats are not"),
             "finance_console":        C("M",  "Division", "MPCA", "Auto_Compute", "On_Submit", False, 30, "Normal / same"),
+            "tournament_closure":     C("M",  "Division", "MPCA", "Manual_PDF", "On_Submit", True,  15, "Division drafts, signs & closes; MPCA sees on submission"),
             "mpca_visibility":        C("INFO","Division","None", "Auto_Compute", "On_Submit", False, None, "On final claim submission only"),
         },
         "coachingcamp": {
@@ -172,6 +180,7 @@ def _default_cells() -> Dict[str, Dict[str, Dict[str, Any]]]:
             "match_calendar":         C("O",  "Division", "None", "Manual_PDF",   "Realtime", False, None, "Division may make, all manual fields"),
             "unified_budget":         C("M",  "Division", "None", "Auto_Compute", "On_Submit", True, 15, "Auto from (players × rate card); no MPCA role; division creates & LOCKS"),
             "finance_console":        C("M",  "Division", "MPCA", "Auto_Compute", "On_Submit", False, 30, "Normal / same — camp for district/rural players who can't practise at the divisional HQ"),
+            "tournament_closure":     C("M",  "Division", "MPCA", "Manual_PDF", "On_Submit", True,  15, "Division drafts, signs & closes; MPCA sees on submission"),
             "mpca_visibility":        C("INFO","Division","None", "Auto_Compute", "On_Submit", False, None, "On final claim submission only"),
         },
         "vacationcamp": {
@@ -183,6 +192,7 @@ def _default_cells() -> Dict[str, Dict[str, Dict[str, Any]]]:
             "match_calendar":         C("O",  "Division", "None", "Manual_PDF",   "Realtime", False, None, "Division may make, all manual fields"),
             "unified_budget":         C("M",  "Division", "None", "Auto_Compute", "On_Submit", True, 15, "Auto from (players × rate card); no MPCA role; division creates & LOCKS"),
             "finance_console":        C("M",  "Division", "MPCA", "Auto_Compute", "On_Submit", False, 30, "Normal / same — Divisional Secretary must certify no amount was charged from players"),
+            "tournament_closure":     C("M",  "Division", "MPCA", "Manual_PDF", "On_Submit", True,  15, "Division drafts, signs & closes; MPCA sees on submission"),
             "mpca_visibility":        C("INFO","Division","None", "Auto_Compute", "On_Submit", False, None, "On final claim submission only"),
         },
     }

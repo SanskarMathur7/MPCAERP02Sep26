@@ -733,3 +733,62 @@ async def get_closure_letter(tid: str):
     if not doc:
         raise HTTPException(404, "No closure letter has been generated yet")
     return doc
+
+
+# ─────────────── MPCA-244 · Signed closure upload + close ───────────────
+
+class ClosureSignedUploadPayload(BaseModel):
+    signed_url: str
+
+
+@api_router.post("/tournaments/{tid}/closure-signed-upload")
+async def upload_signed_closure(
+    tid: str, payload: ClosureSignedUploadPayload,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
+):
+    """Owner uploads a signed copy of the closure letter. Wiring-driven — the
+    persona must match `tournament_closure.owner` for this tournament type."""
+    await assert_wiring_owner(tid, "tournament_closure", x_body_type, x_body_code,
+                              action_label="signed closure upload")
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    if not payload.signed_url:
+        raise HTTPException(400, "signed_url is required")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.tournaments.update_one({"id": tid}, {"$set": {
+        "closure_signed_url": payload.signed_url,
+        "closure_signed_at":  now,
+        "closure_signed_by":  stamp_actor(x_persona_name, x_body_code, x_body_type),
+    }})
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})
+
+
+@api_router.post("/tournaments/{tid}/close")
+async def close_tournament(
+    tid: str,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
+):
+    """Final close — flips tournament.status → Completed. Requires (a) the
+    signed closure PDF to be uploaded, (b) the caller's body_type to match
+    `tournament_closure.owner` per wiring."""
+    await assert_wiring_owner(tid, "tournament_closure", x_body_type, x_body_code,
+                              action_label="tournament close")
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    if not t.get("closure_signed_url"):
+        raise HTTPException(400, "Upload the signed closure letter before closing the tournament.")
+    if t.get("status") == "Completed":
+        return {"already": "Completed"}
+    now = datetime.now(timezone.utc).isoformat()
+    await db.tournaments.update_one({"id": tid}, {"$set": {
+        "status":       "Completed",
+        "closed_at":    now,
+        "closed_by":    stamp_actor(x_persona_name, x_body_code, x_body_type),
+    }})
+    return await db.tournaments.find_one({"id": tid}, {"_id": 0})

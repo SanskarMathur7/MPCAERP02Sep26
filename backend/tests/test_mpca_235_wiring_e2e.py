@@ -56,7 +56,7 @@ def seeded_tournaments(client):
 class TestMatrixShape:
     def test_matrix_has_8_types_and_9_steps(self, wiring):
         assert len(wiring["types"]) == 8
-        assert len(wiring["steps"]) == 9
+        assert len(wiring["steps"]) == 10
         type_ids = {t["id"] for t in wiring["types"]}
         assert type_ids == {"bcci", "interdiv", "camp", "district",
                             "interschool", "interclub", "coachingcamp", "vacationcamp"}
@@ -64,7 +64,7 @@ class TestMatrixShape:
     def test_all_72_cells_have_8_attrs(self, wiring):
         required = {"flag", "owner", "approver", "mode", "visibility", "blocks_next", "sla_days", "text"}
         for tid, steps in wiring["cells"].items():
-            assert len(steps) == 9, f"{tid} missing steps"
+            assert len(steps) == 10, f"{tid} missing steps"
             for skey, cell in steps.items():
                 assert required.issubset(cell.keys()), f"{tid}.{skey} missing attrs"
 
@@ -107,7 +107,7 @@ class TestWiringStatusPerTournament:
             f"{tno} (code={t.get('tournament_type_code')}) expected type_id={expected_type} "
             f"but got {data['type_id']}"
         )
-        assert len(data["steps"]) == 9
+        assert len(data["steps"]) == 10
         assert data["type_name"], "type_name missing"
 
     @pytest.mark.parametrize("tno", list(EXPECTED_TYPE.keys()))

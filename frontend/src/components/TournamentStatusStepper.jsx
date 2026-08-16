@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Clock, Circle, ArrowRight, Info } from "lucide-react";
 import { api } from "@/lib/api";
+import { useWiringOwnerMatch } from "@/lib/useWiring";
 
 /**
  * Sprint M30 · Tournament Status Stepper
@@ -82,8 +83,13 @@ const TournamentStatusStepper = ({ tournament, persona, onAction }) => {
         } finally { setAdvancing(false); }
     };
 
-    // Persona-driven "advance" affordance shown only for MPCA
+    // MPCA-243 · Ship 3 · Persona-driven "advance" affordance is now
+    // wiring-driven. For Division-owned tournaments (Inter-District, School,
+    // Club, Camp), the Division/District Secretary drives the stepper. For
+    // MPCA-owned tournaments (BCCI, Inter-Division), only State personas do.
     const isMPCA = persona?.body_type === "State";
+    const wiringOwnsCreation = useWiringOwnerMatch(tournament?.id, "tournament_creation", persona);
+    const canAdvance = isMPCA || (wiringOwnsCreation === true);
     const advanceMap = {
         Draft: { label: "Submit for Approval", kind: "submit" },
         Awaiting_Approval: { label: "Approve Tournament", kind: "approve" },
@@ -91,7 +97,7 @@ const TournamentStatusStepper = ({ tournament, persona, onAction }) => {
         Squad_Selection: { label: "Start Tournament", kind: "start_play" },
         In_Progress: { label: "Mark Completed", kind: "complete" },
     };
-    const nextAdvance = isMPCA ? advanceMap[status] : null;
+    const nextAdvance = canAdvance ? advanceMap[status] : null;
 
     // Persona-filtered pending items
     const myItems = pending.items.filter((it) => {

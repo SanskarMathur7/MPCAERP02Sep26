@@ -25,13 +25,13 @@ def test_get_wiring_returns_matrix():
     assert r.status_code == 200
     d = r.json()
     assert d["id"] == "singleton"
-    assert len(d["steps"]) == 9
+    assert len(d["steps"]) == 10
     assert len(d["types"]) == 8
     expected = {"bcci", "interdiv", "camp", "district",
                 "interschool", "interclub", "coachingcamp", "vacationcamp"}
     assert set(d["cells"].keys()) == expected
     for tid in d["cells"]:
-        assert len(d["cells"][tid]) == 9
+        assert len(d["cells"][tid]) == 10
     assert d["enums"]["flag"] == ["M", "O", "NA", "INFO"]
 
 
@@ -89,10 +89,10 @@ def test_export_shape():
     assert r.status_code == 200
     d = r.json()
     assert d["meta"]["title"] == "MPCA Tournament Wiring"
-    assert len(d["steps"]) == 9
+    assert len(d["steps"]) == 10
     assert len(d["types"]) == 8
     for t in d["types"]:
-        assert len(t["cells"]) == 9
+        assert len(t["cells"]) == 10
         for c in t["cells"]:
             assert "flag" in c
             assert "owner" in c

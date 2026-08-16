@@ -455,19 +455,21 @@ const FinancialSummaryPanel = ({ tournament }) => {
     );
 };
 
-/** Sprint M19 · Closure Letter — POST generate, GET fetch. */
-const ClosureLetterPanel = ({ tournament, persona, canGenerate }) => {
+/** Sprint M19 + MPCA-244 · Closure Letter — generate, upload signed copy, close tournament. */
+const ClosureLetterPanel = ({ tournament, persona, canGenerate, onChange }) => {
     const [letter, setLetter] = useState(null);
     const [busy, setBusy] = useState(false);
     const [notes, setNotes] = useState("");
+    const [tourn, setTourn] = useState(tournament); // local mirror so we can reflect Close status
+    useEffect(() => { setTourn(tournament); }, [tournament]);
 
-    // MPCA-243 · Ship 2 · Only the wiring-owner may generate the closure
-    // letter. The parent still passes `canGenerate` (used as a coarse
-    // parent-level gate — e.g. for read-only match-official personas) —
-    // we AND it with the wiring owner-match.
+    // MPCA-243 · Ship 2 · wiring owner check for GENERATE (finance_console).
+    // MPCA-244 · Ship 3 · wiring owner check for SIGN + CLOSE (tournament_closure).
     const wiringCanGenerate = useWiringOwnerMatch(tournament?.id, "finance_console", persona);
+    const wiringCanClose = useWiringOwnerMatch(tournament?.id, "tournament_closure", persona);
     const finalCanGenerate = canGenerate && (wiringCanGenerate ?? true);
     const financeStep = useWiringStep(tournament?.id, "finance_console");
+    const closureStep = useWiringStep(tournament?.id, "tournament_closure");
 
     const load = async () => {
         try {
@@ -490,26 +492,81 @@ const ClosureLetterPanel = ({ tournament, persona, canGenerate }) => {
         } finally { setBusy(false); }
     };
 
+    // MPCA-244 · Upload the signed closure letter (any URL — the app currently
+    // stores the URL string; a file-upload UI is a future enhancement).
+    const uploadSigned = async () => {
+        const url = window.prompt("Paste the URL of the signed closure PDF (Google Drive / S3 / any public link):");
+        if (!url) return;
+        setBusy(true);
+        try {
+            const updated = await api.post(`/tournaments/${tournament.id}/closure-signed-upload`, { signed_url: url })
+                .then((r) => r.data);
+            setTourn(updated);
+            onChange?.();
+        } catch (e) {
+            alert(e?.response?.data?.detail || e.message);
+        } finally { setBusy(false); }
+    };
+
+    // MPCA-244 · Final close.
+    const closeTournament = async () => {
+        if (!window.confirm("Close this tournament? Once closed, no further edits are possible.")) return;
+        setBusy(true);
+        try {
+            const updated = await api.post(`/tournaments/${tournament.id}/close`).then((r) => r.data);
+            setTourn(updated);
+            onChange?.();
+            alert("Tournament closed.");
+        } catch (e) {
+            alert(e?.response?.data?.detail || e.message);
+        } finally { setBusy(false); }
+    };
+
+    const isClosed = tourn?.status === "Completed";
+    const hasSignedPdf = !!tourn?.closure_signed_url;
+
     return (
         <div className="border border-mpca-brass/30 bg-mpca-ivory p-5" data-testid="panel-closure-letter">
             <div className="flex items-start justify-between mb-3">
                 <div>
                     <div className="overline text-[9px]">Tournament Closure Certificate</div>
                     <div className="font-serif text-lg text-mpca-green-dark mt-1">
-                        {letter ? "Certificate on file" : "Not yet generated"}
+                        {isClosed ? "Tournament closed ✓" : letter ? "Certificate on file" : "Not yet generated"}
                     </div>
-                    {letter?.generated_at && <div className="text-[10px] text-mpca-brass font-mono mt-0.5">Generated {new Date(letter.generated_at).toLocaleString("en-IN")}</div>}
-                    {financeStep?.owner && financeStep.owner !== "MPCA" && (
+                    {letter?.generated_at && <div className="text-[10px] text-mpca-brass font-mono mt-0.5">Draft generated {new Date(letter.generated_at).toLocaleString("en-IN")}</div>}
+                    {tourn?.closure_signed_at && (
+                        <div className="text-[10px] text-mpca-green-dark font-mono mt-0.5" data-testid="closure-signed-info">
+                            Signed uploaded {new Date(tourn.closure_signed_at).toLocaleString("en-IN")} by {tourn.closure_signed_by}
+                        </div>
+                    )}
+                    {tourn?.closed_at && (
+                        <div className="text-[10px] text-mpca-green-dark font-mono mt-0.5" data-testid="closure-closed-info">
+                            Tournament closed {new Date(tourn.closed_at).toLocaleString("en-IN")} by {tourn.closed_by}
+                        </div>
+                    )}
+                    {closureStep?.owner && (
                         <div className="text-[9px] text-mpca-brass mt-1 uppercase tracking-widest flex items-center gap-1" data-testid="closure-owner-hint">
-                            <Info size={10} /> Issued by {financeStep.owner} per wiring
+                            <Info size={10} /> Closure owned by {closureStep.owner} · Signed PDF required to close
                         </div>
                     )}
                 </div>
-                {finalCanGenerate && (
-                    <button onClick={generate} disabled={busy} className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" data-testid="closure-generate-btn">
-                        {busy ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />} {letter ? "Regenerate" : "Generate"}
-                    </button>
-                )}
+                <div className="flex items-center gap-2">
+                    {finalCanGenerate && !isClosed && (
+                        <button onClick={generate} disabled={busy} className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" data-testid="closure-generate-btn">
+                            {busy ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />} {letter ? "Regenerate" : "Generate"}
+                        </button>
+                    )}
+                    {letter && !isClosed && wiringCanClose && (
+                        <button onClick={uploadSigned} disabled={busy} className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" data-testid="closure-upload-signed-btn">
+                            <Upload size={11} /> {hasSignedPdf ? "Replace Signed" : "Upload Signed"}
+                        </button>
+                    )}
+                    {hasSignedPdf && !isClosed && wiringCanClose && (
+                        <button onClick={closeTournament} disabled={busy} className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" data-testid="closure-close-tournament-btn">
+                            <Lock size={11} /> Close Tournament
+                        </button>
+                    )}
+                </div>
             </div>
 
             {finalCanGenerate && !letter && (
@@ -523,6 +580,11 @@ const ClosureLetterPanel = ({ tournament, persona, canGenerate }) => {
             ) : (
                 <div className="py-6 text-center text-mpca-gray-dark italic font-serif border border-dashed border-mpca-brass/30">
                     No closure certificate on file. Generate one after all payments have been received.
+                </div>
+            )}
+            {hasSignedPdf && (
+                <div className="mt-3 text-[11px]" data-testid="closure-signed-link">
+                    <a href={tourn.closure_signed_url} target="_blank" rel="noreferrer" className="text-mpca-oxblood underline">View signed closure PDF ↗</a>
                 </div>
             )}
         </div>

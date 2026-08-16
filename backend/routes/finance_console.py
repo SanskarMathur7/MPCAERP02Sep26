@@ -920,6 +920,54 @@ async def finance_matrix(
         })
     multi_pool = len([p for p in pools_summary if p["pool_id"]]) > 1
 
+    # MPCA-243 · Ship 3 · Visibility timing enforcement.
+    # If the wiring says finance_console.visibility == "On_Submit" AND the
+    # caller is the observing State persona (not the wiring owner), the
+    # detailed spend rows are HIDDEN until each body actually submits its
+    # reimbursement claim. Rows whose claim_status ∈ Submitted/Under_Review/
+    # Approved/Rejected remain visible; the rest are redacted with a hint.
+    on_submit_gated = False
+    try:
+        from core.wiring_guard import resolve_wiring_cell, _OWNER_TO_BODY_TYPES
+        _fc_cell = await resolve_wiring_cell(tid, "finance_console")
+        _visibility = (_fc_cell or {}).get("visibility")
+        _fc_owner = (_fc_cell or {}).get("owner")
+        _caller_in_owner = (x_body_type or "") in _OWNER_TO_BODY_TYPES.get(_fc_owner or "", set())
+        # Only redact when caller is State AND is NOT the wiring owner.
+        if _visibility == "On_Submit" and (x_body_type or "").lower() == "state" and not _caller_in_owner:
+            on_submit_gated = True
+    except Exception:
+        pass
+    _SUBMITTED_STATUSES = {"Submitted", "Under_Review", "Approved", "Rejected"}
+    if on_submit_gated:
+        redacted_rows = []
+        for r in rows:
+            if (r.get("claim_status") or "") in _SUBMITTED_STATUSES:
+                redacted_rows.append(r)
+            else:
+                # Preserve identity + role so MPCA can see who exists, but
+                # zero-out the financials until the body submits.
+                redacted_rows.append({
+                    "body_code": r["body_code"],
+                    "body_name": r["body_name"],
+                    "role": r["role"],
+                    "pool_id": r.get("pool_id"),
+                    "pool_name": r.get("pool_name"),
+                    "iv_set": r.get("iv_set"),
+                    "budget_status": "Hidden_Until_Submit",
+                    "budget_total_inr": 0, "approved_total_inr": None,
+                    "invoice_count": 0, "invoice_total_inr": 0,
+                    "extras_total_inr": 0, "da_total_inr": 0,
+                    "claim_status": None,
+                    "next_action_for": {"role": r["role"], "hint": "Awaiting body submission (On_Submit visibility)"},
+                    "_redacted": True,
+                })
+        rows = redacted_rows
+        # Also zero pool totals so the aggregate view doesn't leak
+        for ps in pools_summary:
+            ps["budget_total_inr"] = sum(x.get("budget_total_inr", 0) for x in rows if x.get("pool_id") == ps["pool_id"])
+            ps["approved_total_inr"] = sum((x.get("approved_total_inr") or 0) for x in rows if x.get("pool_id") == ps["pool_id"])
+
     return {
         "tournament_id": tid,
         "tournament_name": t.get("name"),
@@ -934,6 +982,7 @@ async def finance_matrix(
         "row_count": len(rows),
         "viewer_scope": "state" if is_state else "body",
         "viewer_body_code": x_body_code if not is_state else None,
+        "visibility_gated": on_submit_gated,
     }
 
 

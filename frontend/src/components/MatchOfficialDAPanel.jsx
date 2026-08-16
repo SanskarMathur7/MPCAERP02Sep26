@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useWiringStep } from "@/lib/useWiring";
 
 /**
  * MPCA-234 · Redesigned T.A. Expense Claim Form
@@ -97,6 +98,12 @@ const StatusPill = ({ status }) => {
 
 // ────────────────────── Main component ──────────────────────
 const MatchOfficialDAPanel = ({ tournamentId, formId: formIdProp, readOnly = false, viewerBadges = false, onChange }) => {
+    // MPCA-243 · Ship 2 · Copy for "awaiting review" is wiring-driven —
+    // finance_console.approver tells us who reviews (MPCA vs Division).
+    const financeStep = useWiringStep(tournamentId, "finance_console");
+    const reviewer = financeStep?.approver && financeStep.approver !== "None"
+        ? financeStep.approver
+        : "MPCA";
     const { persona } = useAuth();
     const [form, setForm] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -511,7 +518,7 @@ const MatchOfficialDAPanel = ({ tournamentId, formId: formIdProp, readOnly = fal
 
             {form.status === "Submitted" && (
                 <div className="border-2 border-mpca-brass bg-mpca-brass/5 p-4 text-sm text-mpca-brass flex items-center gap-2 italic">
-                    <CheckCircle2 size={16} /> Submitted on {form.submitted_at ? new Date(form.submitted_at).toLocaleDateString("en-IN") : "—"} · awaiting MPCA review
+                    <CheckCircle2 size={16} /> Submitted on {form.submitted_at ? new Date(form.submitted_at).toLocaleDateString("en-IN") : "—"} · awaiting {reviewer} review
                 </div>
             )}
         </div>

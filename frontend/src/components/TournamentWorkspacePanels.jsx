@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2, Save, X, Loader2, Lock, LockOpen, Calendar as CalIcon, Upload, FileDown } from "lucide-react";
+import { Plus, Trash2, Save, X, Loader2, Lock, LockOpen, Calendar as CalIcon, Upload, FileDown, Info } from "lucide-react";
 import Papa from "papaparse";
 import { api } from "@/lib/api";
 import MatchFixtureCard from "@/components/MatchFixtureCard";
+import { useWiringStep, useWiringOwnerMatch } from "@/lib/useWiring";
 
 const inputCls = "input-heritage !py-1.5 !text-xs";
 
@@ -19,6 +20,12 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState(null);
     const fileRef = useRef(null);
+    // MPCA-243 · Ship 2 · Read the wiring step for advisory copy. When
+    // `match_calendar.mode == "Manual_PDF"` (BCCI/School/Club/etc.), the
+    // panel hints that team names should be free-text (e.g. away = other
+    // states) rather than picked from pools. When `flag == "O"` (Optional)
+    // for camps, the panel shows a "Optional · No downstream impact" chip.
+    const calStep = useWiringStep(tournament?.id, "match_calendar");
     const [form, setForm] = useState({
         stage: "League", match_date: "", start_time: "10:00",
         home_team: "", away_team: "", venue_name: tournament?.venue_name_snapshot || "",
@@ -195,6 +202,16 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
 
     return (
         <div className="border border-mpca-brass/30 bg-mpca-ivory p-5" data-testid="panel-match-calendar">
+            {calStep && (calStep.mode === "Manual_PDF" || calStep.flag === "O") && (
+                <div className="mb-3 border border-mpca-brass/40 bg-mpca-parchment/60 px-3 py-2 text-[10px] uppercase tracking-widest text-mpca-brass flex items-center gap-2" data-testid="calendar-wiring-hint">
+                    <Info size={11} />
+                    <span className="font-mono">
+                        {calStep.mode === "Manual_PDF" && calStep.flag === "O" && "Optional · Manual team names — no downstream impact for this tournament type"}
+                        {calStep.mode === "Manual_PDF" && calStep.flag !== "O" && "Manual team names — free-text (e.g. away = other states) per wiring"}
+                        {calStep.mode !== "Manual_PDF" && calStep.flag === "O" && "Optional · Calendar entries have no downstream impact for this tournament type"}
+                    </span>
+                </div>
+            )}
             <div className="flex items-start justify-between mb-3">
                 <div>
                     <div className="overline text-[9px]">Match Calendar · Fixture Generator</div>
@@ -444,6 +461,14 @@ const ClosureLetterPanel = ({ tournament, persona, canGenerate }) => {
     const [busy, setBusy] = useState(false);
     const [notes, setNotes] = useState("");
 
+    // MPCA-243 · Ship 2 · Only the wiring-owner may generate the closure
+    // letter. The parent still passes `canGenerate` (used as a coarse
+    // parent-level gate — e.g. for read-only match-official personas) —
+    // we AND it with the wiring owner-match.
+    const wiringCanGenerate = useWiringOwnerMatch(tournament?.id, "finance_console", persona);
+    const finalCanGenerate = canGenerate && (wiringCanGenerate ?? true);
+    const financeStep = useWiringStep(tournament?.id, "finance_console");
+
     const load = async () => {
         try {
             const doc = await api.get(`/tournaments/${tournament.id}/closure-letter`).then((r) => r.data);
@@ -474,15 +499,20 @@ const ClosureLetterPanel = ({ tournament, persona, canGenerate }) => {
                         {letter ? "Certificate on file" : "Not yet generated"}
                     </div>
                     {letter?.generated_at && <div className="text-[10px] text-mpca-brass font-mono mt-0.5">Generated {new Date(letter.generated_at).toLocaleString("en-IN")}</div>}
+                    {financeStep?.owner && financeStep.owner !== "MPCA" && (
+                        <div className="text-[9px] text-mpca-brass mt-1 uppercase tracking-widest flex items-center gap-1" data-testid="closure-owner-hint">
+                            <Info size={10} /> Issued by {financeStep.owner} per wiring
+                        </div>
+                    )}
                 </div>
-                {canGenerate && (
+                {finalCanGenerate && (
                     <button onClick={generate} disabled={busy} className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" data-testid="closure-generate-btn">
                         {busy ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />} {letter ? "Regenerate" : "Generate"}
                     </button>
                 )}
             </div>
 
-            {canGenerate && !letter && (
+            {finalCanGenerate && !letter && (
                 <textarea placeholder="Additional notes to include in the certificate (optional)…" className="input-heritage !text-xs w-full h-16 mb-3" value={notes} onChange={(e) => setNotes(e.target.value)} />
             )}
 

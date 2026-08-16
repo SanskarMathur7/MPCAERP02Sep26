@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Wallet, Loader2, ArrowRight, Send, PlusCircle, Info, TrendingUp, TrendingDown, ChevronRight, Pencil, Save, X, Plus } from "lucide-react";
 import { api } from "@/lib/api";
+import { useWiringOwnerMatch } from "@/lib/useWiring";
 
 const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 
@@ -46,13 +47,17 @@ const TournamentBudgetsPanel = ({ tournament, persona, onChange, hideConsoleLink
     const isMPCA = persona?.body_type === "State";
     const myBody = persona?.body_code;
 
-    // Auto-drafted budget editing (MPCA for BCCI + Inter_Divisional; Divisions
-    // for every other scope). See backend `_may_edit_heads`.
-    const editableScopes = ["BCCI", "Inter_Divisional"];
+    // MPCA-243 · Ship 2 · Wiring-driven edit permission (replaces the legacy
+    // hardcoded scope list). Falls back to the legacy scope check only while
+    // wiring is still loading (returns null in that window).
+    const wiringCanEdit = useWiringOwnerMatch(tournament?.id, "unified_budget", persona);
+    const legacyEditableScopes = ["BCCI", "Inter_Divisional"];
     const scope = tournament?.scope;
-    const canEditHeads = isMPCA
-        ? editableScopes.includes(scope)
-        : (persona?.body_type === "Division" || persona?.body_type === "District") && !editableScopes.includes(scope);
+    const canEditHeads = wiringCanEdit !== null
+        ? wiringCanEdit
+        : (isMPCA
+            ? legacyEditableScopes.includes(scope)
+            : (persona?.body_type === "Division" || persona?.body_type === "District") && !legacyEditableScopes.includes(scope));
     const [editing, setEditing] = useState(null);     // budget_id being edited
     const [draftHeads, setDraftHeads] = useState([]); // [{head, limit_inr, notes?}]
     const [savingEdit, setSavingEdit] = useState(false);

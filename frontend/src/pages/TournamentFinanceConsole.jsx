@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useWiringOwnerMatch } from "@/lib/useWiring";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
 import TournamentSchemeBadge from "@/components/TournamentSchemeBadge";
@@ -97,7 +98,12 @@ const TournamentFinanceConsole = () => {
         && myBody?.startsWith("DIV-")
         && (hostBody || "").startsWith("DIST-")
         && (hostBody || "").endsWith(`-${myBody.slice(-3)}`);
-    const isMPCA = isState || isHostBody || isParentDivOfHostDist;
+    // MPCA-243 · Ship 2 · Wiring-aware finance owner elevation. If wiring
+    // says `finance_console.owner == "Division"` and the caller is Division/
+    // District, they get the aggregate view (mirrors the backend's
+    // `is_wiring_owner` fallback in finance_console.py).
+    const wiringFinanceOwner = useWiringOwnerMatch(id, "finance_console", persona);
+    const isMPCA = isState || isHostBody || isParentDivOfHostDist || wiringFinanceOwner === true;
 
     const [accessDenied, setAccessDenied] = useState(null);
 

@@ -735,6 +735,338 @@ async def get_closure_letter(tid: str):
     return doc
 
 
+# ─────────────── MPCA-246 · Rich multi-section PDF ───────────────
+
+@api_router.get("/tournaments/{tid}/closure-letter/pdf")
+async def get_closure_letter_pdf(tid: str):
+    """Generate a rich multi-section closure PDF with pool tables, calendar,
+    officials, squad summary, budget rollup, invoices, deductions, financial
+    summary, payments, and links to signed artifacts.
+
+    Returns application/pdf. Falls back gracefully if any section has no data.
+    """
+    from fastapi.responses import Response
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    import io
+
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+
+    fs = await tournament_financial_summary(tid)
+
+    # Determine owner (MPCA vs Division) so header + issuer flip appropriately
+    try:
+        from core.wiring_guard import resolve_wiring_cell
+        fc_cell = await resolve_wiring_cell(tid, "finance_console")
+        owner = (fc_cell or {}).get("owner") or "MPCA"
+    except Exception:
+        owner = "MPCA"
+
+    header_org = "MADHYA PRADESH CRICKET ASSOCIATION"
+    if owner in ("Division", "District"):
+        host_body = await db.bodies.find_one({"code": t.get("host_body_id")}, {"_id": 0}) or {}
+        if host_body.get("name"):
+            header_org = host_body["name"].upper()
+
+    # ─── Data aggregation ───
+    pools = await db.pools.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
+    participations = await db.tournament_participations.find(
+        {"tournament_id": tid, "removed_at": None}, {"_id": 0}).to_list(500)
+    matches = await db.tournament_matches.find(
+        {"tournament_id": tid}, {"_id": 0}).sort([("match_date", 1), ("match_no", 1)]).to_list(2000)
+    officials = await db.tournament_match_officials.find(
+        {"tournament_id": tid}, {"_id": 0}).to_list(500)
+    squads = await db.squads.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
+    invoices = await db.tournament_invoices.find(
+        {"tournament_id": tid}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    budgets = await db.tournament_budgets.find(
+        {"tournament_id": tid}, {"_id": 0}).to_list(500)
+    receipts = await db.reimbursement_receipts.find(
+        {"tournament_id": tid}, {"_id": 0}).to_list(500) if hasattr(db, "reimbursement_receipts") else []
+
+    # Unique venues from matches
+    venues = sorted({m.get("venue_name") or m.get("venue_id") for m in matches if (m.get("venue_name") or m.get("venue_id"))})
+
+    # ─── Build PDF ───
+    buf = io.BytesIO()
+    pdf = SimpleDocTemplate(
+        buf, pagesize=A4,
+        topMargin=1.5*cm, bottomMargin=1.5*cm,
+        leftMargin=1.5*cm, rightMargin=1.5*cm,
+        title=f"Tournament Closure · {t.get('tournament_no', tid)}",
+    )
+    ss = getSampleStyleSheet()
+    h1 = ParagraphStyle("h1", parent=ss["Title"], fontSize=15, spaceAfter=4)
+    h2 = ParagraphStyle("h2", parent=ss["Heading2"], fontSize=11, spaceBefore=10, spaceAfter=4,
+                        textColor=colors.HexColor("#3b5540"))
+    body = ParagraphStyle("body", parent=ss["BodyText"], fontSize=9, leading=11)
+    small = ParagraphStyle("small", parent=ss["BodyText"], fontSize=8, textColor=colors.grey)
+
+    def _tbl(data, col_widths=None, header=True):
+        tbl = Table(data, colWidths=col_widths, repeatRows=1 if header else 0)
+        style = [
+            ("BOX",        (0, 0), (-1, -1), 0.5, colors.grey),
+            ("INNERGRID",  (0, 0), (-1, -1), 0.25, colors.lightgrey),
+            ("FONTSIZE",   (0, 0), (-1, -1), 8),
+            ("VALIGN",     (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING",  (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ]
+        if header:
+            style += [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#3b5540")),
+                ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+                ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+            ]
+        tbl.setStyle(TableStyle(style))
+        return tbl
+
+    story = []
+
+    # ─── § 1 · Header ───
+    story.append(Paragraph(f"<b>{header_org}</b>", h1))
+    story.append(Paragraph("TOURNAMENT CLOSURE CERTIFICATE", h1))
+    story.append(Paragraph(
+        f"Ref: <b>{t.get('tournament_no', tid)}</b> &nbsp;&nbsp; "
+        f"Date: {datetime.now(timezone.utc).strftime('%d %B, %Y')}",
+        small,
+    ))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(
+        "This is to certify that the tournament described below has been concluded "
+        "and all financial obligations have been settled.", body))
+    story.append(Spacer(1, 8))
+
+    # ─── § 2 · Tournament basics ───
+    story.append(Paragraph("Tournament Details", h2))
+    basics = [
+        ["Name",         t.get("name") or ""],
+        ["Type",         t.get("tournament_type_code") or t.get("tournament_type") or ""],
+        ["Format",       t.get("format") or ""],
+        ["Season",       t.get("fiscal_cycle") or ""],
+        ["Host body",    t.get("host_body_id") or ""],
+        ["Dates",        f"{t.get('start_date') or '—'} to {t.get('end_date') or '—'}"],
+        ["Matches",      str(len(matches))],
+        ["Participants", str(len(participations))],
+    ]
+    story.append(_tbl(basics, col_widths=[4*cm, 13*cm], header=False))
+
+    # ─── § 3 · Pools & Participating Bodies ───
+    if participations or pools:
+        story.append(Paragraph("Pools & Participating Bodies", h2))
+        rows = [["#", "Body", "Role", "Pool", "IV Set"]]
+        for i, p in enumerate(participations, 1):
+            rows.append([
+                str(i),
+                p.get("body_name") or p.get("body_code") or "",
+                p.get("role") or "Participant",
+                p.get("pool_name") or p.get("pool_id") or "—",
+                p.get("iv_set") or "—",
+            ])
+        if len(rows) > 1:
+            story.append(_tbl(rows, col_widths=[0.8*cm, 6*cm, 3*cm, 4.5*cm, 2.7*cm]))
+
+    # ─── § 4 · Grounds / Venues ───
+    if venues:
+        story.append(Paragraph("Grounds / Venues", h2))
+        vrows = [["#", "Venue"]] + [[str(i), v] for i, v in enumerate(venues, 1)]
+        story.append(_tbl(vrows, col_widths=[0.8*cm, 16.2*cm]))
+
+    # ─── § 5 · Match Calendar ───
+    if matches:
+        story.append(PageBreak())
+        story.append(Paragraph(f"Match Calendar ({len(matches)} matches)", h2))
+        mrows = [["#", "Date", "Home", "Away", "Venue", "Result"]]
+        for m in matches:
+            mrows.append([
+                str(m.get("match_no") or ""),
+                m.get("match_date") or "—",
+                (m.get("home_team") or "")[:22],
+                (m.get("away_team") or "")[:22],
+                (m.get("venue_name") or m.get("venue_id") or "—")[:20],
+                (m.get("result_summary") or m.get("status") or "—")[:22],
+            ])
+        story.append(_tbl(mrows, col_widths=[0.8*cm, 2.2*cm, 4*cm, 4*cm, 3.5*cm, 3.5*cm]))
+
+    # ─── § 6 · Match Officials ───
+    if officials:
+        story.append(Paragraph(f"Match Officials ({len(officials)} assignments)", h2))
+        orows = [["Match#", "Role", "Grade", "Name", "Body"]]
+        for o in officials[:100]:  # cap huge lists
+            orows.append([
+                str(o.get("match_no") or o.get("fixture_no") or "—"),
+                o.get("role") or "—",
+                o.get("grade") or "—",
+                (o.get("official_name") or "—")[:22],
+                (o.get("official_body_code") or "—")[:12],
+            ])
+        story.append(_tbl(orows, col_widths=[1.5*cm, 2.5*cm, 2*cm, 6*cm, 5*cm]))
+
+    # ─── § 7 · Squad Summary ───
+    if squads:
+        story.append(Paragraph(f"Squad Summary ({len(squads)} squads)", h2))
+        srows = [["Body", "Team", "Players", "Status", "Signed?"]]
+        for sq in squads:
+            srows.append([
+                (sq.get("body_id") or "—")[:14],
+                (sq.get("team_name") or "—")[:20],
+                str(len(sq.get("members") or [])),
+                (sq.get("submission_status") or "Draft").replace("_", " "),
+                "Yes" if sq.get("signed_copy_url") else "—",
+            ])
+        story.append(_tbl(srows, col_widths=[3.5*cm, 5*cm, 2*cm, 3.5*cm, 3*cm]))
+
+    # ─── § 8 · Unified Budget Rollup ───
+    if budgets:
+        story.append(PageBreak())
+        story.append(Paragraph("Unified Budget Rollup", h2))
+        brows = [["Body", "Scope", "Status", "Allocated ₹", "Approved ₹"]]
+        total_alloc = total_appr = 0
+        for b in budgets:
+            alloc = float(b.get("total_inr") or 0)
+            appr  = float(b.get("approved_total_inr") or 0)
+            total_alloc += alloc; total_appr += appr
+            brows.append([
+                (b.get("body_id") or "—")[:14],
+                (b.get("scope") or "—")[:14],
+                (b.get("status") or "—").replace("_", " "),
+                f"{alloc:,.0f}",
+                f"{appr:,.0f}",
+            ])
+        brows.append(["", "", "TOTAL", f"{total_alloc:,.0f}", f"{total_appr:,.0f}"])
+        story.append(_tbl(brows, col_widths=[3*cm, 3*cm, 4*cm, 3.5*cm, 3.5*cm]))
+
+    # ─── § 9 · Invoices ───
+    if invoices:
+        story.append(Paragraph(f"Invoices ({len(invoices)} rows)", h2))
+        irows = [["#", "Ref", "Vendor / Head", "Date", "Amount ₹", "Status"]]
+        total_inv = 0
+        for i, inv in enumerate(invoices, 1):
+            amt = float(inv.get("total_inr") or 0)
+            total_inv += amt
+            irows.append([
+                str(i),
+                (inv.get("invoice_ref") or inv.get("invoice_no") or "—")[:14],
+                (inv.get("vendor_name") or inv.get("head_key") or "—")[:22],
+                inv.get("invoice_date") or "—",
+                f"{amt:,.0f}",
+                (inv.get("status") or "—").replace("_", " "),
+            ])
+        irows.append(["", "", "", "TOTAL", f"{total_inv:,.0f}", ""])
+        story.append(_tbl(irows, col_widths=[0.8*cm, 3*cm, 5*cm, 2.5*cm, 3*cm, 2.7*cm]))
+
+    # ─── § 10 · MPCA Deductions / Adjustments ───
+    # Read the deduction rows from the tournament's unified_budget_snapshot if present
+    snap = t.get("unified_budget_snapshot") or {}
+    ded_items = []
+    for row in snap.get("body_rows") or []:
+        for d in row.get("deductions") or []:
+            ded_items.append((row.get("body_id") or "—", d))
+    if ded_items:
+        story.append(Paragraph("MPCA Deductions / Adjustments", h2))
+        drows = [["Body", "Reason", "Amount ₹"]]
+        total_ded = 0
+        for body_code, d in ded_items:
+            amt = float(d.get("amount_inr") or 0)
+            total_ded += amt
+            drows.append([body_code[:14], (d.get("reason") or "—")[:40], f"{amt:,.0f}"])
+        drows.append(["", "TOTAL", f"{total_ded:,.0f}"])
+        story.append(_tbl(drows, col_widths=[3*cm, 11*cm, 3*cm]))
+
+    # ─── § 11 · Financial Summary ───
+    story.append(PageBreak())
+    story.append(Paragraph("Financial Summary", h2))
+    fsr = [
+        ["Approved budget",             f"{fs['budget']['total_inr']:,.0f}"],
+        ["Actual invoices",             f"{fs['actuals']['invoices_inr']:,.0f}"],
+        ["Extra expenses approved",     f"{fs['actuals']['extras_inr']:,.0f}"],
+        ["Match officials' DA",         f"{fs['actuals']['match_officials_da_inr']:,.0f}"],
+        ["Total actual spend",          f"{fs['actuals']['total_spend_inr']:,.0f}"],
+        ["Variance vs budget",          f"{fs['variance_inr']:,.0f}"],
+        ["Claim requested",             f"{fs['claim']['requested_inr']:,.0f}"],
+        [f"Claim approved by {'MPCA' if owner == 'MPCA' else owner}",  f"{fs['claim']['approved_inr']:,.0f}"],
+        ["Payment received",            f"{fs['receipts']['total_inr']:,.0f}"],
+        ["Outstanding",                 f"{fs['receipts']['outstanding_inr']:,.0f}"],
+    ]
+    fs_tbl = Table(fsr, colWidths=[10*cm, 7*cm])
+    fs_tbl.setStyle(TableStyle([
+        ("BOX",         (0, 0), (-1, -1), 0.5, colors.grey),
+        ("INNERGRID",   (0, 0), (-1, -1), 0.25, colors.lightgrey),
+        ("FONTSIZE",    (0, 0), (-1, -1), 9),
+        ("FONTNAME",    (0, 0), (0, -1), "Helvetica-Bold"),
+        ("BACKGROUND",  (0, 0), (0, -1), colors.HexColor("#f4ede0")),
+        ("ALIGN",       (1, 0), (1, -1), "RIGHT"),
+    ]))
+    story.append(fs_tbl)
+
+    # ─── § 12 · Payment Log ───
+    if receipts:
+        story.append(Paragraph(f"Payments Received ({len(receipts)} entries)", h2))
+        prows = [["#", "Date", "UTR / Ref", "Amount ₹", "Note"]]
+        for i, r in enumerate(receipts, 1):
+            prows.append([
+                str(i),
+                r.get("receipt_date") or "—",
+                (r.get("utr") or r.get("reference") or "—")[:20],
+                f"{float(r.get('amount_inr') or 0):,.0f}",
+                (r.get("notes") or "—")[:30],
+            ])
+        story.append(_tbl(prows, col_widths=[0.8*cm, 2.2*cm, 4.5*cm, 3*cm, 6.5*cm]))
+
+    # ─── § 13 · Signed Artifact Links ───
+    signed_links = []
+    # Squad signed PDFs
+    for sq in squads:
+        if sq.get("signed_copy_url"):
+            signed_links.append((f"Squad · {sq.get('body_id')}", sq["signed_copy_url"]))
+    # Closure signed URL
+    if t.get("closure_signed_url"):
+        signed_links.append(("Signed closure PDF", t["closure_signed_url"]))
+    if signed_links:
+        story.append(Paragraph("Signed Artifacts on File", h2))
+        for label, url in signed_links:
+            story.append(Paragraph(
+                f"• {label}: <a href='{url}' color='#7a1e2b'>{url[:70]}{'…' if len(url) > 70 else ''}</a>",
+                body,
+            ))
+
+    # ─── § 14 · Issuer footer ───
+    story.append(Spacer(1, 24))
+    footer_org = "MPCA Secretariat" if owner == "MPCA" else header_org.title()
+    story.append(Paragraph(f"Issued by: <b>{footer_org}</b>", body))
+    story.append(Paragraph(f"Post: Hon. Secretary, {footer_org}", body))
+    story.append(Spacer(1, 24))
+    sig = Table([
+        ["Hon. Secretary", "Hon. Treasurer"],
+        ["", ""],
+        ["", ""],
+        ["___________________", "___________________"],
+        ["Signature & Seal",   "Signature & Seal"],
+    ], colWidths=[8*cm, 8*cm])
+    sig.setStyle(TableStyle([
+        ("FONTNAME",  (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",  (0, 0), (-1, -1), 8),
+        ("ALIGN",     (0, 0), (-1, -1), "CENTER"),
+    ]))
+    story.append(sig)
+
+    pdf.build(story)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'inline; filename="closure-{t.get("tournament_no", tid)}.pdf"',
+        },
+    )
+
+
 # ─────────────── MPCA-244 · Signed closure upload + close ───────────────
 
 class ClosureSignedUploadPayload(BaseModel):

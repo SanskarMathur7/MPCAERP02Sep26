@@ -556,6 +556,17 @@ const ClosureLetterPanel = ({ tournament, persona, canGenerate, onChange }) => {
                             {busy ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />} {letter ? "Regenerate" : "Generate"}
                         </button>
                     )}
+                    {/* MPCA-246 · Rich multi-section PDF (always available once
+                        anything downstream has data — tournament basics alone
+                        are enough for a legible skeleton). */}
+                    <a
+                        href={`${(typeof window !== "undefined" ? window.location.origin : "")}/api/tournaments/${tournament.id}/closure-letter/pdf`}
+                        target="_blank" rel="noreferrer"
+                        className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2 py-1 flex items-center gap-1"
+                        data-testid="closure-rich-pdf-btn"
+                    >
+                        <FileDown size={11} /> Rich PDF
+                    </a>
                     {letter && !isClosed && wiringCanClose && (
                         <button onClick={uploadSigned} disabled={busy} className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" data-testid="closure-upload-signed-btn">
                             <Upload size={11} /> {hasSignedPdf ? "Replace Signed" : "Upload Signed"}

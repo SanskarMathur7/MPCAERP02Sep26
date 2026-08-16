@@ -2,7 +2,7 @@
 import re
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
-from fastapi import HTTPException
+from fastapi import HTTPException, Header
 
 from core.infra import db, api_router
 from models import (
@@ -11,6 +11,7 @@ from models import (
     SpecialPerformance,
 )
 from core.helpers import _next_fixture_no
+from core.wiring_guard import assert_wiring_owner
 
 
 # ---------------- Fixtures ----------------
@@ -67,10 +68,19 @@ async def get_fixture(fid: str):
 
 
 @api_router.post("/fixtures", response_model=Fixture)
-async def create_fixture(payload: FixtureCreate):
+async def create_fixture(
+    payload: FixtureCreate,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+):
     t = await db.tournaments.find_one({"id": payload.tournament_id}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
+    # MPCA-243 · Ship 1 · Wiring-driven owner guard for calendar creation.
+    await assert_wiring_owner(
+        payload.tournament_id, "match_calendar", x_body_type, x_body_code,
+        action_label="fixture creation",
+    )
     if t["status"] not in ("Upcoming", "Squad_Selection", "In_Progress"):
         raise HTTPException(400, f"Cannot create fixtures for a tournament in status {t['status']}")
     fx_no = await _next_fixture_no(t.get("fiscal_cycle") or "2025-26")

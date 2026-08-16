@@ -35,9 +35,10 @@ from datetime import date
 from math import ceil
 from typing import Any, Dict, List, Optional
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Header
 
 from core.infra import api_router, db
+from core.wiring_guard import assert_wiring_owner, stamp_actor
 from models import BUDGET_HEADS_META, TRAVEL_HEADS_META
 
 
@@ -934,10 +935,25 @@ async def migrate_legacy_budgets(dry_run: bool = True):
 # ─────────────── MPCA-225 · Budget Freeze workflow ───────────────
 
 @api_router.post("/tournaments/{tid}/unified-budget/lock")
-async def lock_unified_budget(tid: str):
-    """MPCA-only · Snapshot the current unified budget, freeze it at a new
-    version, and block further recomputes from overwriting it."""
+async def lock_unified_budget(
+    tid: str,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
+):
+    """Snapshot the current unified budget, freeze it at a new version, and
+    block further recomputes from overwriting it.
+
+    MPCA-243 · Ship 1 · Wiring-driven — the persona's body_type must match
+    the tournament's `unified_budget.owner` (or `approver`) per the wiring
+    config. `locked_by` is stamped with the actual persona, not hardcoded
+    "MPCA"."""
     from datetime import datetime, timezone
+    # Guard first (also 404s if tournament missing)
+    owner, _cell = await assert_wiring_owner(
+        tid, "unified_budget", x_body_type, x_body_code,
+        action_label="budget lock",
+    )
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if t is None:
         raise HTTPException(404, "Tournament not found")
@@ -983,15 +999,23 @@ async def lock_unified_budget(tid: str):
         "is_locked": True,
         "locked_version": prev_version + 1,
         "locked_at": datetime.now(timezone.utc).isoformat(),
-        "locked_by": "MPCA",
+        "locked_by": stamp_actor(x_persona_name, x_body_code, x_body_type),
     }
     await db.tournaments.update_one({"id": tid}, {"$set": {"unified_budget_snapshot": snapshot}})
     return snapshot
 
 
 @api_router.post("/tournaments/{tid}/unified-budget/unlock")
-async def unlock_unified_budget(tid: str):
-    """MPCA-only · Unfreeze the snapshot so Divisions can request re-computes."""
+async def unlock_unified_budget(
+    tid: str,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+):
+    """Unfreeze the snapshot so the owning body can request re-computes.
+
+    MPCA-243 · Ship 1 · Wiring-driven — same owner rule as lock."""
+    await assert_wiring_owner(tid, "unified_budget", x_body_type, x_body_code,
+                              action_label="budget unlock")
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "unified_budget_snapshot": 1, "id": 1})
     if t is None:
         raise HTTPException(404, "Tournament not found")

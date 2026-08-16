@@ -279,6 +279,7 @@ async def assign_tournament_official(
     payload: _TmoCreate,
     x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
     x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
     x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
 ):
     await _wiring_owner_guard(tid, x_body_type, x_role_id)
@@ -316,7 +317,13 @@ async def assign_tournament_official(
         per_day_fee_inr=float(fee),
         per_day_da_inr=float(da),
         notes=payload.notes,
-        assigned_by=x_persona_name or "MPCA",
+        # MPCA-243 · Ship 1 · Stamp the actual assigning persona + body (not
+        # hardcoded "MPCA") so downstream audit shows who really posted the
+        # official for Division-owned tournaments (Inter-District etc.).
+        assigned_by=(
+            f"{x_persona_name} · {x_body_code}" if x_persona_name and x_body_code
+            else (x_persona_name or x_body_code or "MPCA")
+        ),
         official_name=off.get("full_name"),
         body_id=off.get("body_id"),
         tournament_name=t.get("name"),

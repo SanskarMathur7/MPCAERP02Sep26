@@ -15,10 +15,11 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 import uuid
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Header
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.infra import db, api_router
+from core.wiring_guard import assert_wiring_owner, stamp_actor
 
 
 # ─────────────────────────── Match Fixtures ───────────────────────────
@@ -141,9 +142,17 @@ async def list_all_matches(
 
 
 @api_router.post("/tournaments/{tid}/matches", response_model=TournamentMatch)
-async def create_tournament_match(tid: str, payload: TournamentMatchCreate):
+async def create_tournament_match(
+    tid: str,
+    payload: TournamentMatchCreate,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+):
     if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
         raise HTTPException(404, "Tournament not found")
+    # MPCA-243 · Ship 1 · Wiring guard for match calendar authoring.
+    await assert_wiring_owner(tid, "match_calendar", x_body_type, x_body_code,
+                              action_label="match creation")
     count = await db.tournament_matches.count_documents({"tournament_id": tid})
     m = TournamentMatch(tournament_id=tid, match_no=count + 1, **payload.model_dump())
     await db.tournament_matches.insert_one(m.model_dump())
@@ -151,7 +160,13 @@ async def create_tournament_match(tid: str, payload: TournamentMatchCreate):
 
 
 @api_router.patch("/tournaments/{tid}/matches/{mid}", response_model=TournamentMatch)
-async def patch_tournament_match(tid: str, mid: str, patch: TournamentMatchPatch):
+async def patch_tournament_match(
+    tid: str, mid: str, patch: TournamentMatchPatch,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+):
+    await assert_wiring_owner(tid, "match_calendar", x_body_type, x_body_code,
+                              action_label="match edit")
     updates = {k: v for k, v in patch.model_dump(exclude_none=True).items()}
     if updates:
         r = await db.tournament_matches.update_one({"id": mid, "tournament_id": tid}, {"$set": updates})
@@ -161,7 +176,13 @@ async def patch_tournament_match(tid: str, mid: str, patch: TournamentMatchPatch
 
 
 @api_router.delete("/tournaments/{tid}/matches/{mid}")
-async def delete_tournament_match(tid: str, mid: str):
+async def delete_tournament_match(
+    tid: str, mid: str,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+):
+    await assert_wiring_owner(tid, "match_calendar", x_body_type, x_body_code,
+                              action_label="match delete")
     r = await db.tournament_matches.delete_one({"id": mid, "tournament_id": tid})
     if r.deleted_count == 0:
         raise HTTPException(404, "Match not found")
@@ -594,7 +615,20 @@ class ClosureLetterPayload(BaseModel):
 
 
 @api_router.post("/tournaments/{tid}/closure-letter")
-async def generate_closure_letter(tid: str, payload: ClosureLetterPayload):
+async def generate_closure_letter(
+    tid: str,
+    payload: ClosureLetterPayload,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
+):
+    # MPCA-243 · Ship 1 · Wiring-driven owner guard. Closure follows the
+    # `finance_console.owner` per the wiring config (BCCI/Inter-Div = MPCA,
+    # District/School/Club/Camp = Division).
+    owner, _cell = await assert_wiring_owner(
+        tid, "finance_console", x_body_type, x_body_code,
+        action_label="closure letter generation",
+    )
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
@@ -625,7 +659,24 @@ async def generate_closure_letter(tid: str, payload: ClosureLetterPayload):
     now_iso = datetime.now(timezone.utc).isoformat()
     now_display = datetime.now(timezone.utc).strftime("%d %B, %Y")
 
-    letter = f"""MADHYA PRADESH CRICKET ASSOCIATION
+    # MPCA-243 · Ship 1 · Dynamic issuer header based on wiring owner. For
+    # tournaments where `finance_console.owner == "Division"` (District/School/
+    # Club/Camp), the issuing authority is the Division / District Secretariat,
+    # not MPCA. Fall back to MPCA-issued for owner=MPCA (BCCI/Inter-Div).
+    if owner in ("Division", "District"):
+        body_doc = await db.bodies.find_one({"code": t.get("host_body_id") or x_body_code}, {"_id": 0}) or {}
+        issuer_body_name = body_doc.get("name") or (t.get("host_body_id") or "Division Secretariat")
+        header_org      = issuer_body_name.upper()
+        default_issuer  = payload.issued_by_name or x_persona_name or f"{issuer_body_name} Secretariat"
+        default_post    = payload.issued_by_post or f"Hon. Secretary, {issuer_body_name}"
+        approver_line   = f"Claim approved by {issuer_body_name}:"
+    else:
+        header_org      = "MADHYA PRADESH CRICKET ASSOCIATION"
+        default_issuer  = payload.issued_by_name or "MPCA Secretariat"
+        default_post    = payload.issued_by_post or "Hon. Secretary, MPCA"
+        approver_line   = "Claim approved by MPCA:     "
+
+    letter = f"""{header_org}
 ─────────────────────────────────────
 TOURNAMENT CLOSURE CERTIFICATE
 
@@ -653,14 +704,14 @@ Variance vs budget:         ₹ {fs['variance_inr']:,.0f}
 
 REIMBURSEMENT
 Claim requested:            ₹ {fs['claim']['requested_inr']:,.0f}
-Claim approved by MPCA:     ₹ {fs['claim']['approved_inr']:,.0f}
+{approver_line}₹ {fs['claim']['approved_inr']:,.0f}
 Payment received:           ₹ {fs['receipts']['total_inr']:,.0f}
 Outstanding:                ₹ {fs['receipts']['outstanding_inr']:,.0f}
 
 {payload.additional_notes or ''}
 
-Issued by: {payload.issued_by_name or 'MPCA Secretariat'}
-Post:      {payload.issued_by_post or 'Hon. Secretary, MPCA'}
+Issued by: {default_issuer}
+Post:      {default_post}
 
 ── End of certificate ──
 """

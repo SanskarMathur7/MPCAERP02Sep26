@@ -791,11 +791,26 @@ async def finance_matrix(
         and host_body_id.startswith("DIST-")
         and host_body_id.endswith(f"-{body_code[-3:]}")
     )
+    # MPCA-243 · Ship 1 · Wiring-aware finance owner elevation. If the wiring
+    # says `finance_console.owner == "Division"` and the caller's body_type
+    # is Division (or their district lies under this Division), grant the
+    # State-equivalent aggregate view — matches user's intent that Divisions
+    # own the finance console for District/School/Club/Camp tournaments.
+    is_wiring_owner = False
+    try:
+        from core.wiring_guard import resolve_wiring_cell, _OWNER_TO_BODY_TYPES
+        fc_cell = await resolve_wiring_cell(tid, "finance_console")
+        fc_owner = (fc_cell or {}).get("owner")
+        if fc_owner and (x_body_type or "") in _OWNER_TO_BODY_TYPES.get(fc_owner, set()):
+            is_wiring_owner = True
+    except Exception:
+        pass
     is_state = (
         (x_body_type or "").lower() == "state"
         or body_code.upper() == "MPCA"
         or is_host
         or is_parent_div_of_host_dist
+        or is_wiring_owner
     )
     parts_query: Dict[str, Any] = {"tournament_id": tid, "removed_at": None}
     if not is_state and x_body_code:

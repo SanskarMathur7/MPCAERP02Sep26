@@ -226,15 +226,29 @@ class _HeadEditPayload(BaseModel):
     edited_by: Optional[str] = None
 
 
-_MPCA_EDITABLE_SCOPES = {"BCCI", "Inter_Divisional"}  # MPCA authors the budget for these
+_MPCA_EDITABLE_SCOPES = {"BCCI", "Inter_Divisional"}  # legacy fallback — used only when wiring is unresolvable
 
 
-def _may_edit_heads(tournament: dict, body_type: Optional[str]) -> bool:
-    """MPCA-editable-lines RBAC.
-    · MPCA (State) may edit only for BCCI / Inter_Divisional tournaments.
-    · Division (or District) may edit for every OTHER tournament scope
-      (Inter_District, Championship, Invitational, Club, School, etc.).
+async def _may_edit_heads(tournament: dict, body_type: Optional[str],
+                          body_code: Optional[str] = None) -> bool:
+    """MPCA-243 · Ship 1 · Wiring-driven edit permission.
+
+    Preferred path: read `unified_budget.owner` from wiring; caller's
+    body_type must sit within that owner's allowed set. Falls back to the
+    legacy scope map only when wiring cannot be resolved (defensive).
     """
+    tid = tournament.get("id")
+    if tid:
+        try:
+            from core.wiring_guard import resolve_wiring_cell, _OWNER_TO_BODY_TYPES
+            cell = await resolve_wiring_cell(tid, "unified_budget")
+            owner = cell.get("owner") if cell else None
+            if owner:
+                allowed = _OWNER_TO_BODY_TYPES.get(owner, {"State"})
+                return body_type in allowed
+        except Exception:
+            pass  # fall through to legacy
+    # Legacy fallback (should not fire in practice — wiring is always seeded)
     scope = (tournament.get("scope") or "").strip()
     if body_type == "State":
         return scope in _MPCA_EDITABLE_SCOPES
@@ -263,11 +277,11 @@ async def edit_budget_heads(
     tournament = await db.tournaments.find_one({"id": doc.get("tournament_id")}, {"_id": 0})
     if not tournament:
         raise HTTPException(404, "Parent tournament not found")
-    if not _may_edit_heads(tournament, x_body_type):
+    if not await _may_edit_heads(tournament, x_body_type, x_user_body_code):
         raise HTTPException(
             403,
-            "You may not edit line items on this budget. MPCA edits BCCI + "
-            "Inter-Divisional budgets; Divisions edit every other scope.",
+            "You may not edit line items on this budget for this tournament "
+            "type per the wiring config (unified_budget.owner mismatch).",
         )
     # Division can only edit their own body's budget row.
     if x_body_type in {"Division", "District"} and doc.get("body_id") != x_user_body_code:

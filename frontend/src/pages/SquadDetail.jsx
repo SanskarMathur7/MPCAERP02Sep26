@@ -510,7 +510,7 @@ const SquadDetail = () => {
                         </div>
                         {wiringSquadMode.mode === "Manual_PDF" ? (
                             <div>
-                                <b>Manual · PDF only</b> — the recommended flow is to upload a signed squad-list PDF (see the “Signed Copy” section below). The player picker still works and you may use it for record-keeping, but MPCA officially accepts the signed PDF for this tournament type.
+                                <b>Manual · PDF only</b> — this tournament type does not use the player register. Upload the signed squad-list PDF below to officially nominate players. The picker further down is faded because it is optional and used only for internal record-keeping.
                             </div>
                         ) : wiringSquadMode.mode === "Register_Linked" ? (
                             <div>
@@ -611,7 +611,20 @@ const SquadDetail = () => {
             )}
 
             {/* ─── 2-column body ─── */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6" data-testid="squad-detail-body">
+            {/* MPCA-241 · For Manual_PDF wiring types the picker is not the official
+                nomination surface — fade it out so users focus on the Signed PDF
+                upload below, but keep it interactive for internal record-keeping. */}
+            {wiringSquadMode?.mode === "Manual_PDF" && (
+                <div className="mb-2 border border-mpca-brass/40 bg-mpca-parchment/60 px-4 py-2 text-[10px] uppercase tracking-widest text-mpca-brass flex items-center gap-2" data-testid="squad-picker-fade-ribbon">
+                    <Info size={11} />
+                    <span className="font-mono">Picker below is optional · Manual PDF upload is the accepted flow for this tournament type</span>
+                </div>
+            )}
+            <div
+                className={"grid grid-cols-1 lg:grid-cols-5 gap-6 " + (wiringSquadMode?.mode === "Manual_PDF" ? "opacity-50 hover:opacity-100 transition-opacity duration-200" : "")}
+                data-testid="squad-detail-body"
+                data-picker-faded={wiringSquadMode?.mode === "Manual_PDF" ? "true" : "false"}
+            >
                 {/* LEFT · Player pool */}
                 <div className="lg:col-span-3 bulletin-card" data-testid="squad-pool-card">
                     <div className="px-5 py-3 border-b border-mpca-brass/20 flex items-center justify-between">

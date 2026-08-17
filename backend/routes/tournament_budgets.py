@@ -90,6 +90,8 @@ async def list_tournament_budgets(
     body_id: Optional[str] = None,
     status: Optional[TournamentBudgetStatus] = None,
     fiscal_cycle: Optional[str] = None,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
 ):
     q: dict = {}
     if tournament_id:
@@ -104,6 +106,30 @@ async def list_tournament_budgets(
     if fiscal_cycle:
         q["fiscal_cycle"] = fiscal_cycle
     docs = await db.tournament_budgets.find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
+
+    # MPCA-248 · Ship 3 for budgets · On_Submit visibility filter.
+    # If the tournament's wiring says `unified_budget.visibility == "On_Submit"`
+    # AND the caller is a State persona who is NOT the wiring owner, redact
+    # Draft/Sent_To_Division/Accepted_By_Division rows (numbers zeroed but
+    # identity + status kept so MPCA sees who exists but not the numbers yet).
+    if (x_body_type or "").lower() == "state" and tournament_id:
+        try:
+            from core.wiring_guard import resolve_wiring_cell, _OWNER_TO_BODY_TYPES
+            cell = await resolve_wiring_cell(tournament_id, "unified_budget")
+            visibility = (cell or {}).get("visibility")
+            owner = (cell or {}).get("owner") or "MPCA"
+            caller_in_owner = "State" in _OWNER_TO_BODY_TYPES.get(owner, set()) and owner == "MPCA"
+            _PRIVATE_STATUSES = {"Draft", "Sent_To_Division", "Accepted_By_Division", "Revision_Requested"}
+            if visibility == "On_Submit" and not caller_in_owner:
+                for d in docs:
+                    if d.get("status") in _PRIVATE_STATUSES:
+                        d["total_inr"] = 0
+                        d["approved_total_inr"] = None
+                        d["head_allocations"] = []
+                        d["_redacted"] = True
+                        d["_redacted_reason"] = "Awaiting body submission (On_Submit visibility)"
+        except Exception:
+            pass
     return docs
 
 

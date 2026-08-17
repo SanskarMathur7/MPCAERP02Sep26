@@ -1057,6 +1057,36 @@ async def get_closure_letter_pdf(tid: str):
 
     pdf.build(story)
     buf.seek(0)
+
+    # MPCA-249 · Optional appendix merge — download-only variant appends
+    # each linked signed PDF (squad signed sheets + closure signed PDF).
+    # Passed as ?merge_signed=1. Silently skips URLs that don't fetch as
+    # PDFs (private drives, dead links, image-only signed sheets) so the
+    # base certificate always renders.
+    if signed_links:
+        try:
+            import requests as _req
+            from pypdf import PdfWriter, PdfReader
+            writer = PdfWriter()
+            writer.append(fileobj=io.BytesIO(buf.getvalue()))
+            fetched = 0
+            for label, url in signed_links:
+                try:
+                    r = _req.get(url, timeout=8, allow_redirects=True)
+                    if r.status_code != 200 or not r.content.startswith(b"%PDF"):
+                        continue
+                    writer.append(fileobj=io.BytesIO(r.content))
+                    fetched += 1
+                except Exception:
+                    continue
+            if fetched:
+                out = io.BytesIO()
+                writer.write(out)
+                out.seek(0)
+                buf = out
+        except Exception:
+            pass  # fall through — base PDF still valid
+
     return Response(
         content=buf.getvalue(),
         media_type="application/pdf",

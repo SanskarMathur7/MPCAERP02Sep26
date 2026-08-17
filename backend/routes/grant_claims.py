@@ -41,6 +41,18 @@ class GrantClaimDoc(BaseModel):
     vault_doc_id: Optional[str] = None
 
 
+class GrantClaimExtraDoc(BaseModel):
+    """MPCA-250 · Optional supporting document (not required by the scheme).
+    Division uploads any number of these to strengthen their claim."""
+    model_config = ConfigDict(extra="ignore")
+    doc_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    description: str                                 # short label filled by Division
+    filename: Optional[str] = None
+    file_url: Optional[str] = None
+    uploaded_at: Optional[str] = None
+    uploaded_by: Optional[str] = None
+
+
 class GrantClaimBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     scheme_code: str
@@ -48,6 +60,7 @@ class GrantClaimBase(BaseModel):
     fiscal_cycle: str = "2025-26"
     claimed_amount_inr: float = 0.0
     notes: Optional[str] = None
+    purpose_of_claim: Optional[str] = None           # MPCA-250 · long-text purpose
 
 
 class GrantClaimAiSummary(BaseModel):
@@ -74,6 +87,7 @@ class GrantClaim(GrantClaimBase):
     body_name: Optional[str] = None
     status: GrantClaimStatus = "Draft"
     documents: List[GrantClaimDoc] = []
+    extra_documents: List[GrantClaimExtraDoc] = []   # MPCA-250 · supporting docs
     submitted_by: Optional[str] = None
     submitted_at: Optional[str] = None
     reviewed_by: Optional[str] = None
@@ -507,6 +521,16 @@ class SignedUploadPayload(BaseModel):
     signed_url: str
 
 
+class ExtraDocumentPayload(BaseModel):
+    description: str
+    file_url: str
+    filename: Optional[str] = None
+
+
+class PurposePatchPayload(BaseModel):
+    purpose_of_claim: str
+
+
 class MpcaPaymentPayload(BaseModel):
     utr: str
     amount_inr: float
@@ -575,8 +599,14 @@ async def grant_summary_pdf(cid: str, variant: str = "submission"):
     story.append(Spacer(1, 14))
 
     if doc.get("notes"):
-        story.append(Paragraph("<b>Purpose / Notes</b>", styles["Heading3"]))
+        story.append(Paragraph("<b>Notes</b>", styles["Heading3"]))
         story.append(Paragraph(doc["notes"], styles["Normal"]))
+        story.append(Spacer(1, 10))
+
+    # MPCA-250 · Purpose of claim (long text)
+    if doc.get("purpose_of_claim"):
+        story.append(Paragraph("<b>Purpose of Claim</b>", styles["Heading3"]))
+        story.append(Paragraph(doc["purpose_of_claim"].replace("\n", "<br/>"), styles["Normal"]))
         story.append(Spacer(1, 10))
 
     # Documents table
@@ -600,6 +630,28 @@ async def grant_summary_pdf(cid: str, variant: str = "submission"):
             ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
         ]))
         story.append(t2)
+        story.append(Spacer(1, 14))
+
+    # MPCA-250 · Extra supporting documents (with descriptions)
+    extras = doc.get("extra_documents") or []
+    if extras:
+        story.append(Paragraph("<b>Supporting Documents</b>", styles["Heading3"]))
+        erows = [["#", "Description", "Filename"]]
+        for i, e in enumerate(extras, 1):
+            erows.append([
+                str(i),
+                (e.get("description") or "")[:60],
+                (e.get("filename") or "—")[:40],
+            ])
+        t3 = Table(erows, colWidths=[1*cm, 10*cm, 6*cm])
+        t3.setStyle(TableStyle([
+            ("BOX",         (0, 0), (-1, -1), 0.5, colors.grey),
+            ("INNERGRID",   (0, 0), (-1, -1), 0.25, colors.lightgrey),
+            ("BACKGROUND",  (0, 0), (-1, 0), colors.HexColor("#7a5c2e")),
+            ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
+            ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+        ]))
+        story.append(t3)
         story.append(Spacer(1, 14))
 
     # AI verdict (approval variant only)
@@ -729,6 +781,57 @@ async def mark_grant_payment_made(
         link=f"/grant-claims/{cid}", related_type="grant_claim", related_id=cid,
         severity="info", kind="info",
     )
+    return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+# ─────── MPCA-250 · Supporting docs + purpose ───────
+
+@api_router.patch("/grant-claims/{cid}/purpose", response_model=GrantClaim)
+async def patch_purpose(cid: str, payload: PurposePatchPayload):
+    if not await db.grant_claims.find_one({"id": cid}, {"_id": 1}):
+        raise HTTPException(404, "Claim not found")
+    await db.grant_claims.update_one({"id": cid}, {"$set": {
+        "purpose_of_claim": payload.purpose_of_claim,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.post("/grant-claims/{cid}/extra-document", response_model=GrantClaim)
+async def add_extra_document(
+    cid: str, payload: ExtraDocumentPayload,
+    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+):
+    """Add an arbitrary supporting document (with description) to a claim."""
+    claim = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not claim:
+        raise HTTPException(404, "Claim not found")
+    entry = GrantClaimExtraDoc(
+        description=payload.description,
+        filename=payload.filename,
+        file_url=payload.file_url,
+        uploaded_at=datetime.now(timezone.utc).isoformat(),
+        uploaded_by=x_user_name,
+    ).model_dump()
+    extras = claim.get("extra_documents") or []
+    extras.append(entry)
+    await db.grant_claims.update_one({"id": cid}, {"$set": {
+        "extra_documents": extras,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+@api_router.delete("/grant-claims/{cid}/extra-document/{doc_id}", response_model=GrantClaim)
+async def remove_extra_document(cid: str, doc_id: str):
+    claim = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not claim:
+        raise HTTPException(404, "Claim not found")
+    extras = [e for e in (claim.get("extra_documents") or []) if e.get("doc_id") != doc_id]
+    await db.grant_claims.update_one({"id": cid}, {"$set": {
+        "extra_documents": extras,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
     return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
 
 

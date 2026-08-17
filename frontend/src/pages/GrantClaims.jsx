@@ -208,6 +208,51 @@ const GrantClaims = () => {
         if (!selected) return;
         window.open(`${BACKEND_URL}/api/grant-claims/${selected.id}/summary-pdf?variant=${variant}`, "_blank");
     };
+
+    // MPCA-250 · Purpose editor (long-text) + extra supporting document handlers
+    const [purposeDraft, setPurposeDraft] = useState("");
+    useEffect(() => { setPurposeDraft(selected?.purpose_of_claim || ""); }, [selected?.id, selected?.purpose_of_claim]);
+    const savePurpose = async () => {
+        try {
+            const { data } = await api.patch(`/grant-claims/${selected.id}/purpose`, { purpose_of_claim: purposeDraft });
+            setSelected(data);
+            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+    const [uploadingExtra, setUploadingExtra] = useState(false);
+    const addExtraDocument = async () => {
+        const description = window.prompt("Description of this supporting document:");
+        if (!description) return;
+        const inp = document.createElement("input");
+        inp.type = "file";
+        inp.onchange = async () => {
+            const file = inp.files?.[0];
+            if (!file) return;
+            setUploadingExtra(true);
+            try {
+                const fd = new FormData();
+                fd.append("file", file);
+                fd.append("related_type", "grant_claim");
+                fd.append("related_id", selected.id);
+                const { data: up } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+                const { data } = await api.post(`/grant-claims/${selected.id}/extra-document`, {
+                    description, file_url: up.url, filename: up.original_name,
+                });
+                setSelected(data);
+                setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+            } catch (e) { alert(e?.response?.data?.detail || e.message); }
+            finally { setUploadingExtra(false); }
+        };
+        inp.click();
+    };
+    const removeExtraDocument = async (docId) => {
+        if (!window.confirm("Remove this supporting document?")) return;
+        try {
+            const { data } = await api.delete(`/grant-claims/${selected.id}/extra-document/${docId}`);
+            setSelected(data);
+            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
     const uploadSignedSubmission = async () => {
         const url = window.prompt("Paste URL of the SIGNED submission summary PDF (Google Drive / S3 / any public link):");
         if (!url) return;
@@ -504,6 +549,75 @@ const GrantClaims = () => {
                             {/* MPCA-245 · Tab content — Details tab keeps existing AI summary + docs */}
                             {(tab === "details" || tab === "documents") && (
                             <>
+                            {/* MPCA-250 · Purpose of claim (long-text) — editable in Draft/Documents_Pending/Rejected */}
+                            {tab === "details" && (
+                            <div className="mb-4 border border-mpca-brass/30 p-3 bg-mpca-parchment/40" data-testid="purpose-editor">
+                                <div className="overline text-[9px] mb-1">Purpose of Claim</div>
+                                {!isMPCA && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status) ? (
+                                    <>
+                                        <textarea
+                                            rows={4}
+                                            className="input-heritage !text-sm w-full"
+                                            placeholder="Describe in detail the purpose for which this grant is being claimed…"
+                                            value={purposeDraft}
+                                            onChange={(e) => setPurposeDraft(e.target.value)}
+                                            data-testid="purpose-input"
+                                        />
+                                        <div className="mt-2 flex justify-end">
+                                            <button
+                                                onClick={savePurpose}
+                                                disabled={purposeDraft === (selected.purpose_of_claim || "")}
+                                                className="text-[10px] uppercase tracking-widest px-3 py-1 bg-mpca-oxblood text-mpca-ivory disabled:opacity-40"
+                                                data-testid="save-purpose-btn"
+                                            >Save Purpose</button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-[13px] text-mpca-charcoal whitespace-pre-wrap italic" data-testid="purpose-readonly">
+                                        {selected.purpose_of_claim || <span className="text-mpca-gray-dark">— No purpose recorded —</span>}
+                                    </div>
+                                )}
+                            </div>
+                            )}
+
+                            {/* MPCA-250 · Extra supporting docs — visible in both details + documents tabs */}
+                            <div className="mb-4 border border-mpca-brass/30 p-3" data-testid="extra-docs-panel">
+                                <div className="flex justify-between items-center mb-2">
+                                    <div className="overline text-[9px]">Supporting Documents (Optional) · {(selected.extra_documents || []).length}</div>
+                                    {!isMPCA && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status) && (
+                                        <button
+                                            onClick={addExtraDocument}
+                                            disabled={uploadingExtra}
+                                            className="text-[10px] uppercase tracking-widest px-3 py-1 border border-mpca-brass text-mpca-brass hover:bg-mpca-brass/10 disabled:opacity-40"
+                                            data-testid="add-extra-doc-btn"
+                                        >
+                                            <Upload size={11} className="inline mr-1" /> {uploadingExtra ? "Uploading…" : "Add Supporting Document"}
+                                        </button>
+                                    )}
+                                </div>
+                                {(selected.extra_documents || []).length === 0 ? (
+                                    <div className="text-[11px] text-mpca-gray-dark italic py-2">No supporting documents attached. Any extra evidence you upload here will also print in the summary PDF.</div>
+                                ) : (
+                                    <ul className="space-y-1">
+                                        {selected.extra_documents.map(e => (
+                                            <li key={e.doc_id} className="flex items-center justify-between text-[11px] p-2 bg-mpca-ivory border border-mpca-brass/20" data-testid={`extra-doc-${e.doc_id}`}>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-mpca-charcoal font-medium truncate">{e.description}</div>
+                                                    <a href={e.file_url} target="_blank" rel="noreferrer" className="text-[10px] text-mpca-oxblood underline truncate">{e.filename || "view file ↗"}</a>
+                                                </div>
+                                                {!isMPCA && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status) && (
+                                                    <button
+                                                        onClick={() => removeExtraDocument(e.doc_id)}
+                                                        className="ml-2 text-mpca-oxblood text-[10px]"
+                                                        data-testid={`remove-extra-doc-${e.doc_id}`}
+                                                    >✕</button>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+
                             {/* M38 · Claim-level AI Summary — visible whenever AI has run at least once */}
                             {selected.ai_summary && (
                                 <div className={`mb-4 p-4 border-2 ${

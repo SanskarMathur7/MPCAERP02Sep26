@@ -71,8 +71,8 @@ const NAV_DOMAINS = [
             { to: "/venues", label: "Grounds", icon: MapPinIcon },
             { to: "/players", label: "Player Register", icon: Users },
             { to: "/player-registrations", label: "Season Onboarding", icon: Users },
-            { to: "/match-officials", label: "Match Officials", icon: ShieldCheck },
-            { to: "/da-review", label: "DA Review Inbox", icon: FileCheck },
+            { to: "/match-officials", label: "Match Officials", icon: ShieldCheck, state_only: true },
+            { to: "/da-review", label: "DA Review Inbox", icon: FileCheck, state_only: true },
         ],
     },
     {
@@ -359,7 +359,13 @@ const AppLayout = ({ children }) => {
                                 </div>
                             )}
                             <ul className="space-y-0.5">
-                                {group.items.map((item) => (
+                                {group.items
+                                    // MPCA-247 · Per-item persona guard. Items marked `state_only`
+                                    // (e.g. DA Review Inbox, Match Officials Master) are hidden
+                                    // from Division / District Secretaries because MPCA owns
+                                    // all match-official fee & DA workflows in the ERP.
+                                    .filter((item) => !item.state_only || persona?.body_type === "State")
+                                    .map((item) => (
                                     <li key={item.to}>
                                         <NavLink
                                             to={item.to}

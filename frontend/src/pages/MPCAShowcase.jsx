@@ -1267,49 +1267,6 @@ const ModulesTab = () => (
                 );
             })}
         </div>
-
-        <H2>What&apos;s next — MPCA-254 alignment ship</H2>
-        <div className="border border-mpca-brass/40 bg-mpca-parchment/50 p-4 text-[12px] text-mpca-charcoal">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                    <div className="flex items-center gap-1.5 mb-1">
-                        <ArrowRight size={14} className="text-mpca-oxblood" />
-                        <span className="font-serif text-mpca-oxblood text-sm">Ship A · Compliance Chips</span>
-                    </div>
-                    Show <b>🟢 Wired · Following Governance</b> or <b>🟡 Wired · Legacy Flow</b> chips on the tournament type picker, tournament list, and detail headers.
-                </div>
-                <div>
-                    <div className="flex items-center gap-1.5 mb-1">
-                        <ArrowRight size={14} className="text-mpca-oxblood" />
-                        <span className="font-serif text-mpca-oxblood text-sm">Ship B · Promote Camps</span>
-                    </div>
-                    Migrate camps from the standalone <code>/camps</code> collection into <code>db.tournaments</code> with type-code <code>camp / coachingcamp / vacationcamp</code>, unifying them under the 10-step wiring.
-                </div>
-                <div>
-                    <div className="flex items-center gap-1.5 mb-1">
-                        <ArrowRight size={14} className="text-mpca-oxblood" />
-                        <span className="font-serif text-mpca-oxblood text-sm">Ship C · Sidebar Cleanup</span>
-                    </div>
-                    Hide the standalone Camps sidebar item for Division users once camps live inside the main tournaments list.
-                </div>
-            </div>
-        </div>
-
-        <Callout tone="info" title="Roadmap beyond MPCA-254">
-            <ul className="list-disc list-inside space-y-0.5">
-                <li>Drag-and-drop signed PDF uploader for grants (replaces the current URL-prompt).</li>
-                <li>Grant discussion notifications — ping the recipient on new messages.</li>
-                <li>Budget Version History &amp; Audit Log — chronological trail of budget revisions per (body, pool).</li>
-                <li>DA/TA multi-budget picker for officials · Scheme 3-B no-fee undertaking enforcement.</li>
-                <li>Bulk Payment UTR upload — CSV parser for treasurer to mark DA forms paid at scale.</li>
-                <li>Season Earnings Statement — Form 16A prefill per official.</li>
-                <li>KO Team Promoter — bulk swap placeholders for Knockout brackets.</li>
-                <li>Real SMTP wiring for production email notifications.</li>
-                <li>Phase VI — BCCI-level ball-by-ball online scoring tool.</li>
-                <li>Hindi i18n for the full application · Native mobile app for Player Registration.</li>
-                <li>Refactor: split bloated models.py into /backend/models/ domain files.</li>
-            </ul>
-        </Callout>
     </div>
 );
 

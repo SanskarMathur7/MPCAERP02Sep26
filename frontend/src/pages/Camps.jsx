@@ -40,7 +40,7 @@ const CampsPage = () => {
             ]);
             setCamps(c || []);
             setSchemes(s || []);
-            setInterDivTournaments((tournaments || []).filter((t) => t.tournament_scope === "Inter_Divisional"));
+            setInterDivTournaments((tournaments || []).filter((t) => t.tournament_scope === "Inter_Divisional" || t.scope === "Inter_Divisional"));
         } finally { setLoading(false); }
     };
     useEffect(() => { load(); }, []);

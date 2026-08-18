@@ -86,6 +86,7 @@ const EventCalendar = lazy(() => import("@/pages/EventCalendar"));
 const PlayerRegistrations = lazy(() => import("@/pages/PlayerRegistrations"));
 const PublicPlayerRegistration = lazy(() => import("@/pages/PublicPlayerRegistration"));
 const CampsPage = lazy(() => import("@/pages/Camps"));
+const CampDetail = lazy(() => import("@/pages/CampDetail"));
 const SchemesMaster = lazy(() => import("@/pages/SchemesMaster"));
 const TournamentMasterRegistry = lazy(() => import("@/pages/TournamentMasterRegistry"));
 const RateCardMaster = lazy(() => import("@/pages/RateCardMaster"));
@@ -232,6 +233,7 @@ function App() {
                             <Route path="/tournaments/:tid/squads/new" element={<Protected><SquadDetail /></Protected>} />
                             <Route path="/player-registrations" element={<Protected><PlayerRegistrations /></Protected>} />
                             <Route path="/camps" element={<Protected><CampsPage /></Protected>} />
+                            <Route path="/camps/:cid" element={<Protected><CampDetail /></Protected>} />
                             <Route path="/schemes" element={<Protected><SchemesMaster /></Protected>} />
                             <Route path="/tournament-master" element={<Protected><TournamentMasterRegistry /></Protected>} />
                             <Route path="/rate-cards" element={<Protected><RateCardMaster /></Protected>} />

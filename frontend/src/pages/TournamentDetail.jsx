@@ -645,6 +645,29 @@ const PreTournamentCampsPanel = ({ tournamentId, tournamentName, persona }) => {
                                 >
                                     Open Camp
                                 </button>
+                            ) : (isMPCA || persona?.body_code === p.body_code) ? (
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            // Derive fiscal cycle from current camp (if any exists) or default
+                                            const cycle = camps[0]?.fiscal_cycle || new Date().getFullYear() + "-" + String((new Date().getFullYear() + 1) % 100).padStart(2, "0");
+                                            const { data: created } = await api.post("/camps", {
+                                                body_id: p.body_code,
+                                                scheme_code: "3-D",
+                                                camp_type: "Pre_Tournament_Camp",
+                                                fiscal_cycle: cycle,
+                                                inter_division_tournament_id: tournamentId,
+                                                inter_division_tournament_name: tournamentName,
+                                                created_by: persona?.name,
+                                            });
+                                            navigate(`/camps/${created.id}`);
+                                        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+                                    }}
+                                    className="text-[10px] uppercase tracking-widest border border-mpca-brass text-mpca-brass hover:bg-mpca-brass hover:text-mpca-ivory px-3 py-1.5"
+                                    data-testid={`start-camp-${p.body_code}`}
+                                >
+                                    Start Camp
+                                </button>
                             ) : (
                                 <span className="text-[10px] text-mpca-oxblood italic">Auto-creates on tournament approval</span>
                             )}

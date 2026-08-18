@@ -21,13 +21,9 @@ const SECTION_STYLES = {
     "A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS": { header: "bg-mpca-brass/20 text-mpca-brass", cardBorder: "border-mpca-brass/40" },
 };
 
-const TYPE_OPTIONS = [
-    { value: "MPCA_InterDivisional", label: "MPCA · Inter-Divisional (MY Memorial, Madhavrao Scindia, JN Bhaya…)" },
-    { value: "MPCA_Championship", label: "MPCA · Championship (CT Sarwate, CS Nayudu, Nimbalkar…)" },
-    { value: "BCCI", label: "BCCI (Ranji, Vijay Hazare, Duleep, U-23, U-19, U-16)" },
-    { value: "Invitational", label: "Invitational" },
-    { value: "Other", label: "Other" },
-];
+// Gap E · Removed unused `TYPE_OPTIONS` legacy dropdown (pre-catalog flat
+// list). The 2-step Create-Tournament flow now uses `TOURNAMENT_TYPE_CATALOG`
+// cards in Step 1; no consumer read TYPE_OPTIONS after the M22 refactor.
 
 // Trimmed to formats that MPCA / Divisions actually schedule. Kept aligned with backend Literal.
 const FORMAT_OPTIONS = [

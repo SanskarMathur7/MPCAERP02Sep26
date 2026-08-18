@@ -25,14 +25,14 @@ _SCOPE_TO_TYPE = {
 
 # Ship 4 tournament_type_code prefix → wiring type_id (used when master-registry
 # lookup fails or the code is a slug that doesn't match a registry row).
+# Gap D · Trimmed BCCI prefixes to only the two catalog codes actually created
+# by the UI (`bcci_staging`, `away_participation`). The `bcci` prefix covers
+# both. Trophy-name prefixes (ranji/duleep/irani/nayudu/vijay_hazare/
+# syed_mushtaq_ali) were removed — no live tournament ever used them and the
+# stale Sample Ranji seed row was realigned to `bcci_staging` in Gap B.
 _CODE_TO_TYPE = {
     "bcci":                      "bcci",
-    "ranji":                     "bcci",
-    "vijay_hazare":              "bcci",
-    "syed_mushtaq_ali":          "bcci",
-    "duleep":                    "bcci",
-    "irani":                     "bcci",
-    "nayudu":                    "bcci",
+    "away_participation":        "bcci",
     "inter_div":                 "interdiv",
     "mpca_inter_div":            "interdiv",
     "inter_district":            "district",

@@ -22,6 +22,7 @@ const MpcaClaimReviewForm = () => {
     const [tournament, setTournament] = useState(null);
     const [body, setBody] = useState(null);
     const [summary, setSummary] = useState(null);
+    const [invoices, setInvoices] = useState([]);           // MPCA-258 · full invoice list on the review PDF
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -29,12 +30,14 @@ const MpcaClaimReviewForm = () => {
             try {
                 const { data: c } = await api.get(`/reimbursement-claims/${id}`);
                 setClaim(c);
-                const [t, s, b] = await Promise.all([
+                const [t, s, b, inv] = await Promise.all([
                     api.get(`/tournaments/${c.tournament_id}`).then((r) => r.data).catch(() => null),
                     api.get(`/reimbursement-claims/${id}/review-summary`).then((r) => r.data).catch(() => null),
                     api.get(`/bodies/${c.body_id}`).then((r) => r.data).catch(() => null),
+                    api.get(`/tournament-invoices`, { params: { tid: c.tournament_id, body_id: c.body_id } })
+                       .then((r) => r.data).catch(() => []),
                 ]);
-                setTournament(t); setSummary(s); setBody(b);
+                setTournament(t); setSummary(s); setBody(b); setInvoices(inv || []);
             } finally { setLoading(false); }
         })();
     }, [id]);
@@ -177,6 +180,49 @@ const MpcaClaimReviewForm = () => {
                             <td className="py-2 px-2 uppercase text-[10px] tracking-widest">Total Deducted</td>
                             <td className="py-2 px-2 text-right font-mono text-red-800">−{fmtINR(totalDeducted)}</td>
                             <td />
+                        </tr>
+                    </tbody>
+                </table>
+            )}
+
+            {/* Section C · Attached Invoices (Division-side ledger) */}
+            <h3 className="font-serif text-lg border-b border-black mb-2 mt-6">C. Attached Invoices ({invoices.length})</h3>
+            {invoices.length === 0 ? (
+                <div className="text-[11px] italic text-gray-500 mb-6">No invoices attached to this claim.</div>
+            ) : (
+                <table className="w-full text-[10px] border-collapse mb-6" data-testid="mpca-claim-invoices-table">
+                    <thead>
+                        <tr className="border-y border-black">
+                            <th className="text-left py-1 px-2 w-6">#</th>
+                            <th className="text-left py-1 px-2">Invoice Ref.</th>
+                            <th className="text-left py-1 px-2">Vendor</th>
+                            <th className="text-left py-1 px-2 w-20">Invoice No.</th>
+                            <th className="text-left py-1 px-2 w-20">Date</th>
+                            <th className="text-left py-1 px-2">Head</th>
+                            <th className="text-right py-1 px-2 w-20">Amount</th>
+                            <th className="text-right py-1 px-2 w-16">GST</th>
+                            <th className="text-right py-1 px-2 w-20">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {invoices.map((inv, i) => (
+                            <tr key={inv.id} className="border-b border-gray-200 align-top">
+                                <td className="py-1 px-2">{i + 1}</td>
+                                <td className="py-1 px-2 font-mono">{inv.invoice_ref}</td>
+                                <td className="py-1 px-2">{inv.vendor_name}</td>
+                                <td className="py-1 px-2 font-mono text-[9.5px]">{inv.invoice_no || "—"}</td>
+                                <td className="py-1 px-2">{fmtDate(inv.invoice_date)}</td>
+                                <td className="py-1 px-2">{(inv.allocations?.[0]?.head_label) || inv.budget_head_code}</td>
+                                <td className="py-1 px-2 text-right font-mono">{fmtINR(inv.amount_inr)}</td>
+                                <td className="py-1 px-2 text-right font-mono">{fmtINR(inv.gst_inr)}</td>
+                                <td className="py-1 px-2 text-right font-mono"><b>{fmtINR(inv.total_inr)}</b></td>
+                            </tr>
+                        ))}
+                        <tr className="border-y-2 border-black bg-gray-50 font-semibold">
+                            <td colSpan={6} className="py-2 px-2 uppercase text-[10px] tracking-widest">Invoice Grand Total</td>
+                            <td className="py-2 px-2 text-right font-mono">{fmtINR(invoices.reduce((a, b) => a + Number(b.amount_inr || 0), 0))}</td>
+                            <td className="py-2 px-2 text-right font-mono">{fmtINR(invoices.reduce((a, b) => a + Number(b.gst_inr || 0), 0))}</td>
+                            <td className="py-2 px-2 text-right font-mono">{fmtINR(invoices.reduce((a, b) => a + Number(b.total_inr || 0), 0))}</td>
                         </tr>
                     </tbody>
                 </table>

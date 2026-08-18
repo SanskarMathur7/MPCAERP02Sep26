@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, CheckCircle2, XCircle, ClipboardList } from "lucide-react";
+import { ArrowLeft, FileText, Eye, CheckCircle2, XCircle, ClipboardList } from "lucide-react";
 import { api, BACKEND_URL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
+import InvoicePreviewModal from "@/components/InvoicePreviewModal";
 
 const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 
@@ -354,6 +355,7 @@ export const ReimbursementClaimDetail = () => {
     const [loading, setLoading] = useState(true);
     const [approveOpen, setApproveOpen] = useState(false);
     const [approveAmt, setApproveAmt] = useState(0);
+    const [previewInvoice, setPreviewInvoice] = useState(null);   // MPCA-258 · preview modal state
     const [liveSpent, setLiveSpent] = useState(0);
     const [reviewSummary, setReviewSummary] = useState(null);
     const [tournament, setTournament] = useState(null);
@@ -568,8 +570,17 @@ export const ReimbursementClaimDetail = () => {
                                 <div className="col-span-4">{inv.vendor_name}</div>
                                 <div className="col-span-2 text-[10px] text-mpca-gray-dark">{inv.invoice_date}</div>
                                 <div className="col-span-2 text-right font-mono">{fmt(inv.total_inr)}</div>
-                                <div className="col-span-1 text-right">
-                                    {inv.file_url && <a href={`${BACKEND_URL}${inv.file_url}`} target="_blank" rel="noreferrer" className="text-mpca-brass" data-testid={`view-inv-file-${inv.id}`}><FileText size={12} /></a>}
+                                <div className="col-span-1 flex items-center justify-end gap-1.5">
+                                    {/* MPCA-258 · Preview modal — full invoice detail incl. head allocations, GST, eligibility. */}
+                                    <button
+                                        onClick={() => setPreviewInvoice(inv)}
+                                        className="text-mpca-oxblood hover:text-mpca-oxblood/70"
+                                        title="Preview invoice detail"
+                                        data-testid={`preview-inv-${inv.id}`}
+                                    >
+                                        <Eye size={13} />
+                                    </button>
+                                    {inv.file_url && <a href={`${BACKEND_URL}${inv.file_url}`} target="_blank" rel="noreferrer" className="text-mpca-brass" title="Open signed file" data-testid={`view-inv-file-${inv.id}`}><FileText size={12} /></a>}
                                 </div>
                             </div>
                         ))}
@@ -710,6 +721,15 @@ export const ReimbursementClaimDetail = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* MPCA-258 · Invoice preview modal — full detail on click */}
+            {previewInvoice && (
+                <InvoicePreviewModal
+                    invoice={previewInvoice}
+                    bodyName={claim?.body_name}
+                    onClose={() => setPreviewInvoice(null)}
+                />
             )}
         </div>
     );

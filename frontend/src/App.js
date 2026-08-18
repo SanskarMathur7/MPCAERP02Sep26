@@ -75,6 +75,16 @@ const MpcaClaimReviewForm = lazy(() => import("@/pages/MpcaClaimReviewForm"));
 const MatchOfficialDAVoucher = lazy(() => import("@/pages/MatchOfficialDAVoucher"));
 const MatchOfficialFinancePage = lazy(() => import("@/pages/MatchOfficialFinancePage"));
 const MPCAShowcase = lazy(() => import("@/pages/MPCAShowcase"));
+// Feb 2026 · Design-preview HUD dashboards (stakeholder proposal, isolated)
+const DesignPreviewLanding = lazy(() => import("@/pages/design-preview/Landing"));
+const DesignPreviewSeason = lazy(() => import("@/pages/design-preview/SeasonOverview"));
+const DesignPreviewGrants = lazy(() => import("@/pages/design-preview/GrantsBoard"));
+const DesignPreviewBudget = lazy(() => import("@/pages/design-preview/BudgetHealth"));
+const DesignPreviewCalendar = lazy(() => import("@/pages/design-preview/TournamentCalendar"));
+const DesignPreviewOfficials = lazy(() => import("@/pages/design-preview/OfficialsSquads"));
+const DesignPreviewFinance = lazy(() => import("@/pages/design-preview/FinancialFlow"));
+const DesignPreviewCompliance = lazy(() => import("@/pages/design-preview/ComplianceMatrix"));
+const DesignPreviewDivisions = lazy(() => import("@/pages/design-preview/DivisionScorecard"));
 const MyDAForms = lazy(() => import("@/pages/MyDAForms"));
 const SquadReview = lazy(() => import("@/pages/SquadReview"));
 const SquadDetail = lazy(() => import("@/pages/SquadDetail"));
@@ -131,6 +141,16 @@ function App() {
                             <Route path="/login" element={<Login />} />
                             <Route path="/disclosures-public" element={<Disclosures publicView />} />
                             <Route path="/showcase" element={<MPCAShowcase />} />
+                            {/* Feb 2026 · Design proposal preview — public routes so stakeholders can view without login */}
+                            <Route path="/design-preview" element={<DesignPreviewLanding />} />
+                            <Route path="/design-preview/season-overview" element={<DesignPreviewSeason />} />
+                            <Route path="/design-preview/grants-board" element={<DesignPreviewGrants />} />
+                            <Route path="/design-preview/budget-health" element={<DesignPreviewBudget />} />
+                            <Route path="/design-preview/tournament-calendar" element={<DesignPreviewCalendar />} />
+                            <Route path="/design-preview/officials-squads" element={<DesignPreviewOfficials />} />
+                            <Route path="/design-preview/financial-flow" element={<DesignPreviewFinance />} />
+                            <Route path="/design-preview/compliance-matrix" element={<DesignPreviewCompliance />} />
+                            <Route path="/design-preview/division-scorecard" element={<DesignPreviewDivisions />} />
                             <Route path="/verify/:uid" element={<Verify />} />
                             <Route path="/member-profile/:uid" element={<MemberProfile />} />
                             <Route path="/register/player/:token" element={<PublicPlayerRegistration />} />

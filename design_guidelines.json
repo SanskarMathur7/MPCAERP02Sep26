@@ -1,135 +1,161 @@
 {
-  "project_name": "MPCA ERP System",
-  "theme": "Dark/Heritage (Mixed)",
-  "archetype": "Archetype 5 (Jewel & Luxury) with Heritage Organic twists",
-  "design_philosophy": {
-    "vibe": "Classic, heritage, formal, ceremonial. Evokes a wood-paneled committee room at a heritage cricket pavilion (like Lord's or Eden Gardens).",
-    "core_principles": [
-      "No generic SaaS aesthetics. No 'AI slop' gradients or neon.",
-      "Embrace heritage cricket motifs: scoreboard typography layout, willow grain textures, brass/gold details, ivory paper backgrounds, deep pitch green and oxblood accents.",
-      "Typography hierarchy must evoke a printed annual report or formal club bulletin.",
-      "Animations must be slow, dignified, and ceremonial, rather than snappy or bouncy."
-    ]
+  "theme": "dark",
+  "project_context": {
+    "app_type": "dashboard",
+    "description": "Executive Analytics Command Center for MPCA (Madhya Pradesh Cricket Association) ERP. Hybrid of Data-first Analytics and Sports-broadcast HUD. Isolated under /design-preview/* routes.",
+    "emotional_tone": "Authoritative, live, technical, broadcast-native, data-dense, command-center."
   },
   "typography": {
-    "font_families": {
-      "headings": "Cormorant Garamond, serif",
-      "body": "Bricolage Grotesque, sans-serif",
-      "mono": "IBM Plex Mono, monospace"
-    },
-    "google_fonts_url": "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap",
-    "rules": {
-      "h1": "text-4xl sm:text-5xl lg:text-6xl font-serif tracking-tight font-medium text-mpca-green-dark",
-      "h2": "text-2xl sm:text-3xl lg:text-4xl font-serif tracking-tight font-medium text-mpca-green-dark",
-      "h3": "text-xl sm:text-2xl font-serif tracking-tight font-medium",
-      "body": "text-base font-sans leading-relaxed text-mpca-charcoal",
-      "overlines": "text-xs font-sans uppercase tracking-[0.2em] font-medium text-mpca-brass",
-      "labels": "text-sm font-sans font-medium text-mpca-charcoal"
-    }
+    "primary_font": "IBM Plex Sans",
+    "heading_font": "Bebas Neue",
+    "numeric_hero_font": "Bebas Neue",
+    "mono_font": "IBM Plex Mono",
+    "rules": [
+      "Use Bebas Neue (uppercase) for all big numeric hero counters (KPIs, Scores).",
+      "Use IBM Plex Sans for standard labels, body text, and tooltips.",
+      "Use IBM Plex Mono for tabular data, timestamps, and small financial figures.",
+      "Strictly NO rounded soft fonts. Use sharp tracking and aggressive weights for headings."
+    ]
   },
   "colors": {
-    "primary": {
-      "mpca-green-dark": "#0F291E",
-      "mpca-green": "#153F2D",
-      "mpca-green-light": "#1E523A"
-    },
-    "secondary": {
-      "mpca-oxblood": "#8A2832",
-      "mpca-burgundy-dark": "#4A151E"
+    "background": {
+      "base": "#0A1118",
+      "surface": "#111A24",
+      "surface_elevated": "#1A2634",
+      "surface_highlight": "#1E293B"
     },
     "accents": {
-      "mpca-brass": "#C5A059",
-      "mpca-gold": "#D4AF37",
-      "mpca-gold-light": "#EEDC9A"
-    },
-    "backgrounds": {
-      "mpca-ivory": "#FDFBF7",
-      "mpca-parchment": "#F4F1EA",
-      "mpca-wood-dark": "#1C140F"
+      "saffron": "#FF8A00",
+      "marigold": "#FFB703",
+      "crimson": "#E63946",
+      "pitch_green": "#2A9D8F",
+      "cyan_hud": "#00B4D8",
+      "oxblood": "#4A0404"
     },
     "text": {
-      "mpca-charcoal": "#1A1A1A",
-      "mpca-gray-dark": "#4A4A4A",
-      "mpca-gray": "#737373",
-      "on-dark": "#FDFBF7"
+      "primary": "#F8FAFC",
+      "secondary": "#94A3B8",
+      "muted": "#64748B",
+      "accent": "#00B4D8"
     },
     "borders": {
-      "light": "rgba(197, 160, 89, 0.2)",
-      "dark": "rgba(15, 41, 30, 0.15)",
-      "gold": "#C5A059"
+      "default": "#1E293B",
+      "highlight": "#334155"
     }
   },
-  "spacing_and_layout": {
-    "philosophy": "Generous spacing. The bento grids should have wider gaps, and sections should have 'breathing room' fitting of a luxury/heritage context.",
-    "section_padding": "py-24 md:py-32",
-    "container_padding": "px-6 md:px-12",
-    "gap_strategy": "gap-8 md:gap-12 for bento grid, gap-6 for dashboard metrics",
-    "borders": "Use strict structural borders (1px solid) to create a 'bulletin/register' look rather than floating soft shadows.",
-    "radii": "Use minimal rounding. rounded-none or rounded-sm for formal document feel. Buttons can be rounded-none or rounded."
+  "visual_enhancers": {
+    "cards": "Sharp-edged (rounded-none). Absolutely NO rounded-lg or rounded-md. Borders must be 1px solid #1E293B.",
+    "live_indicators": "Pulsing dots (bg-crimson or bg-pitch_green with animate-ping) next to 'Live' or 'Active' states to mimic broadcast graphics.",
+    "textures": "Use dark stadium lights backgrounds for the main landing page. Keep inner dashboard panels matte and flat to prevent data obfuscation.",
+    "glassmorphism": "Avoid soft glassmorphism. Use semi-transparent dark blocks (bg-surface/90) with sharp borders if overlapping is necessary."
   },
-  "components_strategy": {
-    "cards": {
-      "dashboard_stats": "Flat background (mpca-ivory), 1px subtle brass/gold border (border-[#C5A059]/30), no soft shadows. Sharp corners or rounded-sm.",
-      "persona_cards": "Wood-paneled or Pitch Green textured backgrounds. High contrast serif text for the roles (President, Secretary, etc.), mimicking a blazer pocket or formal nameplate.",
-      "member_register": "Table layout with strict horizontal rules, reminiscent of a printed ledger. Row hover should just be a subtle background tint (mpca-parchment)."
+  "component_patterns": {
+    "hero_counters": "Large Bebas Neue numbers (text-5xl to text-6xl) in saffron or cyan, accompanied by small all-caps mono labels with wide tracking (tracking-widest).",
+    "ticker_strip": "Use react-fast-marquee. Deep background (bg-black), bright mono text. Separate items with discrete separators like ' /// ' or a solid square block.",
+    "kanban_board": "Sharp columns with deep navy backgrounds (bg-[#0A1118]), 1px border. Cards within have left-border colored based on status.",
+    "hud_panels": "Broadcast style panels with header strips (bg-surface_elevated) containing a mono title, followed by dense data or ECharts instances below."
+  },
+  "grids_and_layouts": {
+    "bento_density": "High density grids (Data-first Analytics). Use grid-cols-1 md:grid-cols-4 lg:grid-cols-12 with tight gaps (gap-4 or gap-6).",
+    "spacing": "Tight padding inside cards (p-4 or p-6) to maximize data density. Keep outer margins generous."
+  },
+  "motion": {
+    "page_load": "Staggered fade-ins and subtle slide-ups using framer-motion (staggerChildren: 0.05, y: 10, duration: 0.3).",
+    "hover_states": "Slight scale (scale: 1.01) and border color change (border-cyan_hud). No heavy soft box-shadows; rely on sharp border highlights.",
+    "live_elements": "CSS animate-ping for live dots. Smooth continuous scroll for tickers."
+  },
+  "echarts_config_guidance": {
+    "general": "Dark theme configured by default. backgroundColor: 'transparent', textStyle: { fontFamily: 'IBM Plex Sans', color: '#94A3B8' }, tooltip: { backgroundColor: '#111A24', borderColor: '#334155', textStyle: { color: '#F8FAFC' } }",
+    "sankey": "Used for Financial flow and Officials workload. Nodes: sharp rectangles (itemStyle: { borderWidth: 1, borderColor: '#FFF' }), Links: gradient opacity (lineStyle: { color: 'gradient', curveness: 0.5 }).",
+    "treemap": "Used for Budget Heads. Deep hierarchy. Use dark borders between blocks (itemStyle: { borderColor: '#0A1118', borderWidth: 2 }).",
+    "calendar_heatmap": "Used for Match density. Color range from #1A2634 (low) to #2A9D8F (high) to #FF8A00 (very high). Split by months.",
+    "radar": "Used for Division Scorecard. Sharp angular polygons. No smooth curves. Area styled with low opacity and high border width.",
+    "gauge": "Used for Budget Utilisation. Broadcast speedometer style. Split into distinct color segments (green, yellow, red)."
+  },
+  "page_blueprints": [
+    {
+      "route": "/design-preview",
+      "name": "Design Proposal Landing",
+      "layout": "Grid of 8 sharp-edged cards (image background with heavy dark overlay bg-black/80). Prominent banner at top: 'DESIGN PROPOSAL v1 - Stakeholder Preview Only'.",
+      "elements": "Cards should have big numbers (01-08) and crisp descriptions."
     },
-    "buttons": {
-      "primary": "bg-mpca-green-dark text-on-dark border border-transparent hover:bg-mpca-green hover:border-mpca-brass transition-all duration-300 font-sans tracking-wide uppercase text-sm px-6 py-3",
-      "secondary": "bg-transparent text-mpca-green-dark border border-mpca-brass hover:bg-mpca-parchment transition-all duration-300 font-sans tracking-wide uppercase text-sm px-6 py-3"
+    {
+      "route": "/design-preview/season-overview",
+      "name": "Season Overview / Home Command Centre",
+      "layout": "Top row: Live match ticker. Second row: Hero KPIs (Tournaments, Matches, active claims). Third row: Toss countdowns, quick drill-downs.",
+      "elements": "Pulse dots for active matches. Bebas Neue hero numbers."
     },
-    "forms": {
-      "inputs": "bg-mpca-ivory border-b border-mpca-gray/30 rounded-none focus:border-mpca-brass focus:ring-0 focus:outline-none px-0 py-2 (Underlined style, like a physical form).",
-      "labels": "text-xs uppercase tracking-wider text-mpca-gray-dark mb-1 font-semibold"
+    {
+      "route": "/design-preview/grants-board",
+      "name": "Grant Claims Lifecycle Board",
+      "layout": "Kanban board layout. 6 columns representing states (Draft -> Docs Pending -> Submitted -> Under Review -> Approved -> Payment Made).",
+      "elements": "Mini waterfall chart and ageing distribution histogram in a side panel or top summary row."
     },
-    "navigation": {
-      "sidebar": "Deep pitch green background (bg-mpca-green-dark) with gold/brass icons and text (text-mpca-gold-light/70 hover:text-mpca-gold-light). Sidebar sections for 'Phase 2/3/4' should be visibly disabled/greyed out with opacity-40.",
-      "header": "Solid mpca-ivory background, bottom border in subtle brass. Sticky. Z-50."
+    {
+      "route": "/design-preview/budget-health",
+      "name": "Unified Budget Health",
+      "layout": "Left wide panel: Treemap of budget heads. Right panels: Actual-vs-budget gauges, top-5 overrun heads (horizontal bars), invoice velocity sparkline.",
+      "elements": "ECharts Treemap and Gauge components."
+    },
+    {
+      "route": "/design-preview/tournament-calendar",
+      "name": "Tournament Calendar & Performance",
+      "layout": "Top full-width: Annual calendar heatmap. Bottom split: Tournament Gantt chart and format-mix donut.",
+      "elements": "ECharts Calendar and custom Gantt view."
+    },
+    {
+      "route": "/design-preview/officials-squads",
+      "name": "Match Officials & Squads",
+      "layout": "Top half: Officials workload Sankey diagram. Bottom half: Squad-selection funnel per format and fitness radar.",
+      "elements": "Dense ECharts integration. Tooltips are critical here."
+    },
+    {
+      "route": "/design-preview/financial-flow",
+      "name": "Financial Flow",
+      "layout": "Hero full-width: Big Sankey diagram (BCCI -> MPCA -> Divisions -> Districts -> Clubs). Bottom: Monthly cash-flow area chart and treasurer's outflow ticker.",
+      "elements": "Sankey is the focal point. Use distinct vibrant colors for different entities."
+    },
+    {
+      "route": "/design-preview/compliance-matrix",
+      "name": "Compliance / Wiring Status",
+      "layout": "Main component: 8 tournament types × 10 wiring steps compliance heatmap. Right sidebar: Red-flag alerts and 'days-since-last-audit' list.",
+      "elements": "ECharts heatmap. Use crimson for red-flags and pitch green for compliant."
+    },
+    {
+      "route": "/design-preview/division-scorecard",
+      "name": "Division Scorecard",
+      "layout": "Left: Comparative ranking list (10 divisions) with horizontal bar rows. Right: Radar chart overlaying top 3 divisions for comparison.",
+      "elements": "ECharts Radar and Bar."
     }
-  },
-  "surfaces_and_textures": {
-    "overlays": "Never use solid black overlays. Use bg-mpca-green-dark/70 for dark overlays on hero images to keep the green/heritage tint.",
-    "patterns": "Use generated textures for specific high-end areas (e.g. login cards, hero section). Use CSS variables for subtle paper grain on the main app background."
-  },
+  ],
   "media": {
     "images": {
-      "hero_cricket_ground": "https://images.unsplash.com/photo-1512719994953-eabf50895df7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwxfHxoZXJpdGFnZSUyMGNyaWNrZXQlMjBncm91bmQlMjBwYXZpbGlvbnxlbnwwfHx8fDE3Nzg5MDY2ODR8MA&ixlib=rb-4.1.0&q=85",
-      "vintage_bat_ball": "https://images.unsplash.com/photo-1674986778924-7a33c1531443?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxoZXJpdGFnZSUyMGNyaWNrZXQlMjBncm91bmQlMjBwYXZpbGlvbnxlbnwwfHx8fDE3Nzg5MDY2ODR8MA&ixlib=rb-4.1.0&q=85",
-      "leather_balls": "https://images.unsplash.com/photo-1700223613081-fff47f71f180?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwzfHx2aW50YWdlJTIwbGVhdGhlciUyMGNyaWNrZXQlMjBiYWxsJTIwYmF0fGVufDB8fHx8MTc3ODkwNjY4NHww&ixlib=rb-4.1.0&q=85"
-    },
-    "textures": {
-      "pitch_green_texture": "https://static.prod-images.emergentagent.com/jobs/152b2070-1a30-4f04-95c7-4d26fa8ac612/images/006d8e6e2750829d93b81c24cc15a67d5c4bd05efa0d02575d5bd2574bd85827.png",
-      "willow_wood_texture": "https://static.prod-images.emergentagent.com/jobs/152b2070-1a30-4f04-95c7-4d26fa8ac612/images/b98a340e69b7a7bf56b395768a44425db8c876edd0194e80d32af3cf0b913c33.png",
-      "vintage_scoreboard": "https://static.prod-images.emergentagent.com/jobs/152b2070-1a30-4f04-95c7-4d26fa8ac612/images/2064a62584872a486cf02834d876d9ef2064bc9f4cc65f6ff4cbeee51b2bcf5d.png"
-    },
-    "usage_instructions": {
-      "hero_cricket_ground": "Use as the background for the Landing page hero section. Overlay with bg-mpca-green-dark/80 for text contrast.",
-      "pitch_green_texture": "Use for the background of the Demo login persona cards, particularly for executive roles like President or Secretary.",
-      "willow_wood_texture": "Use for accent sidebars, call-out banners, or the Committee Member persona card.",
-      "vintage_scoreboard": "Use for the Dashboard stats/metrics area background, overlaid with high opacity ivory/green so numbers pop out.",
-      "vintage_bat_ball": "Use as a supporting image in the Public Disclosures or About section."
+      "stadium_background": {
+        "url": "https://images.unsplash.com/photo-1750716413756-b66624b64ce4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwxfHxjcmlja2V0JTIwc3RhZGl1bSUyMGxpZ2h0cyUyMGRhcmt8ZW58MHx8fHwxNzg3MDYxNjA0fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Cricket stadium lights at night. Use as a heavy overlay background for the command center landing page to establish the broadcast feel."
+      },
+      "texture": {
+         "url": "https://images.unsplash.com/photo-1629197520635-16570fbd0bb3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGRhcmslMjBncmVlbiUyMHNwb3J0cyUyMHRleHR1cmV8ZW58MHx8fHwxNzg3MDYxNjA1fDA&ixlib=rb-4.1.0&q=85",
+         "description": "Abstract dark green texture for specific HUD panel background accents (e.g., live matches)."
+      }
     }
   },
-  "motion_and_interactions": {
-    "transitions": "Use slow, deliberate transitions. transition-all duration-500 ease-in-out.",
-    "hover": "Subtle lifts (-translate-y-0.5) with a brass border highlight. Do not use heavy bouncy effects.",
-    "loading": "Use a slow fade or a stately sliding animation. No rapid spinners."
+  "instructions_to_main_agent": {
+    "dependencies": "yarn add echarts echarts-for-react react-fast-marquee @phosphor-icons/react lucide-react framer-motion clsx tailwind-merge",
+    "routing": "Create all routes strictly under /design-preview/*. Do not alter existing routes.",
+    "data_fetching": "Mock realistic sample data client-side for these preview pages. Label as 'sample data' in tooltips to indicate this is a design demo.",
+    "tailwind_config": "Extend colors with the specific MPCA HUD palette (e.g., mpca-navy: '#0A1118', mpca-surface: '#111A24', mpca-saffron: '#FF8A00', mpca-crimson: '#E63946', mpca-pitch: '#2A9D8F') in tailwind.config.js.",
+    "components_path": "/app/frontend/src/components/ui",
+    "testing": "All interactive and key informational elements MUST include a data-testid attribute formatted as kebab-case role-based (e.g., data-testid='kpi-card-matches')."
   },
-  "accessibility_and_testing": {
-    "contrast": "Ensure text over wood/pitch green textures has sufficient contrast, using text-mpca-ivory or text-mpca-gold-light.",
-    "testing": "All interactive and key informational elements MUST include a 'data-testid' attribute (e.g., data-testid='login-president-card')."
-  },
-  "icons": {
-    "library": "lucide-react",
-    "style": "Use thin stroke weights (strokeWidth={1.5}) to match the formal, elegant feel of the serif typography."
-  },
-  "instructions_to_main_agent": [
-    "Inject the google_fonts_url into the index.html or main stylesheet.",
-    "Configure Tailwind with the custom colors provided (mpca-green-dark, mpca-ivory, mpca-brass, etc.) and map them to standard classes if using Shadcn.",
-    "Use Bricolage Grotesque as the default sans (for body, buttons, tags) and Cormorant Garamond for ALL headings.",
-    "Do NOT use standard rounded cards. Enforce `rounded-none` or `rounded-sm` heavily.",
-    "For the Demo login screen, create a visually striking grid of cards using the textures provided, each representing a persona (President, Hon. Secretary, Treasurer, Committee Member, Member, Public).",
-    "For the Membership Register, build a clean, ledger-style table rather than modern SaaS cards.",
-    "For Phase 2-5 features in the sidebar, ensure they are rendered but visually disabled (opacity-50, cursor-not-allowed) to show the full scope of the ERP.",
-    "Ensure the layout feels like a stately, wood-paneled digital document—a love letter to cricket heritage."
+  "universal_guidelines_for_main_agent": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Do NOT make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy, but keep borders sharp for this specific dashboard.",
+    "Do NOT use transparent backgrounds in headers, overlays, or dropdowns over content.",
+    "Every interaction needs micro-animations - hover states, transitions, entrance animations. Static = dead.",
+    "Do not use default rounded-lg. This design requires decisive angular language (rounded-none).",
+    "Never use AI assistant Emoji characters for icons.",
+    "All interactive elements MUST include a data-testid attribute."
   ]
 }

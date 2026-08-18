@@ -593,7 +593,21 @@ def _format_group_from_tournament(t: Dict[str, Any]) -> str:
 
 
 def _tournament_type_key(t: Dict[str, Any]) -> str:
-    """Best-effort map from Tournament.scope/tournament_type to a rate-card key."""
+    """Best-effort map from Tournament.scope/tournament_type to a rate-card key.
+
+    MPCA-Feb2026 · Gap A · Check `tournament_type` (explicit family) BEFORE
+    falling through to `scope`. BCCI tournaments default to `scope=Championship`
+    (per catalog), which previously masked the BCCI rate card lookup and
+    silently routed BCCI budgets to the Championship rate card.
+    """
+    tt = t.get("tournament_type") or ""
+    code = (t.get("tournament_type_code") or "").lower()
+    # 1. Explicit family label wins — BCCI + Camp are unambiguous.
+    if "BCCI" in tt or code.startswith("bcci") or code == "away_participation":
+        return "BCCI"
+    if "Camp" in tt or "Pre_Tournament" in tt or code.endswith("_camp") or code == "pre_camp":
+        return "Pre_Tournament_Camp"
+    # 2. Scope fallback for the remaining MPCA families.
     scope = t.get("scope") or ""
     if scope == "Inter_Divisional":
         return "Inter_Divisional"
@@ -601,11 +615,6 @@ def _tournament_type_key(t: Dict[str, Any]) -> str:
         return "Inter_District"
     if scope == "Championship":
         return "Championship"
-    tt = t.get("tournament_type") or ""
-    if "BCCI" in tt:
-        return "BCCI"
-    if "Camp" in tt or "Pre_Tournament" in tt:
-        return "Pre_Tournament_Camp"
     return "Inter_Divisional"
 
 

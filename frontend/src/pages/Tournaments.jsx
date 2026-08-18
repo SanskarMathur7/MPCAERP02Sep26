@@ -239,8 +239,13 @@ const Tournaments = () => {
                 ))}
             </div>
 
-            {/* MPCA-235 · Ship 4 · MPCA state visibility toggle */}
-            {isMpcaState && (hiddenCount > 0 || includeCampScoped) && (
+            {/* MPCA-235 · Ship 4 · MPCA state visibility toggle.
+               Only relevant for categories whose wiring cell has
+               mpca_visibility=On_Submit (Camps · Inter-School · Inter-Club).
+               BCCI, MPCA Inter-Div and generic ALL/Live views are always
+               real-time for MPCA — hide the banner there so users aren't
+               misled into thinking those tournaments are gated. */}
+            {isMpcaState && (hiddenCount > 0 || includeCampScoped) && !["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
                 <div className="mb-4 flex items-center gap-3 text-[11px]" data-testid="mpca-visibility-toggle">
                     <span className="uppercase tracking-widest text-mpca-brass">
                         {includeCampScoped
@@ -254,6 +259,16 @@ const Tournaments = () => {
                     >
                         {includeCampScoped ? "Focus on core" : "Show all"}
                     </button>
+                </div>
+            )}
+
+            {/* MPCA-259 · Positive realtime-visibility banner for BCCI / MPCA
+               Inter-Divisional / Championship filters, where MPCA sees every
+               action in real-time per the wiring matrix (mpca_visibility=Realtime). */}
+            {isMpcaState && ["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
+                <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-widest text-mpca-green-dark" data-testid="mpca-realtime-banner">
+                    <span className="w-1.5 h-1.5 rounded-full bg-mpca-green-dark" />
+                    Real-time visibility · MPCA sees every {filter === "BCCI" ? "BCCI" : (filter === "MPCA_Championship" ? "Championship" : "MPCA Inter-Divisional")} tournament action as it happens (per wiring)
                 </div>
             )}
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, MapPin, Calendar, Users, IndianRupee, Info, FileText, Loader2, Save } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -13,9 +13,14 @@ import CricketLoader from "@/components/CricketLoader";
  * planned-participant count. MPCA sees the same page in read-only aggregate
  * mode. Reciprocal-visitors management stays on the parent Tournament page
  * (Pre-Tournament Camps panel) since it is a fleet operation.
+ *
+ * MPCA-254 · Ship B — If the camp has been migrated to a first-class
+ * tournament (`migrated_to_tournament_id` set), redirect immediately to
+ * the tournament detail page so users don't get the legacy form.
  */
 const CampDetail = () => {
     const { cid } = useParams();
+    const navigate = useNavigate();
     const { persona } = useAuth();
     const [camp, setCamp] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -26,6 +31,11 @@ const CampDetail = () => {
         setLoading(true);
         try {
             const { data } = await api.get(`/camps/${cid}`);
+            // MPCA-254 · Ship B — Migrated camps live in db.tournaments now.
+            if (data?.migrated_to_tournament_id) {
+                navigate(`/tournaments/${data.migrated_to_tournament_id}`, { replace: true });
+                return;
+            }
             setCamp(data);
             setForm({
                 start_date: data.start_date || "",
@@ -37,7 +47,7 @@ const CampDetail = () => {
         } catch (e) { console.warn(e); setCamp(null); }
         finally { setLoading(false); }
     };
-    useEffect(() => { load(); }, [cid]);
+    useEffect(() => { load(); }, [cid]);   // eslint-disable-line react-hooks/exhaustive-deps
 
     const isOwner = persona?.body_code === camp?.body_id || persona?.body_type === "State";
     const canEdit = isOwner && ["Draft", "Documents_Pending", "Sent_To_Division"].includes(camp?.status || "Draft");

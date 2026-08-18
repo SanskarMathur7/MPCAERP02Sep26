@@ -74,6 +74,10 @@ class Camp(CampBase):
     created_by: Optional[str] = None
     auto_created_from_tournament: bool = False    # true if the auto-hook birthed it
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # MPCA-254 · Ship B — Populated after the camp is promoted into
+    # db.tournaments. If set, UI redirects the user to /tournaments/{id}.
+    migrated_to_tournament_id: Optional[str] = None
+    migrated_at: Optional[str] = None
 
 
 class CampCreate(CampBase):
@@ -167,6 +171,16 @@ async def create_camp(payload: CampCreate):
         "inter_division_tournament_name": idt_name,
     })
     await db.camps.insert_one(camp.model_dump())
+    # MPCA-254 · Ship B — Auto-promote the new camp to a first-class
+    # tournament immediately so the caller lands on the wired workspace.
+    try:
+        new_tid = await _promote_one_camp_to_tournament(camp.model_dump())
+        if new_tid:
+            camp.migrated_to_tournament_id = new_tid
+            camp.migrated_at = datetime.now(timezone.utc).isoformat()
+    except Exception as e:   # never let promotion failure block camp creation
+        import logging
+        logging.getLogger("mpca").warning("Auto-promotion of camp %s failed: %s", camp.id, e)
     return camp
 
 

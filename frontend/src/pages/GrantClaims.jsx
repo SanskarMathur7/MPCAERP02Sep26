@@ -5,6 +5,7 @@ import { api, BACKEND_URL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import VaultDocumentPicker from "@/components/VaultDocumentPicker";
+import SignedPdfUploadModal from "@/components/SignedPdfUploadModal";
 
 // MPCA-245 · Progress ribbon steps for grant claim lifecycle
 const GRANT_STEPS = [
@@ -50,6 +51,104 @@ const fmt = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 const TOURNAMENT_SCHEME_CODES = new Set(["2-A", "2-B", "2-C", "2-D", "2-E", "3-C", "3-D", "9-BCCI"]);
 const isTournamentScheme = (s) => s && (TOURNAMENT_SCHEME_CODES.has(s.scheme_code) || s.scheme_type === "Reimbursement" || (s.frequency || "").toLowerCase().includes("tournament"));
 
+// Feb 2026 · Payment modal — replaces the 4 chained window.prompt() calls
+// with a proper 4-field form + optional signed-receipt drop zone.
+const PaymentModal = ({ claim, persona, onClose, onSubmit }) => {
+    const [utr, setUtr] = useState("");
+    const [amount, setAmount] = useState(claim?.approved_amount_inr ?? "");
+    const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+    const [receiptRec, setReceiptRec] = useState(null);
+    const [showDropzone, setShowDropzone] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState(null);
+
+    const canSubmit = utr.trim() && amount !== "" && !isNaN(parseFloat(amount)) && date && !submitting;
+
+    const doSubmit = async () => {
+        setError(null);
+        setSubmitting(true);
+        try {
+            await onSubmit({
+                utr: utr.trim(),
+                amount_inr: parseFloat(amount),
+                payment_date: date,
+                receipt_url: receiptRec?.url || null,
+            });
+        } catch (e) {
+            setError(e?.response?.data?.detail || e.message || "Failed to record payment");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" role="dialog" aria-modal="true" data-testid="payment-modal">
+            <div className="bg-mpca-parchment w-full max-w-lg border-2 border-mpca-brass shadow-2xl">
+                <div className="flex items-start justify-between px-5 py-4 border-b border-mpca-brass/40 bg-mpca-ivory">
+                    <div className="flex items-start gap-3">
+                        <IndianRupee size={22} strokeWidth={1.5} className="text-mpca-green-dark mt-0.5 flex-shrink-0" />
+                        <div>
+                            <h2 className="font-serif text-lg text-mpca-green-dark leading-snug">Mark Payment Made</h2>
+                            <p className="text-[11px] text-mpca-gray-dark italic mt-1">Records the disbursal against this approved claim and moves it to <em>Payment Made</em>.</p>
+                        </div>
+                    </div>
+                    <button type="button" onClick={onClose} aria-label="Close" className="text-mpca-gray-dark hover:text-mpca-oxblood transition-colors" data-testid="payment-modal-close-btn">
+                        <XCircle size={18} strokeWidth={1.5} />
+                    </button>
+                </div>
+                <div className="p-5 space-y-3">
+                    <label className="block">
+                        <div className="overline text-[9px] mb-1">UTR / Transaction Ref *</div>
+                        <input type="text" className="input-heritage" value={utr} onChange={(e) => setUtr(e.target.value)} placeholder="e.g. AXISN2026021712345678" data-testid="payment-utr" />
+                    </label>
+                    <label className="block">
+                        <div className="overline text-[9px] mb-1">Amount (₹) *</div>
+                        <input type="number" step="0.01" className="input-heritage" value={amount} onChange={(e) => setAmount(e.target.value)} data-testid="payment-amount" />
+                    </label>
+                    <label className="block">
+                        <div className="overline text-[9px] mb-1">Payment Date *</div>
+                        <input type="date" className="input-heritage" value={date} onChange={(e) => setDate(e.target.value)} data-testid="payment-date" />
+                    </label>
+                    <div>
+                        <div className="overline text-[9px] mb-1">Signed Receipt PDF <span className="text-mpca-gray-dark normal-case tracking-normal">(optional)</span></div>
+                        {receiptRec ? (
+                            <div className="flex items-center gap-2 bg-mpca-ivory border border-mpca-brass/40 px-3 py-2">
+                                <CheckCircle2 size={14} className="text-mpca-oxblood flex-shrink-0" />
+                                <a href={`${BACKEND_URL}${receiptRec.url}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-mpca-green-dark hover:text-mpca-oxblood truncate flex-1" data-testid="payment-receipt-link">{receiptRec.original_name}</a>
+                                <button type="button" onClick={() => setReceiptRec(null)} className="text-mpca-gray-dark hover:text-mpca-oxblood" aria-label="Remove receipt" data-testid="payment-receipt-remove">
+                                    <XCircle size={14} />
+                                </button>
+                            </div>
+                        ) : (
+                            <button type="button" onClick={() => setShowDropzone(true)} className="w-full border border-dashed border-mpca-brass/40 hover:border-mpca-brass px-3 py-4 text-xs text-mpca-gray-dark hover:text-mpca-green-dark transition-colors flex items-center justify-center gap-2" data-testid="payment-receipt-open-dropzone">
+                                <Upload size={12} strokeWidth={1.5} /> Attach signed receipt (drag &amp; drop)
+                            </button>
+                        )}
+                    </div>
+                    {error && (
+                        <div className="bg-mpca-oxblood/10 border border-mpca-oxblood/40 text-mpca-oxblood px-3 py-2 text-xs" data-testid="payment-modal-error">{error}</div>
+                    )}
+                </div>
+                <div className="px-5 py-3 border-t border-mpca-brass/40 bg-mpca-ivory flex justify-end gap-2">
+                    <button type="button" onClick={onClose} disabled={submitting} className="border border-mpca-gray-dark text-mpca-gray-dark px-4 py-1.5 text-[11px] uppercase tracking-widest hover:bg-mpca-gray-dark hover:text-mpca-ivory transition-colors disabled:opacity-50" data-testid="payment-cancel-btn">Cancel</button>
+                    <button type="button" onClick={doSubmit} disabled={!canSubmit} className="btn-heritage-primary disabled:opacity-50" data-testid="payment-submit-btn">
+                        {submitting ? "Recording…" : "Record Payment"}
+                    </button>
+                </div>
+            </div>
+            <SignedPdfUploadModal
+                open={showDropzone}
+                onClose={() => setShowDropzone(false)}
+                title="Attach Signed Receipt"
+                description="Drop the payment receipt PDF here. It will be linked to this payment record."
+                metadata={{ related_type: "grant_claim_payment", related_id: claim?.id, uploaded_by: persona?.name, body_id: persona?.body_code }}
+                onUploaded={(rec) => { setReceiptRec(rec); }}
+                testidPrefix="payment-receipt-modal"
+            />
+        </div>
+    );
+};
+
 const GrantClaims = () => {
     const { persona } = useAuth();
     const navigate = useNavigate();
@@ -68,6 +167,11 @@ const GrantClaims = () => {
     const [newMessage, setNewMessage] = useState("");
     const [bodies, setBodies] = useState([]);
     const [divisionFilter, setDivisionFilter] = useState("all");
+    // Feb 2026 · Signed-PDF drop-zone modal state (replaces window.prompt URL flow)
+    // signedUploadModal.kind ∈ { "submission", "approval" } · null = closed
+    const [signedUploadModal, setSignedUploadModal] = useState(null);
+    // Feb 2026 · Payment modal state (replaces the 4-chained window.prompt calls)
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
     const isMPCA = persona?.body_type === "State";
 
@@ -256,39 +360,19 @@ const GrantClaims = () => {
             setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
-    const uploadSignedSubmission = async () => {
-        const url = window.prompt("Paste URL of the SIGNED submission summary PDF (Google Drive / S3 / any public link):");
-        if (!url) return;
-        try {
-            const { data } = await api.post(`/grant-claims/${selected.id}/signed-upload`, { signed_url: url });
-            setSelected(data);
-            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
-        } catch (e) { alert(e?.response?.data?.detail || e.message); }
-    };
-    const uploadMpcaSignedApproval = async () => {
-        const url = window.prompt("Paste URL of the SIGNED MPCA approval summary PDF:");
-        if (!url) return;
-        try {
-            const { data } = await api.post(`/grant-claims/${selected.id}/mpca-signed-upload`, { signed_url: url });
-            setSelected(data);
-            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
-        } catch (e) { alert(e?.response?.data?.detail || e.message); }
-    };
-    const markPaymentMade = async () => {
-        const utr = window.prompt("UTR / transaction reference:");
-        if (!utr) return;
-        const amountStr = window.prompt("Payment amount (₹):", selected?.approved_amount_inr ?? "");
-        if (!amountStr) return;
-        const date = window.prompt("Payment date (YYYY-MM-DD):", new Date().toISOString().slice(0, 10));
-        if (!date) return;
-        const receipt_url = window.prompt("Payment receipt URL (optional — press OK to skip):") || null;
-        try {
-            const { data } = await api.post(`/grant-claims/${selected.id}/payment`, {
-                utr, amount_inr: parseFloat(amountStr), payment_date: date, receipt_url,
-            });
-            setSelected(data);
-            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
-        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    const uploadSignedSubmission = () => setSignedUploadModal({ kind: "submission" });
+    const uploadMpcaSignedApproval = () => setSignedUploadModal({ kind: "approval" });
+    // Feb 2026 · replaces window.prompt() chains with a proper form modal.
+    // markPaymentMade now just opens the modal; the modal calls
+    // `submitPayment()` with the collected fields (utr, amount, date, optional
+    // receipt drop-zone).
+    const markPaymentMade = () => setPaymentModalOpen(true);
+    const submitPayment = async ({ utr, amount_inr, payment_date, receipt_url }) => {
+        const { data } = await api.post(`/grant-claims/${selected.id}/payment`, {
+            utr, amount_inr, payment_date, receipt_url: receipt_url || null,
+        });
+        setSelected(data);
+        setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
     };
     const sendMessage = async () => {
         if (!newMessage.trim() || !selected) return;
@@ -840,6 +924,47 @@ const GrantClaims = () => {
                     )}
                 </div>
             </div>
+
+            {/* Feb 2026 · Signed-PDF drop-zone modal (replaces the legacy URL prompts) */}
+            <SignedPdfUploadModal
+                open={signedUploadModal?.kind === "submission"}
+                onClose={() => setSignedUploadModal(null)}
+                title="Upload Signed Submission PDF"
+                description="Drop the signed submission summary PDF here. MPCA will see it under the History tab once submitted."
+                metadata={{ related_type: "grant_claim", related_id: selected?.id, uploaded_by: persona?.name, body_id: persona?.body_code }}
+                onUploaded={async (rec) => {
+                    const { data } = await api.post(`/grant-claims/${selected.id}/signed-upload`, { signed_url: rec.url });
+                    setSelected(data);
+                    setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+                }}
+                testidPrefix="signed-submission-modal"
+            />
+            <SignedPdfUploadModal
+                open={signedUploadModal?.kind === "approval"}
+                onClose={() => setSignedUploadModal(null)}
+                title="Upload MPCA-Signed Approval PDF"
+                description="Drop the MPCA-office-bearer-signed approval summary PDF here. Only State personas can perform this action."
+                metadata={{ related_type: "grant_claim", related_id: selected?.id, uploaded_by: persona?.name, body_id: persona?.body_code }}
+                onUploaded={async (rec) => {
+                    const { data } = await api.post(`/grant-claims/${selected.id}/mpca-signed-upload`, { signed_url: rec.url });
+                    setSelected(data);
+                    setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+                }}
+                testidPrefix="signed-approval-modal"
+            />
+
+            {/* Feb 2026 · Payment modal (replaces the 4 chained window.prompt calls) */}
+            {paymentModalOpen && (
+                <PaymentModal
+                    claim={selected}
+                    persona={persona}
+                    onClose={() => setPaymentModalOpen(false)}
+                    onSubmit={async (payload) => {
+                        await submitPayment(payload);
+                        setPaymentModalOpen(false);
+                    }}
+                />
+            )}
 
             {/* New Claim modal */}
             {creating && (

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Wallet, Calendar, ArrowRight, Users } from "lucide-react";
+import { Plus, Wallet, Calendar, ArrowRight, Users, Info } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
+import { WiringComplianceChip } from "@/lib/wiringCompliance";
 
 const CAMP_TYPES = [
     { code: "Periodical_Coaching", label: "Periodical Coaching", scheme: "3-A" },
@@ -78,10 +79,19 @@ const CampsPage = () => {
                     </p>
                 </div>
                 {canCreate && (
-                    <button className="btn-heritage-primary" onClick={openForm} data-testid="new-camp-btn">
-                        <Plus size={12} /> New Camp
+                    <button className="btn-heritage-primary" onClick={() => navigate("/tournaments")} data-testid="new-camp-btn" title="Camps are now created from the Tournaments page — the type picker includes Pre-Tournament / Coaching / Vacation camps.">
+                        <Plus size={12} /> New Camp · via Tournaments
                     </button>
                 )}
+            </div>
+
+            {/* MPCA-254 · Ship B · Migration banner */}
+            <div className="border-l-4 border-mpca-green-dark bg-mpca-green-dark/5 p-4 mb-6 flex gap-3" data-testid="camps-migration-banner">
+                <Info size={16} className="text-mpca-green-dark flex-shrink-0 mt-0.5" />
+                <div className="text-[12px] text-mpca-charcoal leading-relaxed">
+                    <div className="font-serif text-mpca-green-dark text-sm mb-1">Camps are now first-class tournaments</div>
+                    Existing camps are automatically promoted to the main <b>Tournaments</b> list on each server boot, where they inherit the 10-step wiring flow (Squad · Calendar · Budget · Finance · Closure). New camps should be created from the Tournaments page — the type picker includes <b>Pre-Tournament Camp</b>, <b>Periodical Coaching Camp</b>, and <b>Vacation Camp</b>. This page remains for historical reference.
+                </div>
             </div>
 
             {/* Camp-type overview */}
@@ -117,9 +127,14 @@ const CampsPage = () => {
                         <div className="col-span-1">Status</div>
                     </div>
                     {camps.map((c) => (
-                        <div key={c.id} className="grid grid-cols-12 gap-3 px-4 py-3 items-center border-b border-mpca-brass/10 cursor-pointer hover:bg-mpca-cream/40" onClick={() => navigate(`/tournaments/${c.id}/finance`)} data-testid={`camp-row-${c.id}`}>
+                        <div key={c.id} className="grid grid-cols-12 gap-3 px-4 py-3 items-center border-b border-mpca-brass/10 cursor-pointer hover:bg-mpca-cream/40" onClick={() => c.migrated_to_tournament_id ? navigate(`/tournaments/${c.migrated_to_tournament_id}`) : navigate(`/tournaments/${c.id}/finance`)} data-testid={`camp-row-${c.id}`}>
                             <div className="col-span-4">
-                                <div className="font-serif text-sm text-mpca-green-dark">{c.name}</div>
+                                <div className="font-serif text-sm text-mpca-green-dark flex items-center gap-2">
+                                    {c.name}
+                                    {c.migrated_to_tournament_id && (
+                                        <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 border border-mpca-green-dark/50 bg-mpca-green-dark/10 text-mpca-green-dark" title={`Promoted to tournament ${c.migrated_to_tournament_id}`}>Migrated ✓</span>
+                                    )}
+                                </div>
                                 <div className="text-[10px] font-mono text-mpca-brass">{c.camp_no} · Scheme {c.scheme_code}</div>
                             </div>
                             <div className="col-span-2 text-[11px]">{CAMP_TYPES.find((t) => t.code === c.camp_type)?.label || c.camp_type}</div>

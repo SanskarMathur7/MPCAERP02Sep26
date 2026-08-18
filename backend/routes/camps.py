@@ -360,3 +360,120 @@ async def remove_reciprocal_visitor(cid: str, body_id: str):
     visitors = [v for v in (camp.get("reciprocal_visitors") or []) if v.get("body_id") != body_id]
     await db.camps.update_one({"id": cid}, {"$set": {"reciprocal_visitors": visitors}})
     return await db.camps.find_one({"id": cid}, {"_id": 0})
+
+
+# ═════════════════════════════════════════════════════════════════════
+# MPCA-254 · Ship B — Promote legacy camps to first-class tournaments.
+# ═════════════════════════════════════════════════════════════════════
+# Camps historically lived in a separate `db.camps` collection with a
+# parallel finance pipeline. New camps created via the Tournament type
+# picker already write to `db.tournaments` with the correct
+# `tournament_type_code`. This endpoint back-fills the legacy population
+# so every camp is visible on the main Tournaments list and inherits the
+# 10-step wiring flow.
+#
+# Idempotent: skips any camp already carrying `migrated_to_tournament_id`.
+# Safe to re-run on every boot.
+
+CAMP_TYPE_TO_TOURNAMENT_CODE = {
+    "Periodical_Coaching":  "periodical_coaching_camp",
+    "Vacation_Camp":        "vacation_camp",
+    "Pre_Tournament_Camp":  "pre_tournament_camp",
+    # Reciprocal_Match is intentionally NOT promoted — user decision (removed from wiring).
+}
+
+CAMP_TYPE_TO_FAMILY = {
+    "Periodical_Coaching":  "MPCA_InterDivisional",
+    "Vacation_Camp":        "MPCA_InterDivisional",
+    "Pre_Tournament_Camp":  "MPCA_InterDivisional",
+}
+
+
+async def _promote_one_camp_to_tournament(camp: dict) -> Optional[str]:
+    """Create a `db.tournaments` row that mirrors this camp. Returns the new
+    tournament id, or None if the camp isn't promotable (e.g. Reciprocal_Match).
+    """
+    code = CAMP_TYPE_TO_TOURNAMENT_CODE.get(camp.get("camp_type"))
+    if not code:
+        return None
+    if camp.get("migrated_to_tournament_id"):
+        return camp["migrated_to_tournament_id"]
+
+    # Reserve a tournament number.
+    from routes.tournaments import _next_tournament_no   # local import avoids cycle
+    tno = await _next_tournament_no(camp.get("fiscal_cycle") or "2025-26")
+
+    tid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id":                     tid,
+        "tournament_no":          tno,
+        "name":                   camp.get("name") or f"Camp {camp.get('camp_no')}",
+        "short_name":             None,
+        "tournament_type":        CAMP_TYPE_TO_FAMILY.get(camp["camp_type"]) or "MPCA_InterDivisional",
+        "tournament_type_code":   code,
+        "format":                 "Multi_Day",
+        "scope":                  "Inter_Divisional",
+        "fiscal_cycle":           camp.get("fiscal_cycle") or "2025-26",
+        "host_body_id":           camp.get("body_id"),
+        "scheme_code":            camp.get("scheme_code"),
+        "start_date":             camp.get("start_date"),
+        "end_date":               camp.get("end_date"),
+        "venue":                  camp.get("venue_hint"),
+        "venue_id":               None,
+        "ground_id":              None,
+        "max_squad_size":         18,
+        "is_womens":              False,
+        "allows_guests":          False,
+        "notes":                  camp.get("notes"),
+        "status":                 {
+            "Draft":     "Draft",
+            "Scheduled": "Approved",
+            "Running":   "In_Progress",
+            "Completed": "Completed",
+            "Cancelled": "Cancelled",
+        }.get(camp.get("status") or "Draft", "Draft"),
+        "acceptance":             {"status": "Not_Required", "required_from": [], "entries": []},
+        "created_at":             camp.get("created_at") or now,
+        "created_by":             camp.get("created_by"),
+        "migrated_from_camp_id":  camp["id"],           # provenance
+        "parent_tournament_id":   camp.get("inter_division_tournament_id"),
+        "is_pre_tournament_camp": camp.get("camp_type") == "Pre_Tournament_Camp",
+    }
+    await db.tournaments.insert_one(doc)
+    await db.camps.update_one(
+        {"id": camp["id"]},
+        {"$set": {"migrated_to_tournament_id": tid, "migrated_at": now}},
+    )
+    return tid
+
+
+@api_router.post("/camps/migrate-to-tournaments")
+async def migrate_camps_to_tournaments():
+    """Idempotent bulk migration. Promotes every un-migrated camp (except
+    Reciprocal_Match) into `db.tournaments` and stamps the camp record with
+    a `migrated_to_tournament_id` pointer. Returns a summary.
+
+    Safe to call multiple times — already-migrated camps are skipped.
+    """
+    q = {"migrated_to_tournament_id": {"$exists": False}}
+    camps_to_migrate = await db.camps.find(q, {"_id": 0}).to_list(2000)
+    promoted = 0
+    skipped_reciprocal = 0
+    failed: List[dict] = []
+    for camp in camps_to_migrate:
+        try:
+            new_tid = await _promote_one_camp_to_tournament(camp)
+            if new_tid is None:
+                skipped_reciprocal += 1
+            else:
+                promoted += 1
+        except Exception as e:   # noqa: BLE001
+            failed.append({"camp_id": camp.get("id"), "camp_no": camp.get("camp_no"), "error": str(e)})
+    return {
+        "promoted":            promoted,
+        "skipped_reciprocal":  skipped_reciprocal,
+        "already_migrated":    (await db.camps.count_documents({"migrated_to_tournament_id": {"$exists": True}})),
+        "failed":              failed,
+    }
+

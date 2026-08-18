@@ -11,6 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSeason } from "@/context/SeasonContext";
 import { TOURNAMENT_TYPE_CATALOG, getTypeByCode, getCreatableTournamentTypes, groupTypesBySection } from "@/lib/tournamentCatalog";
 import { getDirectoryFor } from "@/lib/tournamentDirectory";
+import { WiringComplianceChip } from "@/lib/wiringCompliance";
 
 // Visual palette per section (matches the user's mockup: BCCI = navy tint,
 // MPCA = green tint, Division = brass/marigold tint)
@@ -340,6 +341,9 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                                                         className={`text-left p-4 border ${style.cardBorder} hover:border-mpca-oxblood hover:bg-mpca-cream/30 transition-all group relative`}
                                                         data-testid={`trn-type-card-${t.code}`}
                                                     >
+                                                        <div className="absolute top-3 right-3">
+                                                            <WiringComplianceChip code={t.code} showLabel={false} testId={`trn-type-wiring-${t.code}`} />
+                                                        </div>
                                                         <div className={`inline-block text-[9px] uppercase tracking-widest px-2 py-0.5 ${style.header} mb-2`}>
                                                             {sectionLabel.replace("A DIVISION ALLOTS TO ITS DISTRICTS, CLUBS, SCHOOLS OR ITS OWN TEAMS", "DIVISION ALLOTS TO " + (t.flow.split("→")[1] || "").trim().toUpperCase())}
                                                         </div>
@@ -376,7 +380,9 @@ const TournamentCreateModal = ({ open, onClose, onDone }) => {
                     <div className="border border-mpca-brass/30 bg-mpca-parchment/40 px-4 py-3 flex items-center gap-3" data-testid="trn-type-badge">
                         <Trophy size={16} strokeWidth={1.5} className="text-mpca-brass" />
                         <div className="flex-1">
-                            <div className="overline text-[9px]">Selected Tournament Type</div>
+                            <div className="overline text-[9px] flex items-center gap-2">Selected Tournament Type
+                                <WiringComplianceChip code={form.tournament_type_code} testId="trn-type-badge-wiring" />
+                            </div>
                             <div className="font-serif text-base text-mpca-green-dark mt-0.5">{getTypeByCode(form.tournament_type_code)?.name || form.tournament_type}</div>
                         </div>
                         <div className="text-[10px] text-mpca-brass italic max-w-xs text-right">

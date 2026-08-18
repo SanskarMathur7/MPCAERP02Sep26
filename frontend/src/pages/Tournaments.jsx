@@ -9,6 +9,7 @@ import {
 import CricketLoader from "@/components/CricketLoader";
 import TournamentCreateModal from "@/components/TournamentCreateModal";
 import { TournamentProgressionRibbonMini } from "@/components/TournamentProgressionRibbon";
+import { WiringComplianceChip } from "@/lib/wiringCompliance";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -297,6 +298,7 @@ const Tournaments = () => {
                                         )}
                                         {t.host_body_id && <span className="font-mono text-mpca-brass">· Host {t.host_body_id}</span>}
                                         {t.trophy_name && <span className="text-mpca-oxblood">· 🏆 {t.trophy_name}</span>}
+                                        <WiringComplianceChip tournament={t} testId={"trn-wiring-" + t.tournament_no} className="ml-1" />
                                     </div>
                                     {/* M11 · Acceptance status + required-from strip */}
                                     {acc.status && acc.status !== "Not_Required" && (

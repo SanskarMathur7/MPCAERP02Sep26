@@ -86,6 +86,17 @@ async def lifespan(app: FastAPI):
         # wiring says squad_approval.flag != "M" (no MPCA step). Idempotent.
         from routes.selection_console import heal_legacy_stuck_squads
         await heal_legacy_stuck_squads()
+        # MPCA-254 · Ship B · Idempotent promotion of legacy camps into the
+        # main tournaments collection so they share the 10-step wiring flow.
+        try:
+            from routes.camps import migrate_camps_to_tournaments
+            result = await migrate_camps_to_tournaments()
+            if result.get("promoted"):
+                import logging
+                logging.getLogger("mpca").info("MPCA-254 promoted %d camp(s) to tournaments", result["promoted"])
+        except Exception as e:  # never let migration crash startup
+            import logging
+            logging.getLogger("mpca").warning("Camp promotion migration failed: %s", e)
     yield
     # ---- shutdown ----
     client.close()

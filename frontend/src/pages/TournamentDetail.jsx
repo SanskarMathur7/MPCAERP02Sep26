@@ -11,6 +11,7 @@ import {
 import CricketLoader from "@/components/CricketLoader";
 import TournamentSubTabs from "@/components/TournamentSubTabs";
 import TournamentProgressionRibbon from "@/components/TournamentProgressionRibbon";
+import { WiringComplianceChip } from "@/lib/wiringCompliance";
 import InputVariablesPanel from "@/components/InputVariablesPanel";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
 import TournamentInvoicesPanel from "@/components/TournamentInvoicesPanel";
@@ -242,6 +243,9 @@ const TournamentDetail = () => {
                     {t.name}
                 </h1>
                 {t.short_name && <div className="text-xs tracking-[0.3em] uppercase text-mpca-gold-light mt-2">&ldquo;{t.short_name}&rdquo;</div>}
+                <div className="mt-3">
+                    <WiringComplianceChip tournament={t} testId="trn-detail-wiring" />
+                </div>
                 <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5 mt-7 text-mpca-ivory/90">
                     <div className="flex items-start gap-2">
                         <Calendar size={16} className="text-mpca-gold-light mt-0.5" />

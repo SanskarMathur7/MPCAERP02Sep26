@@ -319,7 +319,19 @@ def _auto_scheme_for(tournament_type, scope, type_code):
 
 
 @api_router.post("/tournaments", response_model=Tournament)
-async def create_tournament(payload: TournamentCreate):
+async def create_tournament(
+    payload: TournamentCreate,
+    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+):
+    # MPCA-260 · Ship P0.2 — wiring guard at CREATION time. Prevents a
+    # Division/District persona from creating an MPCA-owned type (BCCI /
+    # MPCA Inter-Divisional / Championship). The frontend already hides
+    # these types from the picker for non-State personas, but the API
+    # must enforce it independently (defense in depth).
+    from core.wiring_guard import assert_creation_owner
+    await assert_creation_owner(payload.model_dump(), x_body_type)
+
     # M39c · Block new tournaments until MPCA has activated the schemes for
     # the requested fiscal cycle by uploading the signed master PDF.
     from routes.events import is_season_activated

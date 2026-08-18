@@ -281,6 +281,7 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                             poolOptions={poolOptions}
                             groundOptions={groundOptions}
                             officialsByRole={officialsByRole}
+                            manualTeamNames={calStep?.mode === "Manual_PDF"}
                             onSaved={async () => { setCreating(false); await load(); onChange?.(); }}
                             onCancel={() => setCreating(false)}
                             startExpanded
@@ -297,6 +298,7 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                             poolOptions={poolOptions}
                             groundOptions={groundOptions}
                             officialsByRole={officialsByRole}
+                            manualTeamNames={calStep?.mode === "Manual_PDF"}
                             onSaved={async () => { await load(); onChange?.(); }}
                             onDeleted={async () => { await load(); onChange?.(); }}
                         />

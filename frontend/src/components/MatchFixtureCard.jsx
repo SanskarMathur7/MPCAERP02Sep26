@@ -79,6 +79,7 @@ export default function MatchFixtureCard({
     onDeleted,       // callback after successful delete
     onCancel,        // callback for cancelling a new draft
     startExpanded = false,
+    manualTeamNames = false,   // MPCA-260 · Ship P0.1 — when true, TEAM A/B render as free-text inputs (BCCI wiring: match_calendar.mode=Manual_PDF)
 }) {
     const [expanded, setExpanded] = useState(startExpanded);
     const [saving, setSaving] = useState(false);
@@ -264,10 +265,18 @@ export default function MatchFixtureCard({
                                 : ["Team SF1", "Team SF2", "Team SF3", "Team SF4"])
                             : [];
                         const mergedOptions = [...placeholders, ...teamOptions.filter((t) => !placeholders.includes(t))];
+                        // MPCA-260 · Ship P0.1 — free-text Team A / Team B when
+                        // wiring says match_calendar.mode = Manual_PDF (BCCI,
+                        // School, Club, Camps). Placeholder-shaped KO rounds
+                        // still use dropdowns so SFn Winner semantics work.
+                        const freeText = manualTeamNames && !isKO;
                         return (
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                         <div>
-                            <div className={labelCls}>Team A {isKO && <span className="text-mpca-oxblood normal-case tracking-normal">· placeholders allowed</span>}</div>
+                            <div className={labelCls}>Team A {isKO && <span className="text-mpca-oxblood normal-case tracking-normal">· placeholders allowed</span>}{freeText && <span className="text-mpca-oxblood normal-case tracking-normal">· free-text</span>}</div>
+                            {freeText ? (
+                                <input type="text" className={inputCls} value={form.home_team} onChange={(e) => setField("home_team", e.target.value)} disabled={!canEdit} placeholder="e.g. Karnataka" data-testid="fx-team-a" />
+                            ) : (
                             <select className={inputCls} value={form.home_team} onChange={(e) => setField("home_team", e.target.value)} disabled={!canEdit} data-testid="fx-team-a">
                                 <option value="">— pick —</option>
                                 {placeholders.length > 0 && (
@@ -279,9 +288,13 @@ export default function MatchFixtureCard({
                                     {teamOptions.filter((t) => !placeholders.includes(t)).map((t) => <option key={t} value={t}>{t}</option>)}
                                 </optgroup>
                             </select>
+                            )}
                         </div>
                         <div>
-                            <div className={labelCls}>Team B {isKO && <span className="text-mpca-oxblood normal-case tracking-normal">· placeholders allowed</span>}</div>
+                            <div className={labelCls}>Team B {isKO && <span className="text-mpca-oxblood normal-case tracking-normal">· placeholders allowed</span>}{freeText && <span className="text-mpca-oxblood normal-case tracking-normal">· free-text</span>}</div>
+                            {freeText ? (
+                                <input type="text" className={inputCls} value={form.away_team} onChange={(e) => setField("away_team", e.target.value)} disabled={!canEdit} placeholder="e.g. Kerala" data-testid="fx-team-b" />
+                            ) : (
                             <select className={inputCls} value={form.away_team} onChange={(e) => setField("away_team", e.target.value)} disabled={!canEdit} data-testid="fx-team-b">
                                 <option value="">— pick —</option>
                                 {placeholders.length > 0 && (
@@ -293,6 +306,7 @@ export default function MatchFixtureCard({
                                     {teamOptions.filter((t) => !placeholders.includes(t) && t !== form.home_team).map((t) => <option key={t} value={t}>{t}</option>)}
                                 </optgroup>
                             </select>
+                            )}
                         </div>
                         <div>
                             <div className={labelCls}>Squad size per team <span className="text-mpca-gray-dark normal-case tracking-normal">pax · blank = {defaultSquad}</span></div>

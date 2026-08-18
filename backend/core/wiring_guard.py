@@ -47,6 +47,59 @@ async def resolve_wiring_cell(tid: str, step_key: str) -> dict:
     return wiring.get("cells", {}).get(type_id, {}).get(step_key) or {}
 
 
+async def resolve_wiring_cell_by_payload(payload: dict, step_key: str) -> dict:
+    """MPCA-260 · Ship P0.2 — payload-based wiring lookup.
+
+    Used at CREATION time when a tournament doesn't exist yet. Reads
+    tournament_type_code / tournament_type / scope directly from the
+    incoming payload and resolves the wiring cell for `step_key`.
+
+    Returns `{}` if wiring cannot be resolved (safe fallback = MPCA-only).
+    """
+    try:
+        from routes.tournament_wiring_status import _resolve_type_id
+        from routes.tournament_wiring import _fetch_or_seed_wiring
+    except Exception:
+        return {}
+    try:
+        type_id = await _resolve_type_id(payload or {})
+    except Exception:
+        return {}
+    wiring = await _fetch_or_seed_wiring()
+    return wiring.get("cells", {}).get(type_id, {}).get(step_key) or {}
+
+
+async def assert_creation_owner(
+    payload: dict,
+    x_body_type: Optional[str],
+    *,
+    action_label: str = "tournament creation",
+) -> Tuple[str, dict]:
+    """MPCA-260 · Ship P0.2 — enforce wiring owner at tournament CREATION.
+
+    Because no `tid` exists yet, uses the incoming payload to resolve the
+    wiring cell for `tournament_creation`. Raises 403 unless the caller's
+    body_type ∈ the owner set for this tournament type. Legacy calls
+    (missing X-Body-Type header) are permitted with a safe MPCA fallback.
+    """
+    cell = await resolve_wiring_cell_by_payload(payload, "tournament_creation")
+    owner = (cell.get("owner") if cell else None) or "MPCA"
+
+    # Legacy service-to-service / seed callers without persona headers — allow.
+    if x_body_type is None:
+        return owner, cell
+    if owner == "Auto":
+        raise HTTPException(409, f"Cannot {action_label}: this type is system-managed.")
+    allowed = _OWNER_TO_BODY_TYPES.get(owner, {"State"})
+    if x_body_type not in allowed:
+        raise HTTPException(
+            403,
+            f"Only {' / '.join(sorted(allowed))} personas may perform {action_label} "
+            f"for this tournament type (wiring owner = {owner}).",
+        )
+    return owner, cell
+
+
 async def assert_wiring_owner(
     tid: str,
     step_key: str,

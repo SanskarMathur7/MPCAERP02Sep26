@@ -34,19 +34,23 @@ export default function TournamentClosurePDF() {
     const [invoices, setInvoices]   = useState([]);
     const [spentByBody, setSpent]   = useState({});
     const [letter, setLetter]       = useState(null);
+    const [squads, setSquads]       = useState([]);
+    const [discussionThreads, setThreads] = useState([]);   // [{thread, messages}]
     const [loading, setLoading]     = useState(true);
 
     useEffect(() => {
         (async () => {
             setLoading(true);
             try {
-                const [tRes, mRes, pRes, oRes, iRes, lRes] = await Promise.all([
+                const [tRes, mRes, pRes, oRes, iRes, lRes, sqRes, chRes] = await Promise.all([
                     api.get(`/tournaments/${id}`),
                     api.get(`/tournaments/${id}/matches`),
                     api.get(`/tournaments/${id}/participants`).catch(() => ({ data: [] })),
                     api.get(`/tournaments/${id}/match-officials/rollup`).catch(() => ({ data: null })),
                     api.get(`/tournament-invoices`, { params: { tid: id } }).catch(() => ({ data: [] })),
                     api.get(`/tournaments/${id}/closure-letter`).catch(() => ({ data: null })),
+                    api.get(`/tournaments/${id}/squads`).catch(() => ({ data: [] })),
+                    api.get(`/discussions/tournament/${id}/channels`).catch(() => ({ data: { channels: [] } })),
                 ]);
                 setT(tRes.data);
                 setMatches(mRes.data || []);
@@ -54,6 +58,7 @@ export default function TournamentClosurePDF() {
                 setOffR(oRes.data);
                 setInvoices(iRes.data || []);
                 setLetter(lRes.data);
+                setSquads(sqRes.data || []);
 
                 // Per-body head-wise spend (only for participants that have a body_code)
                 const bodies = Array.from(new Set(
@@ -67,6 +72,18 @@ export default function TournamentClosurePDF() {
                     } catch { /* no budget for this body */ }
                 }));
                 setSpent(per);
+
+                // Discussion threads — fetch each channel + its messages so the
+                // closure letter carries the MPCA ↔ body audit trail.
+                const channels = chRes.data?.channels || [];
+                const withMsgs = await Promise.all(channels.map(async (c) => {
+                    try {
+                        const tr = await api.get(`/discussions/tournament/${id}`, { params: c.body_scope ? { body_scope: c.body_scope } : {} });
+                        const msgs = await api.get(`/discussions/${tr.data.id}/messages`).catch(() => ({ data: [] }));
+                        return { channel: c, thread: tr.data, messages: msgs.data || [] };
+                    } catch { return { channel: c, thread: null, messages: [] }; }
+                }));
+                setThreads(withMsgs.filter((x) => x.messages.length > 0));
             } finally { setLoading(false); }
         })();
     }, [id]);
@@ -244,8 +261,57 @@ export default function TournamentClosurePDF() {
                 </>
             )}
 
-            {/* Section 4 · Budget vs Spent per body */}
-            <h3 className="text-lg border-b border-black mb-2 mt-6">4. Budget Utilisation</h3>
+            {/* Section 4 · Squads per body — one compact table per participating body */}
+            {squads.length > 0 && (
+                <>
+                    <h3 className="text-lg border-b border-black mb-2 mt-6">4. Squads &middot; {squads.length} body(ies)</h3>
+                    {squads.map((sq) => {
+                        const players = sq.players || sq.player_entries || sq.roster || [];
+                        const bodyName = participants.find((p) => p.body_code === sq.body_code)?.body_name || sq.body_code;
+                        return (
+                            <div key={sq.id} className="mb-4" data-testid={`closure-squad-${sq.body_code}`}>
+                                <div className="text-[11px] mb-1">
+                                    <b>{bodyName}</b> <span className="text-gray-600">({sq.body_code})</span>
+                                    {" · "}<span className="uppercase tracking-widest text-[10px]">{sq.status || "—"}</span>
+                                    {" · "}<span>{players.length} player(s)</span>
+                                    {sq.captain_player_id && <span> · Captain: <b>{sq.captain_name || sq.captain_player_id}</b></span>}
+                                </div>
+                                {players.length > 0 ? (
+                                    <table className="w-full text-[11px] border-collapse">
+                                        <thead>
+                                            <tr className="border-b border-black">
+                                                <th className="text-left py-1 pr-2 w-6">#</th>
+                                                <th className="text-left py-1 pr-2">Player</th>
+                                                <th className="text-left py-1 pr-2">Role</th>
+                                                <th className="text-left py-1 pr-2">Bat</th>
+                                                <th className="text-left py-1 pr-2">Bowl</th>
+                                                <th className="text-left py-1 pr-2">DOB</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {players.map((p, i) => (
+                                                <tr key={p.player_id || p.id || i} className="border-b border-gray-300">
+                                                    <td className="py-1 pr-2">{i + 1}</td>
+                                                    <td className="py-1 pr-2"><b>{p.name || p.player_name || p.player_id}</b>{p.is_captain && <span className="text-[9px] uppercase tracking-widest"> · Capt</span>}{p.is_wk && <span className="text-[9px] uppercase tracking-widest"> · WK</span>}</td>
+                                                    <td className="py-1 pr-2">{p.role || "—"}</td>
+                                                    <td className="py-1 pr-2">{p.batting_style || p.bat_hand || "—"}</td>
+                                                    <td className="py-1 pr-2">{p.bowling_style || p.bowl_hand || "—"}</td>
+                                                    <td className="py-1 pr-2">{fmtDate(p.dob)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="text-[11px] italic text-gray-600">Squad locked — roster not itemised here (see signed squad sheet appendix).</div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </>
+            )}
+
+            {/* Section 5 · Budget vs Spent per body */}
+            <h3 className="text-lg border-b border-black mb-2 mt-6">5. Budget Utilisation</h3>
             {Object.keys(spentByBody).length === 0 ? (
                 <div className="text-[11px] italic text-gray-600 mb-4">No approved budget on file.</div>
             ) : (
@@ -278,14 +344,28 @@ export default function TournamentClosurePDF() {
                 ))
             )}
 
-            {/* Section 5 · Invoice ledger */}
-            {invoices.length > 0 && (
+            {/* Section 6 · Invoice ledger */}
+            {invoices.length > 0 && (() => {
+                // Sort ledger by division for readability + build a per-division totals map.
+                const bodyName = (code) => participants.find((p) => p.body_code === code)?.body_name || code;
+                const sortedInvs = [...invoices].sort((a, b) => {
+                    const bA = a.body_id || ""; const bB = b.body_id || "";
+                    if (bA !== bB) return bA.localeCompare(bB);
+                    return (a.invoice_date || "").localeCompare(b.invoice_date || "");
+                });
+                const byDiv = {};
+                sortedInvs.forEach((inv) => {
+                    const k = inv.body_id || "—";
+                    byDiv[k] = (byDiv[k] || 0) + Number(inv.total_inr || 0);
+                });
+                return (
                 <>
-                    <h3 className="text-lg border-b border-black mb-2 mt-6">5. Invoice Ledger &middot; {invoices.length} invoice(s)</h3>
+                    <h3 className="text-lg border-b border-black mb-2 mt-6">6. Invoice Ledger &middot; {invoices.length} invoice(s)</h3>
                     <table className="w-full text-[10px] border-collapse mb-4" data-testid="closure-invoices-table">
                         <thead>
                             <tr className="border-b border-black">
                                 <th className="text-left py-1 pr-2">Ref</th>
+                                <th className="text-left py-1 pr-2">Division</th>
                                 <th className="text-left py-1 pr-2">Date</th>
                                 <th className="text-left py-1 pr-2">Vendor</th>
                                 <th className="text-left py-1 pr-2">Head</th>
@@ -295,9 +375,10 @@ export default function TournamentClosurePDF() {
                             </tr>
                         </thead>
                         <tbody>
-                            {invoices.map((inv) => (
+                            {sortedInvs.map((inv) => (
                                 <tr key={inv.id} className="border-b border-gray-200">
                                     <td className="py-1 pr-2 font-mono">{inv.invoice_ref}</td>
+                                    <td className="py-1 pr-2"><b>{bodyName(inv.body_id)}</b> <span className="text-gray-600">({inv.body_id})</span></td>
                                     <td className="py-1 pr-2">{fmtDate(inv.invoice_date)}</td>
                                     <td className="py-1 pr-2">{inv.vendor_name}</td>
                                     <td className="py-1 pr-2">{(inv.allocations?.[0]?.head_label) || inv.budget_head_code}</td>
@@ -307,11 +388,24 @@ export default function TournamentClosurePDF() {
                                 </tr>
                             ))}
                             <tr className="border-t-2 border-black">
-                                <td colSpan={4} className="py-1 pr-2 uppercase tracking-widest text-[10px]">Invoice Grand Total</td>
+                                <td colSpan={5} className="py-1 pr-2 uppercase tracking-widest text-[10px]">Invoice Grand Total</td>
                                 <td className="py-1 pr-2 text-right font-mono">{INR(invoices.reduce((a, b) => a + Number(b.amount_inr || 0), 0))}</td>
                                 <td className="py-1 pr-2 text-right font-mono">{INR(invoices.reduce((a, b) => a + Number(b.gst_inr || 0), 0))}</td>
                                 <td className="py-1 pr-2 text-right font-mono"><b>{INR(invoices.reduce((a, b) => a + Number(b.total_inr || 0), 0))}</b></td>
                             </tr>
+                        </tbody>
+                    </table>
+
+                    {/* Per-division sub-totals */}
+                    <div className="text-[10px] uppercase tracking-widest mb-1">Per-Division Totals</div>
+                    <table className="w-full text-[11px] border-collapse mb-4">
+                        <tbody>
+                            {Object.entries(byDiv).map(([code, amt]) => (
+                                <tr key={code} className="border-b border-gray-200">
+                                    <td className="py-1 pr-2"><b>{bodyName(code)}</b> <span className="text-gray-600">({code})</span></td>
+                                    <td className="py-1 pr-2 text-right font-mono">{INR(amt)}</td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
 
@@ -328,12 +422,45 @@ export default function TournamentClosurePDF() {
                         </tbody>
                     </table>
                 </>
+                );
+            })()}
+
+            {/* Section 7 · Discussion audit trail */}
+            {discussionThreads.length > 0 && (
+                <>
+                    <h3 className="text-lg border-b border-black mb-2 mt-6">7. Discussion Audit Trail &middot; {discussionThreads.length} channel(s)</h3>
+                    {discussionThreads.map(({ channel, messages }, ci) => (
+                        <div key={ci} className="mb-4" data-testid={`closure-discussion-${channel.body_scope || 'general'}`}>
+                            <div className="inline-block bg-black text-white px-2 py-0.5 text-[10px] uppercase tracking-widest mb-1">
+                                {channel.label} · {messages.length} message(s)
+                            </div>
+                            <table className="w-full text-[10px] border-collapse">
+                                <thead>
+                                    <tr className="border-b border-black">
+                                        <th className="text-left py-1 pr-2 w-20">When</th>
+                                        <th className="text-left py-1 pr-2 w-40">Author</th>
+                                        <th className="text-left py-1 pr-2">Message</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {messages.map((m, mi) => (
+                                        <tr key={m.id || mi} className="border-b border-gray-200 align-top">
+                                            <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(m.created_at)}</td>
+                                            <td className="py-1 pr-2"><b>{m.author_name || m.created_by || "—"}</b>{m.author_body_code && <div className="text-gray-600 text-[9px]">{m.author_body_code}</div>}</td>
+                                            <td className="py-1 pr-2 whitespace-pre-wrap">{m.body || m.text || "—"}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ))}
+                </>
             )}
 
-            {/* Section 6 · Closure note (from backend closure_letter) */}
+            {/* Section 8 · Closure note (from backend closure_letter) */}
             {letter?.body_text && (
                 <>
-                    <h3 className="text-lg border-b border-black mb-2 mt-6">6. Closure Notes</h3>
+                    <h3 className="text-lg border-b border-black mb-2 mt-6">8. Closure Notes</h3>
                     <pre className="whitespace-pre-wrap font-serif text-[11px] leading-relaxed">{letter.body_text}</pre>
                 </>
             )}

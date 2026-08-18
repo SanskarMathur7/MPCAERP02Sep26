@@ -1,0 +1,67 @@
+{
+  "summary": "BCCI Tournament Wiring Audit — 10-step conformance run for BCCI-family tournaments (used seeded 'Duleep Trophy' tournament_type_code=bcci_staging → resolves to wiring type_id=bcci). Verified GET /api/tournament-wiring cell values vs actual API/UI behavior. Backend guards are 90% enforced but Step 1 (tournament_creation) is completely UN-guarded, and Step 6 (match_calendar) UI ships DROPDOWNS despite the wiring banner correctly displaying 'MANUAL TEAM NAMES — FREE-TEXT (E.G. AWAY = OTHER STATES) PER WIRING'. Backend accepts free-text team names — the divergence is UI-only for Step 6.",
+
+  "per_step_audit_table": [
+    {"step": 1, "key": "tournament_creation",    "wiring": "M · owner=MPCA · mode=Auto_Compute · vis=Realtime", "observed": "POST /api/tournaments with X-Body-Type=Division created a BCCI tournament (HTTP 200, TRN-2026-27-089). No assert_wiring_owner() call.", "verdict": "FAIL", "root_cause": "/app/backend/routes/tournaments.py:321 create_tournament() — no wiring guard. Only guard is in POST /tournaments/{tid}/status/{new_status} (line 595). Fix: add `await assert_wiring_owner(None, 'tournament_creation', x_body_type, ...)` but resolver needs to accept `tournament_type_code` directly (no tid yet). Suggest adding a variant `assert_wiring_owner_by_code(type_code, step, x_body_type)`."},
+    {"step": 2, "key": "pool_basics",             "wiring": "M · owner=MPCA · mode=Auto_Compute · vis=Realtime", "observed": "wiring cell text says 'HOST division only (one selectable); multiple match pools allowed' — GET participants works. NOT audited: whether MPCA can add free-text non-MP bodies (Kerala, Karnataka) as opposing pool participants. Wiring text conflicts with review-request expectation of 'Manual — MPCA can add any body'. Wiring cell mode=Auto_Compute but review says Manual_PDF.", "verdict": "PARTIAL", "root_cause": "Wiring cell text for BCCI pool_basics ('HOST division only') may itself be incorrect — user's original problem statement says 'MPCA can add any body as participant, not restricted to divisions'. Recommend updating wiring cell text + verifying tournament_participations endpoint allows free-text opponent bodies for BCCI."},
+    {"step": 3, "key": "match_official_posting", "wiring": "M · owner=MPCA · mode=Register_Linked · vis=Realtime", "observed": "POST /api/tournament-match-officials with X-Body-Type=Division blocked (non-200). Guard in /app/backend/routes/match_officials.py:212-224 reads wiring cell.", "verdict": "PASS", "root_cause": "-"},
+    {"step": 4, "key": "squad",                   "wiring": "M · owner=MPCA · mode=Manual_PDF · vis=Realtime",  "observed": "Wiring status endpoint returns mode=Manual_PDF; frontend TournamentDetail Squads setup card labels 'One per participating body'. NOT deeply audited whether Squad panel forces register selection vs allows signed-PDF upload for BCCI.", "verdict": "PARTIAL", "root_cause": "Squad UI (/app/frontend/src/pages/*Squad*.jsx) and POST /api/squads endpoints need verification that Manual_PDF mode disables member-picker + shows PDF upload widget. Not tested end-to-end in this iteration."},
+    {"step": 5, "key": "squad_approval",           "wiring": "NA · owner=Auto · mode=NA",                        "observed": "wiring-status returns status=na. selection_console.py:204 reads flag=NA and skips approval.", "verdict": "PASS", "root_cause": "-"},
+    {"step": 6, "key": "match_calendar",           "wiring": "M · owner=MPCA · mode=Manual_PDF · vis=Realtime",  "observed": "BACKEND: POST /tournaments/{tid}/matches with free-text home_team='Karnataka', away_team='Kerala' → 200 OK. Division 403. Backend is CORRECT. FRONTEND BUG: TournamentWorkspacePanels renders correct banner 'MANUAL TEAM NAMES — FREE-TEXT (E.G. AWAY = OTHER STATES) PER WIRING' but MatchFixtureCard renders TEAM A and TEAM B as <SELECT> dropdowns bound to `teamOptions` (registered bodies) — Playwright confirmed tag=<SELECT> with only 'DIV-BPL' as option. Free-text input impossible from UI.", "verdict": "FAIL (UI)", "root_cause": "/app/frontend/src/components/MatchFixtureCard.jsx lines 268-297 — `<select data-testid=fx-team-a>` / `<select data-testid=fx-team-b>` are HARDCODED as dropdowns bound to teamOptions. Component must accept the calStep wiring cell (or a `manualTeams` prop) and switch to `<input type=text>` when `match_calendar.mode === 'Manual_PDF'`. Also needs to persist free-text into placeholders list for future matches."},
+    {"step": 7, "key": "unified_budget",           "wiring": "M · owner=MPCA · mode=Auto_Compute · vis=Realtime", "observed": "unified_budget.py:960,1024 asserts wiring owner. Not tested with Division persona.", "verdict": "PASS (static)", "root_cause": "-"},
+    {"step": 8, "key": "finance_console",          "wiring": "M · owner=MPCA · approver=MPCA · mode=Auto_Compute", "observed": "Cell correct. Live persona-scoped test not run.", "verdict": "PASS (static)", "root_cause": "-"},
+    {"step": 9, "key": "tournament_closure",       "wiring": "M · owner=MPCA · mode=Manual_PDF",                  "observed": "POST /tournaments/{tid}/close as Division → 403 (verified). Guard in tournament_workspace.py:1141.", "verdict": "PASS", "root_cause": "-"},
+    {"step": 10,"key": "mpca_visibility",          "wiring": "INFO · owner=MPCA · vis=Realtime",                  "observed": "Cell correct; wiring-status returns status=info, note='Realtime to MPCA'.", "verdict": "PASS", "root_cause": "-"}
+  ],
+
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/tournaments", "issue": "No assert_wiring_owner('tournament_creation') guard — Division persona (X-Body-Type=Division, X-User-Body-Code=DIV-IND) successfully created a BCCI tournament (HTTP 200). Wiring cell says owner=MPCA. This is a governance leak across ALL 8 wiring types (Division could create MPCA-only BCCI/Inter-Div; District could create Division-only tournaments).", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/tournament-wiring — bcci.pool_basics cell", "issue": "Cell text says 'HOST division only (one selectable)' but user's problem statement expects 'Manual — MPCA can add any body (e.g. Kerala, Karnataka) as opposing participant'. Wiring cell may be wrong OR pool_basics endpoint may not honor the Manual semantic. Needs product clarification + possible cell update."}
+    ]
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MatchFixtureCard.jsx", "issue": "TEAM A / TEAM B rendered as <select> dropdowns bound to `teamOptions` (registered bodies) even when wiring `match_calendar.mode === 'Manual_PDF'` (BCCI, School, Club, Camps, Coaching, Vacation types). User cannot enter free-text opponent names like 'Karnataka', 'Kerala', 'Other States'. Banner correctly announces free-text mode but form does not honor it. Confirmed on Duleep Trophy — Team A tag=<SELECT>, only option available was 'DIV-BPL'.", "selector": "[data-testid='fx-team-a'], [data-testid='fx-team-b']", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_bcci_wiring_audit.py",
+    "/app/test_reports/pytest/bcci_wiring_audit.xml"
+  ],
+
+  "action_items": [
+    "1. FRONTEND FIX (Step 6, user-reported): In /app/frontend/src/components/MatchFixtureCard.jsx, read `useWiringStep(tournament.id, 'match_calendar')` and switch TEAM A / TEAM B from <select value=form.home_team> to <input type=text placeholder='e.g. Karnataka'> when cell.mode === 'Manual_PDF'. Ensure both create-mode and edit-mode branches switch. Consider also allowing free-text alongside dropdown when mode is 'Manual_PDF' (best UX = combobox / list with 'add new').",
+    "2. BACKEND FIX (Step 1): Add wiring-owner enforcement to POST /api/tournaments. Because tid does not exist yet, resolve type_id from payload.tournament_type_code / tournament_type / scope using the existing _resolve_type_id helper (feed it the pending payload dict), fetch wiring cell for 'tournament_creation', then run the _OWNER_TO_BODY_TYPES check against X-Body-Type header. Alternatively: create a shared helper `assert_creation_owner(payload, x_body_type)` in core/wiring_guard.py.",
+    "3. VERIFICATION (Step 2 pool_basics): Confirm with product whether BCCI opposing teams should be Manual (free-text) or Register-linked. If Manual, update the wiring cell mode to Manual_PDF and update tournament_participations endpoint + PoolPanel UI accordingly.",
+    "4. VERIFICATION (Step 4 squad): Deep-test Squad panel end-to-end for BCCI — confirm signed-PDF upload flow works and register-selection is disabled when wiring mode=Manual_PDF."
+  ],
+
+  "critical_code_review_comments": [
+    "core/wiring_guard.py `resolve_wiring_cell` requires a tid (tournament must already exist) — so creation-time guard cannot use it. Need a payload-based variant.",
+    "MatchFixtureCard.jsx does not consume the wiring context that TournamentWorkspacePanels already fetches via `useWiringStep(tournament.id, 'match_calendar')` — banner logic lives in the parent but the actual form does not receive `calStep`. Prop drilling needed.",
+    "tournament_wiring.py bcci.pool_basics text 'HOST division only (one selectable)' semantically conflicts with the wiring mode row for BCCI in the review request ('MPCA can add any body as participant'). The single source of truth is contradicting itself in text vs review expectation — needs product review."
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_bcci_wiring_audit.py (new — 18 tests, 17 pass, 1 fail = Step 1 BUG)"
+  ],
+
+  "success_rate": {"backend": "94%", "frontend": "reproduced 1 CRITICAL bug (Team A/B dropdown for Manual_PDF)"},
+
+  "test_credentials": "Persona chip login: persona-chip-president (MPCA), persona-chip-division-secretary (DIV-IND), persona-chip-district-secretary (DIST-INDO-IND). MUST click 'Sign in to the Registrar' button after chip click — chip only auto-fills.",
+
+  "seed_data_creation": "None — used existing seeded 'Duleep Trophy' (id=780b0d57-eddf-468b-a607-7cc6c1da9e6e, tournament_type_code=bcci_staging, cycle=2026-27) and 'ZR Irani Cup' (id=e601bf8b-...). Test 1.2 created a Division-owned BCCI tournament (BUG) which was cleaned up via direct MongoDB delete.",
+
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent fixes: (a) POST /api/tournaments wiring guard, (b) MatchFixtureCard.jsx free-text Team A/B for Manual_PDF wiring mode — re-run `pytest /app/backend/tests/test_bcci_wiring_audit.py -v` and re-run the Playwright block that opens Duleep Trophy → box-calendar → calendar-add-match-btn and asserts `fx-team-a` tag === 'INPUT'. Also do the analog for a Division-owned tournament (e.g. Inter-Club/Inter-School) to make sure the free-text switch also fires there (their wiring mode is also Manual_PDF).",
+
+  "rca_of_the_issue": "USER-REPORTED BUG (Step 6): TournamentWorkspacePanels correctly reads `useWiringStep('match_calendar')` and renders the free-text banner when mode=Manual_PDF (line 210 of TournamentWorkspacePanels.jsx). However the *child* component that actually renders the form fields — MatchFixtureCard.jsx — hardcodes `<select data-testid=fx-team-a>` bound to `teamOptions` (line 271) and `<select data-testid=fx-team-b>` (line 285). No `mode` or `calStep` prop is passed to MatchFixtureCard. Consequence: banner + backend agree that BCCI should accept free-text 'Kerala', 'Karnataka', 'Other States', but the UI form only exposes registered MP bodies as picks. Fix requires (a) passing `calStep` (or `manualTeams=true`) from TournamentWorkspacePanels.jsx L275-303 into MatchFixtureCard, and (b) in MatchFixtureCard rendering conditional: if `manualTeams` → `<input type=text data-testid=fx-team-a value=form.home_team onChange=setField('home_team', e.target.value) />` (same for B), else keep existing dropdown. Reproduction confirmed via Playwright screenshot /app/test_reports/bcci_calendar_dropdown.png."
+}

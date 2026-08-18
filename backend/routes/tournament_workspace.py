@@ -396,13 +396,36 @@ class SetupMetaPayload(BaseModel):
 
 @api_router.patch("/tournaments/{tid}/setup-meta")
 async def patch_setup_meta(tid: str, payload: SetupMetaPayload):
-    r = await db.tournaments.update_one({"id": tid}, {"$set": {"setup_meta": payload.setup_meta}})
-    if r.matched_count == 0:
-        raise HTTPException(404, "Tournament not found")
     # M26 · Sync per-body participation ledger when pools change
     meta = payload.setup_meta if isinstance(payload.setup_meta, dict) else {}
     div_pools = meta.get("division_pools")
     dist_pools = meta.get("district_pools")
+
+    # MPCA-260 · Ship P1 — Enforce "one host body per pool" for BCCI-family
+    # tournaments (wiring cell pool_basics.text = "HOST division only, one
+    # selectable"). Validation is server-side so it can't be bypassed.
+    from core.wiring_guard import resolve_wiring_cell
+    pool_cell = await resolve_wiring_cell(tid, "pool_basics")
+    if pool_cell and pool_cell.get("mode") == "Auto_Compute":
+        def _member_codes(p):
+            # Support both member shapes: list of strings, or list of {code}/{body_code}.
+            m = p.get("members") or p.get("bodies") or p.get("teams") or []
+            out = []
+            for it in m:
+                if isinstance(it, str): out.append(it)
+                elif isinstance(it, dict): out.append(it.get("code") or it.get("body_code") or it.get("body_id"))
+            return [c for c in out if c]
+        for p in (div_pools or []) + (dist_pools or []):
+            if len(_member_codes(p)) > 1:
+                raise HTTPException(
+                    409,
+                    "Wiring violation: BCCI-family tournaments allow only ONE host body per pool. "
+                    "Please split into separate pools (opposing teams are free-text in the Match Calendar, not part of the pool).",
+                )
+
+    r = await db.tournaments.update_one({"id": tid}, {"$set": {"setup_meta": payload.setup_meta}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Tournament not found")
     if div_pools is not None or dist_pools is not None:
         from routes.tournament_participations import sync_participants_from_pools
         await sync_participants_from_pools(tid, div_pools, dist_pools)

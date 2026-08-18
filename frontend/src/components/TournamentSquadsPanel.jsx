@@ -32,16 +32,23 @@ const TournamentSquadsPanel = ({ tournament, persona, canManage, onChange: _onCh
     // stay aligned with the governance intent. "M" → MPCA approves; otherwise
     // squad locks locally with no MPCA step.
     const [approvalFlag, setApprovalFlag] = useState(null);
+    // MPCA-260 · Ship P1 — Read the wiring's squad step (owner + mode).  When
+    // owner=MPCA + mode=Manual_PDF (BCCI family), the panel must show a
+    // SINGLE MPCA-uploads-signed-PDF card — not one card per participating
+    // body — because per wiring the roster is a manual signed sheet, not
+    // built from the player register per division.
+    const [squadStep, setSquadStep] = useState(null);
 
     useEffect(() => {
         let alive = true;
         api.get(`/tournaments/${tournament.id}/wiring-status`)
             .then(r => {
                 if (!alive) return;
-                const step = (r.data.steps || []).find(s => s.key === "squad_approval");
-                setApprovalFlag(step?.flag ?? null);
+                const steps = r.data.steps || [];
+                setApprovalFlag(steps.find(s => s.key === "squad_approval")?.flag ?? null);
+                setSquadStep(steps.find(s => s.key === "squad") ?? null);
             })
-            .catch(() => { if (alive) setApprovalFlag(null); });
+            .catch(() => { if (alive) { setApprovalFlag(null); setSquadStep(null); } });
         return () => { alive = false; };
     }, [tournament.id]);
 
@@ -84,6 +91,45 @@ const TournamentSquadsPanel = ({ tournament, persona, canManage, onChange: _onCh
             No participants yet — set up Division Pools in the Tournament Basics panel first, then each participating body will get a squad slot here.
         </div>
     );
+
+    // MPCA-260 · Ship P1 — Wiring says squad is MPCA-uploaded signed PDF
+    // (BCCI family). Skip the per-body grid entirely and render a single
+    // upload card. Existing squads (if any) still show below for audit.
+    const mpcaSignedPdfMode =
+        squadStep?.owner === "MPCA" && squadStep?.mode === "Manual_PDF";
+
+    if (mpcaSignedPdfMode) {
+        const anySquad = rows.find(r => r.squad)?.squad;
+        const url = anySquad?.signed_squad_url || tournament.mpca_signed_squad_url;
+        return (
+            <div className="border border-mpca-brass/30 bg-mpca-ivory p-5 space-y-4" data-testid="panel-squads-manual-pdf">
+                <div>
+                    <div className="overline text-[9px]">MPCA Signed Squad</div>
+                    <div className="font-serif text-lg text-mpca-green-dark mt-1">
+                        Squad · Manual PDF (uploaded by MPCA)
+                    </div>
+                    <div className="text-[11px] text-mpca-gray-dark mt-1 max-w-2xl">
+                        Per wiring, for BCCI-family tournaments MPCA uploads the signed squad sheet.
+                        Individual divisions do <b>not</b> build squads for this tournament in the ERP —
+                        the roster arrives as a signed team-list PDF from the state.
+                    </div>
+                </div>
+                <div className="border border-dashed border-mpca-brass/40 bg-white p-4">
+                    {url ? (
+                        <div className="text-[12px] flex items-center gap-2 flex-wrap" data-testid="squad-manual-pdf-uploaded">
+                            <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 border border-mpca-green-dark/50 bg-mpca-green-dark/5 text-mpca-green-dark">Uploaded</span>
+                            <a href={url} target="_blank" rel="noreferrer" className="text-mpca-oxblood underline break-all">{url}</a>
+                        </div>
+                    ) : (
+                        <div className="text-[12px] italic text-mpca-gray-dark" data-testid="squad-manual-pdf-empty">
+                            No signed squad uploaded yet. When MPCA finalises the roster, upload the signed PDF
+                            here — the URL will be stored against this tournament for closure archival.
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
 
     const submittedCount = rows.filter((r) => r.squad && ["Submitted", "Awaiting_MPCA_Approval", "Under_Review", "Approved"].includes(r.squad.submission_status)).length;
     const approvedCount = rows.filter((r) => r.squad?.submission_status === "Approved").length;

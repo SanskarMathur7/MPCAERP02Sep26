@@ -421,7 +421,7 @@ const TournamentDetail = () => {
                             {/* Utility footer — audit + comms */}
                             <SetupBox testId="box-activity" icon={History} label="Activity Log" note="Chronological trail of all actions" onClick={() => setOpenBox(openBox === "activity" ? null : "activity")} active={openBox === "activity"} />
                             <SetupBox testId="box-discussion" icon={MessageSquare} label="Discussion" note="Broadcast to all Divisions · or chat privately with one" onClick={() => setOpenBox(openBox === "discussion" ? null : "discussion")} active={openBox === "discussion"} />
-                            {t.tournament_scope === "Inter_Divisional" && (
+                            {(t.tournament_scope === "Inter_Divisional" || t.scope === "Inter_Divisional") && (
                                 <SetupBox testId="box-pre-camps" icon={UsersRound} label="Pre-Tournament Camps" note="One per participating body · auto-created on approval" onClick={() => setOpenBox(openBox === "pre-camps" ? null : "pre-camps")} active={openBox === "pre-camps"} />
                             )}
                         </>

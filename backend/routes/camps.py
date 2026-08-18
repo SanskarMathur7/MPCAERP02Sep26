@@ -274,10 +274,12 @@ async def auto_create_pre_camps_for_tournament(tournament: dict) -> dict:
 @api_router.get("/tournaments/{tid}/pre-tournament-camps", response_model=List[Camp])
 async def list_pre_tournament_camps(tid: str):
     """List all Pre-Tournament Camps auto-linked to this Inter-Divisional tournament."""
-    t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "tournament_scope": 1})
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "tournament_scope": 1, "scope": 1})
     if not t:
         raise HTTPException(404, "Tournament not found")
-    if t.get("tournament_scope") != "Inter_Divisional":
+    # MPCA-251 · Some seeded tournaments use `scope` instead of `tournament_scope`.
+    # Accept either — the underlying value is the same enum.
+    if t.get("tournament_scope") != "Inter_Divisional" and t.get("scope") != "Inter_Divisional":
         return []
     docs = await db.camps.find({
         "camp_type": "Pre_Tournament_Camp",

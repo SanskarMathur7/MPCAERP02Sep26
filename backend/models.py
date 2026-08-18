@@ -1221,6 +1221,13 @@ class Tournament(TournamentBase):
     unified_budget_snapshot: Optional[Dict[str, Any]] = None
     created_by: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # MPCA-254 · Ship B — Provenance & linkage fields for tournaments that
+    # were promoted from legacy `db.camps` (Pre-Tournament / Coaching /
+    # Vacation camps). `parent_tournament_id` points to the Inter-Divisional
+    # tournament the camp is linked to (for Pre-Tournament Camps only).
+    migrated_from_camp_id: Optional[str] = None
+    parent_tournament_id: Optional[str] = None
+    is_pre_tournament_camp: bool = False
 
 
 class TournamentCreate(TournamentBase):

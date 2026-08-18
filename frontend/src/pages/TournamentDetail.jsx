@@ -6,7 +6,7 @@ import {
     setTournamentStatus, fetchBodies, api,
 } from "@/lib/api";
 import {
-    Trophy, Calendar, MapPin, Users, ChevronLeft, ShieldCheck, AlertTriangle, BadgeCheck,
+    Trophy, Calendar, MapPin, Users, ChevronLeft, ChevronRight, ShieldCheck, AlertTriangle, BadgeCheck,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentSubTabs from "@/components/TournamentSubTabs";
@@ -87,6 +87,7 @@ const TournamentDetail = () => {
     const [progressKey, setProgressKey] = useState(0);
     const [myParticipation, setMyParticipation] = useState(null);   // M39x
     const [wiringFlags, setWiringFlags] = useState({});             // MPCA-235 · Ship 3 · flag per box
+    const [parentTournament, setParentTournament] = useState(null); // MPCA-254 · Ship B · linked Inter-Div tournament (for camps)
 
     // MPCA-235 · Ship 3 · Read the wiring status once and build a box-testid → {flag, owner} map
     // so each SetupBox shows a Mandatory / Optional / Optional·Not Used badge AND the note text
@@ -125,6 +126,21 @@ const TournamentDetail = () => {
             } catch { setMyParticipation(null); }
         })();
     }, [id, persona?.body_code, persona?.body_type, progressKey]);
+
+    // MPCA-254 · Ship B — For Pre-Tournament / Camp tournaments, fetch the
+    // parent Inter-Divisional tournament so we can show a clickable link
+    // back to it (users often need to jump to the parent to see squads,
+    // fixtures, or the shared budget context).
+    useEffect(() => {
+        (async () => {
+            const parentId = t?.parent_tournament_id;
+            if (!parentId) { setParentTournament(null); return; }
+            try {
+                const { data } = await api.get(`/tournaments/${parentId}`);
+                setParentTournament(data || null);
+            } catch { setParentTournament(null); }
+        })();
+    }, [t?.parent_tournament_id]);
 
     const acceptTournament = async () => {
         try {
@@ -243,8 +259,20 @@ const TournamentDetail = () => {
                     {t.name}
                 </h1>
                 {t.short_name && <div className="text-xs tracking-[0.3em] uppercase text-mpca-gold-light mt-2">&ldquo;{t.short_name}&rdquo;</div>}
-                <div className="mt-3">
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
                     <WiringComplianceChip tournament={t} testId="trn-detail-wiring" />
+                    {parentTournament && (
+                        <button
+                            onClick={() => navigate(`/tournaments/${parentTournament.id}`)}
+                            title={`Linked to ${parentTournament.name} — click to open the parent Inter-Divisional tournament`}
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 border border-mpca-gold/60 bg-mpca-gold/10 text-mpca-gold-light text-[10px] uppercase tracking-widest hover:bg-mpca-gold/25 hover:text-mpca-ivory transition-all"
+                            data-testid="trn-detail-linked-parent"
+                        >
+                            <span className="w-1.5 h-1.5 rounded-full bg-mpca-gold" />
+                            Linked to · {parentTournament.name}
+                            <ChevronRight size={11} strokeWidth={2} />
+                        </button>
+                    )}
                 </div>
                 <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5 mt-7 text-mpca-ivory/90">
                     <div className="flex items-start gap-2">

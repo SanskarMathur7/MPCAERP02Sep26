@@ -237,6 +237,9 @@ async def patch_rate_card(card_id: str, patch: RateCardPatch):
             da = float((vals or {}).get("da_per_day") or 0)
             clean_off[role] = {"fee_per_day": max(0.0, fee), "da_per_day": max(0.0, da)}
         payload["officials_rates"] = clean_off
+    if patch.disabled_head_keys is not None:
+        # MPCA-255 · Sanitise — coerce to strings, dedupe, cap length.
+        payload["disabled_head_keys"] = sorted({str(k) for k in patch.disabled_head_keys if k})[:200]
     if not payload:
         return existing
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()

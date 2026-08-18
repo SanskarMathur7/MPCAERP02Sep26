@@ -1081,6 +1081,11 @@ class RateCard(BaseModel):
     # newly-created `tournament_match_officials` at assignment time. Existing
     # assignments retain the snapshot rates they were created with.
     officials_rates: Dict[str, Dict[str, float]] = Field(default_factory=dict)
+    # MPCA-255 · Heads that do NOT apply to this tournament type. Keys listed
+    # here are skipped by the unified budget compute engine and hidden from
+    # the budget panel. Empty list = all 17 defaults + custom heads apply
+    # (same as before). Additive & backward-compatible.
+    disabled_head_keys: List[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: Optional[str] = None
     updated_by: Optional[str] = None
@@ -1103,6 +1108,7 @@ class RateCardPatch(BaseModel):
     budget_rates: Optional[Dict[str, RateHead]] = None
     travel_rates: Optional[Dict[str, RateHead]] = None
     officials_rates: Optional[Dict[str, Dict[str, float]]] = None
+    disabled_head_keys: Optional[List[str]] = None    # MPCA-255
 
 
 class SquadTimeline(BaseModel):

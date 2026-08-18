@@ -272,17 +272,24 @@ def compute_tournament_budget(
         {"hotel_team": {"md": 1800, "nmd": 1800}, ...}
     """
     budget_rates = rate_card.get("budget_rates") or {}
+    # MPCA-255 · Per-tournament-type disabled heads — the rate card lists which
+    # of the default 17 (and custom) heads do NOT apply to this tournament
+    # type. Filter at the top so downstream logic never sees them.
+    disabled_keys = set(rate_card.get("disabled_head_keys") or [])
     # MPCA-224 · Apply head_meta_overrides (name / driver / owner / rooms /
     # basis) to the 17 default heads BEFORE iterating.
     meta_overrides = rate_card.get("head_meta_overrides") or {}
     default_heads_effective = [
         {**h, **{k: v for k, v in (meta_overrides.get(h["key"]) or {}).items() if v is not None or k in ("driver",)}}
         for h in BUDGET_HEADS_META
+        if h["key"] not in disabled_keys
     ]
     # MPCA-223 · Include custom heads (MPCA-added line items) alongside the
     # 17 default heads. Custom heads are stored on the rate card and follow
     # the same {key, name, driver, rooms, basis, owner} shape.
-    all_heads = default_heads_effective + list(rate_card.get("custom_heads") or [])
+    all_heads = default_heads_effective + [
+        h for h in (rate_card.get("custom_heads") or []) if h.get("key") not in disabled_keys
+    ]
     valid_matches = [m for m in matches if match_days(m) > 0]
     gap = gap_map(valid_matches)
 

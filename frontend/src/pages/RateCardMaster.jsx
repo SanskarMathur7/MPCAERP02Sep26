@@ -92,6 +92,24 @@ export default function RateCardMaster() {
         setCard(next); setDirty(true);
     };
 
+    // MPCA-255 · Toggle whether a head applies to this rate card's tournament
+    // type. Disabled heads are skipped by the compute engine and hidden from
+    // the budget panel. Persists to backend immediately (no dirty flag).
+    const toggleHeadEnabled = async (key, enabled) => {
+        if (!card) return;
+        const current = new Set(card.disabled_head_keys || []);
+        if (enabled) current.delete(key); else current.add(key);
+        const next_disabled = Array.from(current);
+        setSaving(true); setErr(null);
+        try {
+            const { data } = await api.patch(`/rate-cards/${card.id}`, {
+                disabled_head_keys: next_disabled,
+            });
+            setCard(data);
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setSaving(false); }
+    };
+
     // MPCA-224 · Effective head metadata after applying overrides
     const effectiveDefaultHeads = useMemo(() => {
         const overrides = card?.head_meta_overrides || {};
@@ -187,6 +205,7 @@ export default function RateCardMaster() {
     const budgetHeads = heads.budget_heads || [];
     const travelHeads = heads.travel_heads || [];
     const budgetSubtotal = useMemo(() => budgetHeads.reduce((acc, h) => {
+        if ((card?.disabled_head_keys || []).includes(h.key)) return acc;
         const r = (card?.budget_rates || {})[h.key] || { md: 0, nmd: 0 };
         return acc + (r.md || 0) + (r.nmd || 0);
     }, 0), [card, budgetHeads]);
@@ -238,13 +257,14 @@ export default function RateCardMaster() {
                 <div className="border border-mpca-brass/30 bg-mpca-ivory mb-8" data-testid="rc-budget-table">
                     <div className="px-4 py-2 bg-mpca-green-dark text-mpca-gold-light flex items-center gap-2">
                         <Wallet size={13} />
-                        <div className="font-serif text-sm">Tournament Rate Card · {budgetHeads.length} heads</div>
+                        <div className="font-serif text-sm">Tournament Rate Card · {budgetHeads.length - (card?.disabled_head_keys || []).filter(k => budgetHeads.some(h => h.key === k)).length} of {budgetHeads.length} heads active</div>
                         <div className="text-[10px] uppercase tracking-widest opacity-80 ml-auto">md × qty × MatchDays  +  nmd × qty × NonMatchDays</div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                             <thead className="bg-mpca-parchment/60 text-mpca-brass uppercase text-[9px] tracking-widest">
                                 <tr>
+                                    <th className="px-2 py-2 text-center w-10" title="Applies to this tournament type">On</th>
                                     <th className="px-3 py-2 text-left w-1/3">Head</th>
                                     <th className="px-3 py-2 text-left">Driver</th>
                                     <th className="px-3 py-2 text-left">Owner</th>
@@ -255,8 +275,20 @@ export default function RateCardMaster() {
                             <tbody>
                                 {effectiveDefaultHeads.map((h) => {
                                     const r = (card.budget_rates || {})[h.key] || { md: 0, nmd: 0 };
+                                    const isDisabled = (card.disabled_head_keys || []).includes(h.key);
                                     return (
-                                        <tr key={h.key} className="border-b border-mpca-brass/10" data-testid={`rc-b-row-${h.key}`}>
+                                        <tr key={h.key} className={`border-b border-mpca-brass/10 ${isDisabled ? "opacity-40 bg-mpca-brass/5" : ""}`} data-testid={`rc-b-row-${h.key}`}>
+                                            <td className="px-2 py-2 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    className="cursor-pointer accent-mpca-oxblood"
+                                                    checked={!isDisabled}
+                                                    disabled={!canEdit || saving}
+                                                    onChange={(e) => toggleHeadEnabled(h.key, e.target.checked)}
+                                                    title={isDisabled ? "Head disabled — click to enable for this tournament type" : "Head applies — click to disable for this tournament type"}
+                                                    data-testid={`rc-b-toggle-${h.key}`}
+                                                />
+                                            </td>
                                             <td className="px-3 py-2 font-serif text-mpca-green-dark">
                                                 <input
                                                     type="text"
@@ -329,7 +361,7 @@ export default function RateCardMaster() {
                             </tbody>
                             <tfoot>
                                 <tr className="bg-mpca-parchment/40 border-t border-mpca-brass/40">
-                                    <td colSpan={3} className="px-3 py-2 text-right font-mono text-[10px] text-mpca-brass uppercase tracking-widest">Sum of unit rates (advisory)</td>
+                                    <td colSpan={4} className="px-3 py-2 text-right font-mono text-[10px] text-mpca-brass uppercase tracking-widest">Sum of unit rates (advisory · active heads only)</td>
                                     <td colSpan={2} className="px-3 py-2 text-right font-mono text-mpca-oxblood" data-testid="rc-b-subtotal">{INR(budgetSubtotal)}</td>
                                 </tr>
                             </tfoot>

@@ -45,6 +45,8 @@ const PlayerDetail = lazy(() => import("@/pages/PlayerDetail"));
 const Tournaments = lazy(() => import("@/pages/Tournaments"));
 const TournamentDetail = lazy(() => import("@/pages/TournamentDetail"));
 const TournamentSchedulePDF = lazy(() => import("@/pages/TournamentSchedulePDF"));
+const TournamentClosurePDF  = lazy(() => import("@/pages/TournamentClosurePDF"));
+const GrantClaimSummaryPDF  = lazy(() => import("@/pages/GrantClaimSummaryPDF"));
 const SelectionConsole = lazy(() => import("@/pages/SelectionConsole"));
 const MatchOfficials = lazy(() => import("@/pages/MatchOfficials"));
 const MyAssignments = lazy(() => import("@/pages/MyAssignments"));
@@ -188,6 +190,8 @@ function App() {
                             <Route path="/audit-log" element={<Protected><AuditLog /></Protected>} />
                             <Route path="/tournaments/:id" element={<Protected><TournamentDetail /></Protected>} />
                             <Route path="/tournaments/:id/schedule" element={<Protected><TournamentSchedulePDF /></Protected>} />
+                            <Route path="/tournaments/:id/closure"  element={<Protected><TournamentClosurePDF /></Protected>} />
+                            <Route path="/grant-claims/:id/summary" element={<Protected><GrantClaimSummaryPDF /></Protected>} />
                             <Route path="/tournaments/:id/selection" element={<Protected><SelectionConsole /></Protected>} />
                             <Route path="/selection-funnel" element={<Protected><SelectionFunnel /></Protected>} />
                             <Route path="/match-officials" element={<Protected><MatchOfficials /></Protected>} />

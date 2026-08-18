@@ -199,6 +199,27 @@ async def create_invoice(payload: TournamentInvoiceCreate):
         # Convenience: keep legacy budget_head_code = first allocation's code
         if not body.get("budget_head_code"):
             body["budget_head_code"] = allocs[0].get("head_code")
+    elif body.get("budget_head_code"):
+        # MPCA-256 · Legacy single-head caller — synthesise a matching allocation
+        # so per-head spent aggregation (which reads `allocations[]`) works.
+        # Resolves head_label from BUDGET_HEADS_META or the budget's own
+        # approved_head_allocations (custom heads).
+        from models import BUDGET_HEADS_META
+        code = body["budget_head_code"]
+        label = next((h["name"] for h in BUDGET_HEADS_META if h["key"] == code), None)
+        if not label:
+            tb = await db.tournament_budgets.find_one(
+                {"tournament_id": payload.tournament_id, "body_id": payload.body_id, "status": "Approved"},
+                {"_id": 0, "approved_head_allocations": 1, "head_allocations": 1},
+                sort=[("created_at", -1)],
+            )
+            heads_ref = (tb or {}).get("approved_head_allocations") or (tb or {}).get("head_allocations") or []
+            label = next((h.get("head") for h in heads_ref if h.get("head_code") == code or h.get("head") == code), None) or code
+        body["allocations"] = [{
+            "head_code":  code,
+            "head_label": label,
+            "amount_inr": float(body.get("total_inr") or 0),
+        }]
 
     # Resolve budget if not set (single-budget tournaments) — but only when
     # the caller didn't already scope to a specific budget_id.

@@ -556,11 +556,12 @@ const ClosureLetterPanel = ({ tournament, persona, canGenerate, onChange }) => {
                             {busy ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />} {letter ? "Regenerate" : "Generate"}
                         </button>
                     )}
-                    {/* MPCA-246 · Rich multi-section PDF (always available once
-                        anything downstream has data — tournament basics alone
-                        are enough for a legible skeleton). */}
+                    {/* MPCA-257 · Print-page closure certificate — same visual
+                        language as /schedule (MPCA ERP header, serif title,
+                        numbered black-and-white sections). Opens in a new tab
+                        with a native "Print / Save as PDF" call-to-action. */}
                     <a
-                        href={`${(typeof window !== "undefined" ? window.location.origin : "")}/api/tournaments/${tournament.id}/closure-letter/pdf`}
+                        href={`/tournaments/${tournament.id}/closure`}
                         target="_blank" rel="noreferrer"
                         className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2 py-1 flex items-center gap-1"
                         data-testid="closure-rich-pdf-btn"

@@ -206,7 +206,10 @@ const GrantClaims = () => {
     // ─────────── MPCA-245 · Signed-artifact + payment + discussion handlers ───────────
     const downloadSummaryPdf = (variant = "submission") => {
         if (!selected) return;
-        window.open(`${BACKEND_URL}/api/grant-claims/${selected.id}/summary-pdf?variant=${variant}`, "_blank");
+        // MPCA-257 · Route through the new print page (same MPCA ERP visual
+        // language as the tournament schedule / closure PDFs). User hits
+        // "Print / Save as PDF" from the print-optimised page.
+        window.open(`/grant-claims/${selected.id}/summary?variant=${variant}`, "_blank");
     };
 
     // MPCA-250 · Purpose editor (long-text) + extra supporting document handlers

@@ -649,19 +649,37 @@ const PreTournamentCampsPanel = ({ tournamentId, tournamentName, persona }) => {
                                 <button
                                     onClick={async () => {
                                         try {
-                                            // Derive fiscal cycle from current camp (if any exists) or default
                                             const cycle = camps[0]?.fiscal_cycle || new Date().getFullYear() + "-" + String((new Date().getFullYear() + 1) % 100).padStart(2, "0");
+                                            const today = new Date();
+                                            const startISO = today.toISOString().slice(0, 10);
+                                            const endD = new Date(today); endD.setDate(endD.getDate() + 6);
+                                            const endISO = endD.toISOString().slice(0, 10);
                                             const { data: created } = await api.post("/camps", {
+                                                name: `${p.body_name || p.body_code} · Pre-Tournament Camp`,
                                                 body_id: p.body_code,
-                                                scheme_code: "3-D",
                                                 camp_type: "Pre_Tournament_Camp",
+                                                // MPCA-253 · Do NOT force scheme_code="3-D". Pre-Tournament
+                                                // camps follow the Master Rate Card like tournaments (per
+                                                // tournament_type × format × head). Backend leaves
+                                                // scheme_code null; the ratecard-driven auto-budget path
+                                                // takes over.
                                                 fiscal_cycle: cycle,
+                                                start_date: startISO,
+                                                end_date:   endISO,
                                                 inter_division_tournament_id: tournamentId,
                                                 inter_division_tournament_name: tournamentName,
                                                 created_by: persona?.name,
                                             });
                                             navigate(`/camps/${created.id}`);
-                                        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+                                        } catch (e) {
+                                            // MPCA-253 · Pydantic validation errors are `{detail: [{...}, ...]}`.
+                                            // Coerce to a legible message instead of "[object Object]".
+                                            const raw = e?.response?.data?.detail;
+                                            const msg = Array.isArray(raw)
+                                                ? raw.map(x => `• ${x.loc?.join(".") || "field"}: ${x.msg}`).join("\n")
+                                                : (typeof raw === "string" ? raw : e.message);
+                                            alert(msg);
+                                        }
                                     }}
                                     className="text-[10px] uppercase tracking-widest border border-mpca-brass text-mpca-brass hover:bg-mpca-brass hover:text-mpca-ivory px-3 py-1.5"
                                     data-testid={`start-camp-${p.body_code}`}

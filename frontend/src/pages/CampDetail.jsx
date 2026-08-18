@@ -124,7 +124,7 @@ const CampDetail = () => {
 
             <div className="text-[11px] text-mpca-gray-dark">
                 <FileText size={11} className="inline mr-1" />
-                All finance flows for this camp (budget approval, invoices, DA claims, reimbursement) live under the parent Inter-Divisional tournament&apos;s Finance Console.
+                All finance flows for this camp (budget, invoices, DA claims, reimbursement) live under the parent Inter-Divisional tournament&apos;s Finance Console. Budget is driven by the <b>Master Rate Card</b> (Pre-Tournament Camp × format) — scheme 3-D is not used.
             </div>
         </div>
     );

@@ -118,7 +118,15 @@ async def create_camp(payload: CampCreate):
     body = await db.bodies.find_one({"code": payload.body_id}, {"_id": 0})
     if not body:
         raise HTTPException(404, f"Body '{payload.body_id}' not found")
-    scheme_code = payload.scheme_code or CAMP_TYPE_TO_SCHEME.get(payload.camp_type)
+    # MPCA-253 · Pre-Tournament Camps do NOT use scheme 3-D auto-budget.
+    # Per user directive, camps follow the Master Rate Card (same as tournaments,
+    # keyed by tournament_type × format × head). Leave scheme_code null for
+    # Pre_Tournament_Camp so the scheme-driven auto-budget path is skipped —
+    # the ratecard-driven flow takes over when budgets are provisioned.
+    if payload.camp_type == "Pre_Tournament_Camp":
+        scheme_code = payload.scheme_code   # keep whatever caller explicitly sent (usually None)
+    else:
+        scheme_code = payload.scheme_code or CAMP_TYPE_TO_SCHEME.get(payload.camp_type)
 
     # MPCA-204 · Pre-Tournament Camps are mandatorily linked to an
     # Inter-Divisional tournament. Idempotent on (idt_id, body_id).
@@ -131,14 +139,15 @@ async def create_camp(payload: CampCreate):
                 "Pre-Tournament Camps must be linked to an Inter-Division Tournament. "
                 "Please select one from the dropdown.",
             )
-        t = await db.tournaments.find_one({"id": idt_id}, {"_id": 0, "name": 1, "tournament_scope": 1})
+        t = await db.tournaments.find_one({"id": idt_id}, {"_id": 0, "name": 1, "tournament_scope": 1, "scope": 1})
         if not t:
             raise HTTPException(404, f"Inter-Division tournament '{idt_id}' not found")
-        if t.get("tournament_scope") != "Inter_Divisional":
+        # MPCA-251 · Accept either `tournament_scope` or `scope` (seed data uses `scope`).
+        if t.get("tournament_scope") != "Inter_Divisional" and t.get("scope") != "Inter_Divisional":
             raise HTTPException(
                 422,
                 f"Only Inter-Division tournaments may host Pre-Tournament Camps "
-                f"(got scope: {t.get('tournament_scope')}).",
+                f"(got scope: {t.get('tournament_scope') or t.get('scope')}).",
             )
         idt_name = idt_name or t.get("name")
         existing = await db.camps.find_one({

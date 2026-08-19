@@ -156,3 +156,50 @@ def stamp_actor(x_persona_name: Optional[str], x_body_code: Optional[str],
     if x_body_code:
         return x_body_code
     return "MPCA"
+
+
+
+# ─── Feb 2026 · Division-owned Budget Predicate ──────────────────────────────
+# Any tournament whose `unified_budget` wiring cell is owned by the Division
+# (with no approver step) means MPCA has NO role in the budget preparation /
+# acceptance lifecycle. This covers 6 of the 8 tournament types today:
+#   • Pre-Tournament Camp
+#   • Inter-District
+#   • Inter-School
+#   • Inter-Club (A-Grade)
+#   • Periodical Coaching Camp
+#   • Vacation Camp
+# Used by (1) selection_console.py action-item generator to suppress
+# MPCA-side chips (Send / Accept / Sanction) and (2) finance_console.py
+# endpoints to return 400 when MPCA attempts to prepare / send budgets.
+# Reads the live wiring config — no hardcoded type list — so any future
+# wiring change flexes automatically.
+
+async def is_division_owned_budget(tournament: dict) -> bool:
+    """Return True when the wiring cell for `unified_budget` on this
+    tournament is `owner=Division` with no approver — meaning MPCA has
+    no budget-preparation or acceptance role and the Division owns the
+    lifecycle end-to-end until the reimbursement claim submission.
+
+    Falls back to False (safe default — MPCA-owned) on any resolution
+    failure so callers never mis-hide MPCA-side actions.
+    """
+    try:
+        from routes.tournament_wiring_status import _resolve_type_id
+        from routes.tournament_wiring import _fetch_or_seed_wiring
+    except Exception:
+        return False
+    if not tournament:
+        return False
+    try:
+        type_id = await _resolve_type_id(tournament)
+    except Exception:
+        return False
+    wiring = await _fetch_or_seed_wiring()
+    cell = (wiring.get("cells") or {}).get(type_id, {}).get("unified_budget") or {}
+    owner = cell.get("owner")
+    approver = cell.get("approver")
+    # Wiring stores absent approver as either Python None OR the literal
+    # string "None" (legacy seed) — normalise both to falsy.
+    approver_norm = None if (approver is None or approver == "None" or approver == "") else approver
+    return owner == "Division" and approver_norm is None

@@ -367,6 +367,20 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
         raise HTTPException(404, "Tournament not found")
     if t.get("scope") not in UNIFIED_TOURNAMENT_TYPES:
         raise HTTPException(400, f"Tournament scope {t.get('scope')!r} is not covered by the Unified Budget. Use the legacy scheme-based prepare-budgets instead.")
+    # Feb 2026 · Fix C · Block MPCA-side budget preparation on Division-owned
+    # tournament types (Pre-Camp / Inter-District / Inter-School / Inter-Club
+    # A-Grade / Periodical Coaching Camp / Vacation Camp). For these, the
+    # wiring says Division owns the budget end-to-end and MPCA has no
+    # preparation role. Divisions self-prepare via the Division-side console.
+    from core.wiring_guard import is_division_owned_budget
+    if await is_division_owned_budget(t):
+        raise HTTPException(
+            400,
+            "This tournament type is Division-owned. MPCA has no role in "
+            "budget preparation — the Division self-prepares, locks and "
+            "submits a reimbursement claim. Route to the Division-side "
+            "finance console."
+        )
 
     # Compute (or use locked snapshot) — never override a locked snapshot's math
     snap = t.get("unified_budget_snapshot") or {}
@@ -553,6 +567,16 @@ async def send_budgets(tid: str, payload: SendPayload):
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tournament not found")
+    # Feb 2026 · Fix C · Block MPCA-side "Send to Division" on Division-owned
+    # tournament types — see prepare-budgets-unified rationale above.
+    from core.wiring_guard import is_division_owned_budget
+    if await is_division_owned_budget(t):
+        raise HTTPException(
+            400,
+            "This tournament type is Division-owned. MPCA cannot send a "
+            "budget to the Division because there is no MPCA proposal "
+            "step — the Division self-prepares its own budget."
+        )
 
     q: Dict[str, Any] = {
         "tournament_id": tid,

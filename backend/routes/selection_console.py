@@ -781,52 +781,60 @@ async def tournament_pending_actions(tid: str):
         })
 
     # 3b) M39r · MPCA-owned budget flow — new console
-    async for b in db.tournament_budgets.find(
-        {"tournament_id": tid, "status": "Draft"}, {"_id": 0}
-    ):
-        # A Draft budget with `prepared_by_name` set is MPCA-side awaiting send
-        if b.get("prepared_by_name") or b.get("input_variables_snapshot"):
+    # Feb 2026 · Suppress ALL MPCA↔Division budget-lifecycle chips when the
+    # wiring says the Division owns the budget (Pre-Camp / Inter-District /
+    # Inter-School / Inter-Club A-Grade / Periodical Coaching / Vacation
+    # Camp). For these, MPCA has NO role in preparation, sending, sanctioning
+    # or revision — it only sees the final reimbursement claim.
+    from core.wiring_guard import is_division_owned_budget
+    _division_owned = await is_division_owned_budget(t)
+    if not _division_owned:
+        async for b in db.tournament_budgets.find(
+            {"tournament_id": tid, "status": "Draft"}, {"_id": 0}
+        ):
+            # A Draft budget with `prepared_by_name` set is MPCA-side awaiting send
+            if b.get("prepared_by_name") or b.get("input_variables_snapshot"):
+                items.append({
+                    "kind": "budget_send",
+                    "label": f"Send budget to {b.get('body_id')} · ₹{b.get('total_ceiling_inr', 0):,.0f}",
+                    "waiting_on": "MPCA",
+                    "deep_link": f"/tournaments/{tid}/finance",
+                    "record_id": b["id"],
+                    "body_code": b.get("body_id"),
+                })
+        async for b in db.tournament_budgets.find(
+            {"tournament_id": tid, "status": "Sent_To_Division"}, {"_id": 0}
+        ):
             items.append({
-                "kind": "budget_send",
-                "label": f"Send budget to {b.get('body_id')} · ₹{b.get('total_ceiling_inr', 0):,.0f}",
+                "kind": "budget_acceptance",
+                "label": f"Accept budget from MPCA · ₹{b.get('total_ceiling_inr', 0):,.0f}",
+                "waiting_on": b.get("body_id"),
+                "deep_link": f"/tournament-budgets/{b['id']}",
+                "record_id": b["id"],
+                "body_code": b.get("body_id"),
+            })
+        async for b in db.tournament_budgets.find(
+            {"tournament_id": tid, "status": "Accepted_By_Division"}, {"_id": 0}
+        ):
+            items.append({
+                "kind": "budget_sanction",
+                "label": f"Sanction budget · {b.get('body_id')} · ₹{b.get('total_ceiling_inr', 0):,.0f}",
+                "waiting_on": "MPCA",
+                "deep_link": f"/tournament-budgets/{b['id']}",
+                "record_id": b["id"],
+                "body_code": b.get("body_id"),
+            })
+        async for b in db.tournament_budgets.find(
+            {"tournament_id": tid, "status": "Revision_Requested"}, {"_id": 0}
+        ):
+            items.append({
+                "kind": "budget_revise",
+                "label": f"Revise budget · {b.get('body_id')} requested changes",
                 "waiting_on": "MPCA",
                 "deep_link": f"/tournaments/{tid}/finance",
                 "record_id": b["id"],
                 "body_code": b.get("body_id"),
             })
-    async for b in db.tournament_budgets.find(
-        {"tournament_id": tid, "status": "Sent_To_Division"}, {"_id": 0}
-    ):
-        items.append({
-            "kind": "budget_acceptance",
-            "label": f"Accept budget from MPCA · ₹{b.get('total_ceiling_inr', 0):,.0f}",
-            "waiting_on": b.get("body_id"),
-            "deep_link": f"/tournament-budgets/{b['id']}",
-            "record_id": b["id"],
-            "body_code": b.get("body_id"),
-        })
-    async for b in db.tournament_budgets.find(
-        {"tournament_id": tid, "status": "Accepted_By_Division"}, {"_id": 0}
-    ):
-        items.append({
-            "kind": "budget_sanction",
-            "label": f"Sanction budget · {b.get('body_id')} · ₹{b.get('total_ceiling_inr', 0):,.0f}",
-            "waiting_on": "MPCA",
-            "deep_link": f"/tournament-budgets/{b['id']}",
-            "record_id": b["id"],
-            "body_code": b.get("body_id"),
-        })
-    async for b in db.tournament_budgets.find(
-        {"tournament_id": tid, "status": "Revision_Requested"}, {"_id": 0}
-    ):
-        items.append({
-            "kind": "budget_revise",
-            "label": f"Revise budget · {b.get('body_id')} requested changes",
-            "waiting_on": "MPCA",
-            "deep_link": f"/tournaments/{tid}/finance",
-            "record_id": b["id"],
-            "body_code": b.get("body_id"),
-        })
 
     # 4) Reimbursement claims awaiting review
     async for c in db.reimbursement_claims.find({"tournament_id": tid, "status": "Submitted"}, {"_id": 0}):

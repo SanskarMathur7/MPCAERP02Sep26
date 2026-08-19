@@ -5,11 +5,11 @@ import {
     ArrowRight, CheckCircle2, Circle, Loader2, ShieldCheck, PackageOpen,
     Calculator, Wallet, ClipboardCheck, ChevronRight, MessagesSquare,
     Receipt, Activity, HandCoins, ScrollText, ClipboardEdit, LayoutGrid,
-    Gavel, FileSignature, Lock, LockOpen, RadioTower,
+    Gavel, FileSignature, Lock, LockOpen, RadioTower, Info,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { useWiringOwnerMatch } from "@/lib/useWiring";
+import { useWiringOwnerMatch, useWiringStep } from "@/lib/useWiring";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
 import TournamentSchemeBadge from "@/components/TournamentSchemeBadge";
@@ -104,6 +104,15 @@ const TournamentFinanceConsole = () => {
     // `is_wiring_owner` fallback in finance_console.py).
     const wiringFinanceOwner = useWiringOwnerMatch(id, "finance_console", persona);
     const isMPCA = isState || isHostBody || isParentDivOfHostDist || wiringFinanceOwner === true;
+    // Feb 2026 · Fix C · Detect Division-owned budget wiring — used to hide the
+    // MPCA-side console entirely for State personas on Pre-Camp / Inter-District
+    // / Inter-School / Inter-Club (A-Grade) / Periodical Coaching / Vacation
+    // Camp tournaments. Division personas keep full access.
+    const unifiedBudgetCell = useWiringStep(id, "unified_budget");
+    const isDivisionOwnedBudget = useMemo(() => {
+        if (!unifiedBudgetCell) return false;
+        return unifiedBudgetCell.owner === "Division" && !unifiedBudgetCell.approver;
+    }, [unifiedBudgetCell]);
 
     const [accessDenied, setAccessDenied] = useState(null);
 
@@ -196,6 +205,50 @@ const TournamentFinanceConsole = () => {
         </div>
     );
     if (!matrix) return <div className="p-8 text-mpca-oxblood">Tournament not found.</div>;
+
+    // Feb 2026 · Fix C · Educational card for MPCA personas on Division-owned
+    // budget tournaments (Pre-Camp / Inter-District / Inter-School /
+    // Inter-Club A-Grade / Periodical Coaching Camp / Vacation Camp). MPCA
+    // has no preparation / send / sanction role here — Division self-owns
+    // the budget and MPCA becomes visible only at reimbursement claim
+    // submission. Division personas keep full access to the console.
+    if (isDivisionOwnedBudget && persona?.body_type === "State") {
+        return (
+            <div className="max-w-2xl mx-auto p-8 mt-12 bulletin-card border-l-4 border-mpca-brass" data-testid="fc-division-owned-notice">
+                <div className="flex items-start gap-4">
+                    <Info size={22} strokeWidth={1.5} className="text-mpca-brass mt-1 flex-shrink-0" />
+                    <div className="flex-1">
+                        <div className="overline text-[10px] font-semibold text-mpca-brass">MPCA has no budget role here</div>
+                        <div className="font-serif text-2xl text-mpca-green-dark mt-2">Division-owned budget lifecycle</div>
+                        <p className="text-sm text-mpca-charcoal mt-4 leading-relaxed">
+                            <strong>{tournament?.name}</strong> is a <em>Division-run</em> tournament. Per the current wiring,
+                            the Division owns the budget end-to-end — they self-prepare, self-sanction, upload invoices
+                            as the tournament progresses, and finally submit a single Reimbursement Claim to MPCA.
+                        </p>
+                        <p className="text-sm text-mpca-charcoal mt-3 leading-relaxed">
+                            You will see this tournament&apos;s financial activity <strong>only when the Division submits
+                            the Reimbursement Claim</strong> — visit the Grant Claims page to review incoming submissions.
+                        </p>
+                        <div className="mt-5 flex flex-wrap gap-3">
+                            <Link to="/grant-claims" className="btn-heritage-primary" data-testid="fc-goto-grant-claims">
+                                Open Grant Claims →
+                            </Link>
+                            <Link to={`/tournaments/${id}`} className="btn-heritage-secondary" data-testid="fc-goto-tournament">
+                                Back to tournament overview
+                            </Link>
+                        </div>
+                        <div className="mt-6 border-t border-mpca-brass/30 pt-4">
+                            <div className="overline text-[9px] text-mpca-gray-dark">Applies to</div>
+                            <p className="text-[11px] text-mpca-gray-dark italic mt-1 leading-relaxed">
+                                Pre-Tournament Camp · Inter-District · Inter-School · Inter-Club (A-Grade) ·
+                                Periodical Coaching Camp · Vacation Camp
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const rows = matrix.rows || [];
     const pools = matrix.pools || [];

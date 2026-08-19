@@ -1516,6 +1516,12 @@ TournamentBudgetStatus = Literal[
     "Sent_To_Division",       # MPCA has sent the prepared budget; awaiting Division acceptance
     "Accepted_By_Division",   # Division accepted; awaiting MPCA final sanction
     "Revision_Requested",     # Division asked for changes; back with MPCA
+    # Feb 2026 · Fix D · Division-owned budget flow (Pre-Camp, Inter-Dist,
+    # Inter-School, Inter-Club A-Grade, Periodical Coaching, Vacation Camp)
+    "Division_Sanctioned",    # Division locked the auto-computed budget on their own
+    # Feb 2026 · Fix E · Bundled reimbursement claim
+    "Submitted_To_MPCA",      # Division bundled invoices → GrantClaim in flight
+    "Reimbursed",             # MPCA paid the claim → propagated back
 ]
 
 VariableItemStatus = Literal["Pending", "Approved", "Rejected"]

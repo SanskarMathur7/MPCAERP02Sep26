@@ -209,7 +209,9 @@ async def create_invoice(payload: TournamentInvoiceCreate):
         label = next((h["name"] for h in BUDGET_HEADS_META if h["key"] == code), None)
         if not label:
             tb = await db.tournament_budgets.find_one(
-                {"tournament_id": payload.tournament_id, "body_id": payload.body_id, "status": "Approved"},
+                # Feb 2026 · Fix D · accept Division-owned locked statuses too
+                {"tournament_id": payload.tournament_id, "body_id": payload.body_id,
+                 "status": {"$in": ["Approved", "MPCA_Sanctioned", "Division_Sanctioned", "Submitted_To_MPCA", "Reimbursed"]}},
                 {"_id": 0, "approved_head_allocations": 1, "head_allocations": 1},
                 sort=[("created_at", -1)],
             )
@@ -227,7 +229,8 @@ async def create_invoice(payload: TournamentInvoiceCreate):
         tb = await db.tournament_budgets.find_one({
             "tournament_id": payload.tournament_id,
             "body_id": payload.body_id,
-            "status": "Approved",
+            # Feb 2026 · Fix D · Division-owned locked statuses count as "usable"
+            "status": {"$in": ["Approved", "MPCA_Sanctioned", "Division_Sanctioned", "Submitted_To_MPCA", "Reimbursed"]},
         }, {"_id": 0}, sort=[("created_at", -1)])
         if tb:
             body["budget_id"] = tb["id"]

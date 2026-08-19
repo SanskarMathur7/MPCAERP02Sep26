@@ -110,6 +110,13 @@ class GrantClaim(GrantClaimBase):
     payment_receipt_url: Optional[str] = None
     payment_made_by:     Optional[str] = None
     payment_made_at:     Optional[str] = None
+    # Feb 2026 · Fix E · Camp reimbursement linkage
+    # When a claim is auto-materialised from a Division-owned tournament's
+    # locked budget + invoices, these fields link back so MPCA can see the
+    # source camp and the bundled invoice evidence.
+    attached_tournament_id:        Optional[str] = None
+    attached_tournament_budget_id: Optional[str] = None
+    attached_invoice_ids:          List[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -781,6 +788,21 @@ async def mark_grant_payment_made(
         link=f"/grant-claims/{cid}", related_type="grant_claim", related_id=cid,
         severity="info", kind="info",
     )
+    # Feb 2026 · Fix E · Propagate payment to camp-linked TournamentBudget.
+    # If this claim originated from a Division-owned camp (scheme_code ==
+    # "camp_reimbursement" + attached_tournament_budget_id set), flip the
+    # source budget to `Reimbursed` and capture the UTR + amount.
+    linked_budget_id = doc.get("attached_tournament_budget_id")
+    if linked_budget_id and doc.get("scheme_code") == "camp_reimbursement":
+        await db.tournament_budgets.update_one(
+            {"id": linked_budget_id},
+            {"$set": {
+                "status": "Reimbursed",
+                "reimbursed_at": now,
+                "reimbursed_utr": payload.utr,
+                "reimbursed_amount_inr": float(payload.amount_inr),
+            }},
+        )
     return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
 
 

@@ -10,6 +10,7 @@ import {
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useWiringOwnerMatch, useWiringStep } from "@/lib/useWiring";
+import DivisionCampFinancePanel from "@/components/DivisionCampFinancePanel";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
 import TournamentSchemeBadge from "@/components/TournamentSchemeBadge";
@@ -111,7 +112,11 @@ const TournamentFinanceConsole = () => {
     const unifiedBudgetCell = useWiringStep(id, "unified_budget");
     const isDivisionOwnedBudget = useMemo(() => {
         if (!unifiedBudgetCell) return false;
-        return unifiedBudgetCell.owner === "Division" && !unifiedBudgetCell.approver;
+        const app = unifiedBudgetCell.approver;
+        // Wiring stores absent approver as either Python None (→ null) or the
+        // literal string "None" (legacy seed). Normalise both to falsy.
+        const noApprover = app === null || app === undefined || app === "" || app === "None";
+        return unifiedBudgetCell.owner === "Division" && noApprover;
     }, [unifiedBudgetCell]);
 
     const [accessDenied, setAccessDenied] = useState(null);
@@ -206,12 +211,6 @@ const TournamentFinanceConsole = () => {
     );
     if (!matrix) return <div className="p-8 text-mpca-oxblood">Tournament not found.</div>;
 
-    // Feb 2026 · Fix C · Educational card for MPCA personas on Division-owned
-    // budget tournaments (Pre-Camp / Inter-District / Inter-School /
-    // Inter-Club A-Grade / Periodical Coaching Camp / Vacation Camp). MPCA
-    // has no preparation / send / sanction role here — Division self-owns
-    // the budget and MPCA becomes visible only at reimbursement claim
-    // submission. Division personas keep full access to the console.
     if (isDivisionOwnedBudget && persona?.body_type === "State") {
         return (
             <div className="max-w-2xl mx-auto p-8 mt-12 bulletin-card border-l-4 border-mpca-brass" data-testid="fc-division-owned-notice">
@@ -253,6 +252,14 @@ const TournamentFinanceConsole = () => {
     const rows = matrix.rows || [];
     const pools = matrix.pools || [];
     const isMultiPool = matrix.multi_pool;
+    // Feb 2026 · Fix D + E · Division-side camp finance panel — the primary
+    // interaction surface for host-Division personas on Division-owned
+    // tournaments. Drives Prepare → Lock → Upload → Submit → Awaiting →
+    // Reimbursed. The regular Console below still renders for invoice
+    // management / advanced views.
+    const showDivisionCampPanel = isDivisionOwnedBudget
+        && persona?.body_type === "Division"
+        && tournament?.host_body_id === persona?.body_code;
     // MPCA-120 · Division supervising Districts sees a District filter at
     // the top of the Console. When "all" (default), everything renders
     // consolidated across every District row visible to them. When a
@@ -413,6 +420,11 @@ const TournamentFinanceConsole = () => {
                     </span>
                 </div>
             </div>
+
+            {/* Feb 2026 · Fix D + E · Division-side camp finance driver */}
+            {showDivisionCampPanel && (
+                <DivisionCampFinancePanel tournament={tournament} persona={persona} />
+            )}
 
             {/* MPCA-230 · Unified Budget → Finance Console linkage.
                 For tournaments covered by the Unified Budget engine, replace

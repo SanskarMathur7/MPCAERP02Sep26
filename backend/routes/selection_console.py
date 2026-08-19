@@ -788,7 +788,68 @@ async def tournament_pending_actions(tid: str):
     # or revision — it only sees the final reimbursement claim.
     from core.wiring_guard import is_division_owned_budget
     _division_owned = await is_division_owned_budget(t)
-    if not _division_owned:
+    if _division_owned:
+        # ── Fix D · Division-side chips for the self-owned camp flow ─────
+        host_code = t.get("host_body_id")
+        # 3b-i) No budget yet → "Set up camp budget"
+        any_budget = await db.tournament_budgets.find_one(
+            {"tournament_id": tid, "body_id": host_code}, {"_id": 0}
+        )
+        if not any_budget:
+            items.append({
+                "kind": "camp_budget_prepare",
+                "label": "Set up camp budget · auto-compute from rate card",
+                "waiting_on": host_code,
+                "deep_link": f"/tournaments/{tid}/finance",
+                "body_code": host_code,
+            })
+        else:
+            st = any_budget.get("status")
+            b_id = any_budget.get("id")
+            total = float(any_budget.get("total_ceiling_inr") or 0)
+            if st in ("Draft", "Revision_Requested"):
+                items.append({
+                    "kind": "camp_budget_lock",
+                    "label": f"Lock camp budget · ₹{total:,.0f}",
+                    "waiting_on": host_code,
+                    "deep_link": f"/tournaments/{tid}/finance",
+                    "record_id": b_id,
+                    "body_code": host_code,
+                })
+            elif st == "Division_Sanctioned":
+                # Fix E · once locked, prompt to submit the claim once invoices are up
+                inv_count = await db.tournament_invoices.count_documents(
+                    {"tournament_id": tid, "body_id": host_code}
+                )
+                if inv_count > 0:
+                    items.append({
+                        "kind": "camp_submit_claim",
+                        "label": f"Submit reimbursement claim to MPCA · {inv_count} invoice(s)",
+                        "waiting_on": host_code,
+                        "deep_link": f"/tournaments/{tid}/finance",
+                        "record_id": b_id,
+                        "body_code": host_code,
+                    })
+                else:
+                    items.append({
+                        "kind": "camp_upload_invoices",
+                        "label": f"Upload invoices against locked budget ₹{total:,.0f}",
+                        "waiting_on": host_code,
+                        "deep_link": f"/tournaments/{tid}/finance",
+                        "record_id": b_id,
+                        "body_code": host_code,
+                    })
+            elif st == "Submitted_To_MPCA":
+                items.append({
+                    "kind": "camp_claim_pending_review",
+                    "label": "Awaiting MPCA reimbursement decision",
+                    "waiting_on": "MPCA",
+                    "deep_link": f"/grant-claims?tournament_id={tid}",
+                    "record_id": b_id,
+                    "body_code": host_code,
+                })
+            # `Reimbursed` → no action item; visible as a completed pill on the page
+    else:
         async for b in db.tournament_budgets.find(
             {"tournament_id": tid, "status": "Draft"}, {"_id": 0}
         ):

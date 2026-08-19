@@ -374,16 +374,23 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
     const load = async () => {
         setLoading(true);
         try {
+            // Feb 2026 · Fix D+E · Accept Division_Sanctioned (Division-owned
+            // camp flow) in addition to Approved/MPCA_Sanctioned so Divisions
+            // can log invoices against a self-locked budget without MPCA
+            // involvement. We drop the status query-param and filter client-side.
+            const _USABLE_BUDGET_STATUSES = new Set([
+                "Approved", "MPCA_Sanctioned",
+                "Division_Sanctioned", "Submitted_To_MPCA", "Reimbursed",
+            ]);
             const [inv, budgets] = await Promise.all([
                 fetchTournamentInvoices({ tournament_id: tournament.id }),
                 fetchTournamentBudgets({
                     tournament_id: tournament.id,
                     body_id: persona?.body_code,
-                    status: "Approved",
                 }).catch(() => []),
             ]);
             setInvoices(inv);
-            const list = budgets || [];
+            const list = (budgets || []).filter((b) => _USABLE_BUDGET_STATUSES.has(b.status));
             setApprovedBudgets(list);
             // Prefer keeping the current selection if still valid, else pick first.
             const stillValid = list.find((b) => b.id === selectedBudgetId);
@@ -1159,14 +1166,19 @@ const ExtraExpenseTab = ({ tournament, persona, onChanged }) => {
                 fetchExtraExpenseRequests({ tournament_id: tournament.id }),
                 fetchTournamentExpenseEvents(tournament.id),
                 canRequest
-                    ? fetchTournamentBudgets({ tournament_id: tournament.id, body_id: persona?.body_code, status: "Approved" }).catch(() => [])
+                    ? fetchTournamentBudgets({ tournament_id: tournament.id, body_id: persona?.body_code }).catch(() => [])
                     : Promise.resolve([]),
             ]);
             setRequests(r);
             setEvents(ev.events || []);
-            setApprovedBudgets(bud || []);
-            if ((bud || []).length && !selectedBudgetId) {
-                setSelectedBudgetId(bud[0].id);
+            // Feb 2026 · Fix D+E · Accept Division_Sanctioned + MPCA_Sanctioned
+            // in addition to Approved so Extra-Expense requests can be raised
+            // against a Division-locked camp budget too.
+            const _USABLE = new Set(["Approved", "MPCA_Sanctioned", "Division_Sanctioned", "Submitted_To_MPCA", "Reimbursed"]);
+            const useBud = (bud || []).filter((b) => _USABLE.has(b.status));
+            setApprovedBudgets(useBud);
+            if (useBud.length && !selectedBudgetId) {
+                setSelectedBudgetId(useBud[0].id);
             }
         } finally { setLoading(false); }
     };

@@ -248,10 +248,25 @@ const TournamentDetail = () => {
 
     return (
         <PageShell testid="trn-detail-page">
+            {/* Feb 2026 · Scoped style override — force Nunito on inherited
+                heritage components (StatusStepper, SetupBoxes, Discussion) so
+                the page reads as one aesthetic instead of a font salad.  Also
+                mute the heritage brass/gray palette on inline serifs. */}
+            <style>{`
+                [data-testid="trn-detail-page"] .font-serif,
+                [data-testid="trn-detail-page"] h1,
+                [data-testid="trn-detail-page"] h2,
+                [data-testid="trn-detail-page"] h3 { font-family: 'Nunito', system-ui, sans-serif !important; font-weight: 700 !important; }
+                [data-testid="trn-detail-page"] .overline { color: ${DL.ink2} !important; font-family: 'IBM Plex Mono', ui-monospace, monospace !important; font-weight: 700 !important; letter-spacing: 0.18em !important; }
+                [data-testid="trn-detail-page"] .bulletin-card { background: linear-gradient(180deg, ${DL.paper} 0%, ${DL.paperEdge} 100%) !important; border: 1px solid ${DL.ruleStrong} !important; border-radius: 6px !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(14,31,27,0.06), 0 14px 30px -18px rgba(14,31,27,0.24), 0 4px 10px -4px rgba(14,31,27,0.08) !important; }
+                [data-testid="trn-detail-page"] .text-mpca-green-dark { color: ${DL.ink} !important; }
+                [data-testid="trn-detail-page"] .text-mpca-gray-dark, [data-testid="trn-detail-page"] .text-mpca-charcoal { color: ${DL.ink2} !important; }
+                [data-testid="trn-detail-page"] .text-mpca-brass { color: ${DL.gold} !important; }
+            `}</style>
             <TournamentSubTabs tournamentId={id} active="overview" />
             <button
                 onClick={() => navigate("/tournaments")}
-                className="inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.18em] font-bold mb-6 rounded-full px-4 py-2 transition-colors"
+                className="inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.18em] font-bold mb-5 rounded-full px-4 py-2 transition-colors"
                 style={{ fontFamily: DL.fontMono, color: DL.ink, border: `1.5px solid ${DL.ruleStrong}` }}
                 data-testid="trn-back"
             >
@@ -329,25 +344,28 @@ const TournamentDetail = () => {
             </div>
 
             {/* Sprint M30 · Status stepper + Pending With Me */}
-            <TournamentStatusStepper tournament={t} persona={persona} onAction={() => { refreshProgress(); load(); }} />
-
-            {/* MPCA-241 · Old 5-phase progress bar retired in favour of the wiring-driven ribbon below.
-                The `/tournaments/{id}/progress` endpoint stays alive for any external consumers. */}
+            <div className="mb-5">
+                <TournamentStatusStepper tournament={t} persona={persona} onAction={() => { refreshProgress(); load(); }} />
+            </div>
 
             {/* MPCA-235 · Ship 2 · Tournament Progression Ribbon (Wiring-driven) */}
-            <div className="mb-8">
+            <div className="mb-6">
                 <TournamentProgressionRibbon tournamentId={id} refreshKey={progressKey} />
             </div>
 
             {/* Sprint M19 · 8 setup boxes grid */}
-            <div className="mb-10">
-                <div className="overline mb-3">Tournament Workspace · setup boxes</div>
-                {t.tournament_type_code && (
-                    <div className="mb-3 text-[11px] text-mpca-gray-dark">
-                        Type: <span className="font-mono text-mpca-brass">{t.tournament_type_code}</span>
-                        <span className="ml-2 font-serif text-mpca-green-dark">{getTypeByCode(t.tournament_type_code)?.name || ""}</span>
+            <div className="mb-8">
+                <div className="flex items-baseline gap-3 mb-3 flex-wrap">
+                    <div className="text-[12px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
+                        Workspace · Setup Boxes
                     </div>
-                )}
+                    {t.tournament_type_code && (
+                        <div className="text-[11px] font-semibold" style={{ color: DL.ink2 }}>
+                            Type: <span style={{ fontFamily: DL.fontMono, color: DL.gold, fontWeight: 700 }}>{t.tournament_type_code}</span>
+                            <span className="ml-2" style={{ color: DL.ink }}>{getTypeByCode(t.tournament_type_code)?.name || ""}</span>
+                        </div>
+                    )}
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="setup-boxes">
                             {/* MPCA-237 · Ship 4a · Suppress the Accept banner when the current
                                 persona IS the tournament creator (Division that both created and

@@ -61,29 +61,28 @@ const STATUS_META = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// DELHIGENCE-INSPIRED DESIGN TOKENS
-// Editorial-premium palette · Instrument Sans + Instrument Serif italic
-// accent · Mono eyebrows · Embossed paper cards with soft floating shadow.
+// DELHIGENCE-INSPIRED DESIGN TOKENS — Nunito revision (bolder, higher contrast)
+// Editorial-premium palette · Nunito bold everywhere · mono eyebrows kept.
 // ═══════════════════════════════════════════════════════════════════════
 const DL = {
-    fontDisplay: "'Instrument Sans', system-ui, sans-serif",
-    fontSerif:   "'Instrument Serif', 'Cormorant Garamond', serif",
+    fontDisplay: "'Nunito', system-ui, sans-serif",
+    fontSerif:   "'Nunito', system-ui, sans-serif",       // Nunito everywhere now
     fontMono:    "'IBM Plex Mono', ui-monospace, monospace",
-    fontBody:    "'Instrument Sans', system-ui, sans-serif",
+    fontBody:    "'Nunito', system-ui, sans-serif",
 
-    ivory:      "#F5EFE6", // page bg (warm ivory)
-    paper:      "#FBF8F1", // card bg (lighter cream)
-    paperEdge:  "#EDE5D3", // subtle bottom-tint for embossed gradient
-    ink:        "#0E1F1B", // near-black primary text
-    ink2:       "#3A4A44", // secondary text
-    ink3:       "#6B7770", // tertiary / eyebrows
-    muted:      "#8E958F",
-    rule:       "rgba(14, 31, 27, 0.10)",
-    ruleStrong: "rgba(14, 31, 27, 0.22)",
-    emerald:    "#0D3B2E", // brand accent (dark forest green)
-    emeraldSoft:"rgba(13, 59, 46, 0.08)",
-    gold:       "#D4A757", // gold accent for eyebrow numerals
-    danger:     "#9B2B2B",
+    ivory:      "#F5EFE6",
+    paper:      "#FBF8F1",
+    paperEdge:  "#EDE5D3",
+    ink:        "#0E1F1B",
+    ink2:       "#1F2E28", // <-- darkened (was #3A4A44) for stronger readability
+    ink3:       "#2E3B34", // <-- darkened (was #6B7770) — killing the beige haze
+    muted:      "#4C5750", // <-- darkened (was #8E958F)
+    rule:       "rgba(14, 31, 27, 0.16)",
+    ruleStrong: "rgba(14, 31, 27, 0.32)",
+    emerald:    "#0D3B2E",
+    emeraldSoft:"rgba(13, 59, 46, 0.10)",
+    gold:       "#B88328", // <-- deeper gold (was #D4A757 — was reading as beige)
+    danger:     "#8B1F1F",
 };
 
 // Embossed card style — subtle top highlight + bottom sub-shadow + soft floating shadow
@@ -103,18 +102,18 @@ const embossedCard = (extra = {}) => ({
 const Pill = ({ tone, label, testId }) => {
     const styleMap = {
         active:    { bg: DL.emerald,     fg: DL.paper, ring: "none" },
-        pending:   { bg: "transparent",   fg: DL.ink,   ring: `1px solid ${DL.ruleStrong}` },
+        pending:   { bg: "transparent",   fg: DL.ink,   ring: `1.5px solid ${DL.ruleStrong}` },
         suspended: { bg: DL.danger,       fg: DL.paper, ring: "none" },
-        lapsed:    { bg: "rgba(14,31,27,0.06)", fg: DL.ink2, ring: "none" },
-        saffron:   { bg: DL.gold,         fg: DL.ink,   ring: "none" },
+        lapsed:    { bg: "rgba(14,31,27,0.08)", fg: DL.ink2, ring: "none" },
+        saffron:   { bg: DL.gold,         fg: DL.paper, ring: "none" },
         maroon:    { bg: "#5c1420",       fg: DL.paper, ring: "none" },
     };
     const s = styleMap[tone] || styleMap.lapsed;
     return (
         <span
             data-testid={testId}
-            style={{ backgroundColor: s.bg, color: s.fg, border: s.ring === "none" ? "none" : s.ring, fontFamily: DL.fontMono, letterSpacing: "0.14em" }}
-            className="inline-flex items-center px-2.5 py-[3px] text-[10px] font-medium uppercase whitespace-nowrap rounded-full"
+            style={{ backgroundColor: s.bg, color: s.fg, border: s.ring === "none" ? "none" : s.ring, fontFamily: DL.fontMono, letterSpacing: "0.14em", fontWeight: 700 }}
+            className="inline-flex items-center px-2.5 py-[3px] text-[10px] uppercase whitespace-nowrap rounded-full"
         >
             {label}
         </span>
@@ -131,20 +130,20 @@ const StatTile = ({ icon: Icon, label, value, sub }) => {
             <div className="flex items-start justify-between">
                 <div
                     className="inline-flex h-9 w-9 items-center justify-center rounded-lg"
-                    style={{ backgroundColor: DL.emeraldSoft, boxShadow: `inset 0 0 0 1px rgba(13,59,46,0.22)` }}
+                    style={{ backgroundColor: DL.emeraldSoft, boxShadow: `inset 0 0 0 1px rgba(13,59,46,0.32)` }}
                 >
-                    <Icon style={{ color: DL.emerald }} size={16} strokeWidth={1.75} />
+                    <Icon style={{ color: DL.emerald }} size={16} strokeWidth={2.25} />
                 </div>
-                <div className="text-[10px] uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
+                <div className="text-[10px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
                     / stat
                 </div>
             </div>
             <div className="mt-6">
-                <div className="text-[11px] uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.ink3 }}>{label}</div>
-                <div className="mt-2 text-4xl leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 500 }}>
+                <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
+                <div className="mt-2 text-4xl leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>
                     {value}
                 </div>
-                {sub && <div className="text-[13px] mt-3 leading-snug" style={{ color: DL.ink3 }}>{sub}</div>}
+                {sub && <div className="text-[13px] mt-3 leading-snug font-semibold" style={{ color: DL.ink2 }}>{sub}</div>}
             </div>
         </div>
     );
@@ -246,46 +245,29 @@ const Tournaments = () => {
             data-testid="tournaments-page"
             style={{ backgroundColor: DL.ivory, fontFamily: DL.fontBody, color: DL.ink }}
         >
-        <div className="px-8 md:px-12 py-12 max-w-[1280px] mx-auto">
-            {/* Eyebrow row · delhigence pattern */}
-            <div className="mb-8 flex items-baseline gap-6">
-                <span className="text-[11px] uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.ink3 }}>
-                    / Tournaments · Article VII
-                </span>
-                <div className="flex-1 h-px" style={{ backgroundColor: DL.rule }} />
-                <span className="text-[10px] uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
-                    Season 2026-27
-                </span>
-            </div>
-
-            <div className="flex flex-wrap items-end justify-between gap-6 mb-12">
-                <div className="max-w-3xl">
-                    <h1
-                        className="text-[44px] md:text-[64px] leading-[1.02] tracking-[-0.02em]"
-                        style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 500 }}
+        <div className="px-8 md:px-12 py-8 max-w-[1280px] mx-auto">
+            {/* Compact header bar — no editorial hero, more space for the list */}
+            <div className="mb-8 flex items-center justify-between gap-6 flex-wrap">
+                <div className="flex items-baseline gap-4 flex-wrap">
+                    <span className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
+                        / Tournaments
+                    </span>
+                    <span className="text-[10px] uppercase tracking-[0.22em] font-semibold" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
+                        Article VII · Season 2026-27
+                    </span>
+                    <Link
+                        to="/tournament-calendar"
+                        className="text-[10px] uppercase tracking-[0.22em] font-semibold underline underline-offset-4"
+                        style={{ fontFamily: DL.fontMono, color: DL.emerald }}
                     >
-                        Every fixture,
-                        <br />
-                        <span className="italic" style={{ fontFamily: DL.fontSerif, color: DL.emerald }}>every claim,</span>
-                        {" "}one workspace.
-                    </h1>
-                    <p className="mt-6 text-[15.5px] leading-[1.7]" style={{ color: DL.ink2, maxWidth: "62ch" }}>
-                        Create tournaments, accept hosting, draft squads, manage budget &amp; reimbursements, appoint match officials, and attach linked camps — all from a single, wiring-aware surface. Pick a row below to open its workspace, or use{" "}
-                        <Link
-                            to="/tournament-calendar"
-                            className="italic underline underline-offset-4 decoration-[1.5px]"
-                            style={{ fontFamily: DL.fontSerif, color: DL.emerald, textDecorationColor: `${DL.emerald}55` }}
-                        >
-                            Tournament Calendar
-                        </Link>{" "}
-                        for a read-only schedule view.
-                    </p>
+                        View Calendar →
+                    </Link>
                 </div>
                 {isOfficeBearer && getCreatableTournamentTypes(persona).length > 0 && (
                     <button
                         onClick={() => setCreateOpen(true)}
                         data-testid="new-tournament-btn"
-                        className="group inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-medium transition-all"
+                        className="group inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold transition-all"
                         style={{
                             backgroundColor: DL.emerald,
                             color: DL.paper,
@@ -295,13 +277,13 @@ const Tournaments = () => {
                         onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = DL.ink; }}
                         onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = DL.emerald; }}
                     >
-                        <Plus size={16} strokeWidth={2} className="transition-transform group-hover:rotate-90" /> Add Tournament
+                        <Plus size={16} strokeWidth={2.5} className="transition-transform group-hover:rotate-90" /> Add Tournament
                     </button>
                 )}
             </div>
 
             {stats && (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12" data-testid="trn-stats">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-10" data-testid="trn-stats">
                     <StatTile icon={Trophy}      label={persona?.body_type === "State" ? "Total Tournaments" : "In My Scope"}   value={persona?.body_type === "State" ? stats.total_tournaments : list.length}  sub={persona?.body_type === "State" ? `Cycle ${(typeof window !== "undefined" && window.__mpca_season) || "2026-27"} · state-wide` : `${persona?.body_name || persona?.body_code}`} />
                     <StatTile icon={Calendar}    label="Upcoming"            value={persona?.body_type === "State" ? stats.upcoming : list.filter((t) => t.status === "Upcoming").length}            sub="Awaiting squad selection" />
                     <StatTile icon={Users}       label="In Selection"        value={persona?.body_type === "State" ? stats.in_selection : list.filter((t) => t.status === "Squad_Selection").length}        sub="Squads being formed" />
@@ -339,8 +321,9 @@ const Tournaments = () => {
                             style={{
                                 backgroundColor: active ? DL.emerald : "transparent",
                                 color: active ? DL.paper : DL.ink,
-                                border: active ? `1px solid ${DL.emerald}` : `1px solid ${DL.ruleStrong}`,
+                                border: active ? `1.5px solid ${DL.emerald}` : `1.5px solid ${DL.ruleStrong}`,
                                 fontFamily: DL.fontMono,
+                                fontWeight: active ? 700 : 600,
                                 boxShadow: active ? "0 8px 20px -12px rgba(13,59,46,0.5)" : "none",
                             }}
                         >
@@ -352,7 +335,7 @@ const Tournaments = () => {
 
             {isMpcaState && (hiddenCount > 0 || includeCampScoped) && !["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
                 <div className="mb-4 flex items-center gap-3 text-[11px]" data-testid="mpca-visibility-toggle">
-                    <span className="uppercase tracking-[0.2em]" style={{ fontFamily: DL.fontMono, color: DL.ink3 }}>
+                    <span className="uppercase tracking-[0.2em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
                         {includeCampScoped
                             ? "Showing all tournaments including Camps · School · Club"
                             : `${hiddenCount} tournament${hiddenCount === 1 ? "" : "s"} hidden — visibility · on-submit`}
@@ -360,8 +343,8 @@ const Tournaments = () => {
                     <button
                         onClick={() => setIncludeCampScoped(v => !v)}
                         data-testid="mpca-visibility-toggle-btn"
-                        className="px-3 py-1 text-[10px] uppercase tracking-[0.18em] rounded-full transition-colors"
-                        style={{ color: DL.emerald, border: `1px solid ${DL.ruleStrong}`, fontFamily: DL.fontMono }}
+                        className="px-3 py-1 text-[10px] uppercase tracking-[0.18em] rounded-full transition-colors font-bold"
+                        style={{ color: DL.emerald, border: `1.5px solid ${DL.ruleStrong}`, fontFamily: DL.fontMono }}
                     >
                         {includeCampScoped ? "Focus on core" : "Show all"}
                     </button>
@@ -369,7 +352,7 @@ const Tournaments = () => {
             )}
 
             {isMpcaState && ["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
-                <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-[0.2em]" data-testid="mpca-realtime-banner" style={{ fontFamily: DL.fontMono, color: DL.emerald }}>
+                <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] font-bold" data-testid="mpca-realtime-banner" style={{ fontFamily: DL.fontMono, color: DL.emerald }}>
                     <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: DL.emerald }} />
                     Real-time visibility · every {filter === "BCCI" ? "BCCI" : (filter === "MPCA_Championship" ? "Championship" : "Inter-Divisional")} action visible as it happens
                 </div>
@@ -378,7 +361,7 @@ const Tournaments = () => {
             {/* Tournament list · each row is its own embossed card for prominence */}
             <div data-testid="trn-list">
                 {filtered.length === 0 ? (
-                    <div className="p-16 text-center italic" style={{ ...embossedCard(), color: DL.ink3, fontFamily: DL.fontSerif, fontSize: "18px" }} data-testid="trn-empty">
+                    <div className="p-16 text-center" style={{ ...embossedCard(), color: DL.ink2, fontFamily: DL.fontBody, fontSize: "16px", fontWeight: 600 }} data-testid="trn-empty">
                         {filter === "live"
                             ? "No live tournaments right now. Switch to Upcoming or All to see the full calendar."
                             : "No tournaments match this filter."}
@@ -410,32 +393,32 @@ const Tournaments = () => {
                                 >
                                     <Trophy size={18} strokeWidth={1.5} />
                                 </div>
-                                <div className="text-[10.5px] tracking-[0.2em] w-28" style={{ fontFamily: DL.fontMono, color: DL.muted }}>{t.tournament_no}</div>
+                                <div className="text-[10.5px] tracking-[0.2em] w-28 font-bold" style={{ fontFamily: DL.fontMono, color: DL.muted }}>{t.tournament_no}</div>
                                 <div className="flex-1 min-w-[280px]">
-                                    <div className="text-[19px] leading-tight tracking-[-0.01em]" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 500 }}>
+                                    <div className="text-[19px] leading-tight tracking-[-0.01em]" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>
                                         {t.name}
                                         {t.short_name && (
-                                            <span className="italic ml-2 text-[15px]" style={{ fontFamily: DL.fontSerif, color: DL.emerald }}>
-                                                — {t.short_name}
+                                            <span className="ml-2 text-[12px] uppercase tracking-[0.18em]" style={{ fontFamily: DL.fontMono, color: DL.emerald, fontWeight: 700 }}>
+                                                · {t.short_name}
                                             </span>
                                         )}
                                     </div>
-                                    <div className="text-[12px] mt-1.5 flex items-center gap-2 flex-wrap" style={{ color: DL.ink3 }}>
-                                        <Calendar size={11} /> {fmtDate(t.start_date)} → {fmtDate(t.end_date)}
+                                    <div className="text-[12.5px] mt-1.5 flex items-center gap-2 flex-wrap font-semibold" style={{ color: DL.ink2 }}>
+                                        <Calendar size={12} strokeWidth={2.5} /> {fmtDate(t.start_date)} → {fmtDate(t.end_date)}
                                         {(t.venue_name_snapshot || t.venue) && (
-                                            <><span style={{ color: DL.muted }}>·</span><MapPin size={11} /> {t.venue_name_snapshot || t.venue}{t.ground_name_snapshot ? <span style={{ color: DL.muted }}> · {t.ground_name_snapshot}</span> : null}</>
+                                            <><span style={{ color: DL.muted }}>·</span><MapPin size={12} strokeWidth={2.5} /> {t.venue_name_snapshot || t.venue}{t.ground_name_snapshot ? <span style={{ color: DL.muted }}> · {t.ground_name_snapshot}</span> : null}</>
                                         )}
-                                        {t.host_body_id && <span style={{ fontFamily: DL.fontMono, color: DL.muted }}>· Host {t.host_body_id}</span>}
-                                        {t.trophy_name && <span style={{ color: DL.gold, fontFamily: DL.fontSerif, fontStyle: "italic" }}>· 🏆 {t.trophy_name}</span>}
+                                        {t.host_body_id && <span style={{ fontFamily: DL.fontMono, color: DL.muted, fontWeight: 700 }}>· Host {t.host_body_id}</span>}
+                                        {t.trophy_name && <span style={{ color: DL.gold, fontWeight: 800 }}>· 🏆 {t.trophy_name}</span>}
                                         <WiringComplianceChip tournament={t} testId={"trn-wiring-" + t.tournament_no} className="ml-1" />
                                     </div>
                                     {acc.status && acc.status !== "Not_Required" && (
-                                        <div className="mt-2 flex items-center gap-2 flex-wrap text-[10px] uppercase tracking-[0.18em]" data-testid={"trn-acc-" + t.tournament_no} style={{ fontFamily: DL.fontMono }}>
+                                        <div className="mt-2 flex items-center gap-2 flex-wrap text-[10px] uppercase tracking-[0.18em] font-bold" data-testid={"trn-acc-" + t.tournament_no} style={{ fontFamily: DL.fontMono }}>
                                             <span style={{
                                                 padding: "3px 10px",
                                                 borderRadius: "9999px",
                                                 backgroundColor: acc.status === "Accepted" ? DL.emerald : acc.status === "Rejected" ? DL.danger : DL.gold,
-                                                color: acc.status === "Pending" ? DL.ink : DL.paper,
+                                                color: DL.paper,
                                             }}>
                                                 {acc.status === "Pending" ? "Awaiting" : acc.status}
                                             </span>
@@ -458,7 +441,7 @@ const Tournaments = () => {
                                         <TournamentProgressionRibbonMini tournament={t} />
                                     </div>
                                 </div>
-                                <span className="text-[11px] uppercase tracking-[0.2em] w-20 text-right" style={{ fontFamily: DL.fontMono, color: DL.muted }}>{ageLabel(t)}</span>
+                                <span className="text-[11px] uppercase tracking-[0.2em] w-20 text-right font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{ageLabel(t)}</span>
                                 <Pill tone={tm.tone} label={tm.label} testId={"trn-type-" + t.tournament_type} />
                                 <Pill tone={fm.tone} label={fm.label} testId={"trn-fmt-" + t.format} />
                                 {t.is_three_team_format && <Pill tone="pending" label="3-Team" testId={"trn-3team-" + t.tournament_no} />}
@@ -470,7 +453,7 @@ const Tournaments = () => {
                                         <button
                                             onClick={() => handleAcceptance(t.id, "accept")}
                                             disabled={accepting}
-                                            className="px-3.5 py-1.5 text-[10px] uppercase tracking-[0.18em] rounded-full transition disabled:opacity-50"
+                                            className="px-3.5 py-1.5 text-[10px] uppercase tracking-[0.18em] rounded-full transition disabled:opacity-50 font-bold"
                                             style={{ backgroundColor: DL.emerald, color: DL.paper, fontFamily: DL.fontMono, boxShadow: "0 10px 24px -14px rgba(13,59,46,0.6)" }}
                                             data-testid={"trn-accept-" + t.tournament_no}
                                         >
@@ -479,15 +462,15 @@ const Tournaments = () => {
                                         <button
                                             onClick={() => handleAcceptance(t.id, "reject")}
                                             disabled={accepting}
-                                            className="px-3.5 py-1.5 text-[10px] uppercase tracking-[0.18em] rounded-full transition disabled:opacity-50"
-                                            style={{ backgroundColor: DL.danger, color: DL.paper, fontFamily: DL.fontMono, boxShadow: "0 10px 24px -14px rgba(155,43,43,0.6)" }}
+                                            className="px-3.5 py-1.5 text-[10px] uppercase tracking-[0.18em] rounded-full transition disabled:opacity-50 font-bold"
+                                            style={{ backgroundColor: DL.danger, color: DL.paper, fontFamily: DL.fontMono, boxShadow: "0 10px 24px -14px rgba(139,31,31,0.6)" }}
                                             data-testid={"trn-reject-" + t.tournament_no}
                                         >
                                             ✗ Reject
                                         </button>
                                     </div>
                                 )}
-                                <ChevronRight size={18} style={{ color: DL.ink3 }} />
+                                <ChevronRight size={20} strokeWidth={2.5} style={{ color: DL.ink2 }} />
                             </div>
                         );
                     })}

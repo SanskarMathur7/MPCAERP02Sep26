@@ -253,7 +253,7 @@ const Tournaments = () => {
                         / Tournaments
                     </span>
                     <span className="text-[12px] uppercase tracking-[0.22em] font-semibold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
-                        Article VII · Season 2026-27
+                        Season 2026-27
                     </span>
                     <Link
                         to="/tournament-calendar"

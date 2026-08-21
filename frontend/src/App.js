@@ -76,6 +76,7 @@ const MatchOfficialDAVoucher = lazy(() => import("@/pages/MatchOfficialDAVoucher
 const MatchOfficialFinancePage = lazy(() => import("@/pages/MatchOfficialFinancePage"));
 const MPCAShowcase = lazy(() => import("@/pages/MPCAShowcase"));
 const DesignLab = lazy(() => import("@/pages/DesignLab"));
+const UxAuditReview = lazy(() => import("@/pages/UxAuditReview"));
 // Feb 2026 · Design-preview HUD dashboards (stakeholder proposal, isolated)
 const DesignPreviewLanding = lazy(() => import("@/pages/design-preview/Landing"));
 const DesignPreviewSeason = lazy(() => import("@/pages/design-preview/SeasonOverview"));
@@ -143,6 +144,7 @@ function App() {
                             <Route path="/disclosures-public" element={<Disclosures publicView />} />
                             <Route path="/showcase" element={<MPCAShowcase />} />
                             <Route path="/design-lab" element={<DesignLab />} />
+                            <Route path="/audit-review" element={<UxAuditReview />} />
                             {/* Feb 2026 · Design proposal preview — public routes so stakeholders can view without login */}
                             <Route path="/design-preview" element={<DesignPreviewLanding />} />
                             <Route path="/design-preview/season-overview" element={<DesignPreviewSeason />} />

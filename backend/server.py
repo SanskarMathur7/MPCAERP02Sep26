@@ -23,7 +23,7 @@ from routes import (  # noqa: F401
     reimbursement_schemes, reimbursement_claims, camps, squad_ai, grant_claims, scheme_calc,
     tournament_workspace, rbac, tournament_participations, body_documents, player_registrations,
     discussions, events, finance_console, tournament_master, rate_cards, unified_budget,
-    tournament_wiring, tournament_wiring_status, camp_finance,
+    tournament_wiring, tournament_wiring_status, camp_finance, ux_audit,
 )
 from seed import seed_data
 

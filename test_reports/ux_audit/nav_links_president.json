@@ -1,0 +1,158 @@
+[
+  {
+    "href": "/dashboard",
+    "text": "Dashboard"
+  },
+  {
+    "href": "/org",
+    "text": "Organisation\n10\u00b754"
+  },
+  {
+    "href": "/action-center",
+    "text": "Action Center"
+  },
+  {
+    "href": "/discussions",
+    "text": "Discussions"
+  },
+  {
+    "href": "/members",
+    "text": "Membership Register"
+  },
+  {
+    "href": "/meetings",
+    "text": "AGM & Meetings"
+  },
+  {
+    "href": "/events",
+    "text": "Event Calendar"
+  },
+  {
+    "href": "/disclosures",
+    "text": "Disclosures"
+  },
+  {
+    "href": "/schemes",
+    "text": "MPCA Schemes Register"
+  },
+  {
+    "href": "/grant-claims",
+    "text": "Grant Claims"
+  },
+  {
+    "href": "/tournaments",
+    "text": "Tournaments"
+  },
+  {
+    "href": "/tournament-master",
+    "text": "Tournament Registry"
+  },
+  {
+    "href": "/tournament-wiring",
+    "text": "Tournament Wiring"
+  },
+  {
+    "href": "/rate-cards",
+    "text": "Rate Cards"
+  },
+  {
+    "href": "/tournament-calendar",
+    "text": "Tournament Calendar"
+  },
+  {
+    "href": "/venues",
+    "text": "Grounds"
+  },
+  {
+    "href": "/players",
+    "text": "Player Register"
+  },
+  {
+    "href": "/player-registrations",
+    "text": "Season Onboarding"
+  },
+  {
+    "href": "/match-officials",
+    "text": "Match Officials"
+  },
+  {
+    "href": "/da-review",
+    "text": "DA Review Inbox"
+  },
+  {
+    "href": "/access-control",
+    "text": "Access Control (RBAC)"
+  },
+  {
+    "href": "/tournaments/e601bf8b-9e02-4f2f-9146-6ee2007f9850",
+    "text": "SUBMIT FOR APPROVAL\nSubmit tournament for approval\nTRN-2026-"
+  },
+  {
+    "href": "/tournaments/e601bf8b-9e02-4f2f-9146-6ee2007f9850",
+    "text": "INPUT VARIABLES\nSet tournament input variables\nTRN-2026-27-0"
+  },
+  {
+    "href": "/tournaments/3e023352-93e5-430e-93b9-e3857092ccce",
+    "text": "INPUT VARIABLES\nSet tournament input variables\nTRN-2025-26-2"
+  },
+  {
+    "href": "/grant-claims?tournament_id=160ec427-7450-4384-9399-e829a6eb2bb1",
+    "text": "CAMP_CLAIM_PENDING_REVIEW\nAwaiting MPCA reimbursement decisi"
+  },
+  {
+    "href": "/tournaments/31932dfd-4139-4144-bdad-6d32f4ccc247",
+    "text": "SUBMIT FOR APPROVAL\nSubmit tournament for approval\nTRN-2026-"
+  },
+  {
+    "href": "/squads/1e496dc3-fad0-4489-aa64-6d0c00477935",
+    "text": "SQUAD DRAFT\nComplete squad \u00b7 MPCA (0 / 15)\nTRN-2026-27-093 \u00b7"
+  },
+  {
+    "href": "/tournaments/31932dfd-4139-4144-bdad-6d32f4ccc247",
+    "text": "INPUT VARIABLES\nSet tournament input variables\nTRN-2026-27-0"
+  },
+  {
+    "href": "/tournaments/0e61dcfa-5073-417e-97da-896a8af48290",
+    "text": "SUBMIT FOR APPROVAL\nSubmit tournament for approval\nTRN-2026-"
+  },
+  {
+    "href": "/squads/f3bdcc9b-839e-43c7-8284-51b2ae1898dd",
+    "text": "SQUAD DRAFT\nComplete squad \u00b7 MPCA (0 / 15)\nTRN-2026-27-094 \u00b7"
+  },
+  {
+    "href": "/tournaments/0e61dcfa-5073-417e-97da-896a8af48290",
+    "text": "INPUT VARIABLES\nSet tournament input variables\nTRN-2026-27-0"
+  },
+  {
+    "href": "/tournaments/6bb1c6bf-8b25-47ee-8b23-4deebaae6ae6",
+    "text": "SUBMIT FOR APPROVAL\nSubmit tournament for approval\nTRN-2026-"
+  },
+  {
+    "href": "/squads/4e935b84-4c8b-425e-a086-9f66e9582cfe",
+    "text": "SQUAD DRAFT\nComplete squad \u00b7 MPCA (0 / 15)\nTRN-2026-27-095 \u00b7"
+  },
+  {
+    "href": "/claims",
+    "text": "REVIEW 27 OVERDUE"
+  },
+  {
+    "href": "/audit-log",
+    "text": "VIEW FULL LOG"
+  },
+  {
+    "href": "/claims",
+    "text": "Grant Claims"
+  },
+  {
+    "href": "/members",
+    "text": "Membership Register"
+  },
+  {
+    "href": "/meetings",
+    "text": "AGM & Meetings"
+  },
+  {
+    "href": "/rulebook",
+    "text": "AI Rulebook"
+  }
+]

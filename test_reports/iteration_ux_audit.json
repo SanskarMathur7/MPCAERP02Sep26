@@ -1,0 +1,228 @@
+{
+  "phase": "audit",
+  "meta": {
+    "auditor": "T1 (read-only UX audit)",
+    "date": "2026-08-21",
+    "personas_used": ["president", "division-secretary", "secretary"],
+    "focus_pages": ["/tournaments (list+detail)", "/players (list+detail)", "/grant-claims (list+detail)", "/members + /org", "Discussion panels"],
+    "total_routes_visited": 52,
+    "screenshot_dir": "/app/test_reports/ux_audit/",
+    "read_only": true,
+    "no_code_changes": true
+  },
+
+  "summary": "Walked every route in App.js as president, division-secretary and secretary. Focus pages (Tournaments, Players, Grant Claims, Members/Org, Discussions) were deep-dived tab-by-tab. The core finding is not a broken platform — most flows load, data renders, personas are honoured — but a **severe surface-area problem**: too many financial / claims / registry pages that overlap, several dashboards showing 100-300+ buttons or 100+ inputs on a single screen, and a handful of legitimate 'coming soon / not-yet' surfaces. Discussion, Grant Claims two-pane, and /showcase already look production-grade. The /design-preview HUDs are the north star. Player Register, Rate Cards, Audit Log, /org, Tournament Registry and Player Registrations are the P0 redesign candidates.",
+
+  "focus_pages_deep_dive": {
+    "tournaments_list": {
+      "route": "/tournaments",
+      "president_sees": "72 tournaments",
+      "division_secretary_sees": "1 tournament (Parmanand Trophy TRN-2026-27-086) — Indore Division 'Pre-Tournament Camp' is NOT visible as a top-level tourn row for div-sec",
+      "clutter_score": "medium",
+      "classification": "FIX",
+      "priority": "P1",
+      "symptom_short": "Persona scope may be hiding Indore pre-camp, and 20 buttons on list is fine but there are no filters/search visible.",
+      "screenshot": "ux_audit/r_tournaments.png"
+    },
+    "tournament_detail": {
+      "route": "/tournaments/:id",
+      "classification": "FIX",
+      "priority": "P0",
+      "deepest_data_testid_hit": "tournament-subtabs",
+      "symptom_short": "Only 2 sub-tabs visible (OVERVIEW / SQUAD SELECTION). The 10-step lifecycle (Tournament Creation → Pool Basics → Match Official Posting → Squad → Squad Approval → Match Calendar → Unified Budget → Finance Console → Tournament Closure → MPCA Visibility) is rendered ONLY as a visual stepper — not clickable. A 45+ admin cannot discover budget/finance/closure surfaces from here.",
+      "symptom_detail": "Everything except Overview and Squad Selection is either inline (scroll to find), gated behind lifecycle state, or reachable ONLY from side nav (/tournament-finance, /tournament-budgets, /reimbursement-claims). Request called for tabs 'basics, participants matrix, match officials, squads, match calendar, days engine, unified budget, finance console, closure letter, activity log, discussion, pre-camps' — most exist as separate routes but are NOT surfaced on the tournament detail page.",
+      "screenshot": "ux_audit/parmanand_overview.png"
+    },
+    "grant_claims": {
+      "route": "/grant-claims",
+      "classification": "KEEP",
+      "priority": "P2",
+      "deepest_data_testid_hit": "grant-tab-discussion",
+      "symptom_short": "Two-pane list + detail with 4 tabs (Details, Documents (0), Discussion (4), History). Clean, coherent, works. AI Review badge and Summary PDF button are surfaced well. AttachedCampView loads via 'attached-camp-invoice-table'.",
+      "symptom_detail": "GRC-2026-27-0009 loads with lifecycle stepper (Draft → Submitted → Under MPCA Review → Approved → Payment Made). Discussion tab shows 4 messages inline with clean bubble UI. This is the model the rest of the app should be redesigned toward.",
+      "screenshot": "ux_audit/gc_tab2_grant-tab-discussion.png"
+    },
+    "player_register_list": {
+      "route": "/players",
+      "classification": "FIX",
+      "priority": "P0",
+      "symptom_short": "329 buttons on a single page. Filter chips work (All/Active/Pending/In Review/Discrepancy/Div-Approved/Suspended/Local-MP/Born-Outside/Guest/Court Orders — 11 chips), plus 4 stat cards, plus 3 category cards, plus per-row status/action buttons. Cognitive overload for 45+ admin.",
+      "symptom_detail": "Very information-dense. Two 'ALL' buttons (All-in-scope + All body-type) can confuse. Search field is at the bottom of a long chip row — should be primary. Recompute-eligibility button is orange-outlined next to primary orange 'Register a Player' — competing CTAs.",
+      "screenshot": "ux_audit/r_players.png"
+    },
+    "player_detail": {
+      "route": "/players/:id",
+      "classification": "KEEP",
+      "priority": "P2",
+      "deepest_data_testid_hit": "tab-audit",
+      "symptom_short": "6 tabs (Overview, Performance, Eligible Tournaments, KYC & Documents, Sanctions, Audit Trail). Structure is fine; Overview is empty for the TEST_Transfer sample (0-state 'Not yet computed — click Recompute').",
+      "symptom_detail": "KYC & Documents tab has 22 inputs — inline upload widgets. Eligible Tournaments shows 70 rows for this player = long scroll. Sanctions tab has a clean empty state.",
+      "screenshot": "ux_audit/player_detail_open.png"
+    },
+    "membership_register": {
+      "route": "/members",
+      "classification": "KEEP",
+      "priority": "P2",
+      "symptom_short": "8 members. Filter row (All/MPCA/Division + All/Individual/Institutional/Honorary/Patron) is clean and the table layout is well-spaced.",
+      "screenshot": "ux_audit/members_list.png"
+    },
+    "organisational_structure": {
+      "route": "/org",
+      "classification": "FIX",
+      "priority": "P1",
+      "symptom_short": "70 buttons on a single page. BCCI → MPCA → Divisions → Districts tree is displayed with 10 divisions and 54 districts inline — every row has an OPEN button. Scannable but noisy.",
+      "symptom_detail": "Expanding the whole tree by default produces a very long page. A collapsed-by-default tree with a search jump would be friendlier for 45+ users.",
+      "screenshot": "ux_audit/org_list.png"
+    },
+    "discussions": {
+      "route": "/discussions",
+      "classification": "KEEP",
+      "priority": "P2",
+      "symptom_short": "Two-pane conversation list + thread. Chat bubbles are readable, timestamps and body-scope are shown. Compose box has helper text 'Use @ to tag someone. Cmd/Ctrl+Enter to post.'",
+      "symptom_detail": "Best-in-class page in the ERP right now — the pattern to preserve.",
+      "screenshot": "ux_audit/discussions.png"
+    }
+  },
+
+  "broad_sweep_classification": [
+    {"route": "/dashboard", "classification": "KEEP", "priority": "P2", "note": "'Good day, Shri Scindia.' Personalised greeting + 14 CTAs. Works."},
+    {"route": "/tournament-master", "classification": "FIX", "priority": "P1", "note": "67 buttons, 8 tabs (BCCI/Inter-Divisional/Pre-Camp/Inter-District/Inter-School/Inter-Club/Vacation Camp/Periodical), 28 rows. Fine data but crowded."},
+    {"route": "/tournament-calendar", "classification": "MERGE", "priority": "P2", "target": "/events + /tournaments", "note": "Yet another calendar view. Overlaps with /events (Event Calendar) and /tournaments."},
+    {"route": "/tournament-finance", "classification": "MERGE", "priority": "P0", "target": "/tournaments/:id/finance", "note": "Global tournament finance summary; largely redundant with per-tournament finance console."},
+    {"route": "/tournament-budgets", "classification": "MERGE", "priority": "P0", "target": "/budgets + /tournaments/:id/finance", "note": "13 budgets shown; overlaps heavily with /budgets and per-tournament finance."},
+    {"route": "/budgets", "classification": "FIX", "priority": "P1", "note": "'The Budget, Reconciled.' 8288 chars, dense."},
+    {"route": "/budget-vs-actual", "classification": "MOVE-TO-SHOWCASE", "priority": "P1", "note": "65 rows, 6784 chars — pure analytics; belongs on the read-only /showcase layer."},
+    {"route": "/ledger", "classification": "KEEP", "priority": "P2", "note": "General Ledger — 4 rows, 2 tabs; light and clean."},
+    {"route": "/bank", "classification": "KEEP", "priority": "P2", "note": "Bank Operations, tidy."},
+    {"route": "/vendor-bills", "classification": "KEEP", "priority": "P2"},
+    {"route": "/vendors", "classification": "FIX", "priority": "P1", "note": "48 buttons; vendor master has too many inline actions."},
+    {"route": "/vendor-kyc", "classification": "MERGE", "priority": "P1", "target": "/vendors", "note": "Overlaps with Vendor Master; should be a tab inside /vendors."},
+    {"route": "/purchase-orders", "classification": "KEEP", "priority": "P2"},
+    {"route": "/procurement", "classification": "MERGE", "priority": "P1", "target": "/purchase-orders + /vendors", "note": "Small landing page; unclear why separate."},
+    {"route": "/asset-register", "classification": "KEEP", "priority": "P2"},
+    {"route": "/payroll", "classification": "KEEP", "priority": "P2"},
+    {"route": "/dms", "classification": "KEEP", "priority": "P2"},
+    {"route": "/compliance", "classification": "KEEP", "priority": "P2"},
+    {"route": "/claims", "classification": "MERGE", "priority": "P0", "target": "/grant-claims", "note": "'Grant Claims Register' vs /grant-claims 'Grant Claims' — two entry points for the same domain."},
+    {"route": "/division-grants", "classification": "MERGE", "priority": "P1", "target": "/grant-claims", "note": "20 rows of division grant records; overlaps with grant-claims."},
+    {"route": "/reimbursement-claims", "classification": "MERGE", "priority": "P0", "target": "/grant-claims", "note": "Third claims surface; only 9 buttons, 840 chars — near-empty landing."},
+    {"route": "/meetings", "classification": "KEEP", "priority": "P2"},
+    {"route": "/elections", "classification": "KEEP", "priority": "P2"},
+    {"route": "/disclosures", "classification": "KEEP", "priority": "P2"},
+    {"route": "/financial-powers", "classification": "KEEP", "priority": "P2"},
+    {"route": "/rulebook", "classification": "MOVE-TO-SHOWCASE", "priority": "P2", "note": "47-row markdown-style rulebook — reference material; better on /showcase or /dms."},
+    {"route": "/fixtures", "classification": "KEEP", "priority": "P2"},
+    {"route": "/audit-log", "classification": "FIX", "priority": "P1", "note": "201 rows loaded at once, 41,025 chars, no visible pagination. Rewrite with virtual scroll or filters-first."},
+    {"route": "/action-center", "classification": "KEEP", "priority": "P2", "note": "'Pending With MPCA' — meaningful."},
+    {"route": "/events", "classification": "KEEP", "priority": "P2"},
+    {"route": "/camps", "classification": "KEEP", "priority": "P2"},
+    {"route": "/player-registrations", "classification": "FIX", "priority": "P0", "note": "124 buttons, 9495 chars, 2 tabs (Campaigns 54 · Inbox 14 · 9 Pending). Many TEST_ campaigns polluting production. Approve/Reject/Copy Public URL/Invites/Preview/End Campaign/Resume — 7 actions per row. Massive P0 cleanup."},
+    {"route": "/my-assignments", "classification": "KEEP", "priority": "P2"},
+    {"route": "/my-da-forms", "classification": "KEEP", "priority": "P2"},
+    {"route": "/da-review", "classification": "KEEP", "priority": "P2"},
+    {"route": "/selection-funnel", "classification": "KEEP", "priority": "P2"},
+    {"route": "/tournament-wiring", "classification": "FIX", "priority": "P1", "note": "Matrix is beautiful but very dense (9 columns × 9 rows of chips). May be MOVE-TO-SHOWCASE."},
+    {"route": "/rate-cards", "classification": "FIX", "priority": "P0", "note": "129 inputs, 33 rows on one page. Inline editing of every driver+owner+MD+NMD rate is intimidating for a 45+ admin. Split into wizard or Save-per-row."},
+    {"route": "/schemes", "classification": "FIX", "priority": "P1", "note": "48 buttons, 4370 chars. Scheme master could be a table with expand-on-click."},
+    {"route": "/venues", "classification": "KEEP", "priority": "P2"},
+    {"route": "/match-officials", "classification": "FIX", "priority": "P1", "note": "38 buttons; per-row action density. Not visible to division-secretary in side nav — is this intentional?"},
+    {"route": "/access-control", "classification": "KEEP", "priority": "P2", "note": "MPCA-only surface. Correct persona gating."},
+    {"route": "/showcase", "classification": "KEEP", "priority": "P2", "note": "6 dashboards, 5 tabs, 6834 chars — this is the read-only layer the app should evolve toward."},
+    {"route": "/design-preview", "classification": "MOVE-TO-SHOWCASE", "priority": "P1", "note": "Public route, no auth. 8 HUD dashboards. Should either be folded into /showcase or gated behind login before launch."},
+    {"route": "/design-lab", "classification": "DELETE", "priority": "P1", "note": "'Typography & Aesthetic Sampler' — pure design scratchpad. Public route. Should be removed before production."}
+  ],
+
+  "global_findings": {
+    "dead_nav_links": [],
+    "orphan_routes_no_nav_entry": [
+      "/design-lab", "/design-preview/*", "/verify/:uid", "/member-profile/:uid", "/register/player/:token",
+      "/tournaments/:id/schedule", "/tournaments/:id/closure", "/grant-claims/:id/summary (PDF viewers, reachable via detail-page CTAs — OK)",
+      "/tournaments/:id/legacy (redirect)", "/squads/:sid/*", "/reimbursement-claims/:id/division-form", "/reimbursement-claims/:id/mpca-review-form",
+      "/match-official-da/:did/voucher", "/my-finance/:tid"
+    ],
+    "duplicated_claim_surfaces": ["/claims", "/grant-claims", "/reimbursement-claims", "/division-grants"],
+    "duplicated_finance_surfaces": ["/tournament-finance", "/tournament-budgets", "/budgets", "/budget-vs-actual", "/ledger", "/bank"],
+    "duplicated_calendar_surfaces": ["/tournament-calendar", "/events"],
+    "public_routes_that_should_be_gated": ["/design-preview and 8 sub-pages", "/design-lab", "/showcase (intentional — data-input personas write, showcase is public read)"],
+    "buttons_that_do_nothing_or_dead_ends": [
+      "Player list has an 11-chip filter row + two 'ALL' buttons stacked — potentially competing states.",
+      "/tournaments detail: 'Tournament Progression' visual stepper items (Tournament Creation, Pool Basics, Match Official Posting, etc.) look clickable but are not tabs — visual illusion.",
+      "/action-center 'Complete squad · DIV-IND (0/15)' pill on Parmanand Trophy — appears clickable but doesn't advertise its target."
+    ],
+    "personas_who_see_broken_or_empty_pages": [
+      "division-secretary sees a heavy left nav (18 links) but Tournaments list shows only Parmanand — no Indore Pre-Tournament Camp row despite Grant Claim GRC-2026-27-0009 explicitly referencing 'Indore Division · Pre-Tournament Camp'. Suggests the pre-camp is a child of Parmanand and not surfaced independently.",
+      "public / unauthenticated users can freely browse /design-preview and /design-lab — leaks unshipped design scratchpad."
+    ],
+    "p0_redesign_needed_45plus_admin": [
+      {"route": "/players", "reason": "329 buttons, 11 chips, 4 stat cards, 3 category cards, competing CTAs"},
+      {"route": "/rate-cards", "reason": "129 inputs on a single scroll — inline-edit hell"},
+      {"route": "/player-registrations", "reason": "124 buttons, 7 actions per row, TEST_ data mixed with real"},
+      {"route": "/tournaments/:id (detail)", "reason": "10-stage lifecycle rendered as passive stepper — no navigation into stages"},
+      {"route": "/audit-log", "reason": "201 rows dumped at once, no visible pagination"},
+      {"route": "/reimbursement-claims + /claims + /grant-claims + /division-grants", "reason": "Four claim surfaces confuse the single mental model 'file a claim'"},
+      {"route": "/tournament-finance + /tournament-budgets + /budgets + /budget-vs-actual", "reason": "Four finance surfaces confuse 'see the money'"}
+    ],
+    "design_issues_general": [
+      "Serif big-headline pattern is elegant but section eyebrows (small orange caps like 'ARTICLE V · THE REGISTER') can be missed by 45+ users — too small.",
+      "Multiple pages use a season selector at top-right AND tournament-scoped season inside the page — potential state confusion.",
+      "Left-nav is 18–21 items long depending on persona; grouping headings (SECRETARIAL / FINANCIAL / OPERATIONS / GOVERNANCE) help, but scroll is required.",
+      "Numbers like ₹41,08,580 use Indian formatting consistently — good. But some stat tiles show plain digits (312, 289) without a scale label."
+    ],
+    "notable_positives": [
+      "Persona chip login is fast and clear.",
+      "Grant Claims two-pane + 4-tab layout is production-grade.",
+      "Discussion module is clean and friendly.",
+      "/showcase and /design-preview HUDs prove the design bar the rest of the app can reach.",
+      "Every interactive element has data-testid — testability is excellent.",
+      "Season selector shows fiscal cycles 2023-24 through 2029-30 — data model is future-proofed."
+    ]
+  },
+
+  "recommendations_for_main_agent": {
+    "phase_2_cleave_plan_suggested_order": [
+      "1. DELETE: /design-lab (public typography sampler). MOVE /design-preview under an auth or fold into /showcase.",
+      "2. MERGE claim surfaces: fold /claims + /division-grants + /reimbursement-claims into /grant-claims with type filter chips.",
+      "3. MERGE finance surfaces: keep /budgets as the master (with tournament & body views as tabs); redirect /tournament-finance, /tournament-budgets, /budget-vs-actual → /budgets?view=X.",
+      "4. FIX /tournaments/:id — turn the 10-stage lifecycle stepper into a real tabbed navigator so admins can click Match Calendar, Unified Budget, Finance Console, Closure, Discussion inline.",
+      "5. FIX /players — collapse 11 chips into 3 primary + 'More filters'. Promote search to the top. Kill 'Recompute eligibility (all)' as a competing primary button (move to overflow menu).",
+      "6. FIX /rate-cards — replace 129-input scroll with a per-head editor drawer (click row → open drawer → edit rate → save).",
+      "7. FIX /audit-log — add pagination or virtual scroll; add module + actor + date-range filter chips at top.",
+      "8. FIX /player-registrations — delete TEST_ campaigns from prod seed; group 7 per-row actions into a kebab menu.",
+      "9. FIX /org — collapse tree by default; add search-jump-to-body.",
+      "10. Consolidate calendars: merge /tournament-calendar into /events with a 'type' filter.",
+      "11. Move /rulebook + /budget-vs-actual + /tournament-wiring matrix into /showcase (read-only analytics layer)."
+    ],
+    "leave_alone_KEEP": ["/grant-claims", "/discussions", "/dashboard", "/members", "/venues", "/meetings", "/elections", "/disclosures", "/showcase", "/action-center", "/dms", "/compliance"],
+    "estimated_route_count_after_cleave": "≈ 30 routes (down from 52 visited), aligned to a 2-layer arch: main platform (input) + /showcase (read-only)."
+  },
+
+  "screenshots_index": [
+    "ux_audit/00_login.png", "ux_audit/01_dashboard_president.png",
+    "ux_audit/r_tournaments.png", "ux_audit/r_players.png", "ux_audit/r_grant-claims.png",
+    "ux_audit/r_members.png", "ux_audit/r_org.png", "ux_audit/r_rate-cards.png",
+    "ux_audit/r_audit-log.png", "ux_audit/r_player-registrations.png",
+    "ux_audit/r_showcase.png", "ux_audit/r_design-preview.png", "ux_audit/r_design-lab.png",
+    "ux_audit/gc_detail_open.png", "ux_audit/gc_tab2_grant-tab-discussion.png",
+    "ux_audit/player_detail_open.png", "ux_audit/player_tab2_tab-eligibility.png",
+    "ux_audit/parmanand_overview.png", "ux_audit/parmanand_tab2_tournament-subtab-squad.png",
+    "ux_audit/discussions.png", "ux_audit/org_list.png", "ux_audit/members_list.png",
+    "ux_audit/sec_ratecards.png", "ux_audit/sec_auditlog.png", "ux_audit/sec_wiring.png",
+    "ux_audit/showcase.png", "ux_audit/designpreview.png"
+  ],
+
+  "test_credentials": "Persona chips on /login (no password needed): president / secretary / treasurer / division-secretary / division-secretary-gwl / district-secretary / match-official / public. Click chip, then [data-testid=login-submit-btn], wait ~2.5s.",
+  "seed_data_creation": "None. Read-only audit.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "updated_files": [],
+  "action_items_for_main_agent": [
+    "Use recommendations_for_main_agent.phase_2_cleave_plan_suggested_order as the Phase-2 Cleave backlog.",
+    "Confirm with user whether /claims + /division-grants + /reimbursement-claims should truly collapse into /grant-claims (biggest destructive change).",
+    "Confirm which finance page becomes canonical (/budgets recommended).",
+    "Decide whether /design-preview stays public (marketing) or gets moved under /showcase.",
+    "Purge TEST_ campaigns from /player-registrations before deploy.",
+    "Investigate why division-secretary doesn't see 'Indore Division · Pre-Tournament Camp' as a top-level tournament row while GRC-2026-27-0009 references it — either the camp is a child of Parmanand (expected) or the row is being filtered out (bug)."
+  ],
+  "context_for_next_testing_agent": "This was Phase-1 Audit (read-only). Phase-2 will be destructive cleave — after main agent applies deletions/merges, next testing agent should re-run the broad sweep script (login as each persona → visit each remaining route → assert page loads + primary CTA visible) and diff route count.",
+  "success_rate": {"backend": "N/A (frontend-only audit)", "frontend": "N/A (audit not pass/fail)"}
+}

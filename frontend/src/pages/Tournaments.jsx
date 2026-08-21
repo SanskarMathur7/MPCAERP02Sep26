@@ -113,7 +113,7 @@ const Pill = ({ tone, label, testId }) => {
         <span
             data-testid={testId}
             style={{ backgroundColor: s.bg, color: s.fg, border: s.ring === "none" ? "none" : s.ring, fontFamily: DL.fontMono, letterSpacing: "0.14em", fontWeight: 700 }}
-            className="inline-flex items-center px-2.5 py-[3px] text-[10px] uppercase whitespace-nowrap rounded-full"
+            className="inline-flex items-center px-3 py-1 text-[11px] uppercase whitespace-nowrap rounded-full"
         >
             {label}
         </span>
@@ -123,27 +123,27 @@ const Pill = ({ tone, label, testId }) => {
 const StatTile = ({ icon: Icon, label, value, sub }) => {
     return (
         <div
-            className="p-6 flex flex-col justify-between h-full"
+            className="p-7 flex flex-col justify-between h-full"
             style={embossedCard()}
             data-testid={"trn-stat-" + label.toLowerCase().replace(/\s+/g, "-")}
         >
             <div className="flex items-start justify-between">
                 <div
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg"
-                    style={{ backgroundColor: DL.emeraldSoft, boxShadow: `inset 0 0 0 1px rgba(13,59,46,0.32)` }}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-lg"
+                    style={{ backgroundColor: DL.emeraldSoft, boxShadow: `inset 0 0 0 1.5px rgba(13,59,46,0.32)` }}
                 >
-                    <Icon style={{ color: DL.emerald }} size={16} strokeWidth={2.25} />
+                    <Icon style={{ color: DL.emerald }} size={20} strokeWidth={2.25} />
                 </div>
-                <div className="text-[10px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
+                <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
                     / stat
                 </div>
             </div>
-            <div className="mt-6">
-                <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
-                <div className="mt-2 text-4xl leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>
+            <div className="mt-7">
+                <div className="text-[13px] uppercase tracking-[0.2em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
+                <div className="mt-2 text-[52px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>
                     {value}
                 </div>
-                {sub && <div className="text-[13px] mt-3 leading-snug font-semibold" style={{ color: DL.ink2 }}>{sub}</div>}
+                {sub && <div className="text-[14px] mt-3 leading-snug font-semibold" style={{ color: DL.ink2 }}>{sub}</div>}
             </div>
         </div>
     );
@@ -249,15 +249,15 @@ const Tournaments = () => {
             {/* Compact header bar — no editorial hero, more space for the list */}
             <div className="mb-8 flex items-center justify-between gap-6 flex-wrap">
                 <div className="flex items-baseline gap-4 flex-wrap">
-                    <span className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
+                    <span className="text-[13px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink }}>
                         / Tournaments
                     </span>
-                    <span className="text-[10px] uppercase tracking-[0.22em] font-semibold" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
+                    <span className="text-[12px] uppercase tracking-[0.22em] font-semibold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
                         Article VII · Season 2026-27
                     </span>
                     <Link
                         to="/tournament-calendar"
-                        className="text-[10px] uppercase tracking-[0.22em] font-semibold underline underline-offset-4"
+                        className="text-[12px] uppercase tracking-[0.22em] font-bold underline underline-offset-4"
                         style={{ fontFamily: DL.fontMono, color: DL.emerald }}
                     >
                         View Calendar →
@@ -267,7 +267,7 @@ const Tournaments = () => {
                     <button
                         onClick={() => setCreateOpen(true)}
                         data-testid="new-tournament-btn"
-                        className="group inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold transition-all"
+                        className="group inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-[15px] font-bold transition-all"
                         style={{
                             backgroundColor: DL.emerald,
                             color: DL.paper,
@@ -277,7 +277,7 @@ const Tournaments = () => {
                         onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = DL.ink; }}
                         onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = DL.emerald; }}
                     >
-                        <Plus size={16} strokeWidth={2.5} className="transition-transform group-hover:rotate-90" /> Add Tournament
+                        <Plus size={18} strokeWidth={2.75} className="transition-transform group-hover:rotate-90" /> Add Tournament
                     </button>
                 )}
             </div>
@@ -292,24 +292,18 @@ const Tournaments = () => {
                 </div>
             )}
 
-            {/* Filter chips · pill-style, mono labels */}
-            <div className="flex flex-wrap items-center gap-2 mb-6">
-                <Filter size={14} style={{ color: DL.muted }} />
+            {/* Filter chips · pill-style, mono labels — trimmed to the essential 8 */}
+            <div className="flex flex-wrap items-center gap-2.5 mb-6">
+                <Filter size={16} strokeWidth={2.5} style={{ color: DL.ink2 }} />
                 {[
                     ["live",                 "Live"],
                     ["upcoming",             "Upcoming"],
-                    ["all",                  "All"],
                     ["pending_my_accept",    "Awaiting Me"],
+                    ["BCCI",                 "BCCI"],
                     ["MPCA_InterDivisional", "Inter-Div"],
                     ["MPCA_Championship",    "Championships"],
-                    ["BCCI",                 "BCCI"],
-                    ["womens",               "Women's"],
-                    ["three_team",           "3-Team"],
-                    ["Draft",                "Draft"],
-                    ["Awaiting_Approval",    "Awaiting Approval"],
-                    ["Squad_Selection",      "In Selection"],
-                    ["In_Progress",          "In Progress"],
                     ["Completed",            "Completed"],
+                    ["all",                  "All"],
                 ].map(([k, label]) => {
                     const active = filter === k;
                     return (
@@ -317,7 +311,7 @@ const Tournaments = () => {
                             key={k}
                             onClick={() => setFilter(k)}
                             data-testid={"trn-filter-" + k}
-                            className="px-3.5 py-1.5 text-[10.5px] uppercase tracking-[0.16em] transition-all rounded-full"
+                            className="px-4 py-2 text-[12px] uppercase tracking-[0.16em] transition-all rounded-full"
                             style={{
                                 backgroundColor: active ? DL.emerald : "transparent",
                                 color: active ? DL.paper : DL.ink,
@@ -334,7 +328,7 @@ const Tournaments = () => {
             </div>
 
             {isMpcaState && (hiddenCount > 0 || includeCampScoped) && !["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
-                <div className="mb-4 flex items-center gap-3 text-[11px]" data-testid="mpca-visibility-toggle">
+                <div className="mb-4 flex items-center gap-3 text-[13px]" data-testid="mpca-visibility-toggle">
                     <span className="uppercase tracking-[0.2em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
                         {includeCampScoped
                             ? "Showing all tournaments including Camps · School · Club"
@@ -343,7 +337,7 @@ const Tournaments = () => {
                     <button
                         onClick={() => setIncludeCampScoped(v => !v)}
                         data-testid="mpca-visibility-toggle-btn"
-                        className="px-3 py-1 text-[10px] uppercase tracking-[0.18em] rounded-full transition-colors font-bold"
+                        className="px-3.5 py-1.5 text-[12px] uppercase tracking-[0.18em] rounded-full transition-colors font-bold"
                         style={{ color: DL.emerald, border: `1.5px solid ${DL.ruleStrong}`, fontFamily: DL.fontMono }}
                     >
                         {includeCampScoped ? "Focus on core" : "Show all"}
@@ -352,8 +346,8 @@ const Tournaments = () => {
             )}
 
             {isMpcaState && ["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
-                <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] font-bold" data-testid="mpca-realtime-banner" style={{ fontFamily: DL.fontMono, color: DL.emerald }}>
-                    <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: DL.emerald }} />
+                <div className="mb-4 flex items-center gap-2 text-[13px] uppercase tracking-[0.2em] font-bold" data-testid="mpca-realtime-banner" style={{ fontFamily: DL.fontMono, color: DL.emerald }}>
+                    <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: DL.emerald }} />
                     Real-time visibility · every {filter === "BCCI" ? "BCCI" : (filter === "MPCA_Championship" ? "Championship" : "Inter-Divisional")} action visible as it happens
                 </div>
             )}
@@ -361,7 +355,7 @@ const Tournaments = () => {
             {/* Tournament list · each row is its own embossed card for prominence */}
             <div data-testid="trn-list">
                 {filtered.length === 0 ? (
-                    <div className="p-16 text-center" style={{ ...embossedCard(), color: DL.ink2, fontFamily: DL.fontBody, fontSize: "16px", fontWeight: 600 }} data-testid="trn-empty">
+                    <div className="p-20 text-center" style={{ ...embossedCard(), color: DL.ink, fontFamily: DL.fontBody, fontSize: "18px", fontWeight: 700 }} data-testid="trn-empty">
                         {filter === "live"
                             ? "No live tournaments right now. Switch to Upcoming or All to see the full calendar."
                             : "No tournaments match this filter."}
@@ -388,27 +382,27 @@ const Tournaments = () => {
                                 onClick={() => navigate(`/tournaments/${t.id}`)}
                             >
                                 <div
-                                    className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0"
-                                    style={{ backgroundColor: DL.emeraldSoft, boxShadow: `inset 0 0 0 1px rgba(13,59,46,0.22)`, color: DL.emerald }}
+                                    className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
+                                    style={{ backgroundColor: DL.emeraldSoft, boxShadow: `inset 0 0 0 1.5px rgba(13,59,46,0.32)`, color: DL.emerald }}
                                 >
-                                    <Trophy size={18} strokeWidth={1.5} />
+                                    <Trophy size={20} strokeWidth={2} />
                                 </div>
-                                <div className="text-[10.5px] tracking-[0.2em] w-28 font-bold" style={{ fontFamily: DL.fontMono, color: DL.muted }}>{t.tournament_no}</div>
+                                <div className="text-[12px] tracking-[0.2em] w-32 font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{t.tournament_no}</div>
                                 <div className="flex-1 min-w-[280px]">
-                                    <div className="text-[19px] leading-tight tracking-[-0.01em]" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>
+                                    <div className="text-[22px] leading-tight tracking-[-0.01em]" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>
                                         {t.name}
                                         {t.short_name && (
-                                            <span className="ml-2 text-[12px] uppercase tracking-[0.18em]" style={{ fontFamily: DL.fontMono, color: DL.emerald, fontWeight: 700 }}>
+                                            <span className="ml-2 text-[13px] uppercase tracking-[0.18em]" style={{ fontFamily: DL.fontMono, color: DL.emerald, fontWeight: 700 }}>
                                                 · {t.short_name}
                                             </span>
                                         )}
                                     </div>
-                                    <div className="text-[12.5px] mt-1.5 flex items-center gap-2 flex-wrap font-semibold" style={{ color: DL.ink2 }}>
-                                        <Calendar size={12} strokeWidth={2.5} /> {fmtDate(t.start_date)} → {fmtDate(t.end_date)}
+                                    <div className="text-[14px] mt-2 flex items-center gap-2 flex-wrap font-semibold" style={{ color: DL.ink2 }}>
+                                        <Calendar size={14} strokeWidth={2.5} /> {fmtDate(t.start_date)} → {fmtDate(t.end_date)}
                                         {(t.venue_name_snapshot || t.venue) && (
-                                            <><span style={{ color: DL.muted }}>·</span><MapPin size={12} strokeWidth={2.5} /> {t.venue_name_snapshot || t.venue}{t.ground_name_snapshot ? <span style={{ color: DL.muted }}> · {t.ground_name_snapshot}</span> : null}</>
+                                            <><span style={{ color: DL.muted }}>·</span><MapPin size={14} strokeWidth={2.5} /> {t.venue_name_snapshot || t.venue}{t.ground_name_snapshot ? <span style={{ color: DL.muted }}> · {t.ground_name_snapshot}</span> : null}</>
                                         )}
-                                        {t.host_body_id && <span style={{ fontFamily: DL.fontMono, color: DL.muted, fontWeight: 700 }}>· Host {t.host_body_id}</span>}
+                                        {t.host_body_id && <span style={{ fontFamily: DL.fontMono, color: DL.ink2, fontWeight: 700, fontSize: "12px" }}>· Host {t.host_body_id}</span>}
                                         {t.trophy_name && <span style={{ color: DL.gold, fontWeight: 800 }}>· 🏆 {t.trophy_name}</span>}
                                         <WiringComplianceChip tournament={t} testId={"trn-wiring-" + t.tournament_no} className="ml-1" />
                                     </div>
@@ -441,7 +435,7 @@ const Tournaments = () => {
                                         <TournamentProgressionRibbonMini tournament={t} />
                                     </div>
                                 </div>
-                                <span className="text-[11px] uppercase tracking-[0.2em] w-20 text-right font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{ageLabel(t)}</span>
+                                <span className="text-[12px] uppercase tracking-[0.2em] w-24 text-right font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{ageLabel(t)}</span>
                                 <Pill tone={tm.tone} label={tm.label} testId={"trn-type-" + t.tournament_type} />
                                 <Pill tone={fm.tone} label={fm.label} testId={"trn-fmt-" + t.format} />
                                 {t.is_three_team_format && <Pill tone="pending" label="3-Team" testId={"trn-3team-" + t.tournament_no} />}
@@ -453,7 +447,7 @@ const Tournaments = () => {
                                         <button
                                             onClick={() => handleAcceptance(t.id, "accept")}
                                             disabled={accepting}
-                                            className="px-3.5 py-1.5 text-[10px] uppercase tracking-[0.18em] rounded-full transition disabled:opacity-50 font-bold"
+                                            className="px-4 py-2 text-[12px] uppercase tracking-[0.18em] rounded-full transition disabled:opacity-50 font-bold"
                                             style={{ backgroundColor: DL.emerald, color: DL.paper, fontFamily: DL.fontMono, boxShadow: "0 10px 24px -14px rgba(13,59,46,0.6)" }}
                                             data-testid={"trn-accept-" + t.tournament_no}
                                         >
@@ -462,7 +456,7 @@ const Tournaments = () => {
                                         <button
                                             onClick={() => handleAcceptance(t.id, "reject")}
                                             disabled={accepting}
-                                            className="px-3.5 py-1.5 text-[10px] uppercase tracking-[0.18em] rounded-full transition disabled:opacity-50 font-bold"
+                                            className="px-4 py-2 text-[12px] uppercase tracking-[0.18em] rounded-full transition disabled:opacity-50 font-bold"
                                             style={{ backgroundColor: DL.danger, color: DL.paper, fontFamily: DL.fontMono, boxShadow: "0 10px 24px -14px rgba(139,31,31,0.6)" }}
                                             data-testid={"trn-reject-" + t.tournament_no}
                                         >

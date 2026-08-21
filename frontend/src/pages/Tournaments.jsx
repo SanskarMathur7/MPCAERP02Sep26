@@ -134,9 +134,6 @@ const StatTile = ({ icon: Icon, label, value, sub }) => {
                 >
                     <Icon style={{ color: DL.emerald }} size={20} strokeWidth={2.25} />
                 </div>
-                <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
-                    / stat
-                </div>
             </div>
             <div className="mt-7">
                 <div className="text-[13px] uppercase tracking-[0.2em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>

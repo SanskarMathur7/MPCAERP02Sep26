@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import PendingWithMePanel from "@/components/PendingWithMePanel";
-import { DL, PageShell, PageEyebrow } from "@/lib/designSystem";
+import { DL, PageShell, PageEyebrow, embossedCard } from "@/lib/designSystem";
 
 const fmtINR = (n) => {
     if (n == null) return "—";
@@ -38,11 +38,6 @@ const personaScope = (persona) => {
 };
 
 const KpiTile = ({ label, value, sub, icon: Icon, accent = "green", testid, source, formula, meaning }) => {
-    const colorMap = {
-        green: "text-mpca-green-dark",
-        oxblood: "text-mpca-oxblood",
-        brass: "text-mpca-brass",
-    };
     // Feb-2026 · Hover tooltip explains WHERE the number comes from,
     // HOW it's computed, and WHAT it means — one-liner each. Uses the
     // built-in `title` attribute so it works everywhere without extra deps.
@@ -51,17 +46,22 @@ const KpiTile = ({ label, value, sub, icon: Icon, accent = "green", testid, sour
         source && `\nSource · ${source}`,
         formula && `\nFormula · ${formula}`,
     ].filter(Boolean).join("");
+    const accentColor = accent === "oxblood" ? DL.danger : accent === "brass" ? DL.gold : DL.emerald;
     return (
-        <div className="bulletin-card p-6 relative cursor-help" data-testid={testid} title={tooltip || undefined}>
-            <div className="flex items-start justify-between mb-4">
-                <Icon className={colorMap[accent]} size={18} strokeWidth={1.5} />
+        <div
+            className="px-5 py-4 relative cursor-help"
+            style={embossedCard()}
+            data-testid={testid}
+            title={tooltip || undefined}
+        >
+            <div className="flex items-start justify-between mb-2">
+                <span className="text-[12px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</span>
                 {tooltip && (
-                    <span className="text-[9px] uppercase tracking-widest text-mpca-brass/70" aria-hidden="true">?</span>
+                    <span className="text-[10px] font-bold" style={{ fontFamily: DL.fontMono, color: DL.muted }} aria-hidden="true">?</span>
                 )}
             </div>
-            <div className="font-serif text-4xl text-mpca-green-dark leading-none">{value}</div>
-            <div className="mt-2 text-sm text-mpca-charcoal">{label}</div>
-            {sub && <div className="text-[11px] mt-1 text-mpca-gray-dark">{sub}</div>}
+            <div className="text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: accent === "green" ? DL.ink : accentColor, fontWeight: 800 }}>{value}</div>
+            {sub && <div className="text-[12.5px] mt-2 font-semibold" style={{ color: DL.ink2 }}>{sub}</div>}
         </div>
     );
 };
@@ -263,16 +263,40 @@ const Dashboard = () => {
         );
     }
 
+    // Feb 2026 · Personalisation — pick greeting by wall-clock hour
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    const firstName = persona?.name?.split(" ").slice(-1)[0] || persona?.name || "";
+
     return (
         <PageShell testid="dashboard-page">
             <PageEyebrow
-                title={`${persona?.honorific || ""} ${persona?.name || ""}`.trim() || "Command Centre"}
+                title="Command Centre"
                 meta={`${persona?.body_type || ""} · ${rootLabel}${persona?.post ? " · " + persona.post : ""}`}
                 rightAction={
-                    <div className="text-right">
-                        <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>As On</div>
-                        <div className="text-[18px] font-bold mt-1" style={{ color: DL.ink }}>
-                            {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                    <div className="flex items-center gap-4 flex-wrap">
+                        <div
+                            className="inline-flex items-center gap-2 px-4 h-[38px] rounded-full"
+                            style={{
+                                background: `linear-gradient(180deg, ${DL.paper} 0%, ${DL.paperEdge} 100%)`,
+                                border: `1.5px solid ${DL.ruleStrong}`,
+                                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.85), 0 6px 14px -8px rgba(14,31,27,0.25)",
+                            }}
+                            data-testid="dashboard-greeting-chip"
+                        >
+                            <Sparkles size={14} strokeWidth={2.5} style={{ color: DL.gold }} />
+                            <span className="text-[13px] font-bold" style={{ color: DL.ink2 }}>
+                                {greeting},
+                            </span>
+                            <span className="text-[13px] font-bold" style={{ color: DL.ink, fontFamily: DL.fontDisplay }}>
+                                {persona?.honorific || ""} {firstName}
+                            </span>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>As On</div>
+                            <div className="text-[16px] font-bold mt-0.5" style={{ color: DL.ink }}>
+                                {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                            </div>
                         </div>
                     </div>
                 }
@@ -280,7 +304,7 @@ const Dashboard = () => {
 
             {/* Roll-up KPI band — Feb-2026 · rewired to REAL figures. */}
             {totals && (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
                     <KpiTile
                         label="Active Members"
                         value={totals.members.toLocaleString("en-IN")}

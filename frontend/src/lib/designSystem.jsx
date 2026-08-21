@@ -158,33 +158,34 @@ export const FilterChip = ({ active, onClick, testid, children }) => (
     </button>
 );
 
-export const SearchInput = ({ value, onChange, placeholder = "Search…", testid, width = 220 }) => (
+export const SearchInput = ({ value, onChange, placeholder = "Search…", testid, width = 260 }) => (
     <div
-        className="inline-flex items-center gap-2 px-3 py-2 rounded-full"
+        className="inline-flex items-center gap-2 px-4 h-[38px] rounded-full transition-colors"
         style={{
             border: `1.5px solid ${DL.ruleStrong}`,
             backgroundColor: DL.paper,
             width,
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(14,31,27,0.05)",
         }}
     >
-        <Search size={14} strokeWidth={2.5} style={{ color: DL.muted }} />
+        <Search size={16} strokeWidth={2.75} style={{ color: DL.ink }} />
         <input
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             data-testid={testid}
-            className="flex-1 bg-transparent outline-none text-[13px] font-semibold placeholder:font-normal placeholder:opacity-60"
+            className="flex-1 bg-transparent outline-none text-[13px] font-bold placeholder:font-semibold placeholder:text-[#4C5750]"
             style={{ color: DL.ink, fontFamily: DL.fontBody }}
         />
         {value && (
             <button
                 onClick={() => onChange("")}
                 data-testid={testid ? `${testid}-clear` : undefined}
-                className="text-[11px] font-bold uppercase tracking-widest"
-                style={{ color: DL.muted, fontFamily: DL.fontMono }}
+                className="text-[13px] font-bold w-5 h-5 rounded-full inline-flex items-center justify-center transition-colors"
+                style={{ color: DL.paper, backgroundColor: DL.ink2, fontFamily: DL.fontMono }}
             >
-                ✕
+                ×
             </button>
         )}
     </div>

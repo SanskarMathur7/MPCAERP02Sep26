@@ -10,7 +10,7 @@ import {
     User as UserIcon, Plus, Trophy, ShieldAlert, ShieldCheck, ChevronRight, Filter, X, Award, CheckCircle2, AlertTriangle, BadgeCheck, Ban,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
-import { DL, PageShell, PageEyebrow, PrimaryButton } from "@/lib/designSystem";
+import { DL, PageShell, PageEyebrow, PrimaryButton, embossedCard } from "@/lib/designSystem";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ageYears = (dob) => {
@@ -49,17 +49,13 @@ const Pill = ({ tone, label, testId, icon: Icon }) => (
     </span>
 );
 
-const StatTile = ({ icon: Icon, label, value, sub, accent = "navy" }) => {
-    const c = { navy: "text-mpca-green-dark", saffron: "text-mpca-oxblood", marigold: "text-mpca-gold", maroon: "text-mpca-burgundy-dark" }[accent];
-    return (
-        <div className="bulletin-card p-6 border-0 rounded-none" data-testid={"player-stat-" + label.toLowerCase().replace(/\s+/g, "-")}>
-            <Icon className={c + " mb-3"} size={20} strokeWidth={1.25} />
-            <div className="overline">{label}</div>
-            <div className="font-serif text-3xl text-mpca-green-dark mt-2 leading-none">{value}</div>
-            {sub && <div className="text-[11px] text-mpca-gray-dark mt-2">{sub}</div>}
-        </div>
-    );
-};
+const StatTile = ({ label, value, sub }) => (
+    <div className="px-5 py-4" style={embossedCard()} data-testid={"player-stat-" + label.toLowerCase().replace(/\s+/g, "-")}>
+        <div className="text-[12px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
+        <div className="mt-1.5 text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>{value}</div>
+        {sub && <div className="text-[12.5px] mt-1.5 font-semibold" style={{ color: DL.ink2 }}>{sub}</div>}
+    </div>
+);
 
 const NewPlayerDialog = ({ open, persona, bodies, onClose, onCreated }) => {
     const initial = {
@@ -697,11 +693,11 @@ const Players = () => {
             )}
 
             {stats && persona?.body_type === "State" && (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10" data-testid="player-stats">
-                    <StatTile icon={UserIcon} label="Total Players" value={stats.total_players} sub="All bodies · all categories" accent="navy" />
-                    <StatTile icon={CheckCircle2} label="Active" value={stats.active_players} sub="Eligible to be selected" accent="marigold" />
-                    <StatTile icon={AlertTriangle} label="Pending" value={stats.pending_players} sub="Awaiting approval" accent="saffron" />
-                    <StatTile icon={Ban} label="Suspended" value={stats.suspended_players} sub="Disqualifications active" accent="maroon" />
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8" data-testid="player-stats">
+                    <StatTile label="Total Players" value={stats.total_players} sub="All bodies · all categories" />
+                    <StatTile label="Active" value={stats.active_players} sub="Eligible to be selected" />
+                    <StatTile label="Pending" value={stats.pending_players} sub="Awaiting approval" />
+                    <StatTile label="Suspended" value={stats.suspended_players} sub="Disqualifications active" />
                 </div>
             )}
 

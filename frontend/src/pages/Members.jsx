@@ -5,7 +5,7 @@ import { Plus, ChevronRight, Users, Upload, Tag, Download } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import MemberBulkUploadModal from "@/components/MemberBulkUploadModal";
 import { useAuth } from "@/context/AuthContext";
-import { DL, PageShell, PageEyebrow, PrimaryButton, SearchInput, embossedCard } from "@/lib/designSystem";
+import { DL, PageShell, PageEyebrow, PrimaryButton, SearchInput, SortHeader, embossedCard } from "@/lib/designSystem";
 
 const CATEGORIES = ["All", "Individual", "Institutional", "Honorary", "Patron"];
 const MEMBER_TYPES = ["All", "MPCA", "Division"];
@@ -21,6 +21,13 @@ const Members = () => {
     const [subCategory, setSubCategory] = useState("All");
     const [search, setSearch] = useState("");
     const [bulkOpen, setBulkOpen] = useState(false);
+    // Feb 2026 · Sort — for scanability on 45+ admin UI
+    const [sortBy, setSortBy] = useState("enrolled_on");
+    const [sortDir, setSortDir] = useState("desc");
+    const toggleSort = (key) => {
+        if (sortBy !== key) { setSortBy(key); setSortDir("asc"); return; }
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    };
 
     const load = async () => {
         setLoading(true);
@@ -41,7 +48,7 @@ const Members = () => {
     useEffect(() => { load(); }, []);
 
     const filtered = useMemo(() => {
-        return members.filter((m) => {
+        const rows = members.filter((m) => {
             if (category !== "All" && m.category !== category) return false;
             if (memberType !== "All" && (m.member_type || "MPCA") !== memberType) return false;
             if (subCategory !== "All" && m.sub_category !== subCategory) return false;
@@ -57,7 +64,22 @@ const Members = () => {
             }
             return true;
         });
-    }, [members, category, memberType, subCategory, search]);
+        // Sort
+        const dirMul = sortDir === "asc" ? 1 : -1;
+        return [...rows].sort((a, b) => {
+            let av, bv;
+            switch (sortBy) {
+                case "name":     av = (a.name || "").toLowerCase(); bv = (b.name || "").toLowerCase(); break;
+                case "uid":      av = a.uid || ""; bv = b.uid || ""; break;
+                case "category": av = a.category || ""; bv = b.category || ""; break;
+                case "enrolled_on":
+                default:         av = a.enrolled_on || a.created_at || ""; bv = b.enrolled_on || b.created_at || ""; break;
+            }
+            if (av < bv) return -1 * dirMul;
+            if (av > bv) return  1 * dirMul;
+            return 0;
+        });
+    }, [members, category, memberType, subCategory, search, sortBy, sortDir]);
 
     if (loading) return (
         <PageShell testid="members-page">
@@ -123,64 +145,66 @@ const Members = () => {
                 </div>
             )}
 
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-2.5 mb-6">
-                {MEMBER_TYPES.map((t) => {
-                    const active = memberType === t;
-                    return (
-                        <button
-                            key={t}
-                            onClick={() => setMemberType(t)}
-                            data-testid={`filter-type-${t.toLowerCase()}`}
-                            className="px-4 py-2 text-[12px] uppercase tracking-[0.16em] rounded-full transition-all"
-                            style={{
-                                backgroundColor: active ? DL.gold : "transparent",
-                                color: active ? DL.paper : DL.ink,
-                                border: active ? `1.5px solid ${DL.gold}` : `1.5px solid ${DL.ruleStrong}`,
-                                fontFamily: DL.fontMono,
-                                fontWeight: active ? 700 : 600,
-                                boxShadow: active ? "0 8px 20px -12px rgba(184,131,40,0.5)" : "none",
-                            }}
+            {/* Filters + search — chips on the left, search anchored right */}
+            <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
+                <div className="flex flex-wrap items-center gap-2.5">
+                    {MEMBER_TYPES.map((t) => {
+                        const active = memberType === t;
+                        return (
+                            <button
+                                key={t}
+                                onClick={() => setMemberType(t)}
+                                data-testid={`filter-type-${t.toLowerCase()}`}
+                                className="px-4 py-2 text-[12px] uppercase tracking-[0.16em] rounded-full transition-all"
+                                style={{
+                                    backgroundColor: active ? DL.gold : "transparent",
+                                    color: active ? DL.paper : DL.ink,
+                                    border: active ? `1.5px solid ${DL.gold}` : `1.5px solid ${DL.ruleStrong}`,
+                                    fontFamily: DL.fontMono,
+                                    fontWeight: active ? 700 : 600,
+                                    boxShadow: active ? "0 8px 20px -12px rgba(184,131,40,0.5)" : "none",
+                                }}
+                            >
+                                {t}
+                            </button>
+                        );
+                    })}
+                    <div className="h-6 w-px" style={{ backgroundColor: DL.ruleStrong }} />
+                    {CATEGORIES.map((c) => {
+                        const active = category === c;
+                        return (
+                            <button
+                                key={c}
+                                onClick={() => setCategory(c)}
+                                data-testid={`filter-${c.toLowerCase()}`}
+                                className="px-4 py-2 text-[12px] uppercase tracking-[0.16em] rounded-full transition-all"
+                                style={{
+                                    backgroundColor: active ? DL.emerald : "transparent",
+                                    color: active ? DL.paper : DL.ink,
+                                    border: active ? `1.5px solid ${DL.emerald}` : `1.5px solid ${DL.ruleStrong}`,
+                                    fontFamily: DL.fontMono,
+                                    fontWeight: active ? 700 : 600,
+                                    boxShadow: active ? "0 8px 20px -12px rgba(13,59,46,0.5)" : "none",
+                                }}
+                            >
+                                {c}
+                            </button>
+                        );
+                    })}
+                    {subCats.length > 0 && (
+                        <select
+                            value={subCategory}
+                            onChange={(e) => setSubCategory(e.target.value)}
+                            className="px-3 py-2 text-[12px] uppercase tracking-[0.16em] rounded-full"
+                            style={{ fontFamily: DL.fontMono, color: DL.ink, backgroundColor: DL.paper, border: `1.5px solid ${DL.ruleStrong}`, fontWeight: 600 }}
+                            data-testid="sub-category-select"
                         >
-                            {t}
-                        </button>
-                    );
-                })}
-                <div className="h-6 w-px" style={{ backgroundColor: DL.ruleStrong }} />
-                {CATEGORIES.map((c) => {
-                    const active = category === c;
-                    return (
-                        <button
-                            key={c}
-                            onClick={() => setCategory(c)}
-                            data-testid={`filter-${c.toLowerCase()}`}
-                            className="px-4 py-2 text-[12px] uppercase tracking-[0.16em] rounded-full transition-all"
-                            style={{
-                                backgroundColor: active ? DL.emerald : "transparent",
-                                color: active ? DL.paper : DL.ink,
-                                border: active ? `1.5px solid ${DL.emerald}` : `1.5px solid ${DL.ruleStrong}`,
-                                fontFamily: DL.fontMono,
-                                fontWeight: active ? 700 : 600,
-                                boxShadow: active ? "0 8px 20px -12px rgba(13,59,46,0.5)" : "none",
-                            }}
-                        >
-                            {c}
-                        </button>
-                    );
-                })}
-                {subCats.length > 0 && (
-                    <select
-                        value={subCategory}
-                        onChange={(e) => setSubCategory(e.target.value)}
-                        className="px-3 py-2 text-[12px] uppercase tracking-[0.16em] rounded-full"
-                        style={{ fontFamily: DL.fontMono, color: DL.ink, backgroundColor: DL.paper, border: `1.5px solid ${DL.ruleStrong}`, fontWeight: 600 }}
-                        data-testid="sub-category-select"
-                    >
-                        <option value="All">All Sub-Categories</option>
-                        {subCats.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-                    </select>
-                )}
-                <div className="ml-auto">
+                            <option value="All">All Sub-Categories</option>
+                            {subCats.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                        </select>
+                    )}
+                </div>
+                <div className="shrink-0">
                     <SearchInput
                         value={search}
                         onChange={setSearch}
@@ -190,6 +214,19 @@ const Members = () => {
                     />
                 </div>
             </div>
+
+            <SortHeader
+                columns={[
+                    { key: "enrolled_on", label: "Enrolled On" },
+                    { key: "name",        label: "Name" },
+                    { key: "uid",         label: "UID" },
+                    { key: "category",    label: "Category" },
+                ]}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={toggleSort}
+                testidPrefix="mem-sort"
+            />
 
             {/* Ledger */}
             {loading ? (

@@ -233,29 +233,31 @@ const Tournaments = () => {
                 </div>
             )}
 
-            {/* Filter chips + search — trimmed set of 8 essentials */}
-            <div className="flex flex-wrap items-center gap-2.5 mb-6">
-                <Filter size={16} strokeWidth={2.5} style={{ color: DL.ink2 }} />
-                {[
-                    ["live",                 "Live"],
-                    ["upcoming",             "Upcoming"],
-                    ["pending_my_accept",    "Awaiting Me"],
-                    ["BCCI",                 "BCCI"],
-                    ["MPCA_InterDivisional", "Inter-Div"],
-                    ["MPCA_Championship",    "Championships"],
-                    ["Completed",            "Completed"],
-                    ["all",                  "All"],
-                ].map(([k, label]) => (
-                    <FilterChip
-                        key={k}
-                        active={filter === k}
-                        onClick={() => setFilter(k)}
-                        testid={"trn-filter-" + k}
-                    >
-                        {label}
-                    </FilterChip>
-                ))}
-                <div className="ml-auto">
+            {/* Filter chips + search — chips on the left, search anchored right */}
+            <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
+                <div className="flex flex-wrap items-center gap-2.5">
+                    <Filter size={16} strokeWidth={2.5} style={{ color: DL.ink2 }} />
+                    {[
+                        ["live",                 "Live"],
+                        ["upcoming",             "Upcoming"],
+                        ["pending_my_accept",    "Awaiting Me"],
+                        ["BCCI",                 "BCCI"],
+                        ["MPCA_InterDivisional", "Inter-Div"],
+                        ["MPCA_Championship",    "Championships"],
+                        ["Completed",            "Completed"],
+                        ["all",                  "All"],
+                    ].map(([k, label]) => (
+                        <FilterChip
+                            key={k}
+                            active={filter === k}
+                            onClick={() => setFilter(k)}
+                            testid={"trn-filter-" + k}
+                        >
+                            {label}
+                        </FilterChip>
+                    ))}
+                </div>
+                <div className="shrink-0">
                     <SearchInput
                         value={search}
                         onChange={setSearch}

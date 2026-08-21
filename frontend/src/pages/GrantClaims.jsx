@@ -7,7 +7,7 @@ import CricketLoader from "@/components/CricketLoader";
 import VaultDocumentPicker from "@/components/VaultDocumentPicker";
 import SignedPdfUploadModal from "@/components/SignedPdfUploadModal";
 import AttachedCampView from "@/components/AttachedCampView";
-import { PageShell, PageEyebrow, PrimaryButton } from "@/lib/designSystem";
+import { PageShell, PageEyebrow, PrimaryButton, DL, embossedCard } from "@/lib/designSystem";
 
 // MPCA-245 · Progress ribbon steps for grant claim lifecycle
 const GRANT_STEPS = [
@@ -448,7 +448,7 @@ const GrantClaims = () => {
                         </div>
                     )}
                     {filteredClaims.length === 0 ? (
-                        <div className="bulletin-card p-8 text-center text-sm text-mpca-gray-dark">No grant claims yet.</div>
+                        <div className="p-8 text-center text-[14px] font-semibold" style={{ ...embossedCard(), color: DL.ink2 }}>No grant claims yet.</div>
                     ) : filteredClaims.map((c) => {
                         // M38 · AI verdict badge on list — reviewers can triage without opening each claim
                         const v = c.ai_summary?.overall_verdict;
@@ -491,18 +491,18 @@ const GrantClaims = () => {
                 </div>
 
                 {/* Detail */}
-                <div className="bulletin-card p-6 h-fit" data-testid="claim-detail">
+                <div className="p-6 h-fit" style={embossedCard()} data-testid="claim-detail">
                     {!selected ? (
-                        <div className="text-center py-12 text-mpca-gray-dark">Select a claim to view details</div>
+                        <div className="text-center py-12 font-semibold" style={{ color: DL.ink2 }}>Select a claim to view details</div>
                     ) : (
                         <>
                             <div className="flex justify-between items-start mb-4">
                                 <div>
-                                    <div className="overline text-[9px]">Scheme {selected.scheme_code} · {selected.claim_ref}</div>
-                                    <h2 className="font-serif text-2xl text-mpca-green-dark mt-1">{selected.scheme_name}</h2>
-                                    <div className="text-[11px] text-mpca-gray-dark mt-1">
-                                        {selected.body_name} · Claimed <span className="font-mono">{fmt(selected.claimed_amount_inr)}</span>
-                                        {selected.approved_amount_inr != null && <> · Approved <span className="font-mono text-mpca-green-dark">{fmt(selected.approved_amount_inr)}</span></>}
+                                    <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>Scheme {selected.scheme_code} · {selected.claim_ref}</div>
+                                    <h2 className="text-[26px] mt-1 leading-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>{selected.scheme_name}</h2>
+                                    <div className="text-[13px] mt-1.5 font-semibold" style={{ color: DL.ink2 }}>
+                                        {selected.body_name} · Claimed <span style={{ fontFamily: DL.fontMono, color: DL.ink, fontWeight: 700 }}>{fmt(selected.claimed_amount_inr)}</span>
+                                        {selected.approved_amount_inr != null && <> · Approved <span style={{ fontFamily: DL.fontMono, color: DL.emerald, fontWeight: 700 }}>{fmt(selected.approved_amount_inr)}</span></>}
                                     </div>
                                 </div>
                                 <div className="flex gap-2 flex-wrap">

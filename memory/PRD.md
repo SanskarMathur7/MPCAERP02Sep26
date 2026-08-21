@@ -5,6 +5,11 @@
 > Started: Jan 2026 · Last update: Feb 2026 — MPCA-254 Showcase redraft (Phase 1 tabbed doc with HLD/LLD/PRD)
 
 ## Recent Changelog
+- **Feb 2026 — Sub-pages rollout**: TournamentDetail, PlayerDetail and Claim Detail now consume the Delhigence DL palette.
+  - `TournamentDetail.jsx` — outer wrapped in `PageShell` (ivory + Nunito), the dark-navy gradient hero swapped for an **embossed emerald slab** (`linear-gradient(#0D3B2E → #0a2f24)` + 4-layer shadow), gold eyebrow (`TRN-… · Championship · Fourday-Senior`), Nunito 800 title, gold status pills. Status-action buttons are now gold pills. Back-to-Tournaments becomes a ghost pill.
+  - `PlayerDetail.jsx` — same emerald hero treatment on the top slab. Player photo/initials tile keeps its portrait shape but the border switches to gold (was oxblood). Name in Nunito 800.
+  - `GrantClaims.jsx` claim detail panel — right-panel `bulletin-card` swapped for `embossedCard()`; scheme header uses mono uppercase eyebrow, Nunito 800 scheme name, mono-tabular claimed/approved figures. Empty-list card also embossed.
+
 - **Feb 2026 — Design system extracted + rolled out to 4 core pages + Tournaments sort/search**:
   1. **New `lib/designSystem.jsx`** exports `DL` tokens, `embossedCard()`, and reusable primitives (`PageShell`, `PageEyebrow`, `PrimaryButton`, `Pill`, `StatTile`, `FilterChip`, `SearchInput`, `SortHeader`). Every future page imports from here.
   2. **Tournaments refactored** to consume the design system + gained a `SearchInput` (search name / short-name / trophy / tournament-no) and a `SortHeader` bar with 4 sortable columns (Start Date · Tournament # · Name · Status; click to toggle asc/desc, initial state Start Date ↓).

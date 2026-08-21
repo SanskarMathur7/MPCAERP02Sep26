@@ -13,6 +13,7 @@ import TournamentSubTabs from "@/components/TournamentSubTabs";
 import TournamentProgressionRibbon from "@/components/TournamentProgressionRibbon";
 import { WiringComplianceChip } from "@/lib/wiringCompliance";
 import InputVariablesPanel from "@/components/InputVariablesPanel";
+import { DL, PageShell } from "@/lib/designSystem";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
 import TournamentInvoicesPanel from "@/components/TournamentInvoicesPanel";
 import TournamentStatusStepper from "@/components/TournamentStatusStepper";
@@ -246,73 +247,83 @@ const TournamentDetail = () => {
     const ageLabel = t.age_cap_years ? "U-" + t.age_cap_years : (t.age_floor_years ? t.age_floor_years + "+" : "Senior");
 
     return (
-        <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="trn-detail-page">
+        <PageShell testid="trn-detail-page">
             <TournamentSubTabs tournamentId={id} active="overview" />
-            <button onClick={() => navigate("/tournaments")} className="btn-heritage-ghost mb-6" data-testid="trn-back">
-                <ChevronLeft size={14} /> Back to Tournaments
+            <button
+                onClick={() => navigate("/tournaments")}
+                className="inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.18em] font-bold mb-6 rounded-full px-4 py-2 transition-colors"
+                style={{ fontFamily: DL.fontMono, color: DL.ink, border: `1.5px solid ${DL.ruleStrong}` }}
+                data-testid="trn-back"
+            >
+                <ChevronLeft size={14} strokeWidth={2.5} /> Back to Tournaments
             </button>
 
-            {/* Header card */}
-            <div className="bulletin-card p-8 mb-10 bg-gradient-to-br from-mpca-green-dark to-mpca-wood-dark text-mpca-ivory relative overflow-hidden">
-                <div className="overline !text-mpca-gold-light">{t.tournament_no} · {t.scope.replace(/_/g, "-")} · {t.format.replace(/_/g, "-")}</div>
-                <h1 className="font-serif text-4xl md:text-5xl text-mpca-ivory mt-3 leading-tight">
+            {/* Header hero card — embossed emerald slab */}
+            <div
+                className="p-8 md:p-10 mb-8 relative overflow-hidden"
+                style={{
+                    background: `linear-gradient(180deg, ${DL.emerald} 0%, #0a2f24 100%)`,
+                    color: DL.paper,
+                    borderRadius: "8px",
+                    border: `1.5px solid ${DL.ruleStrong}`,
+                    boxShadow: [
+                        "inset 0 1px 0 rgba(255,255,255,0.10)",
+                        "inset 0 -1px 0 rgba(0,0,0,0.35)",
+                        "0 28px 60px -30px rgba(14,31,27,0.55)",
+                        "0 8px 18px -8px rgba(14,31,27,0.25)",
+                    ].join(", "),
+                }}
+            >
+                <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                    {t.tournament_no} · {t.scope.replace(/_/g, "-")} · {t.format.replace(/_/g, "-")}
+                </div>
+                <h1 className="text-[40px] md:text-[52px] mt-3 leading-[1.05] tracking-tight" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}>
                     {t.name}
                 </h1>
-                {t.short_name && <div className="text-xs tracking-[0.3em] uppercase text-mpca-gold-light mt-2">&ldquo;{t.short_name}&rdquo;</div>}
-                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                {t.short_name && <div className="text-[12px] tracking-[0.28em] uppercase mt-2 font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>&ldquo;{t.short_name}&rdquo;</div>}
+                <div className="mt-4 flex items-center gap-2 flex-wrap">
                     <WiringComplianceChip tournament={t} testId="trn-detail-wiring" />
                     {parentTournament && (
                         <button
                             onClick={() => navigate(`/tournaments/${parentTournament.id}`)}
                             title={`Linked to ${parentTournament.name} — click to open the parent Inter-Divisional tournament`}
-                            className="inline-flex items-center gap-1.5 px-2 py-0.5 border border-mpca-gold/60 bg-mpca-gold/10 text-mpca-gold-light text-[10px] uppercase tracking-widest hover:bg-mpca-gold/25 hover:text-mpca-ivory transition-all"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase tracking-[0.18em] font-bold rounded-full transition-all"
+                            style={{ backgroundColor: "rgba(184,131,40,0.15)", border: `1.5px solid ${DL.gold}`, color: DL.gold, fontFamily: DL.fontMono }}
                             data-testid="trn-detail-linked-parent"
                         >
-                            <span className="w-1.5 h-1.5 rounded-full bg-mpca-gold" />
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: DL.gold }} />
                             Linked to · {parentTournament.name}
-                            <ChevronRight size={11} strokeWidth={2} />
+                            <ChevronRight size={11} strokeWidth={2.5} />
                         </button>
                     )}
                 </div>
-                <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5 mt-7 text-mpca-ivory/90">
-                    <div className="flex items-start gap-2">
-                        <Calendar size={16} className="text-mpca-gold-light mt-0.5" />
-                        <div>
-                            <div className="overline text-[9px] !text-mpca-gold-light">Window</div>
-                            <div className="text-sm mt-0.5">{fmtDate(t.start_date)} → {fmtDate(t.end_date)}</div>
-                        </div>
+                <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mt-7">
+                    <div>
+                        <div className="text-[10px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>Window</div>
+                        <div className="text-[15px] font-semibold mt-1" style={{ color: "rgba(251,248,241,0.95)" }}>{fmtDate(t.start_date)} → {fmtDate(t.end_date)}</div>
                     </div>
                     {t.venue && (
-                        <div className="flex items-start gap-2">
-                            <MapPin size={16} className="text-mpca-gold-light mt-0.5" />
-                            <div>
-                                <div className="overline text-[9px] !text-mpca-gold-light">Venue</div>
-                                <div className="text-sm mt-0.5">{t.venue}</div>
-                            </div>
+                        <div>
+                            <div className="text-[10px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>Venue</div>
+                            <div className="text-[15px] font-semibold mt-1" style={{ color: "rgba(251,248,241,0.95)" }}>{t.venue}</div>
                         </div>
                     )}
-                    <div className="flex items-start gap-2">
-                        <Users size={16} className="text-mpca-gold-light mt-0.5" />
-                        <div>
-                            <div className="overline text-[9px] !text-mpca-gold-light">Age Bracket</div>
-                            <div className="text-sm mt-0.5">{ageLabel} · max {t.max_squad_size}/squad</div>
-                        </div>
+                    <div>
+                        <div className="text-[10px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>Age Bracket</div>
+                        <div className="text-[15px] font-semibold mt-1" style={{ color: "rgba(251,248,241,0.95)" }}>{ageLabel} · max {t.max_squad_size}/squad</div>
                     </div>
-                    <div className="flex items-start gap-2">
-                        <ShieldCheck size={16} className="text-mpca-gold-light mt-0.5" />
-                        <div>
-                            <div className="overline text-[9px] !text-mpca-gold-light">Status · Guest Players</div>
-                            <div className="text-sm mt-0.5">{t.status.replace(/_/g, " ")} · {t.allows_guests ? "permitted" : "not permitted"}</div>
-                        </div>
+                    <div>
+                        <div className="text-[10px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>Status · Guest Players</div>
+                        <div className="text-[15px] font-semibold mt-1" style={{ color: "rgba(251,248,241,0.95)" }}>{t.status.replace(/_/g, " ")} · {t.allows_guests ? "permitted" : "not permitted"}</div>
                     </div>
                 </div>
 
                 {canEdit && (
                     <div className="mt-7 flex flex-wrap gap-3" data-testid="trn-status-actions">
-                        {t.status === "Upcoming" && <button onClick={() => handleStatus("Squad_Selection")} className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark" data-testid="trn-open-selection">Open Squad Selection</button>}
-                        {t.status === "Squad_Selection" && <button onClick={() => handleStatus("In_Progress")} className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark" data-testid="trn-start">Start Tournament</button>}
-                        {t.status === "In_Progress" && <button onClick={() => handleStatus("Completed")} className="btn-heritage-primary !bg-mpca-brass !text-mpca-green-dark" data-testid="trn-complete">Mark Completed</button>}
-                        {t.status !== "Cancelled" && t.status !== "Completed" && <button onClick={() => handleStatus("Cancelled")} className="btn-heritage-secondary !text-mpca-ivory !border-mpca-ivory/40 hover:!bg-white/10" data-testid="trn-cancel">Cancel</button>}
+                        {t.status === "Upcoming" && <button onClick={() => handleStatus("Squad_Selection")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: DL.gold, color: DL.ink, fontFamily: DL.fontMono, boxShadow: "0 12px 24px -12px rgba(184,131,40,0.7)" }} data-testid="trn-open-selection">Open Squad Selection</button>}
+                        {t.status === "Squad_Selection" && <button onClick={() => handleStatus("In_Progress")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: DL.gold, color: DL.ink, fontFamily: DL.fontMono, boxShadow: "0 12px 24px -12px rgba(184,131,40,0.7)" }} data-testid="trn-start">Start Tournament</button>}
+                        {t.status === "In_Progress" && <button onClick={() => handleStatus("Completed")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: DL.gold, color: DL.ink, fontFamily: DL.fontMono, boxShadow: "0 12px 24px -12px rgba(184,131,40,0.7)" }} data-testid="trn-complete">Mark Completed</button>}
+                        {t.status !== "Cancelled" && t.status !== "Completed" && <button onClick={() => handleStatus("Cancelled")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: "transparent", color: DL.paper, border: `1.5px solid rgba(251,248,241,0.4)`, fontFamily: DL.fontMono }} data-testid="trn-cancel">Cancel</button>}
                     </div>
                 )}
             </div>
@@ -518,7 +529,7 @@ const TournamentDetail = () => {
                 accessible via the "Squads" setup box above. This removes the
                 two-tab confusion (per MPCA-125) and ensures MPCA cannot add
                 players from the tournament detail page (MPCA-154). */}
-        </div>
+        </PageShell>
     );
 };
 

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import CricketLoader from "@/components/CricketLoader";
+import { DL } from "@/lib/designSystem";
 import DocumentPreview from "@/components/DocumentPreview";
 import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
@@ -1436,12 +1437,22 @@ const PlayerDetail = () => {
     };
 
     return (
-        <div className="page-enter" data-testid="player-detail-page">
-            {/* Sticky header */}
-            <div className="bg-mpca-green-dark text-mpca-ivory border-b-4 border-mpca-oxblood">
-                <div className="max-w-7xl mx-auto px-8 md:px-12 py-8">
-                    <button onClick={() => navigate("/players")} className="text-mpca-gold-light text-xs uppercase tracking-widest hover:text-mpca-oxblood inline-flex items-center gap-1 mb-4" data-testid="back-btn">
-                        <ArrowLeft size={12} /> Back to Player Register
+        <div className="page-enter min-h-screen" data-testid="player-detail-page" style={{ backgroundColor: DL.ivory, fontFamily: DL.fontBody, color: DL.ink }}>
+            {/* Sticky header — embossed emerald slab */}
+            <div style={{
+                background: `linear-gradient(180deg, ${DL.emerald} 0%, #0a2f24 100%)`,
+                color: DL.paper,
+                borderBottom: `4px solid ${DL.gold}`,
+                boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.35), 0 20px 40px -30px rgba(14,31,27,0.55)",
+            }}>
+                <div className="max-w-[1280px] mx-auto px-8 md:px-12 py-8">
+                    <button
+                        onClick={() => navigate("/players")}
+                        className="text-[11px] uppercase tracking-[0.22em] font-bold inline-flex items-center gap-1.5 mb-5"
+                        style={{ color: DL.gold, fontFamily: DL.fontMono }}
+                        data-testid="back-btn"
+                    >
+                        <ArrowLeft size={13} strokeWidth={2.5} /> Back to Player Register
                     </button>
                     <div className="flex items-start gap-6 flex-wrap">
                         {(() => {
@@ -1454,34 +1465,36 @@ const PlayerDetail = () => {
                                 <img
                                     src={photoSrc.startsWith("http") ? photoSrc : `${API}${photoSrc}`}
                                     alt={player.full_name}
-                                    className="w-28 h-36 md:w-32 md:h-40 object-cover shrink-0 border-4 border-mpca-oxblood bg-mpca-gold-light/10"
+                                    className="w-28 h-36 md:w-32 md:h-40 object-cover shrink-0"
+                                    style={{ border: `4px solid ${DL.gold}`, borderRadius: "4px", backgroundColor: "rgba(184,131,40,0.1)" }}
                                     data-testid="player-photo"
                                     onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
                                 />
                             ) : (
                                 <div
-                                    className="w-28 h-36 md:w-32 md:h-40 shrink-0 border-4 border-mpca-oxblood bg-mpca-navy/60 flex flex-col items-center justify-center gap-1"
+                                    className="w-28 h-36 md:w-32 md:h-40 shrink-0 flex flex-col items-center justify-center gap-1"
+                                    style={{ border: `4px solid ${DL.gold}`, borderRadius: "4px", backgroundColor: "rgba(0,0,0,0.25)" }}
                                     data-testid="player-photo-placeholder"
                                     title="Passport-size photograph"
                                 >
-                                    <User size={40} className="text-mpca-gold-light/60" />
-                                    <div className="font-serif text-2xl text-mpca-gold-light">{initials || "—"}</div>
-                                    <div className="text-[8px] uppercase tracking-widest text-mpca-gold-light/50">Photo</div>
+                                    <User size={40} style={{ color: "rgba(184,131,40,0.6)" }} />
+                                    <div className="text-2xl font-bold" style={{ fontFamily: DL.fontDisplay, color: DL.gold }}>{initials || "—"}</div>
+                                    <div className="text-[9px] uppercase tracking-[0.2em] font-bold" style={{ fontFamily: DL.fontMono, color: "rgba(184,131,40,0.6)" }}>Photo</div>
                                 </div>
                             );
                         })()}
                         <div className="flex-1 min-w-[280px]">
                             {player.player_display_id && (
-                                <div className="text-[11px] font-mono uppercase tracking-widest text-mpca-gold-light">{player.player_display_id}</div>
+                                <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>{player.player_display_id}</div>
                             )}
-                            <div className="text-[10px] font-mono text-mpca-gold-light/70">{player.player_id}</div>
-                            <h1 className="font-serif text-4xl md:text-5xl mt-2 leading-tight">{player.full_name}</h1>
+                            <div className="text-[10px] font-bold" style={{ fontFamily: DL.fontMono, color: "rgba(184,131,40,0.7)" }}>{player.player_id}</div>
+                            <h1 className="text-[40px] md:text-[52px] mt-2 leading-[1.05] tracking-tight" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}>{player.full_name}</h1>
                             {player.father_name && (
-                                <div className="text-sm text-mpca-gold-light/85 mt-1">
+                                <div className="text-[14px] mt-2 font-semibold" style={{ color: "rgba(251,248,241,0.85)" }}>
                                     s/o {player.father_name}{player.mother_name ? ` · d/o ${player.mother_name}` : ""}
                                 </div>
                             )}
-                            <div className="text-sm text-mpca-gold-light/85 mt-2">
+                            <div className="text-[14px] mt-2 font-semibold" style={{ color: "rgba(251,248,241,0.85)" }}>
                                 {player.body_id} · {player.role?.replace(/_/g, " ")} · age {ageYears(player.date_of_birth)}
                             </div>
                             <div className="mt-4 flex flex-wrap gap-2">

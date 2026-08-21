@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import PendingWithMePanel from "@/components/PendingWithMePanel";
+import { DL, PageShell, PageEyebrow } from "@/lib/designSystem";
 
 const fmtINR = (n) => {
     if (n == null) return "—";
@@ -263,33 +264,21 @@ const Dashboard = () => {
     }
 
     return (
-        <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="dashboard-page">
-            {/* Header */}
-            <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
-                <div>
-                    <div className="overline">{persona?.body_type} · Command Centre</div>
-                    <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
-                        Good day, {persona?.honorific} {persona?.name?.split(" ").slice(-1)}.
-                    </h1>
-                    <p className="text-mpca-gray-dark mt-2 max-w-2xl text-sm">
-                        Scope · <strong className="text-mpca-charcoal">{rootLabel}</strong>
-                        {persona?.post && <> · {persona.post}</>}
-                    </p>
-                </div>
-                <div className="text-right">
-                    <div className="overline">As On</div>
-                    <div className="font-serif text-lg text-mpca-green-dark mt-1">
-                        {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+        <PageShell testid="dashboard-page">
+            <PageEyebrow
+                title={`${persona?.honorific || ""} ${persona?.name || ""}`.trim() || "Command Centre"}
+                meta={`${persona?.body_type || ""} · ${rootLabel}${persona?.post ? " · " + persona.post : ""}`}
+                rightAction={
+                    <div className="text-right">
+                        <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>As On</div>
+                        <div className="text-[18px] font-bold mt-1" style={{ color: DL.ink }}>
+                            {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                        </div>
                     </div>
-                </div>
-            </div>
+                }
+            />
 
-            <div className="crest-divider mb-10" />
-
-            {/* Roll-up KPI band — Feb-2026 · rewired to REAL figures, no
-                more hard-coded "2025-26" or "Across 10 divisions". Every
-                sub-line ties back to concrete ERP data so the office bearer
-                sees at a glance what the platform is delivering. */}
+            {/* Roll-up KPI band — Feb-2026 · rewired to REAL figures. */}
             {totals && (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10">
                     <KpiTile
@@ -553,7 +542,7 @@ const Dashboard = () => {
                     </Link>
                 </div>
             </section>
-        </div>
+        </PageShell>
     );
 };
 

@@ -4,12 +4,16 @@ import { useAuth } from "@/context/AuthContext";
 import { getCreatableTournamentTypes } from "@/lib/tournamentCatalog";
 import { fetchTournaments, fetchTournamentStats, fetchBodies, actOnTournamentAcceptance } from "@/lib/api";
 import {
-    Trophy, Calendar, MapPin, Users, ChevronRight, Filter, ShieldCheck, Plus,
+    Trophy, Calendar, MapPin, ChevronRight, Filter,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentCreateModal from "@/components/TournamentCreateModal";
 import { TournamentProgressionRibbonMini } from "@/components/TournamentProgressionRibbon";
 import { WiringComplianceChip } from "@/lib/wiringCompliance";
+import {
+    DL, embossedCard, PageShell, PageEyebrow, PrimaryButton,
+    Pill, StatTile, FilterChip, SearchInput, SortHeader,
+} from "@/lib/designSystem";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -61,80 +65,9 @@ const STATUS_META = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// DELHIGENCE-INSPIRED DESIGN TOKENS — Nunito revision (bolder, higher contrast)
-// Editorial-premium palette · Nunito bold everywhere · mono eyebrows kept.
+// Design tokens now imported from @/lib/designSystem (DL, embossedCard,
+// Pill, StatTile). Only page-local helpers remain below.
 // ═══════════════════════════════════════════════════════════════════════
-const DL = {
-    fontDisplay: "'Nunito', system-ui, sans-serif",
-    fontSerif:   "'Nunito', system-ui, sans-serif",       // Nunito everywhere now
-    fontMono:    "'IBM Plex Mono', ui-monospace, monospace",
-    fontBody:    "'Nunito', system-ui, sans-serif",
-
-    ivory:      "#F5EFE6",
-    paper:      "#FBF8F1",
-    paperEdge:  "#EDE5D3",
-    ink:        "#0E1F1B",
-    ink2:       "#1F2E28", // <-- darkened (was #3A4A44) for stronger readability
-    ink3:       "#2E3B34", // <-- darkened (was #6B7770) — killing the beige haze
-    muted:      "#4C5750", // <-- darkened (was #8E958F)
-    rule:       "rgba(14, 31, 27, 0.16)",
-    ruleStrong: "rgba(14, 31, 27, 0.32)",
-    emerald:    "#0D3B2E",
-    emeraldSoft:"rgba(13, 59, 46, 0.10)",
-    gold:       "#B88328", // <-- deeper gold (was #D4A757 — was reading as beige)
-    danger:     "#8B1F1F",
-};
-
-// Embossed card style — subtle top highlight + bottom sub-shadow + soft floating shadow
-const embossedCard = (extra = {}) => ({
-    background: `linear-gradient(180deg, ${DL.paper} 0%, ${DL.paperEdge} 100%)`,
-    borderRadius: "6px",
-    border: `1px solid ${DL.ruleStrong}`,
-    boxShadow: [
-        "inset 0 1px 0 rgba(255,255,255,0.85)",       // top highlight
-        "inset 0 -1px 0 rgba(14,31,27,0.06)",         // bottom sub-shadow
-        "0 20px 40px -22px rgba(14,31,27,0.28)",      // soft floating shadow
-        "0 4px 10px -4px rgba(14,31,27,0.08)",        // close ambient
-    ].join(", "),
-    ...extra,
-});
-
-const Pill = ({ tone, label, testId }) => {
-    const styleMap = {
-        active:    { bg: DL.emerald,     fg: DL.paper, ring: "none" },
-        pending:   { bg: "transparent",   fg: DL.ink,   ring: `1.5px solid ${DL.ruleStrong}` },
-        suspended: { bg: DL.danger,       fg: DL.paper, ring: "none" },
-        lapsed:    { bg: "rgba(14,31,27,0.08)", fg: DL.ink2, ring: "none" },
-        saffron:   { bg: DL.gold,         fg: DL.paper, ring: "none" },
-        maroon:    { bg: "#5c1420",       fg: DL.paper, ring: "none" },
-    };
-    const s = styleMap[tone] || styleMap.lapsed;
-    return (
-        <span
-            data-testid={testId}
-            style={{ backgroundColor: s.bg, color: s.fg, border: s.ring === "none" ? "none" : s.ring, fontFamily: DL.fontMono, letterSpacing: "0.14em", fontWeight: 700 }}
-            className="inline-flex items-center px-3 py-1 text-[11px] uppercase whitespace-nowrap rounded-full"
-        >
-            {label}
-        </span>
-    );
-};
-
-const StatTile = ({ label, value, sub }) => {
-    return (
-        <div
-            className="px-5 py-4"
-            style={embossedCard()}
-            data-testid={"trn-stat-" + label.toLowerCase().replace(/\s+/g, "-")}
-        >
-            <div className="text-[12px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
-            <div className="mt-1.5 text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>
-                {value}
-            </div>
-            {sub && <div className="text-[12.5px] mt-1.5 leading-snug font-semibold" style={{ color: DL.ink2 }}>{sub}</div>}
-        </div>
-    );
-};
 
 const ageLabel = (t) => {
     if (t.age_cap_years && t.age_floor_years) return `U-${t.age_cap_years} / ${t.age_floor_years}+`;
@@ -159,6 +92,14 @@ const Tournaments = () => {
     const isMpcaState = persona?.body_type === "State";
     const [includeCampScoped, setIncludeCampScoped] = useState(!isMpcaState);
     const [hiddenCount, setHiddenCount] = useState(0);
+    // Feb 2026 · Search + sort — for 45+ admins who need to scan the list.
+    const [search, setSearch] = useState("");
+    const [sortBy, setSortBy] = useState("start_date");
+    const [sortDir, setSortDir] = useState("desc");
+    const toggleSort = (key) => {
+        if (sortBy !== key) { setSortBy(key); setSortDir("asc"); return; }
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    };
 
     const handleAcceptance = async (tid, action) => {
         const note = action === "reject" ? window.prompt("Optional note explaining the rejection (leave blank if none):") : null;
@@ -221,8 +162,33 @@ const Tournaments = () => {
         } else if (["Multi_Day", "One_Day", "T20", "Pink_Ball"].includes(filter)) {
             r = r.filter((t) => t.format === filter);
         }
-        return r;
-    }, [list, filter, persona]);
+        // Feb 2026 · name search
+        if (search.trim()) {
+            const q = search.trim().toLowerCase();
+            r = r.filter((t) =>
+                (t.name || "").toLowerCase().includes(q) ||
+                (t.short_name || "").toLowerCase().includes(q) ||
+                (t.tournament_no || "").toLowerCase().includes(q) ||
+                (t.trophy_name || "").toLowerCase().includes(q)
+            );
+        }
+        // Feb 2026 · sort
+        const dirMul = sortDir === "asc" ? 1 : -1;
+        const cmp = (a, b) => {
+            let av, bv;
+            switch (sortBy) {
+                case "tournament_no": av = a.tournament_no || ""; bv = b.tournament_no || ""; break;
+                case "name":          av = (a.name || "").toLowerCase(); bv = (b.name || "").toLowerCase(); break;
+                case "status":        av = a.status || ""; bv = b.status || ""; break;
+                case "start_date":
+                default:              av = a.start_date || ""; bv = b.start_date || ""; break;
+            }
+            if (av < bv) return -1 * dirMul;
+            if (av > bv) return  1 * dirMul;
+            return 0;
+        };
+        return [...r].sort(cmp);
+    }, [list, filter, persona, search, sortBy, sortDir]);
 
     if (loading) return <div className="p-16" data-testid="trn-loading" style={{ backgroundColor: DL.ivory, fontFamily: DL.fontBody }}><CricketLoader size="lg" label="Loading tournament catalogue…" /></div>;
 
@@ -251,35 +217,23 @@ const Tournaments = () => {
                     </Link>
                 </div>
                 {isOfficeBearer && getCreatableTournamentTypes(persona).length > 0 && (
-                    <button
-                        onClick={() => setCreateOpen(true)}
-                        data-testid="new-tournament-btn"
-                        className="group inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-[15px] font-bold transition-all"
-                        style={{
-                            backgroundColor: DL.emerald,
-                            color: DL.paper,
-                            boxShadow: "0 14px 30px -14px rgba(13, 59, 46, 0.55), inset 0 1px 0 rgba(255,255,255,0.15)",
-                            fontFamily: DL.fontBody,
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = DL.ink; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = DL.emerald; }}
-                    >
-                        <Plus size={18} strokeWidth={2.75} className="transition-transform group-hover:rotate-90" /> Add Tournament
-                    </button>
+                    <PrimaryButton onClick={() => setCreateOpen(true)} testid="new-tournament-btn">
+                        Add Tournament
+                    </PrimaryButton>
                 )}
             </div>
 
             {stats && (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-8" data-testid="trn-stats">
-                    <StatTile label={persona?.body_type === "State" ? "Total Tournaments" : "In My Scope"}   value={persona?.body_type === "State" ? stats.total_tournaments : list.length}  sub={persona?.body_type === "State" ? `Cycle ${(typeof window !== "undefined" && window.__mpca_season) || "2026-27"} · state-wide` : `${persona?.body_name || persona?.body_code}`} />
-                    <StatTile label="Upcoming"            value={persona?.body_type === "State" ? stats.upcoming : list.filter((t) => t.status === "Upcoming").length}            sub="Awaiting squad selection" />
-                    <StatTile label="In Selection"        value={persona?.body_type === "State" ? stats.in_selection : list.filter((t) => t.status === "Squad_Selection").length}        sub="Squads being formed" />
-                    <StatTile label="In Progress"         value={persona?.body_type === "State" ? stats.in_progress : list.filter((t) => t.status === "In_Progress").length}         sub="Currently being played" />
-                    <StatTile label="Players Selected"    value={stats.total_players_selected} sub={stats.total_squads + " squads"} />
+                    <StatTile testid="trn-stat-total-tournaments" label={persona?.body_type === "State" ? "Total Tournaments" : "In My Scope"}   value={persona?.body_type === "State" ? stats.total_tournaments : list.length}  sub={persona?.body_type === "State" ? `Cycle ${(typeof window !== "undefined" && window.__mpca_season) || "2026-27"} · state-wide` : `${persona?.body_name || persona?.body_code}`} />
+                    <StatTile testid="trn-stat-upcoming"           label="Upcoming"            value={persona?.body_type === "State" ? stats.upcoming : list.filter((t) => t.status === "Upcoming").length}            sub="Awaiting squad selection" />
+                    <StatTile testid="trn-stat-in-selection"       label="In Selection"        value={persona?.body_type === "State" ? stats.in_selection : list.filter((t) => t.status === "Squad_Selection").length}        sub="Squads being formed" />
+                    <StatTile testid="trn-stat-in-progress"        label="In Progress"         value={persona?.body_type === "State" ? stats.in_progress : list.filter((t) => t.status === "In_Progress").length}         sub="Currently being played" />
+                    <StatTile testid="trn-stat-players-selected"   label="Players Selected"    value={stats.total_players_selected} sub={stats.total_squads + " squads"} />
                 </div>
             )}
 
-            {/* Filter chips · pill-style, mono labels — trimmed to the essential 8 */}
+            {/* Filter chips + search — trimmed set of 8 essentials */}
             <div className="flex flex-wrap items-center gap-2.5 mb-6">
                 <Filter size={16} strokeWidth={2.5} style={{ color: DL.ink2 }} />
                 {[
@@ -291,28 +245,39 @@ const Tournaments = () => {
                     ["MPCA_Championship",    "Championships"],
                     ["Completed",            "Completed"],
                     ["all",                  "All"],
-                ].map(([k, label]) => {
-                    const active = filter === k;
-                    return (
-                        <button
-                            key={k}
-                            onClick={() => setFilter(k)}
-                            data-testid={"trn-filter-" + k}
-                            className="px-4 py-2 text-[12px] uppercase tracking-[0.16em] transition-all rounded-full"
-                            style={{
-                                backgroundColor: active ? DL.emerald : "transparent",
-                                color: active ? DL.paper : DL.ink,
-                                border: active ? `1.5px solid ${DL.emerald}` : `1.5px solid ${DL.ruleStrong}`,
-                                fontFamily: DL.fontMono,
-                                fontWeight: active ? 700 : 600,
-                                boxShadow: active ? "0 8px 20px -12px rgba(13,59,46,0.5)" : "none",
-                            }}
-                        >
-                            {label}
-                        </button>
-                    );
-                })}
+                ].map(([k, label]) => (
+                    <FilterChip
+                        key={k}
+                        active={filter === k}
+                        onClick={() => setFilter(k)}
+                        testid={"trn-filter-" + k}
+                    >
+                        {label}
+                    </FilterChip>
+                ))}
+                <div className="ml-auto">
+                    <SearchInput
+                        value={search}
+                        onChange={setSearch}
+                        placeholder="Search name, code, trophy…"
+                        testid="trn-search"
+                        width={260}
+                    />
+                </div>
             </div>
+
+            <SortHeader
+                columns={[
+                    { key: "start_date",    label: "Start Date" },
+                    { key: "tournament_no", label: "Tournament #" },
+                    { key: "name",          label: "Name" },
+                    { key: "status",        label: "Status" },
+                ]}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={toggleSort}
+                testidPrefix="trn-sort"
+            />
 
             {isMpcaState && (hiddenCount > 0 || includeCampScoped) && !["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
                 <div className="mb-4 flex items-center gap-3 text-[13px]" data-testid="mpca-visibility-toggle">

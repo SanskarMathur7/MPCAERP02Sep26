@@ -7,6 +7,7 @@ import CricketLoader from "@/components/CricketLoader";
 import VaultDocumentPicker from "@/components/VaultDocumentPicker";
 import SignedPdfUploadModal from "@/components/SignedPdfUploadModal";
 import AttachedCampView from "@/components/AttachedCampView";
+import { PageShell, PageEyebrow, PrimaryButton } from "@/lib/designSystem";
 
 // MPCA-245 · Progress ribbon steps for grant claim lifecycle
 const GRANT_STEPS = [
@@ -412,22 +413,18 @@ const GrantClaims = () => {
     const scheme = selected ? schemes.find((s) => s.scheme_code === selected.scheme_code) : null;
 
     return (
-        <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="grant-claims-page">
-            <div className="flex flex-wrap items-end justify-between gap-6 mb-6">
-                <div>
-                    <div className="overline">Financial · Grant Claims</div>
-                    <h1 className="font-serif text-4xl text-mpca-green-dark mt-3">Grant Claims</h1>
-                    <p className="text-mpca-gray-dark mt-2 max-w-2xl text-sm">
-                        {isMPCA ? "Review and approve grant claims submitted by Divisions and Districts. Each uploaded document is AI-verified for authenticity."
-                                : "Claim MPCA grants (annual, coaching, admin, welfare, infrastructure). Upload required documents — AI will verify each before you submit."}
-                    </p>
-                </div>
-                {!isMPCA && (
-                    <button className="btn-heritage-primary" onClick={() => setCreating(true)} data-testid="new-claim-btn">
-                        <IndianRupee size={12} /> New Grant Claim
-                    </button>
-                )}
-            </div>
+        <PageShell testid="grant-claims-page">
+            <PageEyebrow
+                title="Grant Claims"
+                meta="Financial · Reimbursements"
+                rightAction={
+                    !isMPCA && (
+                        <PrimaryButton onClick={() => setCreating(true)} testid="new-claim-btn" icon={IndianRupee}>
+                            New Grant Claim
+                        </PrimaryButton>
+                    )
+                }
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
                 {/* Claims list */}
@@ -1001,7 +998,7 @@ const GrantClaims = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </PageShell>
     );
 };
 

@@ -5,6 +5,13 @@
 > Started: Jan 2026 · Last update: Feb 2026 — MPCA-254 Showcase redraft (Phase 1 tabbed doc with HLD/LLD/PRD)
 
 ## Recent Changelog
+- **Feb 2026 — Design system extracted + rolled out to 4 core pages + Tournaments sort/search**:
+  1. **New `lib/designSystem.jsx`** exports `DL` tokens, `embossedCard()`, and reusable primitives (`PageShell`, `PageEyebrow`, `PrimaryButton`, `Pill`, `StatTile`, `FilterChip`, `SearchInput`, `SortHeader`). Every future page imports from here.
+  2. **Tournaments refactored** to consume the design system + gained a `SearchInput` (search name / short-name / trophy / tournament-no) and a `SortHeader` bar with 4 sortable columns (Start Date · Tournament # · Name · Status; click to toggle asc/desc, initial state Start Date ↓).
+  3. **Dashboard, Members, Players, GrantClaims** swapped outer container → `PageShell` and hero → `PageEyebrow`. Editorial serif headlines killed; ivory background + Nunito bold applied globally. `Members.jsx` got a deeper pass — 4 embossed StatTiles, pill-shaped MEMBER_TYPES + CATEGORIES chips, DL search input, embossed empty state.
+  4. `Article X` prefixes moved out of the hero and into the small `meta` slot on `PageEyebrow` (or dropped where they added no info).
+  5. All data-testids preserved. Sub-pages (per-tournament detail, per-player detail, per-claim detail, etc.) still on legacy heritage tokens — pending next pass.
+
 - **Feb 2026 — Delhigence-inspired redesign on `/tournaments`**: replaced the Institutional Warm sampler skin with an editorial-premium palette matched to https://delhigence.com. Added `Instrument Sans` + `Instrument Serif` to `public/index.html`. New `DL` token set: `ivory #F5EFE6 · paper #FBF8F1 · ink #0E1F1B · emerald #0D3B2E · gold #D4A757 · rule strong rgba(14,31,27,.22)`. Three-font system — `Instrument Sans` display, `Instrument Serif` italic accent (used inline for key phrases like "every claim," and short-name suffixes), `IBM Plex Mono` for eyebrows and pill labels. New `embossedCard()` helper applies a 4-layer box-shadow (inset top highlight + inset bottom sub-shadow + soft floating shadow + close ambient) plus a subtle `linear-gradient(paper → paperEdge)` background so each StatTile and each tournament row visibly lifts off the ivory page. Filter chips became pills; active state gets emerald bg + drop-shadow. Row hover animates `translateY(-1px)` and deepens the floating shadow for a "picking up a card" feel. All data-testids preserved.
 
 - **Feb 2026 — UX Cleave · Round 1**: three destructive changes in one push:

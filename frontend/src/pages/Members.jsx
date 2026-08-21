@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchMembers, fetchMemberStats, fetchMemberCategories } from "@/lib/api";
-import { Plus, Search, ChevronRight, Users, Upload, Tag, Download } from "lucide-react";
+import { Plus, ChevronRight, Users, Upload, Tag, Download } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import MemberBulkUploadModal from "@/components/MemberBulkUploadModal";
 import { useAuth } from "@/context/AuthContext";
+import { DL, PageShell, PageEyebrow, PrimaryButton, SearchInput, embossedCard } from "@/lib/designSystem";
 
 const CATEGORIES = ["All", "Individual", "Institutional", "Honorary", "Patron"];
 const MEMBER_TYPES = ["All", "MPCA", "Division"];
@@ -58,116 +59,134 @@ const Members = () => {
         });
     }, [members, category, memberType, subCategory, search]);
 
-    return (
-        <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="members-page">
-            <div className="flex flex-wrap items-end justify-between gap-6 mb-6">
-                <div>
-                    <div className="overline">Article V · The Register</div>
-                    <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
-                        Membership Register
-                    </h1>
-                    <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        The authoritative digital ledger of MPCA general body members and Division-affiliated members.
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <Link to="/members/categories" className="btn-heritage-ghost" data-testid="categories-link-btn">
-                        <Tag size={14} strokeWidth={1.5} /> Categories
-                    </Link>
-                    {isOfficeBearer && (
-                        <button
-                            className="btn-heritage-ghost"
-                            onClick={() => setBulkOpen(true)}
-                            data-testid="bulk-upload-btn"
-                        >
-                            <Upload size={14} strokeWidth={1.5} /> Bulk Upload
-                        </button>
-                    )}
-                    <Link to="/members/new" className="btn-heritage-primary" data-testid="add-member-btn">
-                        <Plus size={14} strokeWidth={1.5} /> Enrol Member
-                    </Link>
-                </div>
-            </div>
+    if (loading) return (
+        <PageShell testid="members-page">
+            <div className="p-16"><CricketLoader size="lg" label="Loading membership register…" /></div>
+        </PageShell>
+    );
 
-            {/* Stats strip */}
+    return (
+        <PageShell testid="members-page">
+            <PageEyebrow
+                title="Membership Register"
+                meta="MPCA · General Body"
+                rightAction={
+                    <div className="flex flex-wrap gap-2 items-center">
+                        <Link
+                            to="/members/categories"
+                            className="text-[12px] uppercase tracking-[0.2em] font-bold px-4 py-2 rounded-full inline-flex items-center gap-1.5"
+                            style={{ fontFamily: DL.fontMono, color: DL.ink, border: `1.5px solid ${DL.ruleStrong}` }}
+                            data-testid="categories-link-btn"
+                        >
+                            <Tag size={14} strokeWidth={2.5} /> Categories
+                        </Link>
+                        {isOfficeBearer && (
+                            <button
+                                className="text-[12px] uppercase tracking-[0.2em] font-bold px-4 py-2 rounded-full inline-flex items-center gap-1.5"
+                                style={{ fontFamily: DL.fontMono, color: DL.ink, border: `1.5px solid ${DL.ruleStrong}` }}
+                                onClick={() => setBulkOpen(true)}
+                                data-testid="bulk-upload-btn"
+                            >
+                                <Upload size={14} strokeWidth={2.5} /> Bulk Upload
+                            </button>
+                        )}
+                        <PrimaryButton onClick={() => (window.location.href = "/members/new")} testid="add-member-btn">
+                            Enrol Member
+                        </PrimaryButton>
+                    </div>
+                }
+            />
+
+            {/* Stats strip · embossed cards */}
             {stats && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6" data-testid="member-stats-strip">
-                    <div className="border border-mpca-brass/30 bg-mpca-parchment/40 p-3">
-                        <div className="overline text-[9px]">Total</div>
-                        <div className="font-serif text-2xl text-mpca-green-dark">{stats.total}</div>
+                    <div className="px-5 py-4" style={embossedCard()}>
+                        <div className="text-[12px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>Total</div>
+                        <div className="mt-1.5 text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>{stats.total}</div>
                     </div>
                     <div className="border border-mpca-brass/30 bg-mpca-parchment/40 p-3">
                         <div className="overline text-[9px]">MPCA General Body</div>
                         <div className="font-serif text-2xl text-mpca-green-dark">{stats.by_type?.MPCA ?? 0}</div>
                     </div>
-                    <div className="border border-mpca-brass/30 bg-mpca-parchment/40 p-3">
-                        <div className="overline text-[9px]">Division-linked</div>
-                        <div className="font-serif text-2xl text-mpca-green-dark">{stats.by_type?.Division ?? 0}</div>
+                    <div className="px-5 py-4" style={embossedCard()}>
+                        <div className="text-[12px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>MPCA-Direct</div>
+                        <div className="mt-1.5 text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>{stats.by_type?.MPCA ?? 0}</div>
                     </div>
-                    <div className="border border-mpca-brass/30 bg-mpca-parchment/40 p-3">
-                        <div className="overline text-[9px]">Active</div>
-                        <div className="font-serif text-2xl text-mpca-green">{stats.by_status?.Active ?? 0}</div>
+                    <div className="px-5 py-4" style={embossedCard()}>
+                        <div className="text-[12px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>Division-linked</div>
+                        <div className="mt-1.5 text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>{stats.by_type?.Division ?? 0}</div>
+                    </div>
+                    <div className="px-5 py-4" style={embossedCard()}>
+                        <div className="text-[12px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>Active</div>
+                        <div className="mt-1.5 text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.emerald, fontWeight: 800 }}>{stats.by_status?.Active ?? 0}</div>
                     </div>
                 </div>
             )}
 
-            <div className="crest-divider mb-8" />
-
             {/* Filters */}
-            <div className="flex flex-wrap items-center gap-4 mb-8">
-                <div className="flex items-center gap-1 flex-wrap">
-                    {MEMBER_TYPES.map((t) => (
+            <div className="flex flex-wrap items-center gap-2.5 mb-6">
+                {MEMBER_TYPES.map((t) => {
+                    const active = memberType === t;
+                    return (
                         <button
                             key={t}
                             onClick={() => setMemberType(t)}
                             data-testid={`filter-type-${t.toLowerCase()}`}
-                            className={`px-3 py-2 text-[11px] uppercase tracking-[0.18em] border transition-all duration-300 ${
-                                memberType === t
-                                    ? "bg-mpca-brass text-mpca-ivory border-mpca-brass"
-                                    : "bg-transparent text-mpca-brass border-mpca-brass/40 hover:border-mpca-brass"
-                            }`}
+                            className="px-4 py-2 text-[12px] uppercase tracking-[0.16em] rounded-full transition-all"
+                            style={{
+                                backgroundColor: active ? DL.gold : "transparent",
+                                color: active ? DL.paper : DL.ink,
+                                border: active ? `1.5px solid ${DL.gold}` : `1.5px solid ${DL.ruleStrong}`,
+                                fontFamily: DL.fontMono,
+                                fontWeight: active ? 700 : 600,
+                                boxShadow: active ? "0 8px 20px -12px rgba(184,131,40,0.5)" : "none",
+                            }}
                         >
                             {t}
                         </button>
-                    ))}
-                </div>
-                <div className="h-6 w-px bg-mpca-brass/30" />
-                <div className="flex items-center gap-1 flex-wrap">
-                    {CATEGORIES.map((c) => (
+                    );
+                })}
+                <div className="h-6 w-px" style={{ backgroundColor: DL.ruleStrong }} />
+                {CATEGORIES.map((c) => {
+                    const active = category === c;
+                    return (
                         <button
                             key={c}
                             onClick={() => setCategory(c)}
                             data-testid={`filter-${c.toLowerCase()}`}
-                            className={`px-3 py-2 text-[11px] uppercase tracking-[0.18em] border transition-all duration-300 ${
-                                category === c
-                                    ? "bg-mpca-green-dark text-mpca-ivory border-mpca-green-dark"
-                                    : "bg-transparent text-mpca-green-dark border-mpca-brass/40 hover:border-mpca-brass"
-                            }`}
+                            className="px-4 py-2 text-[12px] uppercase tracking-[0.16em] rounded-full transition-all"
+                            style={{
+                                backgroundColor: active ? DL.emerald : "transparent",
+                                color: active ? DL.paper : DL.ink,
+                                border: active ? `1.5px solid ${DL.emerald}` : `1.5px solid ${DL.ruleStrong}`,
+                                fontFamily: DL.fontMono,
+                                fontWeight: active ? 700 : 600,
+                                boxShadow: active ? "0 8px 20px -12px rgba(13,59,46,0.5)" : "none",
+                            }}
                         >
                             {c}
                         </button>
-                    ))}
-                </div>
+                    );
+                })}
                 {subCats.length > 0 && (
                     <select
                         value={subCategory}
                         onChange={(e) => setSubCategory(e.target.value)}
-                        className="input-heritage !py-2 !text-xs max-w-[220px]"
+                        className="px-3 py-2 text-[12px] uppercase tracking-[0.16em] rounded-full"
+                        style={{ fontFamily: DL.fontMono, color: DL.ink, backgroundColor: DL.paper, border: `1.5px solid ${DL.ruleStrong}`, fontWeight: 600 }}
                         data-testid="sub-category-select"
                     >
                         <option value="All">All Sub-Categories</option>
                         {subCats.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                     </select>
                 )}
-                <div className="flex-1 min-w-[200px] relative">
-                    <Search className="absolute left-0 top-1/2 -translate-y-1/2 text-mpca-gray" size={16} strokeWidth={1.5} />
-                    <input
-                        type="text"
+                <div className="ml-auto">
+                    <SearchInput
                         value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search by name, UID, email, role, membership id…"
-                        data-testid="search-input"
-                        className="input-heritage pl-7"
+                        onChange={setSearch}
+                        placeholder="Search name, UID, email, role…"
+                        testid="search-input"
+                        width={260}
                     />
                 </div>
             </div>
@@ -176,15 +195,19 @@ const Members = () => {
             {loading ? (
                 <CricketLoader label="Reading the register…" />
             ) : filtered.length === 0 ? (
-                <div className="text-center py-20 bulletin-card" data-testid="empty-state">
-                    <Users className="mx-auto text-mpca-brass mb-4" size={36} strokeWidth={1} />
-                    <div className="font-serif text-2xl text-mpca-green-dark">No entries found.</div>
-                    <p className="text-mpca-gray-dark text-sm mt-2">
+                <div className="text-center py-20" style={embossedCard()} data-testid="empty-state">
+                    <Users className="mx-auto mb-4" size={36} strokeWidth={2} style={{ color: DL.ink2 }} />
+                    <div className="text-[20px] font-bold" style={{ color: DL.ink }}>No entries found.</div>
+                    <p className="text-[14px] mt-2 font-semibold" style={{ color: DL.ink2 }}>
                         Adjust your filters, enrol a new member, or upload a CSV of members.
                     </p>
                     {isOfficeBearer && (
-                        <button className="btn-heritage-secondary mt-6 inline-flex" onClick={() => setBulkOpen(true)}>
-                            <Download size={14} strokeWidth={1.5} /> Bulk Upload CSV
+                        <button
+                            className="mt-6 inline-flex items-center gap-2 px-5 py-2 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold"
+                            onClick={() => setBulkOpen(true)}
+                            style={{ color: DL.emerald, border: `1.5px solid ${DL.emerald}`, fontFamily: DL.fontMono }}
+                        >
+                            <Download size={14} strokeWidth={2.5} /> Bulk Upload CSV
                         </button>
                     )}
                 </div>
@@ -284,7 +307,7 @@ const Members = () => {
                 </div>
             )}
 
-            <div className="mt-6 text-xs text-mpca-gray-dark italic font-serif">
+            <div className="mt-6 text-[13px] font-semibold" style={{ color: DL.ink2 }}>
                 Showing {filtered.length} of {members.length} entries · Sorted by most recent enrolment.
             </div>
 
@@ -293,7 +316,7 @@ const Members = () => {
                 onClose={() => setBulkOpen(false)}
                 onDone={() => load()}
             />
-        </div>
+        </PageShell>
     );
 };
 

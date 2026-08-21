@@ -10,6 +10,7 @@ import {
     User as UserIcon, Plus, Trophy, ShieldAlert, ShieldCheck, ChevronRight, Filter, X, Award, CheckCircle2, AlertTriangle, BadgeCheck, Ban,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
+import { DL, PageShell, PageEyebrow, PrimaryButton } from "@/lib/designSystem";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const ageYears = (dob) => {
@@ -640,45 +641,38 @@ const Players = () => {
 
     const canCreate = persona && (persona.body_type === "District" || persona.body_type === "State");
 
-    if (loading) return <div className="p-16" data-testid="players-loading"><CricketLoader size="lg" label="Loading the player register…" /></div>;
+    if (loading) return <PageShell testid="players-page"><div className="p-16"><CricketLoader size="lg" label="Loading the player register…" /></div></PageShell>;
 
     return (
-        <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="players-page">
-            <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
-                <div>
-                    <div className="overline">Article VI · Players</div>
-                    <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
-                        Player Register
-                    </h1>
-                    <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        The single source of truth for every cricketer playing under the MPCA flag —
-                        Local-MP, Born-Outside and Guest. Eligibility is validated at the point of entry.
-                    </p>
-                </div>
-                {canCreate && (
-                    <div className="flex gap-3 flex-wrap">
-                        <button
-                            onClick={async () => {
-                                if (!window.confirm("Recompute eligibility tags for every player in your scope? This may take a few seconds.")) return;
-                                try {
-                                    const { data } = await api.post("/players/eligibility-tag/recompute-all");
-                                    alert(`Retagged ${data.tagged} of ${data.total} players.\nBreakdown: ${Object.entries(data.by_tag || {}).map(([k, v]) => `${k}: ${v}`).join("  ·  ")}\nIneligible: ${data.ineligible}  ·  Errors: ${data.errors}`);
-                                    await load();
-                                } catch (e) { alert(e?.response?.data?.detail || e.message); }
-                            }}
-                            className="text-[10px] uppercase tracking-widest border-2 border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory px-3 py-2"
-                            data-testid="bulk-recompute-eligibility-btn"
-                        >
-                            <ShieldCheck size={12} className="inline mr-1" /> Recompute Eligibility (All)
-                        </button>
-                        <button onClick={() => setShowNew(true)} className="btn-heritage-primary" data-testid="new-player-btn">
-                            <Plus size={14} /> Register a Player
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            <div className="crest-divider mb-6" />
+        <PageShell testid="players-page">
+            <PageEyebrow
+                title="Player Register"
+                meta="MPCA · Article VI"
+                rightAction={
+                    canCreate && (
+                        <div className="flex gap-2 flex-wrap items-center">
+                            <button
+                                onClick={async () => {
+                                    if (!window.confirm("Recompute eligibility tags for every player in your scope? This may take a few seconds.")) return;
+                                    try {
+                                        const { data } = await api.post("/players/eligibility-tag/recompute-all");
+                                        alert(`Retagged ${data.tagged} of ${data.total} players.\nBreakdown: ${Object.entries(data.by_tag || {}).map(([k, v]) => `${k}: ${v}`).join("  ·  ")}\nIneligible: ${data.ineligible}  ·  Errors: ${data.errors}`);
+                                        await load();
+                                    } catch (e) { alert(e?.response?.data?.detail || e.message); }
+                                }}
+                                className="text-[12px] uppercase tracking-[0.2em] font-bold px-4 py-2 rounded-full inline-flex items-center gap-1.5"
+                                style={{ fontFamily: DL.fontMono, color: DL.emerald, border: `1.5px solid ${DL.emerald}` }}
+                                data-testid="bulk-recompute-eligibility-btn"
+                            >
+                                <ShieldCheck size={13} strokeWidth={2.5} /> Recompute Eligibility
+                            </button>
+                            <PrimaryButton onClick={() => setShowNew(true)} testid="new-player-btn">
+                                Register a Player
+                            </PrimaryButton>
+                        </div>
+                    )
+                }
+            />
 
             {/* Sprint T-RIM · Scope indicator */}
             {persona && (
@@ -817,7 +811,7 @@ const Players = () => {
                 onClose={() => setSuspendTarget(null)}
                 onDone={async (u) => { setSuspendTarget(null); setSelected(u); await load(); }}
             />
-        </div>
+        </PageShell>
     );
 };
 

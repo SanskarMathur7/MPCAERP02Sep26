@@ -60,26 +60,53 @@ const STATUS_META = {
     Rejected:           { label: "Rejected",          tone: "suspended" },
 };
 
-const Pill = ({ tone, label, testId }) => {
-    const map = {
-        active: "pill pill-active",
-        pending: "pill pill-pending",
-        suspended: "pill pill-suspended",
-        lapsed: "pill pill-lapsed",
-        saffron: "pill bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/50",
-        maroon: "pill bg-mpca-burgundy-dark/15 text-mpca-burgundy-dark border-mpca-burgundy-dark/50",
-    };
-    return <span className={map[tone] || "pill pill-lapsed"} data-testid={testId}>{label}</span>;
+const IW = {
+    font: "'Nunito', system-ui, sans-serif",
+    bgPage:     "#faf6ed", // cream page
+    bgCard:     "#fbf9f0", // card surface
+    bgHeader:   "#f5efdb", // header/footer tint
+    border:     "#d4b95c", // gold rule
+    borderSoft: "rgba(212, 185, 92, 0.4)",
+    eyebrow:    "#7a5c1a", // bronze/olive
+    text:       "#264d3b", // dark olive-green (primary)
+    textSoft:   "#4a3a1a",
+    accent:     "#7a1f2c", // oxblood
+    accentSoft: "#a04552",
 };
 
-const StatTile = ({ icon: Icon, label, value, sub, accent = "navy" }) => {
-    const c = { navy: "text-mpca-green-dark", saffron: "text-mpca-oxblood", marigold: "text-mpca-gold", maroon: "text-mpca-burgundy-dark" }[accent];
+const Pill = ({ tone, label, testId }) => {
+    // Institutional Warm — hex tokens, no MPCA global classes.
+    const styleMap = {
+        active:    { bg: IW.text,   fg: "#fff" },
+        pending:   { bg: IW.bgHeader, fg: IW.eyebrow, border: `1px solid ${IW.border}` },
+        suspended: { bg: IW.accent, fg: "#fff" },
+        lapsed:    { bg: "#e8dcc0", fg: IW.textSoft },
+        saffron:   { bg: IW.accent, fg: "#fff" },
+        maroon:    { bg: "#5c1420", fg: "#fff" },
+    };
+    const s = styleMap[tone] || styleMap.lapsed;
     return (
-        <div className="bulletin-card p-6 border-0 rounded-none" data-testid={"trn-stat-" + label.toLowerCase().replace(/\s+/g, "-")}>
-            <Icon className={c + " mb-3"} size={20} strokeWidth={1.25} />
-            <div className="overline">{label}</div>
-            <div className="font-serif text-3xl text-mpca-green-dark mt-2 leading-none">{value}</div>
-            {sub && <div className="text-[11px] text-mpca-gray-dark mt-2">{sub}</div>}
+        <span
+            data-testid={testId}
+            style={{ backgroundColor: s.bg, color: s.fg, border: s.border || "none" }}
+            className="inline-flex items-center px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap"
+        >
+            {label}
+        </span>
+    );
+};
+
+const StatTile = ({ icon: Icon, label, value, sub }) => {
+    return (
+        <div
+            className="p-6 border"
+            style={{ backgroundColor: IW.bgCard, borderColor: IW.borderSoft }}
+            data-testid={"trn-stat-" + label.toLowerCase().replace(/\s+/g, "-")}
+        >
+            <Icon style={{ color: IW.eyebrow }} className="mb-3" size={20} strokeWidth={1.5} />
+            <div className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: IW.eyebrow }}>{label}</div>
+            <div className="mt-2 text-3xl font-bold leading-none" style={{ color: IW.text }}>{value}</div>
+            {sub && <div className="text-xs mt-2" style={{ color: IW.textSoft }}>{sub}</div>}
         </div>
     );
 };
@@ -172,46 +199,54 @@ const Tournaments = () => {
         return r;
     }, [list, filter, persona]);
 
-    if (loading) return <div className="p-16" data-testid="trn-loading"><CricketLoader size="lg" label="Loading tournament catalogue…" /></div>;
+    if (loading) return <div className="p-16" data-testid="trn-loading" style={{ backgroundColor: IW.bgPage, fontFamily: IW.font }}><CricketLoader size="lg" label="Loading tournament catalogue…" /></div>;
 
     return (
-        <div className="page-enter px-8 md:px-12 py-10 max-w-7xl mx-auto" data-testid="tournaments-page">
-            <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
+        <div
+            className="page-enter min-h-screen"
+            data-testid="tournaments-page"
+            style={{ backgroundColor: IW.bgPage, fontFamily: IW.font, color: IW.text }}
+        >
+        <div className="px-8 md:px-12 py-10 max-w-7xl mx-auto">
+            <div className="flex flex-wrap items-end justify-between gap-6 mb-8">
                 <div>
-                    <div className="overline">Article VII · Tournament Operations</div>
-                    <h1 className="font-serif text-4xl md:text-5xl text-mpca-green-dark mt-3 leading-tight">
+                    <div className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: IW.eyebrow }}>Article VII · Tournament Operations</div>
+                    <h1 className="text-4xl md:text-5xl font-bold mt-3 leading-tight" style={{ color: IW.text }}>
                         Tournaments
                     </h1>
-                    <p className="text-mpca-gray-dark mt-2 max-w-2xl">
-                        The single hub for every tournament action — create, host acceptance, squad selection, budget &amp; finance, reimbursement claims, match officials and linked camps. Pick a tournament below to open its full workspace, or use <Link to="/tournament-calendar" className="underline decoration-mpca-brass underline-offset-2 hover:text-mpca-oxblood">Tournament Calendar</Link> for a read-only schedule view.
+                    <p className="mt-3 max-w-2xl text-base leading-relaxed" style={{ color: IW.textSoft }}>
+                        The single hub for every tournament action — create, host acceptance, squad selection, budget &amp; finance, reimbursement claims, match officials and linked camps. Pick a tournament below to open its full workspace, or use <Link to="/tournament-calendar" className="underline underline-offset-4" style={{ color: IW.accent, textDecorationColor: IW.border }}>Tournament Calendar</Link> for a read-only schedule view.
                     </p>
                 </div>
                 {isOfficeBearer && getCreatableTournamentTypes(persona).length > 0 && (
                     <button
-                        className="btn-heritage-primary"
                         onClick={() => setCreateOpen(true)}
                         data-testid="new-tournament-btn"
+                        className="h-11 px-5 text-sm font-bold uppercase tracking-widest flex items-center gap-2 transition-colors"
+                        style={{ backgroundColor: IW.text, color: "#fff" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1a3628")}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = IW.text)}
                     >
-                        <Plus size={14} strokeWidth={1.5} /> Add Tournament
+                        <Plus size={16} strokeWidth={2} /> Add Tournament
                     </button>
                 )}
             </div>
 
-            <div className="crest-divider mb-10" />
+            <div className="border-t-2 mb-8" style={{ borderColor: IW.border }} />
 
             {stats && (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10" data-testid="trn-stats">
-                    <StatTile icon={Trophy}      label={persona?.body_type === "State" ? "Total Tournaments" : "In My Scope"}   value={persona?.body_type === "State" ? stats.total_tournaments : list.length}  sub={persona?.body_type === "State" ? `Cycle ${(typeof window !== "undefined" && window.__mpca_season) || "2026-27"} · state-wide` : `${persona?.body_name || persona?.body_code}`} accent="navy" />
-                    <StatTile icon={Calendar}    label="Upcoming"            value={persona?.body_type === "State" ? stats.upcoming : list.filter((t) => t.status === "Upcoming").length}            sub="Awaiting squad selection"   accent="saffron" />
-                    <StatTile icon={Users}       label="In Selection"        value={persona?.body_type === "State" ? stats.in_selection : list.filter((t) => t.status === "Squad_Selection").length}        sub="Squads being formed"        accent="marigold" />
-                    <StatTile icon={ShieldCheck} label="In Progress"         value={persona?.body_type === "State" ? stats.in_progress : list.filter((t) => t.status === "In_Progress").length}         sub="Currently being played"     accent="navy" />
-                    <StatTile icon={Trophy}      label="Players Selected"    value={stats.total_players_selected} sub={stats.total_squads + " squads"} accent="maroon" />
+                <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-10" data-testid="trn-stats">
+                    <StatTile icon={Trophy}      label={persona?.body_type === "State" ? "Total Tournaments" : "In My Scope"}   value={persona?.body_type === "State" ? stats.total_tournaments : list.length}  sub={persona?.body_type === "State" ? `Cycle ${(typeof window !== "undefined" && window.__mpca_season) || "2026-27"} · state-wide` : `${persona?.body_name || persona?.body_code}`} />
+                    <StatTile icon={Calendar}    label="Upcoming"            value={persona?.body_type === "State" ? stats.upcoming : list.filter((t) => t.status === "Upcoming").length}            sub="Awaiting squad selection" />
+                    <StatTile icon={Users}       label="In Selection"        value={persona?.body_type === "State" ? stats.in_selection : list.filter((t) => t.status === "Squad_Selection").length}        sub="Squads being formed" />
+                    <StatTile icon={ShieldCheck} label="In Progress"         value={persona?.body_type === "State" ? stats.in_progress : list.filter((t) => t.status === "In_Progress").length}         sub="Currently being played" />
+                    <StatTile icon={Trophy}      label="Players Selected"    value={stats.total_players_selected} sub={stats.total_squads + " squads"} />
                 </div>
             )}
 
             {/* Filter chips */}
             <div className="flex flex-wrap items-center gap-2 mb-6">
-                <Filter size={12} className="text-mpca-gray-dark" />
+                <Filter size={14} style={{ color: IW.eyebrow }} />
                 {[
                     ["live",                 "🔴 Live"],
                     ["upcoming",             "Upcoming"],
@@ -227,27 +262,29 @@ const Tournaments = () => {
                     ["Squad_Selection",      "In Selection"],
                     ["In_Progress",          "In Progress"],
                     ["Completed",            "Completed"],
-                ].map(([k, label]) => (
-                    <button
-                        key={k}
-                        onClick={() => setFilter(k)}
-                        data-testid={"trn-filter-" + k}
-                        className={"px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-semibold border transition-colors " + (filter === k ? "bg-mpca-green-dark text-mpca-ivory border-mpca-green-dark" : "bg-transparent text-mpca-green-dark border-mpca-brass/40 hover:bg-mpca-parchment")}
-                    >
-                        {label}
-                    </button>
-                ))}
+                ].map(([k, label]) => {
+                    const active = filter === k;
+                    return (
+                        <button
+                            key={k}
+                            onClick={() => setFilter(k)}
+                            data-testid={"trn-filter-" + k}
+                            className="px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-bold border-2 transition-colors"
+                            style={{
+                                backgroundColor: active ? IW.text : "transparent",
+                                color: active ? "#fff" : IW.text,
+                                borderColor: active ? IW.text : IW.border,
+                            }}
+                        >
+                            {label}
+                        </button>
+                    );
+                })}
             </div>
 
-            {/* MPCA-235 · Ship 4 · MPCA state visibility toggle.
-               Only relevant for categories whose wiring cell has
-               mpca_visibility=On_Submit (Camps · Inter-School · Inter-Club).
-               BCCI, MPCA Inter-Div and generic ALL/Live views are always
-               real-time for MPCA — hide the banner there so users aren't
-               misled into thinking those tournaments are gated. */}
             {isMpcaState && (hiddenCount > 0 || includeCampScoped) && !["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
                 <div className="mb-4 flex items-center gap-3 text-[11px]" data-testid="mpca-visibility-toggle">
-                    <span className="uppercase tracking-widest text-mpca-brass">
+                    <span className="uppercase tracking-widest font-semibold" style={{ color: IW.eyebrow }}>
                         {includeCampScoped
                             ? "Showing all tournaments including Camps · School · Club (visibility · on-submit)"
                             : `${hiddenCount} tournament${hiddenCount === 1 ? "" : "s"} hidden until their Finance claim is submitted`}
@@ -255,27 +292,25 @@ const Tournaments = () => {
                     <button
                         onClick={() => setIncludeCampScoped(v => !v)}
                         data-testid="mpca-visibility-toggle-btn"
-                        className="px-2.5 py-1 text-[10px] uppercase tracking-widest font-semibold border border-mpca-brass/50 text-mpca-brass hover:bg-mpca-brass/10"
+                        className="px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border-2 transition-colors"
+                        style={{ color: IW.eyebrow, borderColor: IW.border }}
                     >
                         {includeCampScoped ? "Focus on core" : "Show all"}
                     </button>
                 </div>
             )}
 
-            {/* MPCA-259 · Positive realtime-visibility banner for BCCI / MPCA
-               Inter-Divisional / Championship filters, where MPCA sees every
-               action in real-time per the wiring matrix (mpca_visibility=Realtime). */}
             {isMpcaState && ["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
-                <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-widest text-mpca-green-dark" data-testid="mpca-realtime-banner">
-                    <span className="w-1.5 h-1.5 rounded-full bg-mpca-green-dark" />
+                <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-widest font-semibold" data-testid="mpca-realtime-banner" style={{ color: IW.text }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: IW.text }} />
                     Real-time visibility · MPCA sees every {filter === "BCCI" ? "BCCI" : (filter === "MPCA_Championship" ? "Championship" : "MPCA Inter-Divisional")} tournament action as it happens (per wiring)
                 </div>
             )}
 
             {(
-            <div className="bulletin-card overflow-hidden" data-testid="trn-list">
+            <div className="border-2 overflow-hidden" style={{ backgroundColor: IW.bgCard, borderColor: IW.border }} data-testid="trn-list">
                 {filtered.length === 0 ? (
-                    <div className="p-12 text-center text-mpca-gray-dark italic font-serif" data-testid="trn-empty">
+                    <div className="p-12 text-center italic" style={{ color: IW.textSoft }} data-testid="trn-empty">
                         {filter === "live"
                             ? "No live tournaments right now. Switch to Upcoming or All to see the full calendar."
                             : "No tournaments match this filter."}
@@ -295,68 +330,71 @@ const Tournaments = () => {
                             <div
                                 key={t.id}
                                 data-testid={"trn-row-" + t.tournament_no}
-                                className="ledger-row w-full flex flex-wrap items-center gap-4 px-6 py-4 cursor-pointer"
+                                className="w-full flex flex-wrap items-center gap-4 px-6 py-4 cursor-pointer border-b transition-colors"
+                                style={{ borderColor: IW.borderSoft }}
+                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = IW.bgHeader)}
+                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                                 onClick={() => navigate(`/tournaments/${t.id}`)}
                             >
-                                <div className="w-10 h-10 rounded-full bg-mpca-green-dark text-mpca-gold-light flex items-center justify-center shrink-0">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: IW.text, color: "#f6d97a" }}>
                                     <Trophy size={16} strokeWidth={1.5} />
                                 </div>
-                                <div className="font-mono text-[10px] text-mpca-brass tracking-wider w-28">{t.tournament_no}</div>
+                                <div className="font-mono text-[10px] tracking-wider w-28" style={{ color: IW.eyebrow }}>{t.tournament_no}</div>
                                 <div className="flex-1 min-w-[260px]">
-                                    <div className="font-serif text-lg text-mpca-green-dark leading-tight">
-                                        {t.name}{t.short_name && <span className="text-[10px] tracking-[0.2em] uppercase text-mpca-brass ml-2 font-sans">{t.short_name}</span>}
+                                    <div className="text-lg font-bold leading-tight" style={{ color: IW.text }}>
+                                        {t.name}{t.short_name && <span className="text-[10px] tracking-[0.2em] uppercase ml-2 font-normal" style={{ color: IW.eyebrow }}>{t.short_name}</span>}
                                     </div>
-                                    <div className="text-[11px] text-mpca-gray-dark mt-1 flex items-center gap-2 flex-wrap">
+                                    <div className="text-[11px] mt-1 flex items-center gap-2 flex-wrap" style={{ color: IW.textSoft }}>
                                         <Calendar size={11} /> {fmtDate(t.start_date)} → {fmtDate(t.end_date)}
                                         {(t.venue_name_snapshot || t.venue) && (
-                                            <><span>·</span><MapPin size={11} /> {t.venue_name_snapshot || t.venue}{t.ground_name_snapshot ? <span className="text-mpca-brass"> · {t.ground_name_snapshot}</span> : null}</>
+                                            <><span>·</span><MapPin size={11} /> {t.venue_name_snapshot || t.venue}{t.ground_name_snapshot ? <span style={{ color: IW.eyebrow }}> · {t.ground_name_snapshot}</span> : null}</>
                                         )}
-                                        {t.host_body_id && <span className="font-mono text-mpca-brass">· Host {t.host_body_id}</span>}
-                                        {t.trophy_name && <span className="text-mpca-oxblood">· 🏆 {t.trophy_name}</span>}
+                                        {t.host_body_id && <span className="font-mono" style={{ color: IW.eyebrow }}>· Host {t.host_body_id}</span>}
+                                        {t.trophy_name && <span style={{ color: IW.accent }}>· 🏆 {t.trophy_name}</span>}
                                         <WiringComplianceChip tournament={t} testId={"trn-wiring-" + t.tournament_no} className="ml-1" />
                                     </div>
-                                    {/* M11 · Acceptance status + required-from strip */}
                                     {acc.status && acc.status !== "Not_Required" && (
                                         <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[10px] font-mono uppercase tracking-wider" data-testid={"trn-acc-" + t.tournament_no}>
-                                            <span className={
-                                                acc.status === "Accepted"  ? "px-2 py-0.5 bg-mpca-green/15 border border-mpca-green/50 text-mpca-green" :
-                                                acc.status === "Rejected"  ? "px-2 py-0.5 bg-mpca-oxblood/15 border border-mpca-oxblood/50 text-mpca-oxblood" :
-                                                                             "px-2 py-0.5 bg-mpca-brass/15 border border-mpca-brass/50 text-mpca-brass"
-                                            }>
+                                            <span style={{
+                                                padding: "2px 8px",
+                                                backgroundColor: acc.status === "Accepted" ? IW.text : acc.status === "Rejected" ? IW.accent : IW.eyebrow,
+                                                color: "#fff",
+                                            }}>
                                                 {acc.status === "Pending" ? "Awaiting" : acc.status}
                                             </span>
                                             {required.map((bc) => {
                                                 const acted = (acc.entries || []).filter((e) => e.body_code === bc)[0];
+                                                const st2 = !acted
+                                                    ? { color: IW.textSoft, borderColor: IW.borderSoft }
+                                                    : acted.action === "accept"
+                                                        ? { color: IW.text, borderColor: IW.text }
+                                                        : { color: IW.accent, borderColor: IW.accent };
                                                 return (
-                                                    <span key={bc} className={
-                                                        !acted ? "text-mpca-gray-dark border border-mpca-gray/30 px-1.5 py-0.5" :
-                                                        acted.action === "accept" ? "text-mpca-green border border-mpca-green/40 px-1.5 py-0.5" :
-                                                                                    "text-mpca-oxblood border border-mpca-oxblood/40 px-1.5 py-0.5"
-                                                    }>
+                                                    <span key={bc} className="px-1.5 py-0.5 border" style={st2}>
                                                         {acted?.action === "accept" ? "✓ " : acted?.action === "reject" ? "✗ " : "· "}{bc}
                                                     </span>
                                                 );
                                             })}
                                         </div>
                                     )}
-                                    {/* MPCA-235 · Ship 2 · mini wiring ribbon */}
                                     <div className="mt-2">
                                         <TournamentProgressionRibbonMini tournament={t} />
                                     </div>
                                 </div>
-                                <span className="font-mono text-[11px] text-mpca-gray-dark uppercase tracking-wider w-20 text-right">{ageLabel(t)}</span>
+                                <span className="font-mono text-[11px] uppercase tracking-wider w-20 text-right" style={{ color: IW.textSoft }}>{ageLabel(t)}</span>
                                 <Pill tone={tm.tone} label={tm.label} testId={"trn-type-" + t.tournament_type} />
                                 <Pill tone={fm.tone} label={fm.label} testId={"trn-fmt-" + t.format} />
-                                {t.is_three_team_format && <span className="pill bg-mpca-gold/15 text-mpca-gold-dark border-mpca-gold/50" data-testid={"trn-3team-" + t.tournament_no}>3-Team</span>}
-                                {t.is_womens && <span className="pill bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/50" data-testid={"trn-womens-" + t.tournament_no}>Women&apos;s</span>}
-                                {t.allows_guests && <span className="pill bg-mpca-brass/15 text-mpca-gold border-mpca-brass/50">+ Guest</span>}
+                                {t.is_three_team_format && <Pill tone="pending" label="3-Team" testId={"trn-3team-" + t.tournament_no} />}
+                                {t.is_womens && <Pill tone="saffron" label="Women's" testId={"trn-womens-" + t.tournament_no} />}
+                                {t.allows_guests && <Pill tone="pending" label="+ Guest" />}
                                 <Pill tone={st.tone} label={st.label} testId={"trn-status-" + t.status} />
                                 {iMustAccept && (
                                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                         <button
                                             onClick={() => handleAcceptance(t.id, "accept")}
                                             disabled={accepting}
-                                            className="px-3 py-1 text-[10px] uppercase tracking-widest bg-mpca-green text-mpca-ivory hover:bg-mpca-green-dark transition disabled:opacity-50"
+                                            className="px-3 py-1 text-[10px] uppercase tracking-widest font-bold transition disabled:opacity-50"
+                                            style={{ backgroundColor: IW.text, color: "#fff" }}
                                             data-testid={"trn-accept-" + t.tournament_no}
                                         >
                                             ✓ Accept
@@ -364,14 +402,15 @@ const Tournaments = () => {
                                         <button
                                             onClick={() => handleAcceptance(t.id, "reject")}
                                             disabled={accepting}
-                                            className="px-3 py-1 text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory hover:opacity-90 transition disabled:opacity-50"
+                                            className="px-3 py-1 text-[10px] uppercase tracking-widest font-bold transition disabled:opacity-50"
+                                            style={{ backgroundColor: IW.accent, color: "#fff" }}
                                             data-testid={"trn-reject-" + t.tournament_no}
                                         >
                                             ✗ Reject
                                         </button>
                                     </div>
                                 )}
-                                <ChevronRight size={14} className="text-mpca-gray" />
+                                <ChevronRight size={16} style={{ color: IW.eyebrow }} />
                             </div>
                         );
                     })
@@ -384,6 +423,7 @@ const Tournaments = () => {
                 onClose={() => setCreateOpen(false)}
                 onDone={() => load()}
             />
+        </div>
         </div>
     );
 };

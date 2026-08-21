@@ -1,12 +1,83 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
+import { HudEmbeddedContext } from "@/pages/design-preview/_shared";
 import {
     LayoutDashboard, Network, Boxes, FileText, GitBranch, Database, Server,
     Users, Trophy, IndianRupee, Shield, ChevronRight, Layers, Zap, Code2, Info,
     Target, Workflow, ClipboardCheck, Lock, Eye, Calendar as CalendarIcon,
     Building2, GraduationCap, Award, MailCheck, Repeat, BookOpen, Gavel,
     ScrollText, CheckCircle2, AlertTriangle, ArrowRight, Cpu, KeyRound,
-    Sparkles, TrendingUp, Package,
+    Sparkles, TrendingUp, Package, Radio,
 } from "lucide-react";
+
+// ═════════════════════════════════════════════════════════════════════
+// Command Deck · lazy-loaded HUD dashboards (folded from /design-preview)
+// ═════════════════════════════════════════════════════════════════════
+const HudSeasonOverview     = lazy(() => import("@/pages/design-preview/SeasonOverview"));
+const HudGrantsBoard        = lazy(() => import("@/pages/design-preview/GrantsBoard"));
+const HudBudgetHealth       = lazy(() => import("@/pages/design-preview/BudgetHealth"));
+const HudTournamentCalendar = lazy(() => import("@/pages/design-preview/TournamentCalendar"));
+const HudOfficialsSquads    = lazy(() => import("@/pages/design-preview/OfficialsSquads"));
+const HudFinancialFlow      = lazy(() => import("@/pages/design-preview/FinancialFlow"));
+const HudComplianceMatrix   = lazy(() => import("@/pages/design-preview/ComplianceMatrix"));
+const HudDivisionScorecard  = lazy(() => import("@/pages/design-preview/DivisionScorecard"));
+
+const DECK_HUDS = [
+    { key: "season",     label: "Season",     Comp: HudSeasonOverview },
+    { key: "grants",     label: "Grants",     Comp: HudGrantsBoard },
+    { key: "budget",     label: "Budget",     Comp: HudBudgetHealth },
+    { key: "calendar",   label: "Calendar",   Comp: HudTournamentCalendar },
+    { key: "officials",  label: "Officials",  Comp: HudOfficialsSquads },
+    { key: "finance",    label: "Finance",    Comp: HudFinancialFlow },
+    { key: "compliance", label: "Compliance", Comp: HudComplianceMatrix },
+    { key: "divisions",  label: "Divisions",  Comp: HudDivisionScorecard },
+];
+
+const CommandDeckTab = () => {
+    const [hud, setHud] = useState(DECK_HUDS[0].key);
+    const Active = DECK_HUDS.find((h) => h.key === hud)?.Comp;
+    return (
+        <div data-testid="showcase-deck-tab">
+            <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <div className="text-[10px] uppercase tracking-widest text-mpca-brass flex items-center gap-2">
+                        <Radio size={12} /> Broadcast HUD · Read-only Analytics
+                    </div>
+                    <h2 className="mt-1 text-2xl font-semibold text-mpca-green-dark">Command Deck</h2>
+                    <p className="text-[13px] text-mpca-charcoal/80 mt-1 max-w-2xl">
+                        Eight live-styled dashboards folded from the retired <span className="font-mono">/design-preview</span> deck — all sample-data analytics, no data-input controls.
+                    </p>
+                </div>
+                <div className="flex items-center gap-1 flex-wrap" data-testid="showcase-deck-subtabs">
+                    {DECK_HUDS.map((h) => {
+                        const active = hud === h.key;
+                        return (
+                            <button
+                                key={h.key}
+                                onClick={() => setHud(h.key)}
+                                data-testid={`showcase-deck-subtab-${h.key}`}
+                                className={`px-2.5 py-1 text-[10px] uppercase tracking-widest border transition-colors ${
+                                    active
+                                        ? "bg-mpca-green-dark text-mpca-ivory border-mpca-green-dark"
+                                        : "border-mpca-brass/40 text-mpca-charcoal hover:border-mpca-green-dark"
+                                }`}
+                            >
+                                {h.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+            <HudEmbeddedContext.Provider value={true}>
+                <div className="-mx-6 md:-mx-8 border-t border-b border-mpca-brass/30" data-testid={`showcase-deck-active-${hud}`}>
+                    <Suspense fallback={<div className="p-12 text-center text-[11px] uppercase tracking-widest text-mpca-brass">Loading HUD…</div>}>
+                        {Active ? <Active /> : null}
+                    </Suspense>
+                </div>
+            </HudEmbeddedContext.Provider>
+        </div>
+    );
+};
+
 
 /**
  * MPCA ERP · Phase 1 Showcase — stakeholder walkthrough document
@@ -1275,11 +1346,12 @@ const ModulesTab = () => (
 // ═════════════════════════════════════════════════════════════════════
 
 const TABS = [
-    { key: "overview", label: "Overview",  icon: LayoutDashboard },
-    { key: "hld",      label: "HLD",       icon: Network },
-    { key: "lld",      label: "LLD",       icon: GitBranch },
-    { key: "prd",      label: "PRD",       icon: FileText },
-    { key: "modules",  label: "Modules",   icon: Layers },
+    { key: "overview", label: "Overview",      icon: LayoutDashboard },
+    { key: "deck",     label: "Command Deck",  icon: Radio },
+    { key: "hld",      label: "HLD",           icon: Network },
+    { key: "lld",      label: "LLD",           icon: GitBranch },
+    { key: "prd",      label: "PRD",           icon: FileText },
+    { key: "modules",  label: "Modules",       icon: Layers },
 ];
 
 const MPCAShowcase = () => {
@@ -1322,6 +1394,7 @@ const MPCAShowcase = () => {
                 {/* Tab body */}
                 <div className="bg-mpca-ivory border border-mpca-brass/30 p-6 md:p-8" data-testid={`showcase-panel-${tab}`}>
                     {tab === "overview" && <OverviewTab />}
+                    {tab === "deck"     && <CommandDeckTab />}
                     {tab === "hld"      && <HLDTab />}
                     {tab === "lld"      && <LLDTab />}
                     {tab === "prd"      && <PRDTab />}

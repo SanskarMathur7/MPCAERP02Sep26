@@ -822,6 +822,18 @@ async def seed_data():
         {"chairperson": "Shri Abhilash Khandekar"},
         {"$set": {"chairperson": "Shri Mahanaryaman Scindia"}},
     )
+    # Feb 2026 · Honour the broad user-purge sentinel — skip ALL transactional
+    # seeds when the user has explicitly wiped the environment. Only reference
+    # masters (bodies + wiring + schemes + rate cards) run above; everything
+    # else below is guarded. Delete `skip_transactional_seeds` from
+    # system_config to re-enable full seeding.
+    _skip_txn_cfg = await db.system_config.find_one({"key": "skip_transactional_seeds"})
+    _skip_txn = bool(_skip_txn_cfg and _skip_txn_cfg.get("value"))
+    if _skip_txn:
+        logger.info("skip_transactional_seeds=True — bypassing all transactional seeds.")
+        # Reference-master seeds still need to run so the app is functional.
+        await seed_grant_scheme_rates()
+        return
     await seed_claims()
     await seed_procurement()
     await seed_players()

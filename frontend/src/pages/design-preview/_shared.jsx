@@ -5,7 +5,7 @@
  * Broadcast-HUD aesthetic: dark base, sharp edges, IBM Plex + Bebas Neue,
  * ECharts dark theme, ticker strips, live pulse dots.
  */
-import { useMemo } from "react";
+import { useMemo, createContext, useContext } from "react";
 import { NavLink, Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import ReactECharts from "echarts-for-react";
@@ -107,8 +107,24 @@ const NAV = [
     { to: "/design-preview/division-scorecard", label: "DIVISIONS" },
 ];
 
+/* ---------- Embedded-in-Showcase context ----------------------------- */
+export const HudEmbeddedContext = createContext(false);
+
 export const DesignPreviewShell = ({ children }) => {
     const loc = useLocation();
+    const embedded = useContext(HudEmbeddedContext);
+    if (embedded) {
+        // Embedded inside /showcase — skip banner + top-nav + footer, keep HUD palette.
+        return (
+            <div className="bg-hud-base text-hud-text" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                <div className="px-4 py-4">
+                    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} key={loc.pathname}>
+                        {children}
+                    </motion.div>
+                </div>
+            </div>
+        );
+    }
     return (
         <div className="min-h-screen bg-hud-base text-hud-text" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
             {/* Watermark banner */}

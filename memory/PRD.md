@@ -5,6 +5,13 @@
 > Started: Jan 2026 · Last update: Feb 2026 — MPCA-254 Showcase redraft (Phase 1 tabbed doc with HLD/LLD/PRD)
 
 ## Recent Changelog
+- **Feb 2026 — Reimbursement Claim Attached View + Discussion Notifications**: Two follow-ups to the Camp Reimbursement flow.
+
+  **Feature 1 · Attached Camp View (`components/AttachedCampView.jsx`)**: MPCA reviewers on the Grant Claims Details tab now see a rich "FROM CAMP" panel at the top whenever `claim.attached_tournament_id` is populated. Panel contents: source-tournament badge with type + name + start/end dates + host; deep-link "Open Camp →" button; 4-metric strip (Sanctioned Ceiling · Claimed · Variance under/over · Invoices bundled + head count); bundled invoice table with invoice_ref / vendor / head / amount / date / file link + total; head-wise breakdown chips. If the linked TournamentBudget is `Reimbursed`, shows a green "Reimbursed · UTR X" pill. Renders `null` when the claim has no camp linkage — zero impact on legacy scheme claims.
+
+  **Feature 2 · Discussion Notifications (`routes/grant_claims.py:add_discussion`)**: Every new grant-claim discussion message now emits a direction-aware notification. When author.body_type == State (MPCA), a single ping goes to `division-secretary@{claim.body_id}`. Otherwise (Division/District posting), pings go to both `mpca-treasurer@MPCA` and `mpca-secretary@MPCA`. Ping payload: title=`MPCA replied on Grant Claim · {ref}` or `New reply on Grant Claim · {ref}`; message=`{author}: {first-100-chars}…`; link=`/grant-claims/{cid}`; kind=`discussion`. Fire-and-forget with try/except so notification failures never block the reply. **Model extension**: added `"discussion"` to `Notification.kind` Literal enum.
+
+  **Verified end-to-end**: (a) Division posts → 2 rows land (mpca-treasurer + mpca-secretary). (b) MPCA replies → 1 row lands (division-secretary@DIV-IND). (c) MPCA opens `GRC-2026-27-0009` → full attached camp panel with 4 seeded invoices, ₹80,000 total, ₹32,000 under-ceiling variance, open-camp deep link. Frontend + backend lint clean.
 - **Feb 2026 — Fixes D + E · Division-owned Camp Finance Flow (full lifecycle)**: Delivered the complete Division-driven budget lifecycle for the 6 Division-run tournament types (Pre-Camp / Inter-District / Inter-School / Inter-Club A-Grade / Periodical Coaching / Vacation Camp), keeping MPCA visible only at reimbursement-claim submission.
 
   **Model extensions (`models.py`, `grant_claims.py`)**: Added 3 new statuses to `TournamentBudgetStatus` — `Division_Sanctioned`, `Submitted_To_MPCA`, `Reimbursed`. Added 3 optional fields to `GrantClaim`: `attached_tournament_id`, `attached_tournament_budget_id`, `attached_invoice_ids: List[str]`. All additive — zero migration needed.

@@ -1349,7 +1349,7 @@ class Notification(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     recipient_role_id: str               # "division-secretary" / "treasurer" / etc.
     recipient_body_id: str               # body the recipient operates at
-    kind: Literal["claim_event", "sla_breach", "info", "squad_review"] = "claim_event"
+    kind: Literal["claim_event", "sla_breach", "info", "squad_review", "discussion"] = "claim_event"
     title: str
     message: str
     link: Optional[str] = None           # e.g. "/claims"

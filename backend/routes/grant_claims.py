@@ -869,7 +869,8 @@ async def list_discussions(cid: str):
 
 @api_router.post("/grant-claims/{cid}/discussions")
 async def add_discussion(cid: str, payload: GrantDiscussionCreate):
-    if not await db.grant_claims.find_one({"id": cid}, {"_id": 1}):
+    claim = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not claim:
         raise HTTPException(404, "Claim not found")
     if not payload.message.strip():
         raise HTTPException(400, "Message is required")
@@ -884,6 +885,38 @@ async def add_discussion(cid: str, payload: GrantDiscussionCreate):
     }
     await db.grant_claim_discussions.insert_one(entry)
     entry.pop("_id", None)  # avoid ObjectId serialization crash
+
+    # Feb 2026 · Discussion notifications
+    # Route the ping to the OTHER party: if the author is a State (MPCA)
+    # persona, notify the claim's body_id; otherwise notify MPCA reviewers.
+    # Kept fire-and-forget — a notification failure never blocks the reply.
+    preview = entry["message"][:100] + ("…" if len(entry["message"]) > 100 else "")
+    claim_ref = claim.get("claim_ref") or cid[:8]
+    try:
+        if payload.author_body_type == "State":
+            # MPCA → Division / District
+            await _create_notification(
+                recipient_role_id="division-secretary",
+                recipient_body_id=claim.get("body_id"),
+                title=f"MPCA replied on Grant Claim · {claim_ref}",
+                message=f"{payload.author_name or 'MPCA'}: {preview}",
+                link=f"/grant-claims/{cid}", related_type="grant_claim", related_id=cid,
+                severity="info", kind="discussion",
+            )
+        else:
+            # Division / District → MPCA (Treasurer + Secretary)
+            for role in ("mpca-treasurer", "mpca-secretary"):
+                await _create_notification(
+                    recipient_role_id=role,
+                    recipient_body_id="MPCA",
+                    title=f"New reply on Grant Claim · {claim_ref}",
+                    message=f"{payload.author_name or payload.author_body or 'Body'}: {preview}",
+                    link=f"/grant-claims/{cid}", related_type="grant_claim", related_id=cid,
+                    severity="info", kind="discussion",
+                )
+    except Exception:
+        pass  # never let a notification error block the reply
+
     return entry
 
 

@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import VaultDocumentPicker from "@/components/VaultDocumentPicker";
 import SignedPdfUploadModal from "@/components/SignedPdfUploadModal";
+import AttachedCampView from "@/components/AttachedCampView";
 
 // MPCA-245 · Progress ribbon steps for grant claim lifecycle
 const GRANT_STEPS = [
@@ -636,6 +637,11 @@ const GrantClaims = () => {
                             {/* MPCA-245 · Tab content — Details tab keeps existing AI summary + docs */}
                             {(tab === "details" || tab === "documents") && (
                             <>
+                            {/* Feb 2026 · Attached Camp View — shown only when this claim was
+                                auto-materialised from a Division-owned camp reimbursement flow */}
+                            {tab === "details" && selected.attached_tournament_id && (
+                                <AttachedCampView claim={selected} />
+                            )}
                             {/* MPCA-250 · Purpose of claim (long-text) — editable in Draft/Documents_Pending/Rejected */}
                             {tab === "details" && (
                             <div className="mb-4 border border-mpca-brass/30 p-3 bg-mpca-parchment/40" data-testid="purpose-editor">

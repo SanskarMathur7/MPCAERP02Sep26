@@ -1,8 +1,9 @@
 /**
  * /audit-review — Inline reviewer for the Phase-1 UX Audit
- * Reads /api/ux-audit/report, renders every item, lets the user pick a
+ * Reads /api/ux-audit/report, renders every item with per-persona screenshots
+ * captured at /ux-audit/<persona>/<slug>.png, and lets the user pick a
  * DECISION + write a NOTE per item. Decisions persist to Mongo so main
- * agent can act on them in Round 2.
+ * agent can act on them in Round 2 (Cleave).
  */
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
@@ -16,7 +17,103 @@ const DECISIONS = [
     { key: "POSTPONE",         label: "⏸️ Postpone",         color: "bg-slate-100 text-slate-700 border-slate-300" },
 ];
 
-function DecisionRow({ itemKey, itemBody, savedDecision, onSave }) {
+const PERSONAS = [
+    { key: "president",  label: "President" },
+    { key: "secretary",  label: "Secretary" },
+    { key: "treasurer",  label: "Treasurer" },
+];
+
+const routeToSlug = (route) => {
+    if (!route) return null;
+    const cleaned = String(route).trim().replace(/^\//, "");
+    if (!cleaned) return "root";
+    return cleaned
+        .toLowerCase()
+        .replace(/[\/]/g, "_")
+        .replace(/[^a-z0-9_-]/g, "-");
+};
+
+// Pull the first route-looking token out of any string
+const extractRoute = (val) => {
+    if (!val) return null;
+    if (typeof val !== "string") return null;
+    const m = val.match(/(\/[a-z][a-z0-9_-]+(?:\/[a-z0-9:_-]+)*)/i);
+    if (!m) return null;
+    // Skip pseudo tokens containing ':' (dynamic) or blank
+    const r = m[1].split(":")[0].replace(/\/+$/, "");
+    return r.length > 1 ? r : null;
+};
+
+function ScreenshotStrip({ route }) {
+    const [open, setOpen] = useState(null); // persona key when enlarged
+    const [failed, setFailed] = useState({});
+    if (!route) return null;
+    const slug = routeToSlug(route);
+    if (!slug) return null;
+
+    return (
+        <div className="mt-4 border-t border-slate-200 pt-4">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                Screenshots as viewed by
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {PERSONAS.map((p) => {
+                    const src = `/ux-audit/${p.key}/${slug}.png`;
+                    if (failed[p.key]) {
+                        return (
+                            <div key={p.key} className="border border-dashed border-slate-300 rounded-md p-3 text-xs text-slate-400 bg-slate-50">
+                                <div className="font-semibold text-slate-500 mb-1">{p.label}</div>
+                                No screenshot for this route
+                            </div>
+                        );
+                    }
+                    return (
+                        <button
+                            key={p.key}
+                            type="button"
+                            onClick={() => setOpen(p.key)}
+                            className="text-left border border-slate-200 rounded-md overflow-hidden hover:border-slate-400 transition-colors bg-slate-50 group"
+                            data-testid={`audit-shot-${slug}-${p.key}`}
+                        >
+                            <div className="flex items-center justify-between px-2 py-1 bg-slate-100 border-b border-slate-200">
+                                <span className="text-xs font-semibold text-slate-700">{p.label}</span>
+                                <span className="text-[10px] font-mono text-slate-400 group-hover:text-slate-600">click to zoom</span>
+                            </div>
+                            <div className="h-40 overflow-hidden bg-white">
+                                <img
+                                    src={src}
+                                    alt={`${p.label} view of ${route}`}
+                                    className="w-full object-cover object-top"
+                                    loading="lazy"
+                                    onError={() => setFailed((f) => ({ ...f, [p.key]: true }))}
+                                />
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+            {open && (
+                <div
+                    className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 cursor-zoom-out"
+                    onClick={() => setOpen(null)}
+                    data-testid={`audit-shot-modal-${slug}`}
+                >
+                    <div className="max-w-6xl max-h-full overflow-auto bg-white rounded-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="sticky top-0 bg-slate-900 text-white px-4 py-2 flex justify-between items-center">
+                            <span className="text-sm font-semibold">
+                                {PERSONAS.find((p) => p.key === open)?.label} · <span className="font-mono">{route}</span>
+                            </span>
+                            <button onClick={() => setOpen(null)} className="text-white/80 hover:text-white text-lg" data-testid={`audit-shot-close-${slug}`}>✕</button>
+                        </div>
+                        <img src={`/ux-audit/${open}/${slug}.png`} alt={`${open} full view`} className="w-full" />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function DecisionRow({ itemKey, itemBody, resolvedRoute, savedDecision, onSave }) {
     const [decision, setDecision] = useState(savedDecision?.decision || "");
     const [note, setNote] = useState(savedDecision?.note || "");
     const [saving, setSaving] = useState(false);
@@ -37,6 +134,7 @@ function DecisionRow({ itemKey, itemBody, savedDecision, onSave }) {
     return (
         <div className="border-2 border-slate-200 rounded-lg p-5 bg-white hover:border-slate-300 transition-colors" data-testid={`audit-row-${itemKey}`} style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
             <div className="mb-3">{itemBody}</div>
+            <ScreenshotStrip route={resolvedRoute} />
             <div className="flex flex-wrap items-start gap-2 mt-4">
                 {DECISIONS.map((d) => (
                     <button key={d.key} onClick={() => setDecision(d.key)}
@@ -60,6 +158,22 @@ function DecisionRow({ itemKey, itemBody, savedDecision, onSave }) {
             </div>
         </div>
     );
+}
+
+function resolveRouteFromItem(item) {
+    if (typeof item === "string") return extractRoute(item);
+    if (!item || typeof item !== "object") return null;
+    // Prefer explicit route/page/url fields
+    const explicit = item.route || item.page || item.url;
+    if (explicit) return extractRoute(explicit) || (explicit.startsWith("/") ? explicit.split(" ")[0].split("+")[0].trim() : null);
+    // Otherwise pull from any string leaf
+    for (const v of Object.values(item)) {
+        if (typeof v === "string") {
+            const r = extractRoute(v);
+            if (r) return r;
+        }
+    }
+    return null;
 }
 
 function itemBodyGeneric(item) {
@@ -104,10 +218,10 @@ export default function UxAuditReview() {
             { title: "🚫 Dead Buttons / Dead-Ends",             items: gf.buttons_that_do_nothing_or_dead_ends || [], prefix: "dead" },
             { title: "🎨 General Design Issues",                items: gf.design_issues_general || [],           prefix: "des" },
             { title: "✅ Notable Positives (don't touch)",       items: gf.notable_positives || [],              prefix: "pos" },
-            { title: "🔍 Deep-Dive · Tournaments",              items: focus.tournaments ? [focus.tournaments] : [], prefix: "focus-t" },
-            { title: "🔍 Deep-Dive · Players",                  items: focus.players ? [focus.players] : [],      prefix: "focus-p" },
+            { title: "🔍 Deep-Dive · Tournaments",              items: focus.tournaments_list ? [focus.tournaments_list, focus.tournament_detail].filter(Boolean) : [], prefix: "focus-t" },
+            { title: "🔍 Deep-Dive · Players",                  items: [focus.player_register_list, focus.player_detail].filter(Boolean),      prefix: "focus-p" },
             { title: "🔍 Deep-Dive · Grant Claims",             items: focus.grant_claims ? [focus.grant_claims] : [], prefix: "focus-g" },
-            { title: "🔍 Deep-Dive · Members / Org",             items: focus.members || focus.members_org ? [focus.members || focus.members_org] : [], prefix: "focus-m" },
+            { title: "🔍 Deep-Dive · Members / Org",             items: [focus.membership_register, focus.organisational_structure].filter(Boolean), prefix: "focus-m" },
             { title: "🔍 Deep-Dive · Discussions",              items: focus.discussions ? [focus.discussions] : [], prefix: "focus-d" },
             { title: "📋 Broad Sweep Classification",           items: broad, prefix: "sweep" },
         ].filter((s) => s.items.length);
@@ -134,6 +248,7 @@ export default function UxAuditReview() {
                             {savedCount} decision{savedCount === 1 ? "" : "s"} saved
                         </span>
                         <span className="text-sm text-slate-500">{sections.reduce((a, s) => a + s.items.length, 0)} items · {sections.length} sections</span>
+                        <span className="text-sm text-slate-500">Screenshots: President + Secretary + Treasurer · full-page</span>
                     </div>
                 </header>
 
@@ -152,8 +267,10 @@ export default function UxAuditReview() {
                         <div className="space-y-4">
                             {sec.items.map((it, i) => {
                                 const itemKey = `${sec.prefix}-${i}`;
+                                const resolvedRoute = resolveRouteFromItem(it);
                                 return (
                                     <DecisionRow key={itemKey} itemKey={itemKey} itemBody={itemBodyGeneric(it)}
+                                                 resolvedRoute={resolvedRoute}
                                                  savedDecision={decisions[itemKey]}
                                                  onSave={(k, d) => setDecisions((prev) => ({ ...prev, [k]: d }))} />
                                 );

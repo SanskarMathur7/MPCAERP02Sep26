@@ -5,6 +5,8 @@
 > Started: Jan 2026 · Last update: Feb 2026 — MPCA-254 Showcase redraft (Phase 1 tabbed doc with HLD/LLD/PRD)
 
 ## Recent Changelog
+- **Feb 2026 — UX Audit Screenshots in `/audit-review`**: Captured 153 full-page authenticated screenshots (President / Secretary / Treasurer × 51 routes) via a Playwright script (`scripts/capture_ux_screenshots.py`). Persisted to `frontend/public/ux-audit/<persona>/<slug>.png` so CRA dev server + prod build both serve them at `/ux-audit/...`. Rewrote `UxAuditReview.jsx` to render a per-item `ScreenshotStrip` — 3 thumbnail cards (President/Secretary/Treasurer) with click-to-zoom modal, `onError` fallback for routes without captures, lazy-loading. `resolveRouteFromItem()` extracts a route from string items (e.g. `"/rate-cards + /schemes"`) so orphan/dead-button sections also get relevant thumbnails. No backend change needed — plain public asset path.
+
 - **Feb 2026 — Reimbursement Claim Attached View + Discussion Notifications**: Two follow-ups to the Camp Reimbursement flow.
 
   **Feature 1 · Attached Camp View (`components/AttachedCampView.jsx`)**: MPCA reviewers on the Grant Claims Details tab now see a rich "FROM CAMP" panel at the top whenever `claim.attached_tournament_id` is populated. Panel contents: source-tournament badge with type + name + start/end dates + host; deep-link "Open Camp →" button; 4-metric strip (Sanctioned Ceiling · Claimed · Variance under/over · Invoices bundled + head count); bundled invoice table with invoice_ref / vendor / head / amount / date / file link + total; head-wise breakdown chips. If the linked TournamentBudget is `Reimbursed`, shows a green "Reimbursed · UTR X" pill. Renders `null` when the claim has no camp linkage — zero impact on legacy scheme claims.

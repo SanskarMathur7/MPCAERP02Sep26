@@ -60,36 +60,61 @@ const STATUS_META = {
     Rejected:           { label: "Rejected",          tone: "suspended" },
 };
 
-const IW = {
-    font: "'Nunito', system-ui, sans-serif",
-    bgPage:     "#faf6ed", // cream page
-    bgCard:     "#fbf9f0", // card surface
-    bgHeader:   "#f5efdb", // header/footer tint
-    border:     "#d4b95c", // gold rule
-    borderSoft: "rgba(212, 185, 92, 0.4)",
-    eyebrow:    "#7a5c1a", // bronze/olive
-    text:       "#264d3b", // dark olive-green (primary)
-    textSoft:   "#4a3a1a",
-    accent:     "#7a1f2c", // oxblood
-    accentSoft: "#a04552",
+// ═══════════════════════════════════════════════════════════════════════
+// DELHIGENCE-INSPIRED DESIGN TOKENS
+// Editorial-premium palette · Instrument Sans + Instrument Serif italic
+// accent · Mono eyebrows · Embossed paper cards with soft floating shadow.
+// ═══════════════════════════════════════════════════════════════════════
+const DL = {
+    fontDisplay: "'Instrument Sans', system-ui, sans-serif",
+    fontSerif:   "'Instrument Serif', 'Cormorant Garamond', serif",
+    fontMono:    "'IBM Plex Mono', ui-monospace, monospace",
+    fontBody:    "'Instrument Sans', system-ui, sans-serif",
+
+    ivory:      "#F5EFE6", // page bg (warm ivory)
+    paper:      "#FBF8F1", // card bg (lighter cream)
+    paperEdge:  "#EDE5D3", // subtle bottom-tint for embossed gradient
+    ink:        "#0E1F1B", // near-black primary text
+    ink2:       "#3A4A44", // secondary text
+    ink3:       "#6B7770", // tertiary / eyebrows
+    muted:      "#8E958F",
+    rule:       "rgba(14, 31, 27, 0.10)",
+    ruleStrong: "rgba(14, 31, 27, 0.22)",
+    emerald:    "#0D3B2E", // brand accent (dark forest green)
+    emeraldSoft:"rgba(13, 59, 46, 0.08)",
+    gold:       "#D4A757", // gold accent for eyebrow numerals
+    danger:     "#9B2B2B",
 };
 
+// Embossed card style — subtle top highlight + bottom sub-shadow + soft floating shadow
+const embossedCard = (extra = {}) => ({
+    background: `linear-gradient(180deg, ${DL.paper} 0%, ${DL.paperEdge} 100%)`,
+    borderRadius: "6px",
+    border: `1px solid ${DL.ruleStrong}`,
+    boxShadow: [
+        "inset 0 1px 0 rgba(255,255,255,0.85)",       // top highlight
+        "inset 0 -1px 0 rgba(14,31,27,0.06)",         // bottom sub-shadow
+        "0 20px 40px -22px rgba(14,31,27,0.28)",      // soft floating shadow
+        "0 4px 10px -4px rgba(14,31,27,0.08)",        // close ambient
+    ].join(", "),
+    ...extra,
+});
+
 const Pill = ({ tone, label, testId }) => {
-    // Institutional Warm — hex tokens, no MPCA global classes.
     const styleMap = {
-        active:    { bg: IW.text,   fg: "#fff" },
-        pending:   { bg: IW.bgHeader, fg: IW.eyebrow, border: `1px solid ${IW.border}` },
-        suspended: { bg: IW.accent, fg: "#fff" },
-        lapsed:    { bg: "#e8dcc0", fg: IW.textSoft },
-        saffron:   { bg: IW.accent, fg: "#fff" },
-        maroon:    { bg: "#5c1420", fg: "#fff" },
+        active:    { bg: DL.emerald,     fg: DL.paper, ring: "none" },
+        pending:   { bg: "transparent",   fg: DL.ink,   ring: `1px solid ${DL.ruleStrong}` },
+        suspended: { bg: DL.danger,       fg: DL.paper, ring: "none" },
+        lapsed:    { bg: "rgba(14,31,27,0.06)", fg: DL.ink2, ring: "none" },
+        saffron:   { bg: DL.gold,         fg: DL.ink,   ring: "none" },
+        maroon:    { bg: "#5c1420",       fg: DL.paper, ring: "none" },
     };
     const s = styleMap[tone] || styleMap.lapsed;
     return (
         <span
             data-testid={testId}
-            style={{ backgroundColor: s.bg, color: s.fg, border: s.border || "none" }}
-            className="inline-flex items-center px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap"
+            style={{ backgroundColor: s.bg, color: s.fg, border: s.ring === "none" ? "none" : s.ring, fontFamily: DL.fontMono, letterSpacing: "0.14em" }}
+            className="inline-flex items-center px-2.5 py-[3px] text-[10px] font-medium uppercase whitespace-nowrap rounded-full"
         >
             {label}
         </span>
@@ -99,14 +124,28 @@ const Pill = ({ tone, label, testId }) => {
 const StatTile = ({ icon: Icon, label, value, sub }) => {
     return (
         <div
-            className="p-6 border"
-            style={{ backgroundColor: IW.bgCard, borderColor: IW.borderSoft }}
+            className="p-6 flex flex-col justify-between h-full"
+            style={embossedCard()}
             data-testid={"trn-stat-" + label.toLowerCase().replace(/\s+/g, "-")}
         >
-            <Icon style={{ color: IW.eyebrow }} className="mb-3" size={20} strokeWidth={1.5} />
-            <div className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: IW.eyebrow }}>{label}</div>
-            <div className="mt-2 text-3xl font-bold leading-none" style={{ color: IW.text }}>{value}</div>
-            {sub && <div className="text-xs mt-2" style={{ color: IW.textSoft }}>{sub}</div>}
+            <div className="flex items-start justify-between">
+                <div
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg"
+                    style={{ backgroundColor: DL.emeraldSoft, boxShadow: `inset 0 0 0 1px rgba(13,59,46,0.22)` }}
+                >
+                    <Icon style={{ color: DL.emerald }} size={16} strokeWidth={1.75} />
+                </div>
+                <div className="text-[10px] uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
+                    / stat
+                </div>
+            </div>
+            <div className="mt-6">
+                <div className="text-[11px] uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.ink3 }}>{label}</div>
+                <div className="mt-2 text-4xl leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 500 }}>
+                    {value}
+                </div>
+                {sub && <div className="text-[13px] mt-3 leading-snug" style={{ color: DL.ink3 }}>{sub}</div>}
+            </div>
         </div>
     );
 };
@@ -199,43 +238,70 @@ const Tournaments = () => {
         return r;
     }, [list, filter, persona]);
 
-    if (loading) return <div className="p-16" data-testid="trn-loading" style={{ backgroundColor: IW.bgPage, fontFamily: IW.font }}><CricketLoader size="lg" label="Loading tournament catalogue…" /></div>;
+    if (loading) return <div className="p-16" data-testid="trn-loading" style={{ backgroundColor: DL.ivory, fontFamily: DL.fontBody }}><CricketLoader size="lg" label="Loading tournament catalogue…" /></div>;
 
     return (
         <div
             className="page-enter min-h-screen"
             data-testid="tournaments-page"
-            style={{ backgroundColor: IW.bgPage, fontFamily: IW.font, color: IW.text }}
+            style={{ backgroundColor: DL.ivory, fontFamily: DL.fontBody, color: DL.ink }}
         >
-        <div className="px-8 md:px-12 py-10 max-w-7xl mx-auto">
-            <div className="flex flex-wrap items-end justify-between gap-6 mb-8">
-                <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: IW.eyebrow }}>Article VII · Tournament Operations</div>
-                    <h1 className="text-4xl md:text-5xl font-bold mt-3 leading-tight" style={{ color: IW.text }}>
-                        Tournaments
+        <div className="px-8 md:px-12 py-12 max-w-[1280px] mx-auto">
+            {/* Eyebrow row · delhigence pattern */}
+            <div className="mb-8 flex items-baseline gap-6">
+                <span className="text-[11px] uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.ink3 }}>
+                    / Tournaments · Article VII
+                </span>
+                <div className="flex-1 h-px" style={{ backgroundColor: DL.rule }} />
+                <span className="text-[10px] uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
+                    Season 2026-27
+                </span>
+            </div>
+
+            <div className="flex flex-wrap items-end justify-between gap-6 mb-12">
+                <div className="max-w-3xl">
+                    <h1
+                        className="text-[44px] md:text-[64px] leading-[1.02] tracking-[-0.02em]"
+                        style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 500 }}
+                    >
+                        Every fixture,
+                        <br />
+                        <span className="italic" style={{ fontFamily: DL.fontSerif, color: DL.emerald }}>every claim,</span>
+                        {" "}one workspace.
                     </h1>
-                    <p className="mt-3 max-w-2xl text-base leading-relaxed" style={{ color: IW.textSoft }}>
-                        The single hub for every tournament action — create, host acceptance, squad selection, budget &amp; finance, reimbursement claims, match officials and linked camps. Pick a tournament below to open its full workspace, or use <Link to="/tournament-calendar" className="underline underline-offset-4" style={{ color: IW.accent, textDecorationColor: IW.border }}>Tournament Calendar</Link> for a read-only schedule view.
+                    <p className="mt-6 text-[15.5px] leading-[1.7]" style={{ color: DL.ink2, maxWidth: "62ch" }}>
+                        Create tournaments, accept hosting, draft squads, manage budget &amp; reimbursements, appoint match officials, and attach linked camps — all from a single, wiring-aware surface. Pick a row below to open its workspace, or use{" "}
+                        <Link
+                            to="/tournament-calendar"
+                            className="italic underline underline-offset-4 decoration-[1.5px]"
+                            style={{ fontFamily: DL.fontSerif, color: DL.emerald, textDecorationColor: `${DL.emerald}55` }}
+                        >
+                            Tournament Calendar
+                        </Link>{" "}
+                        for a read-only schedule view.
                     </p>
                 </div>
                 {isOfficeBearer && getCreatableTournamentTypes(persona).length > 0 && (
                     <button
                         onClick={() => setCreateOpen(true)}
                         data-testid="new-tournament-btn"
-                        className="h-11 px-5 text-sm font-bold uppercase tracking-widest flex items-center gap-2 transition-colors"
-                        style={{ backgroundColor: IW.text, color: "#fff" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1a3628")}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = IW.text)}
+                        className="group inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-medium transition-all"
+                        style={{
+                            backgroundColor: DL.emerald,
+                            color: DL.paper,
+                            boxShadow: "0 14px 30px -14px rgba(13, 59, 46, 0.55), inset 0 1px 0 rgba(255,255,255,0.15)",
+                            fontFamily: DL.fontBody,
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = DL.ink; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = DL.emerald; }}
                     >
-                        <Plus size={16} strokeWidth={2} /> Add Tournament
+                        <Plus size={16} strokeWidth={2} className="transition-transform group-hover:rotate-90" /> Add Tournament
                     </button>
                 )}
             </div>
 
-            <div className="border-t-2 mb-8" style={{ borderColor: IW.border }} />
-
             {stats && (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-10" data-testid="trn-stats">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12" data-testid="trn-stats">
                     <StatTile icon={Trophy}      label={persona?.body_type === "State" ? "Total Tournaments" : "In My Scope"}   value={persona?.body_type === "State" ? stats.total_tournaments : list.length}  sub={persona?.body_type === "State" ? `Cycle ${(typeof window !== "undefined" && window.__mpca_season) || "2026-27"} · state-wide` : `${persona?.body_name || persona?.body_code}`} />
                     <StatTile icon={Calendar}    label="Upcoming"            value={persona?.body_type === "State" ? stats.upcoming : list.filter((t) => t.status === "Upcoming").length}            sub="Awaiting squad selection" />
                     <StatTile icon={Users}       label="In Selection"        value={persona?.body_type === "State" ? stats.in_selection : list.filter((t) => t.status === "Squad_Selection").length}        sub="Squads being formed" />
@@ -244,19 +310,19 @@ const Tournaments = () => {
                 </div>
             )}
 
-            {/* Filter chips */}
+            {/* Filter chips · pill-style, mono labels */}
             <div className="flex flex-wrap items-center gap-2 mb-6">
-                <Filter size={14} style={{ color: IW.eyebrow }} />
+                <Filter size={14} style={{ color: DL.muted }} />
                 {[
-                    ["live",                 "🔴 Live"],
+                    ["live",                 "Live"],
                     ["upcoming",             "Upcoming"],
                     ["all",                  "All"],
-                    ["pending_my_accept",    "⏳ Awaiting My Acceptance"],
-                    ["MPCA_InterDivisional", "MPCA Inter-Div"],
+                    ["pending_my_accept",    "Awaiting Me"],
+                    ["MPCA_InterDivisional", "Inter-Div"],
                     ["MPCA_Championship",    "Championships"],
                     ["BCCI",                 "BCCI"],
                     ["womens",               "Women's"],
-                    ["three_team",           "3-Team Format"],
+                    ["three_team",           "3-Team"],
                     ["Draft",                "Draft"],
                     ["Awaiting_Approval",    "Awaiting Approval"],
                     ["Squad_Selection",      "In Selection"],
@@ -269,11 +335,13 @@ const Tournaments = () => {
                             key={k}
                             onClick={() => setFilter(k)}
                             data-testid={"trn-filter-" + k}
-                            className="px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-bold border-2 transition-colors"
+                            className="px-3.5 py-1.5 text-[10.5px] uppercase tracking-[0.16em] transition-all rounded-full"
                             style={{
-                                backgroundColor: active ? IW.text : "transparent",
-                                color: active ? "#fff" : IW.text,
-                                borderColor: active ? IW.text : IW.border,
+                                backgroundColor: active ? DL.emerald : "transparent",
+                                color: active ? DL.paper : DL.ink,
+                                border: active ? `1px solid ${DL.emerald}` : `1px solid ${DL.ruleStrong}`,
+                                fontFamily: DL.fontMono,
+                                boxShadow: active ? "0 8px 20px -12px rgba(13,59,46,0.5)" : "none",
                             }}
                         >
                             {label}
@@ -284,16 +352,16 @@ const Tournaments = () => {
 
             {isMpcaState && (hiddenCount > 0 || includeCampScoped) && !["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
                 <div className="mb-4 flex items-center gap-3 text-[11px]" data-testid="mpca-visibility-toggle">
-                    <span className="uppercase tracking-widest font-semibold" style={{ color: IW.eyebrow }}>
+                    <span className="uppercase tracking-[0.2em]" style={{ fontFamily: DL.fontMono, color: DL.ink3 }}>
                         {includeCampScoped
-                            ? "Showing all tournaments including Camps · School · Club (visibility · on-submit)"
-                            : `${hiddenCount} tournament${hiddenCount === 1 ? "" : "s"} hidden until their Finance claim is submitted`}
+                            ? "Showing all tournaments including Camps · School · Club"
+                            : `${hiddenCount} tournament${hiddenCount === 1 ? "" : "s"} hidden — visibility · on-submit`}
                     </span>
                     <button
                         onClick={() => setIncludeCampScoped(v => !v)}
                         data-testid="mpca-visibility-toggle-btn"
-                        className="px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border-2 transition-colors"
-                        style={{ color: IW.eyebrow, borderColor: IW.border }}
+                        className="px-3 py-1 text-[10px] uppercase tracking-[0.18em] rounded-full transition-colors"
+                        style={{ color: DL.emerald, border: `1px solid ${DL.ruleStrong}`, fontFamily: DL.fontMono }}
                     >
                         {includeCampScoped ? "Focus on core" : "Show all"}
                     </button>
@@ -301,24 +369,24 @@ const Tournaments = () => {
             )}
 
             {isMpcaState && ["BCCI", "MPCA_InterDivisional", "MPCA_Championship"].includes(filter) && (
-                <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-widest font-semibold" data-testid="mpca-realtime-banner" style={{ color: IW.text }}>
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: IW.text }} />
-                    Real-time visibility · MPCA sees every {filter === "BCCI" ? "BCCI" : (filter === "MPCA_Championship" ? "Championship" : "MPCA Inter-Divisional")} tournament action as it happens (per wiring)
+                <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-[0.2em]" data-testid="mpca-realtime-banner" style={{ fontFamily: DL.fontMono, color: DL.emerald }}>
+                    <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: DL.emerald }} />
+                    Real-time visibility · every {filter === "BCCI" ? "BCCI" : (filter === "MPCA_Championship" ? "Championship" : "Inter-Divisional")} action visible as it happens
                 </div>
             )}
 
-            {(
-            <div className="border-2 overflow-hidden" style={{ backgroundColor: IW.bgCard, borderColor: IW.border }} data-testid="trn-list">
+            {/* Tournament list · each row is its own embossed card for prominence */}
+            <div data-testid="trn-list">
                 {filtered.length === 0 ? (
-                    <div className="p-12 text-center italic" style={{ color: IW.textSoft }} data-testid="trn-empty">
+                    <div className="p-16 text-center italic" style={{ ...embossedCard(), color: DL.ink3, fontFamily: DL.fontSerif, fontSize: "18px" }} data-testid="trn-empty">
                         {filter === "live"
                             ? "No live tournaments right now. Switch to Upcoming or All to see the full calendar."
                             : "No tournaments match this filter."}
                     </div>
                 ) : (
-                    filtered.map((t) => {
+                    <div className="space-y-3">
+                    {filtered.map((t) => {
                         const fm = FORMAT_META[t.format] || { label: t.format, tone: "lapsed" };
-                        const sc = SCOPE_META[t.scope] || { label: t.scope, tone: "lapsed" };
                         const tm = TYPE_META[t.tournament_type] || { label: t.tournament_type, tone: "lapsed" };
                         const st = STATUS_META[t.status] || { label: t.status, tone: "lapsed" };
                         const acc = t.acceptance || {};
@@ -330,47 +398,56 @@ const Tournaments = () => {
                             <div
                                 key={t.id}
                                 data-testid={"trn-row-" + t.tournament_no}
-                                className="w-full flex flex-wrap items-center gap-4 px-6 py-4 cursor-pointer border-b transition-colors"
-                                style={{ borderColor: IW.borderSoft }}
-                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = IW.bgHeader)}
-                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                                className="w-full flex flex-wrap items-center gap-4 px-6 py-5 cursor-pointer transition-all"
+                                style={embossedCard()}
+                                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(14,31,27,0.06), 0 28px 55px -22px rgba(14,31,27,0.35), 0 6px 14px -4px rgba(14,31,27,0.1)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = embossedCard().boxShadow; }}
                                 onClick={() => navigate(`/tournaments/${t.id}`)}
                             >
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: IW.text, color: "#f6d97a" }}>
-                                    <Trophy size={16} strokeWidth={1.5} />
+                                <div
+                                    className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0"
+                                    style={{ backgroundColor: DL.emeraldSoft, boxShadow: `inset 0 0 0 1px rgba(13,59,46,0.22)`, color: DL.emerald }}
+                                >
+                                    <Trophy size={18} strokeWidth={1.5} />
                                 </div>
-                                <div className="font-mono text-[10px] tracking-wider w-28" style={{ color: IW.eyebrow }}>{t.tournament_no}</div>
-                                <div className="flex-1 min-w-[260px]">
-                                    <div className="text-lg font-bold leading-tight" style={{ color: IW.text }}>
-                                        {t.name}{t.short_name && <span className="text-[10px] tracking-[0.2em] uppercase ml-2 font-normal" style={{ color: IW.eyebrow }}>{t.short_name}</span>}
+                                <div className="text-[10.5px] tracking-[0.2em] w-28" style={{ fontFamily: DL.fontMono, color: DL.muted }}>{t.tournament_no}</div>
+                                <div className="flex-1 min-w-[280px]">
+                                    <div className="text-[19px] leading-tight tracking-[-0.01em]" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 500 }}>
+                                        {t.name}
+                                        {t.short_name && (
+                                            <span className="italic ml-2 text-[15px]" style={{ fontFamily: DL.fontSerif, color: DL.emerald }}>
+                                                — {t.short_name}
+                                            </span>
+                                        )}
                                     </div>
-                                    <div className="text-[11px] mt-1 flex items-center gap-2 flex-wrap" style={{ color: IW.textSoft }}>
+                                    <div className="text-[12px] mt-1.5 flex items-center gap-2 flex-wrap" style={{ color: DL.ink3 }}>
                                         <Calendar size={11} /> {fmtDate(t.start_date)} → {fmtDate(t.end_date)}
                                         {(t.venue_name_snapshot || t.venue) && (
-                                            <><span>·</span><MapPin size={11} /> {t.venue_name_snapshot || t.venue}{t.ground_name_snapshot ? <span style={{ color: IW.eyebrow }}> · {t.ground_name_snapshot}</span> : null}</>
+                                            <><span style={{ color: DL.muted }}>·</span><MapPin size={11} /> {t.venue_name_snapshot || t.venue}{t.ground_name_snapshot ? <span style={{ color: DL.muted }}> · {t.ground_name_snapshot}</span> : null}</>
                                         )}
-                                        {t.host_body_id && <span className="font-mono" style={{ color: IW.eyebrow }}>· Host {t.host_body_id}</span>}
-                                        {t.trophy_name && <span style={{ color: IW.accent }}>· 🏆 {t.trophy_name}</span>}
+                                        {t.host_body_id && <span style={{ fontFamily: DL.fontMono, color: DL.muted }}>· Host {t.host_body_id}</span>}
+                                        {t.trophy_name && <span style={{ color: DL.gold, fontFamily: DL.fontSerif, fontStyle: "italic" }}>· 🏆 {t.trophy_name}</span>}
                                         <WiringComplianceChip tournament={t} testId={"trn-wiring-" + t.tournament_no} className="ml-1" />
                                     </div>
                                     {acc.status && acc.status !== "Not_Required" && (
-                                        <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[10px] font-mono uppercase tracking-wider" data-testid={"trn-acc-" + t.tournament_no}>
+                                        <div className="mt-2 flex items-center gap-2 flex-wrap text-[10px] uppercase tracking-[0.18em]" data-testid={"trn-acc-" + t.tournament_no} style={{ fontFamily: DL.fontMono }}>
                                             <span style={{
-                                                padding: "2px 8px",
-                                                backgroundColor: acc.status === "Accepted" ? IW.text : acc.status === "Rejected" ? IW.accent : IW.eyebrow,
-                                                color: "#fff",
+                                                padding: "3px 10px",
+                                                borderRadius: "9999px",
+                                                backgroundColor: acc.status === "Accepted" ? DL.emerald : acc.status === "Rejected" ? DL.danger : DL.gold,
+                                                color: acc.status === "Pending" ? DL.ink : DL.paper,
                                             }}>
                                                 {acc.status === "Pending" ? "Awaiting" : acc.status}
                                             </span>
                                             {required.map((bc) => {
                                                 const acted = (acc.entries || []).filter((e) => e.body_code === bc)[0];
                                                 const st2 = !acted
-                                                    ? { color: IW.textSoft, borderColor: IW.borderSoft }
+                                                    ? { color: DL.ink3, borderColor: DL.rule }
                                                     : acted.action === "accept"
-                                                        ? { color: IW.text, borderColor: IW.text }
-                                                        : { color: IW.accent, borderColor: IW.accent };
+                                                        ? { color: DL.emerald, borderColor: DL.emerald }
+                                                        : { color: DL.danger, borderColor: DL.danger };
                                                 return (
-                                                    <span key={bc} className="px-1.5 py-0.5 border" style={st2}>
+                                                    <span key={bc} className="px-2 py-0.5 rounded-full border" style={st2}>
                                                         {acted?.action === "accept" ? "✓ " : acted?.action === "reject" ? "✗ " : "· "}{bc}
                                                     </span>
                                                 );
@@ -381,7 +458,7 @@ const Tournaments = () => {
                                         <TournamentProgressionRibbonMini tournament={t} />
                                     </div>
                                 </div>
-                                <span className="font-mono text-[11px] uppercase tracking-wider w-20 text-right" style={{ color: IW.textSoft }}>{ageLabel(t)}</span>
+                                <span className="text-[11px] uppercase tracking-[0.2em] w-20 text-right" style={{ fontFamily: DL.fontMono, color: DL.muted }}>{ageLabel(t)}</span>
                                 <Pill tone={tm.tone} label={tm.label} testId={"trn-type-" + t.tournament_type} />
                                 <Pill tone={fm.tone} label={fm.label} testId={"trn-fmt-" + t.format} />
                                 {t.is_three_team_format && <Pill tone="pending" label="3-Team" testId={"trn-3team-" + t.tournament_no} />}
@@ -393,8 +470,8 @@ const Tournaments = () => {
                                         <button
                                             onClick={() => handleAcceptance(t.id, "accept")}
                                             disabled={accepting}
-                                            className="px-3 py-1 text-[10px] uppercase tracking-widest font-bold transition disabled:opacity-50"
-                                            style={{ backgroundColor: IW.text, color: "#fff" }}
+                                            className="px-3.5 py-1.5 text-[10px] uppercase tracking-[0.18em] rounded-full transition disabled:opacity-50"
+                                            style={{ backgroundColor: DL.emerald, color: DL.paper, fontFamily: DL.fontMono, boxShadow: "0 10px 24px -14px rgba(13,59,46,0.6)" }}
                                             data-testid={"trn-accept-" + t.tournament_no}
                                         >
                                             ✓ Accept
@@ -402,21 +479,21 @@ const Tournaments = () => {
                                         <button
                                             onClick={() => handleAcceptance(t.id, "reject")}
                                             disabled={accepting}
-                                            className="px-3 py-1 text-[10px] uppercase tracking-widest font-bold transition disabled:opacity-50"
-                                            style={{ backgroundColor: IW.accent, color: "#fff" }}
+                                            className="px-3.5 py-1.5 text-[10px] uppercase tracking-[0.18em] rounded-full transition disabled:opacity-50"
+                                            style={{ backgroundColor: DL.danger, color: DL.paper, fontFamily: DL.fontMono, boxShadow: "0 10px 24px -14px rgba(155,43,43,0.6)" }}
                                             data-testid={"trn-reject-" + t.tournament_no}
                                         >
                                             ✗ Reject
                                         </button>
                                     </div>
                                 )}
-                                <ChevronRight size={16} style={{ color: IW.eyebrow }} />
+                                <ChevronRight size={18} style={{ color: DL.ink3 }} />
                             </div>
                         );
-                    })
+                    })}
+                    </div>
                 )}
             </div>
-            )}
 
             <TournamentCreateModal
                 open={createOpen}

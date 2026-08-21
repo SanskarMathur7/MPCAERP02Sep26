@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -91,6 +91,32 @@ const TournamentDetail = () => {
     const [loading, setLoading] = useState(true);
     const [bodies, setBodies] = useState([]);
     const [openBox, setOpenBox] = useState(null); // "calendar"|"receipts"|"summary"|"closure"
+    const panelRef = useRef(null);
+    const heroRef = useRef(null);
+    const [heroPast, setHeroPast] = useState(false);
+    // Feb 2026 · Auto-scroll to expanded workspace panel so the user sees it.
+    // Uses scrollIntoView which walks up the DOM to find the nearest scroll root.
+    useEffect(() => {
+        if (!openBox) return;
+        const tick = setTimeout(() => {
+            if (panelRef.current) {
+                panelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+        }, 80);
+        return () => clearTimeout(tick);
+    }, [openBox]);
+    // Feb 2026 · Sticky sub-nav appears once the hero scrolls out of view.
+    // Uses IntersectionObserver so it works regardless of which ancestor is the scroll root.
+    useEffect(() => {
+        if (!heroRef.current) return;
+        const el = heroRef.current;
+        const obs = new IntersectionObserver(
+            ([entry]) => setHeroPast(!entry.isIntersecting),
+            { root: null, threshold: 0, rootMargin: "-60px 0px 0px 0px" }
+        );
+        obs.observe(el);
+        return () => obs.disconnect();
+    }, [t]);
     const [progressKey, setProgressKey] = useState(0);
     const [myParticipation, setMyParticipation] = useState(null);   // M39x
     const [wiringFlags, setWiringFlags] = useState({});             // MPCA-235 · Ship 3 · flag per box
@@ -291,6 +317,40 @@ const TournamentDetail = () => {
                 [data-testid="trn-detail-page"] .text-mpca-gray-dark, [data-testid="trn-detail-page"] .text-mpca-charcoal { color: ${DL.ink2} !important; }
                 [data-testid="trn-detail-page"] .text-mpca-brass { color: ${DL.gold} !important; }
             `}</style>
+            {/* Feb 2026 · Sticky sub-nav — appears once the hero has scrolled out */}
+            {heroPast && t && (
+                <div
+                    className="fixed left-0 right-0 top-0 z-40 flex items-center gap-4 px-6 md:px-10 py-3"
+                    style={{
+                        background: `linear-gradient(180deg, ${DL.emerald} 0%, #0a2f24 100%)`,
+                        color: DL.paper,
+                        borderBottom: `2px solid ${DL.gold}`,
+                        boxShadow: "0 12px 24px -12px rgba(14,31,27,0.4)",
+                    }}
+                    data-testid="trn-sticky-nav"
+                >
+                    <button
+                        onClick={() => navigate("/tournaments")}
+                        className="text-[11px] uppercase tracking-[0.2em] font-bold"
+                        style={{ fontFamily: DL.fontMono, color: DL.gold }}
+                    >
+                        ← All Tournaments
+                    </button>
+                    <div className="h-4 w-px" style={{ backgroundColor: "rgba(184,131,40,0.35)" }} />
+                    <span className="text-[10.5px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                        {t.tournament_no}
+                    </span>
+                    <span className="text-[17px] font-bold truncate" style={{ fontFamily: DL.fontDisplay, color: DL.paper }}>{t.name}</span>
+                    <span className="ml-auto inline-flex items-center gap-1.5 px-3 py-1 text-[10.5px] uppercase tracking-[0.18em] font-bold rounded-full" style={{ fontFamily: DL.fontMono, backgroundColor: "rgba(184,131,40,0.15)", border: `1.5px solid ${DL.gold}`, color: DL.gold }}>
+                        {t.status.replace(/_/g, " ")}
+                    </span>
+                    {daysUntilInfo && (
+                        <span className="text-[11px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                            · {daysUntilInfo.label}
+                        </span>
+                    )}
+                </div>
+            )}
             <button
                 onClick={() => navigate("/tournaments")}
                 className="inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.18em] font-bold mb-5 rounded-full px-4 py-2 transition-colors"
@@ -300,6 +360,8 @@ const TournamentDetail = () => {
                 <ChevronLeft size={14} strokeWidth={2.5} /> Back to Tournaments
             </button>
 
+            {/* Band 1 · Hero */}
+            <div ref={heroRef}>
             {/* Header hero card — embossed emerald slab */}
             <div
                 className="p-8 md:p-10 mb-8 relative overflow-hidden"
@@ -339,7 +401,6 @@ const TournamentDetail = () => {
                             {daysUntilInfo.label}
                         </span>
                     )}
-                    <WiringComplianceChip tournament={t} testId="trn-detail-wiring" />
                     {parentTournament && (
                         <button
                             onClick={() => navigate(`/tournaments/${parentTournament.id}`)}
@@ -383,6 +444,7 @@ const TournamentDetail = () => {
                         {t.status !== "Cancelled" && t.status !== "Completed" && <button onClick={() => handleStatus("Cancelled")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: "transparent", color: DL.paper, border: `1.5px solid rgba(251,248,241,0.4)`, fontFamily: DL.fontMono }} data-testid="trn-cancel">Cancel</button>}
                     </div>
                 )}
+            </div>
             </div>
 
             {/* Band 2 · 4 Quick Stats — embossed strip below the hero */}
@@ -516,8 +578,8 @@ const TournamentDetail = () => {
                             <SetupBox testId="box-days-engine" icon={CalendarClock} label="Days Engine" note="Match Days · Non-Match Days · calendar" onClick={() => setOpenBox(openBox === "days-engine" ? null : "days-engine")} active={openBox === "days-engine"} flag={wiringFlags["box-days-engine"]} />
                             {/* 7 · Unified Budget */}
                             <SetupBox testId="box-unified-budget" icon={Wallet} label="Unified Budget" note="Auto ₹ from Calendar × Rate Card × Officials" onClick={() => setOpenBox(openBox === "unified-budget" ? null : "unified-budget")} active={openBox === "unified-budget"} flag={wiringFlags["box-unified-budget"]} />
-                            {/* 8 · Finance Console (banner-style consolidated card) */}
-                            <TournamentFinanceCard tournament={t} persona={persona} />
+                            {/* 8 · Finance Console — now a plain SetupBox for consistency; opens the consolidated card below */}
+                            <SetupBox testId="box-finance-console" icon={HandCoins} label="Finance Console" note="Budget · Invoices · Reimbursements · Summary" onClick={() => { setOpenBox(openBox === "finance-console" ? null : "finance-console"); }} active={openBox === "finance-console"} flag={wiringFlags["box-finance-console"]} />
                             {/* 9 · Closure Letter — end of tournament */}
                             <SetupBox
                                 testId="box-closure"
@@ -537,57 +599,83 @@ const TournamentDetail = () => {
                     )}
                 </div>
                 {openBox === "basics" && (
-                    <div className="mt-4"><TournamentBasicsPanel tournament={t} canEdit={canEditSetup && (canEdit || persona?.body_code === t.host_body_id)} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div ref={panelRef} className="mt-4"><TournamentBasicsPanel tournament={t} canEdit={canEditSetup && (canEdit || persona?.body_code === t.host_body_id)} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "participants" && (
-                    <div className="mt-4"><ParticipantsMatrix tournament={t} persona={persona} canManage={canEdit} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div ref={panelRef} className="mt-4"><ParticipantsMatrix tournament={t} persona={persona} canManage={canEdit} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "squads" && (
-                    <div className="mt-4"><TournamentSquadsPanel tournament={t} persona={persona} canManage={canEdit} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div ref={panelRef} className="mt-4"><TournamentSquadsPanel tournament={t} persona={persona} canManage={canEdit} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "input-vars" && (
-                    <div className="mt-4"><InputVariablesPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div ref={panelRef} className="mt-4"><InputVariablesPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "calendar" && (
-                    <div className="mt-4"><MatchCalendarPanel tournament={t} canEdit={canEditSetup && (canEdit || persona?.body_code === t.host_body_id)} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div ref={panelRef} className="mt-4"><MatchCalendarPanel tournament={t} canEdit={canEditSetup && (canEdit || persona?.body_code === t.host_body_id)} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "days-engine" && (
-                    <div className="mt-4"><DaysEnginePanel tournament={t} canEdit={canEdit || persona?.body_code === t.host_body_id} /></div>
+                    <div ref={panelRef} className="mt-4"><DaysEnginePanel tournament={t} canEdit={canEdit || persona?.body_code === t.host_body_id} /></div>
                 )}
                 {openBox === "unified-budget" && (
-                    <div className="mt-4"><UnifiedBudgetPanel tournament={t} canEdit={canEdit || persona?.body_code === "MPCA"} /></div>
+                    <div ref={panelRef} className="mt-4"><UnifiedBudgetPanel tournament={t} canEdit={canEdit || persona?.body_code === "MPCA"} /></div>
+                )}
+                {openBox === "finance-console" && (
+                    <div ref={panelRef} className="mt-4"><TournamentFinanceCard tournament={t} persona={persona} /></div>
                 )}
                 {openBox === "budget" && (
-                    <div className="mt-4"><TournamentBudgetsPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div ref={panelRef} className="mt-4"><TournamentBudgetsPanel tournament={t} persona={persona} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "invoices" && (
-                    <div className="mt-4"><TournamentInvoicesPanel tournament={t} persona={persona} /></div>
+                    <div ref={panelRef} className="mt-4"><TournamentInvoicesPanel tournament={t} persona={persona} /></div>
                 )}
                 {openBox === "receipts" && (
-                    <div className="mt-4"><TournamentReceiptsPanel tournament={t} canEdit={canEdit} /></div>
+                    <div ref={panelRef} className="mt-4"><TournamentReceiptsPanel tournament={t} canEdit={canEdit} /></div>
                 )}
                 {openBox === "summary" && (
-                    <div className="mt-4"><FinancialSummaryPanel tournament={t} /></div>
+                    <div ref={panelRef} className="mt-4"><FinancialSummaryPanel tournament={t} /></div>
                 )}
                 {openBox === "closure" && (
-                    <div className="mt-4"><ClosureLetterPanel tournament={t} persona={persona} canGenerate={canEdit} /></div>
+                    <div ref={panelRef} className="mt-4"><ClosureLetterPanel tournament={t} persona={persona} canGenerate={canEdit} /></div>
                 )}
                 {openBox === "my-da" && (
-                    <div className="mt-4"><MatchOfficialDAPanel tournamentId={id} onChange={() => { refreshProgress(); load(); }} /></div>
+                    <div ref={panelRef} className="mt-4"><MatchOfficialDAPanel tournamentId={id} onChange={() => { refreshProgress(); load(); }} /></div>
                 )}
                 {openBox === "officials" && (
-                    <div className="mt-4" data-testid="box-officials-panel"><MatchOfficialsPanel tournament={t} persona={persona} /></div>
+                    <div ref={panelRef} className="mt-4" data-testid="box-officials-panel"><MatchOfficialsPanel tournament={t} persona={persona} /></div>
                 )}
                 {openBox === "activity" && (
-                    <div className="mt-4"><TournamentActivityLog tournamentId={id} /></div>
-                )}
-                {openBox === "discussion" && (
-                    <div className="mt-4"><TournamentDiscussionBox tournamentId={id} /></div>
+                    <div ref={panelRef} className="mt-4"><TournamentActivityLog tournamentId={id} /></div>
                 )}
                 {openBox === "pre-camps" && (
-                    <div className="mt-4"><PreTournamentCampsPanel tournamentId={id} tournamentName={t.name} persona={persona} /></div>
+                    <div ref={panelRef} className="mt-4"><PreTournamentCampsPanel tournamentId={id} tournamentName={t.name} persona={persona} /></div>
                 )}
             </div>
+
+            {/* Feb 2026 · Discussion — slide-out drawer instead of an inline block */}
+            {openBox === "discussion" && (
+                <div
+                    className="fixed inset-y-0 right-0 z-50 w-[420px] max-w-full shadow-2xl overflow-y-auto"
+                    style={{ background: `linear-gradient(180deg, ${DL.paper} 0%, ${DL.paperEdge} 100%)`, borderLeft: `2px solid ${DL.gold}` }}
+                    data-testid="trn-discussion-drawer"
+                >
+                    <div className="sticky top-0 flex items-center justify-between px-5 py-3 border-b" style={{ backgroundColor: DL.emerald, borderColor: DL.gold, color: DL.paper }}>
+                        <span className="text-[12px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                            / Discussion · {t.tournament_no}
+                        </span>
+                        <button
+                            onClick={() => setOpenBox(null)}
+                            className="text-[13px] font-bold w-7 h-7 rounded-full inline-flex items-center justify-center transition-colors"
+                            style={{ color: DL.emerald, backgroundColor: DL.gold, fontFamily: DL.fontMono }}
+                            data-testid="trn-discussion-close"
+                        >
+                            ×
+                        </button>
+                    </div>
+                    <div className="p-5">
+                        <TournamentDiscussionBox tournamentId={id} />
+                    </div>
+                </div>
+            )}
 
             {/* MPCA-125 + MPCA-154 · The inline "Participating Teams / Squads"
                 grid and its New-Squad + Add-Player dialogs have been REMOVED.

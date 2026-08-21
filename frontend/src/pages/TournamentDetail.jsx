@@ -9,14 +9,12 @@ import {
     Trophy, Calendar, MapPin, Users, ChevronLeft, ChevronRight, ShieldCheck, AlertTriangle, BadgeCheck,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
-import TournamentSubTabs from "@/components/TournamentSubTabs";
 import TournamentProgressionRibbon from "@/components/TournamentProgressionRibbon";
 import { WiringComplianceChip } from "@/lib/wiringCompliance";
 import InputVariablesPanel from "@/components/InputVariablesPanel";
-import { DL, PageShell } from "@/lib/designSystem";
+import { DL, PageShell, embossedCard } from "@/lib/designSystem";
 import TournamentBudgetsPanel from "@/components/TournamentBudgetsPanel";
 import TournamentInvoicesPanel from "@/components/TournamentInvoicesPanel";
-import TournamentStatusStepper from "@/components/TournamentStatusStepper";
 import TournamentBasicsPanel from "@/components/TournamentBasicsPanel";
 import DaysEnginePanel from "@/components/DaysEnginePanel";
 import UnifiedBudgetPanel from "@/components/UnifiedBudgetPanel";
@@ -39,13 +37,28 @@ const SetupBox = ({ testId, icon: Icon, label, note, onClick, active, flag }) =>
     // MPCA-235 · Ship 3 · flag prop may be a raw string ("M"/"O"/"NA"/"INFO")
     // OR an object {flag, owner}. Normalise to a string for badge rendering.
     const flagChar = typeof flag === "object" && flag !== null ? flag.flag : flag;
+    const flagStyle = flagChar === "M" ? { bg: "rgba(139,31,31,0.10)", fg: "#8B1F1F", border: "1px solid rgba(139,31,31,0.35)" }
+                    : flagChar === "O" ? { bg: "rgba(184,131,40,0.14)", fg: "#B88328", border: "1px solid rgba(184,131,40,0.4)" }
+                    : flagChar === "NA" ? { bg: "transparent", fg: "#4C5750", border: "1px dashed rgba(14,31,27,0.32)" }
+                    : flagChar === "INFO" ? { bg: "rgba(184,131,40,0.10)", fg: "#B88328", border: "1px solid rgba(184,131,40,0.3)" }
+                    : null;
     return (
     <button
         onClick={onClick}
-        className={`text-left border p-3 hover:bg-mpca-cream/30 transition-all group relative ${active ? "border-mpca-oxblood bg-mpca-cream/40" : "border-mpca-brass/30"}`}
+        className="text-left p-4 transition-all group relative"
+        style={{
+            background: active
+                ? `linear-gradient(180deg, #F5EEDA 0%, #EDE1BF 100%)`
+                : `linear-gradient(180deg, ${DL.paper} 0%, ${DL.paperEdge} 100%)`,
+            border: active ? `1.5px solid ${DL.gold}` : `1px solid ${DL.ruleStrong}`,
+            borderRadius: "6px",
+            boxShadow: active
+                ? "inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(14,31,27,0.10), 0 22px 40px -22px rgba(184,131,40,0.45), 0 4px 10px -4px rgba(14,31,27,0.10)"
+                : "inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(14,31,27,0.06), 0 14px 30px -22px rgba(14,31,27,0.24), 0 4px 10px -4px rgba(14,31,27,0.08)",
+        }}
         data-testid={testId}
     >
-        {flagChar && (
+        {flagStyle && (
             <span
                 data-testid={`${testId}-flag`}
                 title={
@@ -54,24 +67,17 @@ const SetupBox = ({ testId, icon: Icon, label, note, onClick, active, flag }) =>
                     flagChar === "NA"   ? "Not required for this tournament type — you may still add data, but it won't be used elsewhere" :
                     flagChar === "INFO" ? "Informational / audit trail" : ""
                 }
-                className={
-                    "absolute top-2 right-2 text-[8px] font-mono px-1 py-px border " +
-                    (flagChar === "M"    ? "bg-mpca-oxblood/10 border-mpca-oxblood/40 text-mpca-oxblood" :
-                     flagChar === "O"    ? "bg-mpca-brass/15 border-mpca-brass/40 text-mpca-brass" :
-                     flagChar === "NA"   ? "bg-mpca-ivory border-dashed border-mpca-gray/40 text-mpca-gray" :
-                     flagChar === "INFO" ? "bg-mpca-brass/10 border-mpca-brass/30 text-mpca-brass" :
-                                       "border-mpca-gray/30 text-mpca-gray")
-                }
+                className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{ backgroundColor: flagStyle.bg, color: flagStyle.fg, border: flagStyle.border, fontFamily: DL.fontMono, letterSpacing: "0.1em" }}
             >
-                {flagChar === "NA" ? "OPTIONAL·NOT USED" : flagChar === "M" ? "REQUIRED" : flagChar === "O" ? "OPTIONAL" : "INFO"}
+                {flagChar === "NA" ? "N/A" : flagChar === "M" ? "REQ" : flagChar === "O" ? "OPT" : "INFO"}
             </span>
         )}
-        <div className="flex items-center gap-2 mb-1">
-            <Icon size={14} className="text-mpca-brass" strokeWidth={1.6} />
-            <span className="text-[10px] uppercase tracking-widest text-mpca-brass">Setup</span>
+        <div className="flex items-center justify-center h-10 w-10 rounded-lg mb-3" style={{ backgroundColor: DL.emeraldSoft, boxShadow: `inset 0 0 0 1.5px rgba(13,59,46,0.32)` }}>
+            <Icon size={18} strokeWidth={2.25} style={{ color: DL.emerald }} />
         </div>
-        <div className="font-serif text-sm text-mpca-green-dark group-hover:text-mpca-oxblood">{label}</div>
-        <div className="text-[10px] text-mpca-gray-dark mt-1 font-mono">{note}</div>
+        <div className="text-[15px] leading-tight" style={{ fontFamily: DL.fontDisplay, color: active ? DL.emerald : DL.ink, fontWeight: 800 }}>{label}</div>
+        <div className="text-[11.5px] mt-1.5 font-semibold" style={{ color: DL.ink2 }}>{note}</div>
     </button>
     );
 };
@@ -246,12 +252,34 @@ const TournamentDetail = () => {
     const districts = bodies.filter((b) => b.body_type === "District");
     const ageLabel = t.age_cap_years ? "U-" + t.age_cap_years : (t.age_floor_years ? t.age_floor_years + "+" : "Senior");
 
+    // Feb 2026 · Days-until pill and quick stats for the reorganised layout.
+    const daysUntilInfo = (() => {
+        if (!t.start_date || !t.end_date) return null;
+        const now = new Date();
+        const sd = new Date(t.start_date);
+        const ed = new Date(t.end_date);
+        const dayMs = 86400000;
+        if (now < sd) { const d = Math.ceil((sd - now) / dayMs); return { label: `Starts in ${d} day${d === 1 ? "" : "s"}`, tone: "gold" }; }
+        if (now > ed) return { label: "Concluded", tone: "muted" };
+        const d = Math.ceil((ed - now) / dayMs);
+        return { label: `Live · ends in ${d} day${d === 1 ? "" : "s"}`, tone: "live" };
+    })();
+    const budgetPct = (t.budget_total_inr && t.budget_total_inr > 0)
+        ? Math.round(((t.budget_utilized_inr || 0) / t.budget_total_inr) * 100)
+        : null;
+    const quickStats = [
+        { label: "Squads",   value: (squads || []).length,                    sub: (squads || []).length ? "registered" : "not yet" },
+        { label: "Matches",  value: t.match_count || t.fixture_count || 0,   sub: t.calendar_fixed ? "calendar locked" : "calendar draft" },
+        { label: "Officials", value: t.officials_appointed_count || 0,        sub: "appointed" },
+        { label: "Budget",   value: budgetPct != null ? `${budgetPct}%` : "—", sub: budgetPct != null ? "utilised" : "not set" },
+    ];
+
     return (
         <PageShell testid="trn-detail-page">
             {/* Feb 2026 · Scoped style override — force Nunito on inherited
-                heritage components (StatusStepper, SetupBoxes, Discussion) so
-                the page reads as one aesthetic instead of a font salad.  Also
-                mute the heritage brass/gray palette on inline serifs. */}
+                heritage components (SetupBoxes, Discussion) so the page reads
+                as one aesthetic instead of a font salad. Also mute the
+                heritage brass/gray palette on inline serifs. */}
             <style>{`
                 [data-testid="trn-detail-page"] .font-serif,
                 [data-testid="trn-detail-page"] h1,
@@ -263,7 +291,6 @@ const TournamentDetail = () => {
                 [data-testid="trn-detail-page"] .text-mpca-gray-dark, [data-testid="trn-detail-page"] .text-mpca-charcoal { color: ${DL.ink2} !important; }
                 [data-testid="trn-detail-page"] .text-mpca-brass { color: ${DL.gold} !important; }
             `}</style>
-            <TournamentSubTabs tournamentId={id} active="overview" />
             <button
                 onClick={() => navigate("/tournaments")}
                 className="inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.18em] font-bold mb-5 rounded-full px-4 py-2 transition-colors"
@@ -297,6 +324,21 @@ const TournamentDetail = () => {
                 </h1>
                 {t.short_name && <div className="text-[12px] tracking-[0.28em] uppercase mt-2 font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>&ldquo;{t.short_name}&rdquo;</div>}
                 <div className="mt-4 flex items-center gap-2 flex-wrap">
+                    {daysUntilInfo && (
+                        <span
+                            className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] font-bold rounded-full"
+                            style={{
+                                backgroundColor: daysUntilInfo.tone === "live" ? "rgba(184,131,40,0.20)" : daysUntilInfo.tone === "gold" ? "rgba(184,131,40,0.15)" : "rgba(0,0,0,0.25)",
+                                border: `1.5px solid ${DL.gold}`,
+                                color: daysUntilInfo.tone === "muted" ? "rgba(251,248,241,0.7)" : DL.gold,
+                                fontFamily: DL.fontMono,
+                            }}
+                            data-testid="trn-days-chip"
+                        >
+                            {daysUntilInfo.tone === "live" && <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: DL.gold }} />}
+                            {daysUntilInfo.label}
+                        </span>
+                    )}
                     <WiringComplianceChip tournament={t} testId="trn-detail-wiring" />
                     {parentTournament && (
                         <button
@@ -343,26 +385,32 @@ const TournamentDetail = () => {
                 )}
             </div>
 
-            {/* Sprint M30 · Status stepper + Pending With Me */}
-            <div className="mb-5">
-                <TournamentStatusStepper tournament={t} persona={persona} onAction={() => { refreshProgress(); load(); }} />
+            {/* Band 2 · 4 Quick Stats — embossed strip below the hero */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6" data-testid="trn-quick-stats">
+                {quickStats.map((s) => (
+                    <div key={s.label} className="px-5 py-4" style={embossedCard()}>
+                        <div className="text-[12px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{s.label}</div>
+                        <div className="mt-1.5 text-[32px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>{s.value}</div>
+                        <div className="text-[12px] mt-1.5 font-semibold" style={{ color: DL.ink2 }}>{s.sub}</div>
+                    </div>
+                ))}
             </div>
 
-            {/* MPCA-235 · Ship 2 · Tournament Progression Ribbon (Wiring-driven) */}
+            {/* Band 3 · Progression Ribbon (single source of truth for phase) */}
             <div className="mb-6">
                 <TournamentProgressionRibbon tournamentId={id} refreshKey={progressKey} />
             </div>
 
-            {/* Sprint M19 · 8 setup boxes grid */}
+            {/* Band 4 · Workspace grid (was "Setup Boxes") */}
             <div className="mb-8">
                 <div className="flex items-baseline gap-3 mb-3 flex-wrap">
-                    <div className="text-[12px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
-                        Workspace · Setup Boxes
+                    <div className="text-[13px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink }}>
+                        Workspace
                     </div>
                     {t.tournament_type_code && (
-                        <div className="text-[11px] font-semibold" style={{ color: DL.ink2 }}>
+                        <div className="text-[12px] font-semibold" style={{ color: DL.ink2 }}>
                             Type: <span style={{ fontFamily: DL.fontMono, color: DL.gold, fontWeight: 700 }}>{t.tournament_type_code}</span>
-                            <span className="ml-2" style={{ color: DL.ink }}>{getTypeByCode(t.tournament_type_code)?.name || ""}</span>
+                            <span className="ml-2" style={{ color: DL.ink, fontWeight: 700 }}>{getTypeByCode(t.tournament_type_code)?.name || ""}</span>
                         </div>
                     )}
                 </div>

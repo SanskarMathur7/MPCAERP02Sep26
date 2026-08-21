@@ -120,28 +120,18 @@ const Pill = ({ tone, label, testId }) => {
     );
 };
 
-const StatTile = ({ icon: Icon, label, value, sub }) => {
+const StatTile = ({ label, value, sub }) => {
     return (
         <div
-            className="p-7 flex flex-col justify-between h-full"
+            className="px-5 py-4"
             style={embossedCard()}
             data-testid={"trn-stat-" + label.toLowerCase().replace(/\s+/g, "-")}
         >
-            <div className="flex items-start justify-between">
-                <div
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-lg"
-                    style={{ backgroundColor: DL.emeraldSoft, boxShadow: `inset 0 0 0 1.5px rgba(13,59,46,0.32)` }}
-                >
-                    <Icon style={{ color: DL.emerald }} size={20} strokeWidth={2.25} />
-                </div>
+            <div className="text-[12px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
+            <div className="mt-1.5 text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>
+                {value}
             </div>
-            <div className="mt-7">
-                <div className="text-[13px] uppercase tracking-[0.2em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
-                <div className="mt-2 text-[52px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>
-                    {value}
-                </div>
-                {sub && <div className="text-[14px] mt-3 leading-snug font-semibold" style={{ color: DL.ink2 }}>{sub}</div>}
-            </div>
+            {sub && <div className="text-[12.5px] mt-1.5 leading-snug font-semibold" style={{ color: DL.ink2 }}>{sub}</div>}
         </div>
     );
 };
@@ -280,12 +270,12 @@ const Tournaments = () => {
             </div>
 
             {stats && (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-10" data-testid="trn-stats">
-                    <StatTile icon={Trophy}      label={persona?.body_type === "State" ? "Total Tournaments" : "In My Scope"}   value={persona?.body_type === "State" ? stats.total_tournaments : list.length}  sub={persona?.body_type === "State" ? `Cycle ${(typeof window !== "undefined" && window.__mpca_season) || "2026-27"} · state-wide` : `${persona?.body_name || persona?.body_code}`} />
-                    <StatTile icon={Calendar}    label="Upcoming"            value={persona?.body_type === "State" ? stats.upcoming : list.filter((t) => t.status === "Upcoming").length}            sub="Awaiting squad selection" />
-                    <StatTile icon={Users}       label="In Selection"        value={persona?.body_type === "State" ? stats.in_selection : list.filter((t) => t.status === "Squad_Selection").length}        sub="Squads being formed" />
-                    <StatTile icon={ShieldCheck} label="In Progress"         value={persona?.body_type === "State" ? stats.in_progress : list.filter((t) => t.status === "In_Progress").length}         sub="Currently being played" />
-                    <StatTile icon={Trophy}      label="Players Selected"    value={stats.total_players_selected} sub={stats.total_squads + " squads"} />
+                <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-8" data-testid="trn-stats">
+                    <StatTile label={persona?.body_type === "State" ? "Total Tournaments" : "In My Scope"}   value={persona?.body_type === "State" ? stats.total_tournaments : list.length}  sub={persona?.body_type === "State" ? `Cycle ${(typeof window !== "undefined" && window.__mpca_season) || "2026-27"} · state-wide` : `${persona?.body_name || persona?.body_code}`} />
+                    <StatTile label="Upcoming"            value={persona?.body_type === "State" ? stats.upcoming : list.filter((t) => t.status === "Upcoming").length}            sub="Awaiting squad selection" />
+                    <StatTile label="In Selection"        value={persona?.body_type === "State" ? stats.in_selection : list.filter((t) => t.status === "Squad_Selection").length}        sub="Squads being formed" />
+                    <StatTile label="In Progress"         value={persona?.body_type === "State" ? stats.in_progress : list.filter((t) => t.status === "In_Progress").length}         sub="Currently being played" />
+                    <StatTile label="Players Selected"    value={stats.total_players_selected} sub={stats.total_squads + " squads"} />
                 </div>
             )}
 

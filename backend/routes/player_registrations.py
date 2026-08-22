@@ -19,7 +19,9 @@ from typing import Optional, List, Dict, Any, Literal
 import secrets
 import uuid
 
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends, Request
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from core.infra import db, api_router
@@ -341,8 +343,8 @@ class DocUploadAction(BaseModel):
 async def division_approve(
     rid: str,
     action: RemarkAction,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """M39n · Home Division approves the registration with a mandatory remark.
     Status flips Submitted → Division_Approved. MPCA queue then picks it up."""
@@ -389,8 +391,8 @@ async def division_approve(
 async def mpca_approve(
     rid: str,
     action: RemarkAction,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """M39n · MPCA final approval. Creates the Player row. Accepts either a
     Division-approved registration (normal path) or, with a shortcut warning,
@@ -525,8 +527,8 @@ async def mpca_approve(
 async def return_to_player(
     rid: str,
     action: RemarkAction,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """M39n · Either stage can send the registration back for edits. Player can
     resubmit in-place; status flips Returned → Submitted on re-save."""
@@ -555,8 +557,8 @@ async def return_to_player(
 async def edit_registration(
     rid: str,
     action: EditAction,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """M39n · Home Division (or MPCA) can amend the player_data before approving.
     Diff of changed fields is logged. Only allowed while Submitted / Returned /
@@ -596,8 +598,8 @@ async def edit_registration(
 async def upload_doc_on_behalf(
     rid: str,
     action: DocUploadAction,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """M39n · Division uploads a doc URL on the player's behalf. Doc URL
     typically comes from POST /api/uploads. Overwrites the player_data doc slot
@@ -653,8 +655,8 @@ async def resubmit_after_return(rid: str):
 @api_router.post("/player-registration-campaigns", response_model=PlayerRegistrationCampaign)
 async def create_campaign(
     payload: CampaignCreate,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     if not _may_own(payload.body_code, x_user_body_code, x_role_id):
         raise HTTPException(403, f"Only {payload.body_code} or MPCA may open a campaign for that body.")
@@ -681,9 +683,9 @@ async def create_campaign(
 @api_router.post("/player-registration-campaigns/{cid}/approve-request", response_model=PlayerRegistrationCampaign)
 async def approve_campaign_request(
     cid: str,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_persona_name: Optional[str] = Depends(principal_persona_id),
 ):
     """MPCA-116 · MPCA approves a Division's campaign request. Public form
     submissions unlock once this fires."""
@@ -716,9 +718,9 @@ class _RejectPayload(BaseModel):
 async def reject_campaign_request(
     cid: str,
     payload: _RejectPayload,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_persona_name: Optional[str] = Depends(principal_persona_id),
 ):
     """MPCA-116 · MPCA rejects a Division's campaign request."""
     if not (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES):
@@ -746,8 +748,8 @@ async def list_campaigns(
     body_code: Optional[str] = None,
     cycle_code: Optional[str] = None,
     is_active: Optional[bool] = None,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     q: Dict[str, Any] = {}
     if body_code: q["body_code"] = body_code
@@ -764,8 +766,8 @@ async def list_campaigns(
 @api_router.get("/player-registration-campaigns/{cid}", response_model=PlayerRegistrationCampaign)
 async def get_campaign(
     cid: str,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     doc = await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
     if not doc:
@@ -779,8 +781,8 @@ async def get_campaign(
 async def patch_campaign(
     cid: str,
     payload: CampaignPatch,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     doc = await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
     if not doc:
@@ -801,8 +803,8 @@ async def patch_campaign(
 async def bulk_invite(
     cid: str,
     payload: InviteBulk,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     doc = await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
     if not doc:
@@ -826,8 +828,8 @@ async def bulk_invite(
 @api_router.get("/player-registration-campaigns/{cid}/invites")
 async def list_invites(
     cid: str,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     doc = await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
     if not doc:
@@ -1030,8 +1032,8 @@ async def list_registrations(
     body_code: Optional[str] = None,
     cycle_code: Optional[str] = None,
     status: Optional[str] = None,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     q: Dict[str, Any] = {}
     if campaign_id: q["campaign_id"] = campaign_id
@@ -1049,8 +1051,8 @@ async def list_registrations(
 @api_router.get("/player-registrations/{rid}", response_model=PlayerRegistration)
 async def get_registration(
     rid: str,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
     if not doc:
@@ -1064,8 +1066,8 @@ async def get_registration(
 async def ai_review_registration(
     rid: str,
     actor_name: Optional[str] = None,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """M38i · Run Gemini on the player-submitted KYC documents (photo,
     Aadhaar, address proof, birth certificate) and stamp a summary verdict
@@ -1145,8 +1147,8 @@ async def ai_review_registration(
 @api_router.post("/player-registrations/{rid}/ai-full-review", response_model=PlayerRegistration)
 async def ai_full_review(
     rid: str,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """M39p · Manually re-run the full AI + rules report card. Available to the
     home Division or MPCA at any time before final approval."""
@@ -1169,8 +1171,8 @@ async def ai_full_review(
 async def approve_registration(
     rid: str,
     action: ReviewAction,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
     if not doc:
@@ -1234,8 +1236,8 @@ async def approve_registration(
 async def reject_registration(
     rid: str,
     action: ReviewAction,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
     if not doc:
@@ -1280,8 +1282,8 @@ async def reject_registration(
 async def return_registration(
     rid: str,
     action: ReviewAction,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """Send back to the player so they can edit and re-submit via the same token."""
     doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})

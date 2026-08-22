@@ -31,7 +31,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends, Request
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.infra import db, api_router
@@ -627,7 +629,7 @@ async def send_budgets(tid: str, payload: SendPayload):
 
 @api_router.post("/tournament-budgets/{bid}/division-accept", response_model=TournamentBudget)
 async def division_accept(bid: str, payload: DivisionAcceptPayload,
-                          x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code")):
+                          x_user_body_code: Optional[str] = Depends(principal_body_code)):
     """Division taps Accept on the MPCA-sent budget.
 
     M39z · Since MPCA authored the budget in the first place, a separate
@@ -696,7 +698,7 @@ async def division_accept(bid: str, payload: DivisionAcceptPayload,
 
 @api_router.post("/tournament-budgets/{bid}/request-revision", response_model=TournamentBudget)
 async def request_revision(bid: str, payload: RevisionPayload,
-                           x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code")):
+                           x_user_body_code: Optional[str] = Depends(principal_body_code)):
     """Division asks MPCA to revise the sent budget."""
     doc = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
     if not doc:
@@ -789,7 +791,7 @@ async def sanction(bid: str, payload: SanctionPayload):
 async def finance_matrix(
     tid: str,
     x_body_code: Optional[str] = Header(None, alias="X-Body-Code"),
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
 ):
     """One-row-per-body matrix for the MPCA console. Renders:
        body · role · budget_status · totals · division response · MPCA action ·

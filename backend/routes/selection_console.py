@@ -1,7 +1,9 @@
 """Routes · M12 · Selection Console (post-acceptance squad workflow)."""
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import HTTPException, Header, Request
+from fastapi import HTTPException, Header, Request, Depends
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 from pydantic import BaseModel, ConfigDict
 
 from core.infra import db, api_router
@@ -124,7 +126,7 @@ class SelectionPatch(BaseModel):
 async def patch_selection(
     tid: str,
     payload: SelectionPatch,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     t = await _tournament_or_404(tid)
     await _ensure_accepted(t)
@@ -151,8 +153,8 @@ class SubmitPayload(BaseModel):
 async def submit_selection(
     tid: str,
     payload: SubmitPayload,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_body_code: Optional[str] = Depends(principal_body_code),
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     if not x_role_id or x_role_id not in _DIVISION_ROLES:
@@ -238,7 +240,7 @@ class ReviewPayload(BaseModel):
 async def review_selection(
     tid: str,
     payload: ReviewPayload,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     if not x_role_id or x_role_id not in _MPCA_APPROVER_ROLES:
@@ -291,8 +293,8 @@ class SquadReviewPayload(BaseModel):
 async def submit_squad_to_mpca(
     sid: str,
     payload: SquadSubmitPayload,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_body_code: Optional[str] = Depends(principal_body_code),
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     """Division/District submits their squad to MPCA for review."""
@@ -382,7 +384,7 @@ async def upload_signed_copy(
     sid: str,
     payload: SquadSignedCopyPayload,
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """M37 · Division/District uploads the signed nomination copy for a squad.
     The URL is stamped on the squad so submission-to-MPCA can proceed.
@@ -453,7 +455,7 @@ async def rerun_squad_ai_review(sid: str):
 async def review_squad_by_mpca(
     sid: str,
     payload: SquadReviewPayload,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     """MPCA approves / rejects / finalizes a squad.
@@ -581,7 +583,7 @@ async def set_member_decision(
     sid: str,
     pid: str,
     payload: MemberDecisionPayload,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     """MPCA records an Approved / Rejected verdict on a single nominated player.
@@ -621,7 +623,7 @@ async def set_member_decision(
 async def clear_member_decision(
     sid: str,
     pid: str,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     if x_role_id not in _MPCA_APPROVER_ROLES:
         raise HTTPException(403, "Only MPCA may clear a player decision.")
@@ -637,7 +639,7 @@ async def clear_member_decision(
 @api_router.post("/squads/{sid}/reopen")
 async def reopen_squad(
     sid: str,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """MPCA unlocks a squad so the Division can amend the roster."""
     if x_role_id not in _MPCA_APPROVER_ROLES:
@@ -677,8 +679,8 @@ class SquadOfficialsPatch(BaseModel):
 async def patch_squad_officials(
     sid: str,
     payload: SquadOfficialsPatch,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     """Division/District secretary sets the manager, coach, umpires, scorer,
     physio and match referee for the tournament. Locked once submitted."""

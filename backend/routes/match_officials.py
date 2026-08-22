@@ -5,7 +5,9 @@ managing a squad picks officials from their own body when submitting to MPCA.
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Literal, Dict, Any
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends, Request
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
@@ -131,7 +133,7 @@ async def list_officials(
 @api_router.post("/match-officials", response_model=MatchOfficial)
 async def create_official(
     payload: MatchOfficialBase,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _ADMIN_ROLES:
         raise HTTPException(403, "Only office bearers may add match officials.")
@@ -156,8 +158,8 @@ async def get_official(oid: str):
 async def update_official(
     oid: str,
     payload: MatchOfficialBase,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_persona_name: Optional[str] = Depends(principal_persona_id),
     x_body_code: Optional[str] = Header(None, alias="X-Body-Code"),
 ):
     doc = await db.match_officials.find_one({"id": oid}, {"_id": 0})
@@ -184,7 +186,7 @@ async def update_official(
 @api_router.delete("/match-officials/{oid}")
 async def delete_official(
     oid: str,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _ADMIN_ROLES:
         raise HTTPException(403, "Only office bearers may remove match officials.")
@@ -277,10 +279,10 @@ class _TmoCreate(BaseModel):
 async def assign_tournament_official(
     tid: str,
     payload: _TmoCreate,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_persona_name: Optional[str] = Depends(principal_persona_id),
 ):
     await _wiring_owner_guard(tid, x_body_type, x_role_id)
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
@@ -446,8 +448,8 @@ async def update_tournament_official(
     tid: str,
     aid: str,
     payload: _TmoPatch,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_body_type: Optional[str] = Depends(principal_body_type),
 ):
     await _wiring_owner_guard(tid, x_body_type, x_role_id)
     doc = await db.tournament_match_officials.find_one({"id": aid, "tournament_id": tid}, {"_id": 0})
@@ -464,8 +466,8 @@ async def update_tournament_official(
 async def remove_tournament_official(
     tid: str,
     aid: str,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_body_type: Optional[str] = Depends(principal_body_type),
 ):
     await _wiring_owner_guard(tid, x_body_type, x_role_id)
     r = await db.tournament_match_officials.delete_one({"id": aid, "tournament_id": tid})
@@ -532,9 +534,9 @@ def _official_may_respond(
 async def accept_tournament_assignment(
     tid: str,
     aid: str,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_persona_name: Optional[str] = Depends(principal_persona_id),
 ):
     doc = await db.tournament_match_officials.find_one({"id": aid, "tournament_id": tid}, {"_id": 0})
     if not doc:
@@ -554,9 +556,9 @@ async def reject_tournament_assignment(
     tid: str,
     aid: str,
     payload: _RejectReason,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_persona_name: Optional[str] = Depends(principal_persona_id),
 ):
     if not (payload.reason or "").strip():
         raise HTTPException(400, "A rejection reason is required.")
@@ -593,7 +595,7 @@ async def reject_tournament_assignment(
 
 @api_router.get("/match-officials/me/assignments")
 async def my_official_assignments(
-    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+    x_persona_name: Optional[str] = Depends(principal_persona_id),
 ):
     """Match-Official portal · list every assignment addressed to the caller.
     Match uses the persona name (case-insensitive) against `official_name` snapshot.

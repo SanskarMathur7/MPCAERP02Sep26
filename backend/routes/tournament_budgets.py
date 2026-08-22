@@ -11,7 +11,9 @@ independently of the overall budget approval.
 """
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from fastapi import HTTPException, Request, Header
+from fastapi import HTTPException, Request, Header, Depends
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 from pydantic import BaseModel, ConfigDict
 
 from core.infra import db, api_router
@@ -90,8 +92,8 @@ async def list_tournament_budgets(
     body_id: Optional[str] = None,
     status: Optional[TournamentBudgetStatus] = None,
     fiscal_cycle: Optional[str] = None,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     q: dict = {}
     if tournament_id:
@@ -287,8 +289,8 @@ async def _may_edit_heads(tournament: dict, body_type: Optional[str],
 async def edit_budget_heads(
     bid: str,
     payload: _HeadEditPayload,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
 ):
     doc = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
     if not doc:

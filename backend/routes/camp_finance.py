@@ -32,7 +32,9 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import uuid
 
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends, Request
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
@@ -122,7 +124,7 @@ async def _compute_unified_budget_for_camp(t: dict) -> dict:
 async def division_prepare_budget(
     tid: str,
     payload: DivisionPreparePayload,
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     """Division auto-computes the unified budget for its own camp and
     materialises a Draft `TournamentBudget`. Idempotent — replaces any
@@ -225,7 +227,7 @@ async def division_prepare_budget(
 async def division_self_sanction(
     bid: str,
     payload: DivisionSelfSanctionPayload,
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     """Division locks its Draft into `Division_Sanctioned`. Only the host
     Division of a Division-owned tournament may call this."""
@@ -259,7 +261,7 @@ async def division_self_sanction(
 async def submit_reimbursement_claim(
     tid: str,
     payload: SubmitReimbursementPayload,
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     """Bundle all tournament_invoices → single GrantClaim → flip
     TournamentBudget to Submitted_To_MPCA. This is the single point where

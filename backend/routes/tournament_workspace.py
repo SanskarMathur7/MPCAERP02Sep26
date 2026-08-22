@@ -15,7 +15,9 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 import uuid
 
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends, Request
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.infra import db, api_router
@@ -145,8 +147,8 @@ async def list_all_matches(
 async def create_tournament_match(
     tid: str,
     payload: TournamentMatchCreate,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
         raise HTTPException(404, "Tournament not found")
@@ -162,8 +164,8 @@ async def create_tournament_match(
 @api_router.patch("/tournaments/{tid}/matches/{mid}", response_model=TournamentMatch)
 async def patch_tournament_match(
     tid: str, mid: str, patch: TournamentMatchPatch,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     await assert_wiring_owner(tid, "match_calendar", x_body_type, x_body_code,
                               action_label="match edit")
@@ -178,8 +180,8 @@ async def patch_tournament_match(
 @api_router.delete("/tournaments/{tid}/matches/{mid}")
 async def delete_tournament_match(
     tid: str, mid: str,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     await assert_wiring_owner(tid, "match_calendar", x_body_type, x_body_code,
                               action_label="match delete")
@@ -641,8 +643,8 @@ class ClosureLetterPayload(BaseModel):
 async def generate_closure_letter(
     tid: str,
     payload: ClosureLetterPayload,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
     x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     # MPCA-243 · Ship 1 · Wiring-driven owner guard. Closure follows the
@@ -1129,8 +1131,8 @@ class ClosureSignedUploadPayload(BaseModel):
 @api_router.post("/tournaments/{tid}/closure-signed-upload")
 async def upload_signed_closure(
     tid: str, payload: ClosureSignedUploadPayload,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
     x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     """Owner uploads a signed copy of the closure letter. Wiring-driven — the
@@ -1154,8 +1156,8 @@ async def upload_signed_closure(
 @api_router.post("/tournaments/{tid}/close")
 async def close_tournament(
     tid: str,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
     x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     """Final close — flips tournament.status → Completed. Requires (a) the

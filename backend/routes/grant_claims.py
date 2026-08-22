@@ -13,7 +13,9 @@ import json
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Literal
-from fastapi import HTTPException, Request, Header
+from fastapi import HTTPException, Request, Header, Depends
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 import asyncio
@@ -709,8 +711,8 @@ async def grant_summary_pdf(cid: str, variant: str = "submission"):
 @api_router.post("/grant-claims/{cid}/signed-upload", response_model=GrantClaim)
 async def upload_division_signed(
     cid: str, payload: SignedUploadPayload,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     """Division uploads the signed submission summary PDF (URL)."""
@@ -734,8 +736,8 @@ async def upload_division_signed(
 @api_router.post("/grant-claims/{cid}/mpca-signed-upload", response_model=GrantClaim)
 async def upload_mpca_signed(
     cid: str, payload: SignedUploadPayload,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     """MPCA uploads the signed approval summary PDF (URL)."""
@@ -759,7 +761,7 @@ async def upload_mpca_signed(
 @api_router.post("/grant-claims/{cid}/payment", response_model=GrantClaim)
 async def mark_grant_payment_made(
     cid: str, payload: MpcaPaymentPayload,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     """MPCA records the payment made against an approved grant claim."""

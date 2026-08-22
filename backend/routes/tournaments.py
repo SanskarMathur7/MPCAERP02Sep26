@@ -2,7 +2,8 @@
 from datetime import datetime, timezone, date
 from typing import List, Optional, Literal
 import uuid
-from fastapi import HTTPException, Header, Request
+from fastapi import Depends, Request, HTTPException, Header, Request
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
@@ -182,7 +183,7 @@ async def list_tournaments(
 
 
 @api_router.get("/tournaments/pending-acceptance", response_model=List[Tournament])
-async def list_pending_acceptance(x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code")):
+async def list_pending_acceptance(x_body_code: Optional[str] = Depends(principal_body_code)):
     """List tournaments where the caller's body is on the required-acceptance list AND has NOT yet acted.
     Registered BEFORE the generic /tournaments/{tid} route to avoid tid='pending-acceptance' collision."""
     if not x_body_code:
@@ -323,8 +324,8 @@ def _auto_scheme_for(tournament_type, scope, type_code):
 @api_router.post("/tournaments", response_model=Tournament)
 async def create_tournament(
     payload: TournamentCreate,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     # MPCA-260 · Ship P0.2 — wiring guard at CREATION time. Prevents a
     # Division/District persona from creating an MPCA-owned type (BCCI /
@@ -459,8 +460,8 @@ class TournamentAcceptancePayload(BaseModel):
 async def act_on_tournament_acceptance(
     tid: str,
     payload: TournamentAcceptancePayload,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_body_code: Optional[str] = Depends(principal_body_code),
     x_persona_body: Optional[str] = Header(None, alias="X-Body-Code"),
     x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
@@ -597,8 +598,8 @@ async def reject_tournament(tid: str, actor_name: str, actor_body_id: str = "MPC
 @api_router.post("/tournaments/{tid}/status/{new_status}", response_model=Tournament)
 async def set_tournament_status(
     tid: str, new_status: TournamentStatus,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     """Manually transition a tournament between lifecycle states.
 
@@ -758,7 +759,7 @@ async def tournament_stats(request: Request):
     """Iter 108 (SEC-004): scoped to caller's body.  Tournaments belong to a
     body (Division/District/State); the filter uses the same host body_id
     scope semantics as elsewhere."""
-    from lib.authz import get_principal, scope_filter
+    from lib.authz import get_principal, scope_filter, principal_body_code, principal_role_id, principal_body_type, principal_persona_id
     principal = get_principal(request)
     sf = scope_filter(principal, field="body_id")
     total = await db.tournaments.count_documents(sf)

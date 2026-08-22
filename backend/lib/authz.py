@@ -329,3 +329,46 @@ def require_scope(principal: RequestPrincipal, target_body_code: str) -> None:
 
 # Convenience for legacy callers that used core.scoping.get_scope(request)
 CurrentPrincipal = Depends(get_principal)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Iter 111 · Legacy-header authz migration shims (SEC-001)
+# ═══════════════════════════════════════════════════════════════════════
+# Old routes accepted `X-User-Body-Code` / `X-Role-Id` / `X-Body-Type` as
+# Header(...) parameters — spoofable by any authenticated client.  These
+# Depends() helpers replace the Header() defaults so the value now comes
+# from the signed JWT (request.state.principal) instead.
+
+_LEGACY_ROLE_MAP = {
+    Role.SYS_ADMIN:          "SysAdmin",
+    Role.MPCA_PRESIDENT:     "President",
+    Role.MPCA_SECRETARY:     "Secretary",
+    Role.MPCA_TREASURER:     "Treasurer",
+    Role.DIVISION_SECRETARY: "DivisionSecretary",
+    Role.DISTRICT_SECRETARY: "DistrictSecretary",
+    Role.MATCH_OFFICIAL:     "MatchOfficial",
+}
+
+
+def principal_body_code(request: Request) -> Optional[str]:
+    p = getattr(request.state, "principal", None)
+    return p.body_code if p else None
+
+
+def principal_role_id(request: Request) -> Optional[str]:
+    p = getattr(request.state, "principal", None)
+    if not p:
+        return None
+    return _LEGACY_ROLE_MAP.get(p.role, p.role.value)
+
+
+def principal_body_type(request: Request) -> Optional[str]:
+    p = getattr(request.state, "principal", None)
+    return p.body_type if p else None
+
+
+def principal_persona_id(request: Request) -> Optional[str]:
+    p = getattr(request.state, "principal", None)
+    if not p:
+        return None
+    return (p.raw_user or {}).get("id") or p.user_id

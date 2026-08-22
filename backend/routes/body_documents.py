@@ -19,7 +19,9 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Literal
 import uuid
 
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends, Request
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
@@ -129,8 +131,8 @@ async def list_body_documents(
     body_code: str,
     include_inactive: bool = False,
     doc_kind: Optional[str] = None,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     body = await _ensure_body(body_code)
     if not _can_read(body, x_user_body_code, x_role_id):
@@ -148,7 +150,7 @@ async def list_body_documents(
 async def add_body_document(
     body_code: str,
     payload: BodyDocumentCreate,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
 ):
     body = await _ensure_body(body_code)
     if not _can_write(body, x_user_body_code):
@@ -163,7 +165,7 @@ async def patch_body_document(
     body_code: str,
     doc_id: str,
     patch: BodyDocumentPatch,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
 ):
     body = await _ensure_body(body_code)
     if not _can_write(body, x_user_body_code):
@@ -184,7 +186,7 @@ async def delete_body_document(
     body_code: str,
     doc_id: str,
     hard: bool = False,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
 ):
     body = await _ensure_body(body_code)
     if not _can_write(body, x_user_body_code):
@@ -206,8 +208,8 @@ async def delete_body_document(
 @api_router.get("/bodies/{body_code}/documents/kinds/summary")
 async def body_documents_kinds_summary(
     body_code: str,
-    x_user_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """Rollup of doc_kind → count for the body — used to render the vault header
     ("GST · 1  ·  PAN · 1  ·  Bank · 2 …") and drive completeness badges."""

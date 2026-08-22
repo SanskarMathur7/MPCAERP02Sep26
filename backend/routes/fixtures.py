@@ -2,7 +2,9 @@
 import re
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends, Request
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 
 from core.infra import db, api_router
 from models import (
@@ -70,8 +72,8 @@ async def get_fixture(fid: str):
 @api_router.post("/fixtures", response_model=Fixture)
 async def create_fixture(
     payload: FixtureCreate,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     t = await db.tournaments.find_one({"id": payload.tournament_id}, {"_id": 0})
     if not t:

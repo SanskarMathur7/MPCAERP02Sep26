@@ -35,7 +35,9 @@ from datetime import date
 from math import ceil
 from typing import Any, Dict, List, Optional
 
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends, Request
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 
 from core.infra import api_router, db
 from core.wiring_guard import assert_wiring_owner, stamp_actor
@@ -953,8 +955,8 @@ async def migrate_legacy_budgets(dry_run: bool = True):
 @api_router.post("/tournaments/{tid}/unified-budget/lock")
 async def lock_unified_budget(
     tid: str,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
     x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
 ):
     """Snapshot the current unified budget, freeze it at a new version, and
@@ -1024,8 +1026,8 @@ async def lock_unified_budget(
 @api_router.post("/tournaments/{tid}/unified-budget/unlock")
 async def unlock_unified_budget(
     tid: str,
-    x_body_type: Optional[str] = Header(None, alias="X-Body-Type"),
-    x_body_code: Optional[str] = Header(None, alias="X-User-Body-Code"),
+    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: Optional[str] = Depends(principal_body_code),
 ):
     """Unfreeze the snapshot so the owning body can request re-computes.
 

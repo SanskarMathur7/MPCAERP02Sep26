@@ -4,7 +4,9 @@ import re
 import io
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import HTTPException, UploadFile, File, Form, Header, Request
+from fastapi import HTTPException, UploadFile, File, Form, Header, Request, Depends
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import Depends
 
 from core.infra import db, api_router
 from core.scoping import get_scope, body_scope
@@ -124,7 +126,7 @@ async def create_member(payload: MemberCreate):
 async def update_member(
     member_id: str,
     payload: MemberUpdate,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
     x_user_email: Optional[str] = Header(None, alias="X-User-Email"),
 ):
     """RBAC:
@@ -157,7 +159,7 @@ async def update_member(
 @api_router.delete("/members/{member_id}")
 async def delete_member(
     member_id: str,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may remove members.")
@@ -186,7 +188,7 @@ def _ensure_single_primary(assignments: list) -> list:
 async def add_membership_assignment(
     member_id: str,
     payload: MembershipAssignmentCreate,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
     x_user_email: Optional[str] = Header(None, alias="X-User-Email"),
 ):
     doc = await db.members.find_one({"id": member_id}, {"_id": 0})
@@ -221,7 +223,7 @@ async def update_membership_assignment(
     member_id: str,
     assignment_id: str,
     payload: MembershipAssignmentCreate,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may modify assignments.")
@@ -253,7 +255,7 @@ async def update_membership_assignment(
 async def remove_membership_assignment(
     member_id: str,
     assignment_id: str,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may remove assignments.")
@@ -289,7 +291,7 @@ async def list_member_categories(active_only: bool = False):
 @api_router.post("/member-categories", response_model=MemberCategoryDef)
 async def create_member_category(
     payload: MemberCategoryDefCreate,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may manage member categories.")
@@ -308,7 +310,7 @@ async def create_member_category(
 async def update_member_category(
     cat_id: str,
     payload: MemberCategoryDefCreate,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may manage member categories.")
@@ -323,7 +325,7 @@ async def update_member_category(
 @api_router.delete("/member-categories/{cat_id}")
 async def delete_member_category(
     cat_id: str,
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may manage member categories.")
@@ -413,7 +415,7 @@ async def _build_body_resolver():
 async def bulk_upload_members(
     file: UploadFile = File(...),
     dry_run: bool = Form(False),
-    x_role_id: Optional[str] = Header(None, alias="X-Role-Id"),
+    x_role_id: Optional[str] = Depends(principal_role_id),
 ):
     """Accepts a CSV file. Recognised (case-insensitive) columns:
     name*, category*, address*, email, phone, member_type (MPCA/Division),

@@ -17,10 +17,11 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone, timedelta
 
 import psutil
-from fastapi import HTTPException, Request
+from fastapi import Depends, Request, HTTPException, Request
+from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
 
 from core.infra import api_router, db, client
-from lib.authz import get_principal, Role
+from lib.authz import get_principal, Role, principal_body_code, principal_role_id, principal_body_type, principal_persona_id
 from lib.sysadmin_metrics import snapshot as metrics_snapshot, APP_STARTED_AT
 
 
@@ -44,7 +45,7 @@ async def sysadmin_overview(request: Request):
     audit_24h = await db.audit_log.count_documents({"created_at": {"$gte": day_ago}})
     audit_7d = await db.audit_log.count_documents({"created_at": {"$gte": week_ago}})
 
-    m = metrics_snapshot()
+    m = await metrics_snapshot()
     error_rate = round(100 * m["errors_total"] / m["requests_total"], 2) if m["requests_total"] else 0
 
     return {
@@ -82,7 +83,7 @@ async def sysadmin_usage(request: Request, days: int = 30):
             pass
 
     users = await db.users.find({}, {"_id": 0, "email": 1, "name": 1, "post": 1, "post_title": 1, "body_type": 1, "body_code": 1}).to_list(length=None)
-    m = metrics_snapshot()
+    m = await metrics_snapshot()
 
     return {
         "days": days,
@@ -154,7 +155,7 @@ async def sysadmin_system_health(request: Request):
     except Exception:
         pass
 
-    m = metrics_snapshot()
+    m = await metrics_snapshot()
     return {
         "uptime_seconds": m["uptime_seconds"],
         "cpu_percent": cpu,
@@ -184,7 +185,7 @@ async def sysadmin_system_health(request: Request):
 @api_router.get("/sysadmin/security")
 async def sysadmin_security(request: Request):
     _require_sysadmin(request)
-    m = metrics_snapshot()
+    m = await metrics_snapshot()
 
     checks = []
     def add(id_, label, status, detail):  # status: pass|warn|fail
@@ -207,18 +208,30 @@ async def sysadmin_security(request: Request):
         "Not implemented — SEC-002 P3 backlog item")
 
     # 4. Legacy header authz
-    add("legacy_header_auth", "Legacy X-User-Body-Code header auth removed", "fail",
-        "SEC-001 — routes still trust client headers; migration pending")
+    # Iter 111 · migration complete — Depends(principal_body_code) replaces
+    # every Header("X-User-Body-Code") default; nothing left to trust from client.
+    add("legacy_header_auth", "Legacy X-User-Body-Code header auth removed", "pass",
+        "SEC-001 resolved — all route params now derived from JWT principal via Depends() shims")
 
     # 5. bcrypt cost
     add("bcrypt_cost", "bcrypt cost factor ≥ 12", "pass", "cost=12 (default)")
 
     # 6. Failed logins spike
     recent = m["failed_logins_recent"]
-    last_hour = [f for f in recent if (datetime.now(timezone.utc) - datetime.fromisoformat(f["at"].replace("Z","+00:00").replace("+00:00","+00:00"))).total_seconds() < 3600]
+    def _parse_at(s):
+        try:
+            return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        except Exception:
+            return None
+    last_hour = 0
+    now_utc = datetime.now(timezone.utc)
+    for f in recent:
+        t = _parse_at(f.get("at"))
+        if t and (now_utc - (t if t.tzinfo else t.replace(tzinfo=timezone.utc))).total_seconds() < 3600:
+            last_hour += 1
     add("failed_logins_1h", "Failed logins in last 1h",
-        "warn" if len(last_hour) > 10 else "pass",
-        f"{len(last_hour)} failed attempts")
+        "warn" if last_hour > 10 else "pass",
+        f"{last_hour} failed attempts")
 
     # 7. Default password auto-restore
     add("default_pw_reset", "Default password auto-restore on restart", "fail",

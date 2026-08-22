@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Upload, CheckCircle2, AlertTriangle, Send, IndianRupee, Sparkles, FileText, XCircle, Download, Lock, MessageSquare, Filter } from "lucide-react";
-import { api, BACKEND_URL } from "@/lib/api";
+import { Upload, CheckCircle2, AlertTriangle, Send, IndianRupee, Sparkles, FileText, XCircle, Download, Lock, MessageSquare, Filter, RotateCcw } from "lucide-react";
+import { api, BACKEND_URL, openAuthedFile } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import VaultDocumentPicker from "@/components/VaultDocumentPicker";
@@ -281,6 +281,21 @@ const GrantClaims = () => {
             });
             setSelected(data);
             setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
+    // Iter 123l · MPCA bounces the claim back to the Division for missing /
+    // corrected docs. Reason auto-posts to the Discussion thread.
+    const reopenForDocs = async () => {
+        const reason = window.prompt("What documents need to be added or corrected? (This message will be posted to the Discussion tab.)");
+        if (!reason || !reason.trim()) return;
+        try {
+            const { data } = await api.post(`/grant-claims/${selected.id}/reopen-for-docs`, {
+                reason: reason.trim(), actor_name: persona?.name || "MPCA",
+            });
+            setSelected(data);
+            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+            setTab("discussion");
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
 
@@ -591,6 +606,14 @@ const GrantClaims = () => {
                                     {canReview && (
                                         <>
                                             <button className="btn-heritage-primary" onClick={approveClaim} data-testid="approve-claim-btn"><CheckCircle2 size={12} /> Approve</button>
+                                            <button
+                                                className="border border-mpca-brass text-mpca-brass px-3 py-1.5 text-[11px] uppercase tracking-widest hover:bg-mpca-brass/10"
+                                                onClick={reopenForDocs}
+                                                title="Send back to Division so they can upload / correct paperwork. The reason will be posted to the Discussion tab."
+                                                data-testid="reopen-for-docs-btn"
+                                            >
+                                                <RotateCcw size={12} className="inline mr-1" /> Request More Docs
+                                            </button>
                                             <button className="border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 text-[11px] uppercase tracking-widest" onClick={rejectClaim} data-testid="reject-claim-btn"><XCircle size={12} className="inline mr-1" /> Reject</button>
                                         </>
                                     )}
@@ -947,19 +970,19 @@ const GrantClaims = () => {
                                         </ul>
                                     </div>
                                     {selected.signed_submission_url && (
-                                        <a href={selected.signed_submission_url} target="_blank" rel="noreferrer" className="block text-mpca-oxblood underline text-[11px]" data-testid="signed-submission-link">
+                                        <button onClick={() => openAuthedFile(selected.signed_submission_url)} className="block text-mpca-oxblood underline text-[11px] text-left" data-testid="signed-submission-link">
                                             View Division-signed submission PDF ↗
-                                        </a>
+                                        </button>
                                     )}
                                     {selected.signed_approval_url && (
-                                        <a href={selected.signed_approval_url} target="_blank" rel="noreferrer" className="block text-mpca-oxblood underline text-[11px]" data-testid="signed-approval-link">
+                                        <button onClick={() => openAuthedFile(selected.signed_approval_url)} className="block text-mpca-oxblood underline text-[11px] text-left" data-testid="signed-approval-link">
                                             View MPCA-signed approval PDF ↗
-                                        </a>
+                                        </button>
                                     )}
                                     {selected.payment_receipt_url && (
-                                        <a href={selected.payment_receipt_url} target="_blank" rel="noreferrer" className="block text-mpca-oxblood underline text-[11px]" data-testid="payment-receipt-link">
+                                        <button onClick={() => openAuthedFile(selected.payment_receipt_url)} className="block text-mpca-oxblood underline text-[11px] text-left" data-testid="payment-receipt-link">
                                             View payment receipt ↗
-                                        </a>
+                                        </button>
                                     )}
                                 </div>
                             )}

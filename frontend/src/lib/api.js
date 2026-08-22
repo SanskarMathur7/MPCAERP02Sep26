@@ -71,6 +71,30 @@ api.interceptors.response.use(
     }
 );
 
+// Iter 123l · Open a JWT-gated file (/api/uploads/{id}) in a new tab. Browsers
+// don't attach the Authorization header to plain <a target="_blank"> requests,
+// so the server returned 401. We fetch the bytes through axios (interceptor
+// attaches the Bearer token), turn them into a blob URL, then open that.
+export const openAuthedFile = async (relOrAbsUrl) => {
+    if (!relOrAbsUrl) return;
+    // Extract just the path portion (strip host if present) and drop leading /api
+    // — axios `api` already has baseURL=`${BACKEND_URL}/api`.
+    let path = relOrAbsUrl;
+    try {
+        const u = new URL(relOrAbsUrl, BACKEND_URL);
+        path = u.pathname + u.search;
+    } catch { /* not a valid URL — treat as path */ }
+    path = path.replace(/^\/api/, "");
+    const res = await api.get(path, { responseType: "blob" });
+    const blobUrl = URL.createObjectURL(res.data);
+    const win = window.open(blobUrl, "_blank", "noopener,noreferrer");
+    // Revoke after 60s so memory is reclaimed but user still had time to open/download.
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    if (!win) alert("Please allow pop-ups so we can open the signed PDF.");
+};
+
+
+
 export const fetchMembers = async (params = {}) => {
     const { data } = await api.get("/members", { params });
     return data;

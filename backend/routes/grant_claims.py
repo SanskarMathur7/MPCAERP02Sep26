@@ -544,6 +544,16 @@ class AmountPatchPayload(BaseModel):
     claimed_amount_inr: float
 
 
+# Iter 123l · MPCA can bounce a Submitted / Under_Review claim back to the
+# Division with a request for more / corrected documents. Division sees the
+# claim again in `Documents_Pending`, upload widget + amount editor unlock,
+# and the message is auto-posted to the Discussion tab so the audit trail
+# lives in one place.
+class ReopenPayload(BaseModel):
+    reason: str
+    actor_name: str
+
+
 class MpcaPaymentPayload(BaseModel):
     utr: str
     amount_inr: float
@@ -845,6 +855,49 @@ async def patch_claim_amount(cid: str, payload: AmountPatchPayload):
         "claimed_amount_inr": float(payload.claimed_amount_inr),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }})
+    return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+# Iter 123l · MPCA-side "Request more documents" — reopens the claim so the
+# Division can upload / correct paperwork. The rejection message is auto-
+# posted to the Discussion thread for a single audit-trail source of truth.
+@api_router.post("/grant-claims/{cid}/reopen-for-docs", response_model=GrantClaim)
+async def reopen_for_docs(cid: str, payload: ReopenPayload):
+    claim = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not claim:
+        raise HTTPException(404, "Claim not found")
+    if claim.get("status") not in ("Submitted", "Under_Review"):
+        raise HTTPException(409, f"Cannot reopen from status {claim.get('status')}. Only Submitted or Under_Review claims can be sent back to the Division.")
+    reason = (payload.reason or "").strip()
+    if not reason:
+        raise HTTPException(400, "A reason is required so the Division knows what to fix.")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.grant_claims.update_one({"id": cid}, {"$set": {
+        "status": "Documents_Pending",
+        "reopened_at": now,
+        "reopened_by": payload.actor_name,
+        "reopen_reason": reason,
+        "updated_at": now,
+    }})
+    # Auto-post the reopen note into the Discussion tab so both sides see it.
+    await db.grant_claim_discussions.insert_one({
+        "id":         str(uuid.uuid4()),
+        "claim_id":   cid,
+        "author_name": payload.actor_name,
+        "author_body": "MPCA",
+        "author_body_type": "State",
+        "message":    f"[Documents Reopened] {reason}",
+        "created_at": now,
+        "system_tag": "reopen_for_docs",
+    })
+    # Notify the Division Secretary in-app.
+    await _create_notification(
+        recipient_role_id="division-secretary", recipient_body_id=claim["body_id"],
+        title=f"Grant Claim Reopened · {claim['claim_ref']}",
+        message=f"MPCA has requested additional documents: {reason}",
+        link=f"/grant-claims/{cid}", related_type="grant_claim", related_id=cid,
+        severity="warning", kind="info",
+    )
     return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
 
 

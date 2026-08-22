@@ -120,8 +120,8 @@ const ImpactRow = ({ metric, before, after }) => (
 
 // ── Content ────────────────────────────────────────────────────────
 const PAINS = [
-    { n: 1,  icon: Calendar,     title: "Tournament calendar circulation to Divisions", before: "MPCA typed the BCCI calendar into Word, printed ten copies, couriered them to ten Divisions. A five-day loop.", after: "The Dynamic Wiring Engine reads the BCCI master calendar and pushes it instantly to every Division dashboard.", ai: false },
-    { n: 2,  icon: Building2,    title: "Ground allocation against the calendar",       before: "Manual roster — phone calls to Holkar, Emerald, Roop Singh managers to see which ground is free on which date.", after: "Ground master + calendar auto-allot dates in one click. Conflict-check is built-in.", ai: false },
+    { n: 1,  icon: Calendar,     title: "Tournament calendar circulation to Divisions", before: "MPCA typed the BCCI calendar into Word, printed ten copies, couriered them to ten Divisions. A five-day loop.", after: "MPCA drafts the calendar once inside the ERP; every Division sees it live on their dashboard the moment it is saved. No printing, no couriering, no five-day loop.", ai: false },
+    { n: 2,  icon: Building2,    title: "Ground allocation against the calendar",       before: "Manual roster — phone calls to Holkar, Emerald, Roop Singh managers to see which ground is free on which date.", after: "Ground master is digital. MPCA picks a ground for each match inside the ERP; conflict-check is built in so no ground is booked twice.", ai: false },
     { n: 3,  icon: ShieldCheck,  title: "Match Official postings & follow-ups",         before: "Twenty phone calls a day chasing umpires and scorers to confirm postings. Days of chasing per tournament.", after: "Digital posting notice. Umpire accepts / declines with one tap. MPCA sees a real-time accept-reject dashboard.", ai: false },
     { n: 4,  icon: HandCoins,    title: "Match Official payments — two payers, one man", before: "Umpires collected DA from the Division and fees from MPCA — two doors, two waits, two chances of disappointment.", after: "Unified Budget Engine consolidates DA + fees into a single MPCA-issued payment. One official, one payer, one cycle.", ai: false },
     { n: 5,  icon: Calendar,     title: "Match calendar awareness for all stakeholders", before: "Manual circulation → missed matches → embarrassed officials at the ground gate.", after: "Every stakeholder — Division, District, umpire, scorer, coach, player — sees the calendar in real-time on their dashboard.", ai: false },
@@ -151,7 +151,8 @@ const AI_FEATURES = [
 const IMPACT = [
     ["Tournament calendar circulation",       "5 days",       "5 minutes"],
     ["Player document verification (one)",    "15-30 minutes", "30 seconds"],
-    ["Grant claim verification (one)",         "1-2 days",     "90 seconds"],
+    ["Grant claim verification (one invoice)", "1-2 days",     "90 seconds"],
+    ["Full tournament reimbursement claim · end-to-end", "2+ months", "1 day"],
     ["Umpire posting acceptance loop",         "3-5 days",     "1 tap"],
     ["Approvals lost to email / phone",        "Countless",    "Zero"],
     ["Auditability of governance actions",     "Ad-hoc",       "100% immutable"],

@@ -203,10 +203,12 @@ export default function WiringBrain() {
     }, [pulses, hoveredStep]);
 
     const edgeStyle = (owner, active) => ({
-        stroke: active ? ownerColor(owner) : `rgba(200,180,138,${owner === "m" ? 0.28 : 0.11})`,
-        strokeWidth: active ? 2 : 1,
+        // Iter 116 — Declutter: resting edges are barely-visible whispers so
+        // the diagram reads clean at rest; pulse + hover still pop them bright.
+        stroke: active ? ownerColor(owner) : `rgba(200,180,138,${owner === "m" ? 0.09 : 0.05})`,
+        strokeWidth: active ? 2 : 0.75,
         fill: "none",
-        transition: "stroke 240ms ease, stroke-width 240ms ease",
+        transition: "stroke 240ms ease, stroke-width 240ms ease, opacity 240ms ease",
         cursor: "default",
     });
 

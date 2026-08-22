@@ -32,62 +32,68 @@ import {
 } from "lucide-react";
 
 const DASHBOARD_LINK = { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
-const ORG_LINK = { to: "/org", label: "Organisation", icon: Landmark };
-// M39m · Top-level links surfaced directly beneath Dashboard + Org so users can
-// reach their pending actions and cross-body discussions from any screen.
-const ACTION_CENTER_LINK = { to: "/action-center", label: "Action Center", icon: AlertTriangle };
-const DISCUSSIONS_LINK = { to: "/discussions", label: "Discussions", icon: FileText };
+const INBOX_LINK = { to: "/discussions", label: "Inbox", icon: FileText };
 
 // ═══════════════════════════════════════════════════════════════════
-// User-requested MVP nav — active tabs.
-// Everything else is present but disabled under "Coming Soon", keeping
-// the original groupings visible so nothing looks abandoned.
+// Iter 110 · Reorganised nav — 5 sections for office bearers +
+// dedicated System Administration section for the sys-admin persona.
+// Office bearers can VIEW masters via direct URL but cannot EDIT them
+// (backend enforces via SYSTEM_CONFIG / WORKFLOW_MANAGE / RBAC_MANAGE).
 // ═══════════════════════════════════════════════════════════════════
 
 const NAV_DOMAINS = [
     {
-        domain: "Secretarial",
+        domain: "Dashboard",
         items: [
-            { to: "/members", label: "Membership Register", icon: Users },
+            { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+            { to: "/discussions", label: "Inbox", icon: FileText },
+        ],
+        _skip_dashboard_dupe: true,
+    },
+    {
+        domain: "Tournaments",
+        items: [
+            { to: "/tournaments", label: "Tournaments", icon: TrophyIcon },
+            { to: "/tournament-calendar", label: "Tournament Calendar", icon: Calendar },
+            { to: "/venues", label: "Grounds", icon: MapPinIcon },
+            { to: "/match-officials", label: "Match Officials", icon: ShieldCheck, state_only: true },
+            { to: "/da-review", label: "DA Review Inbox", icon: FileCheck, state_only: true },
+        ],
+    },
+    {
+        domain: "Grants",
+        items: [
+            { to: "/schemes", label: "MPCA Schemes Register", icon: BookOpen, state_only: true },
+            { to: "/grant-claims", label: "Grant Claims", icon: HandCoins, state_only: true },
+        ],
+    },
+    {
+        domain: "Players",
+        items: [
+            { to: "/players", label: "Player Register", icon: Users },
+            { to: "/player-registrations", label: "Season Onboarding", icon: Users },
+        ],
+    },
+    {
+        domain: "Governance",
+        items: [
+            { to: "/org", label: "Organisation", icon: Landmark },
+            { to: "/members", label: "Members", icon: Users },
             { to: "/meetings", label: "AGM & Meetings", icon: Calendar },
             { to: "/events", label: "Event Calendar", icon: Calendar },
             { to: "/disclosures", label: "Disclosures", icon: FileText },
         ],
     },
     {
-        domain: "Financial",
-        items: [
-            // Iter 108d · Schemes Register + Grant Claims are MPCA-only surfaces
-            // (statewide scheme catalogue + state-level claim inbox).  Division /
-            // District Secretaries reach their reimbursement flows through the
-            // Tournament Workspace, not this top-level nav.
-            { to: "/schemes", label: "MPCA Schemes Register", icon: BookOpen, state_only: true },
-            { to: "/grant-claims", label: "Grant Claims", icon: HandCoins, state_only: true },
-        ],
-    },
-    {
-        domain: "Operations",
-        items: [
-            { to: "/tournaments", label: "Tournaments", icon: TrophyIcon },
-            { to: "/tournament-master", label: "Tournament Registry", icon: BookOpen },
-            { to: "/tournament-wiring", label: "Tournament Wiring", icon: BookOpen },
-            { to: "/rate-cards", label: "Rate Cards", icon: BookOpen },
-            { to: "/tournament-calendar", label: "Tournament Calendar", icon: Calendar },
-            { to: "/venues", label: "Grounds", icon: MapPinIcon },
-            { to: "/players", label: "Player Register", icon: Users },
-            { to: "/player-registrations", label: "Season Onboarding", icon: Users },
-            { to: "/match-officials", label: "Match Officials", icon: ShieldCheck, state_only: true },
-            { to: "/da-review", label: "DA Review Inbox", icon: FileCheck, state_only: true },
-        ],
-    },
-    {
-        domain: "Governance",
-        // Only President / Secretary / Sys-Admin see this — filter applied in render.
-        state_only: true,
-        rbac_admin_only: true,
+        domain: "System Administration",
+        sys_admin_only: true,
         items: [
             { to: "/access-control", label: "Access Control (RBAC)", icon: Shield },
             { to: "/mc-admin", label: "Maker-Checker Console", icon: ShieldCheck },
+            { to: "/tournament-master", label: "Tournament Registry", icon: BookOpen },
+            { to: "/tournament-wiring", label: "Tournament Wiring", icon: BookOpen },
+            { to: "/rate-cards", label: "Rate Cards", icon: BookOpen },
+            { to: "/rulebook", label: "Rulebook", icon: BookOpen },
         ],
     },
 ];
@@ -284,99 +290,31 @@ const AppLayout = ({ children }) => {
 
                 {/* Primary nav */}
                 <nav className={`flex-1 ${collapsed ? "px-2" : "px-4"} py-6 overflow-y-auto`}>
-                    {persona?.id !== "match-official" && (
-                    <ul className="space-y-0.5 mb-6">
-                        <li>
-                            <NavLink
-                                to={DASHBOARD_LINK.to}
-                                data-testid="nav-dashboard"
-                                title={collapsed ? DASHBOARD_LINK.label : undefined}
-                                className={({ isActive }) =>
-                                    `group flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} py-2.5 text-sm transition-all duration-300 border-l-2 ${
-                                        isActive
-                                            ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
-                                            : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
-                                    }`
-                                }
-                            >
-                                <DASHBOARD_LINK.icon size={16} strokeWidth={1.5} />
-                                {!collapsed && <span className="tracking-wide ml-3">{DASHBOARD_LINK.label}</span>}
-                            </NavLink>
-                        </li>
-                        <li>
-                            <NavLink
-                                to={ORG_LINK.to}
-                                data-testid="nav-organisation"
-                                className={({ isActive }) =>
-                                    `group flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} py-2.5 text-sm transition-all duration-300 border-l-2 ${
-                                        isActive
-                                            ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
-                                            : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
-                                    }`
-                                }
-                                title={collapsed ? ORG_LINK.label : undefined}
-                            >
-                                <ORG_LINK.icon size={16} strokeWidth={1.5} />
-                                {!collapsed && <>
-                                    <span className="tracking-wide ml-3">{ORG_LINK.label}</span>
-                                    <span className="ml-auto text-[9px] font-mono text-mpca-brass/70 tracking-widest">10·54</span>
-                                </>}
-                            </NavLink>
-                        </li>
-                        {/* M39m · Action Center + Discussions promoted to top-level */}
-                        {[ACTION_CENTER_LINK, DISCUSSIONS_LINK].map((link) => (
-                            <li key={link.to}>
-                                <NavLink
-                                    to={link.to}
-                                    data-testid={`nav-${link.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
-                                    className={({ isActive }) =>
-                                        `group flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} py-2.5 text-sm transition-all duration-300 border-l-2 ${
-                                            isActive
-                                                ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
-                                                : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
-                                        }`
-                                    }
-                                    title={collapsed ? link.label : undefined}
-                                >
-                                    <link.icon size={16} strokeWidth={1.5} />
-                                    {!collapsed && <span className="tracking-wide ml-3">{link.label}</span>}
-                                </NavLink>
-                            </li>
-                        ))}
-                    </ul>
-                    )}
-
                     {(persona?.id === "match-official" ? OFFICIAL_NAV_DOMAINS : NAV_DOMAINS)
                         .filter((group) => {
-                            // Governance / RBAC visible only to President, Secretary, Sys Admin (Q3a)
-                            if (group.rbac_admin_only) {
-                                return persona?.body_type === "State" && ["president", "secretary", "system-administrator"].includes(persona?.id);
+                            // Iter 110 · System Administration section only for sys-admin persona.
+                            if (group.sys_admin_only) {
+                                return persona?.id === "system-administrator" || persona?.role === "sys_admin";
                             }
                             return true;
                         })
-                        // Iter 108d · Hide the whole domain if every item inside is state-only
-                        // and the persona isn't State — otherwise a Division Secretary sees an
-                        // empty "Financial" section header with nothing underneath.
+                        // Hide the whole domain if every item inside is state-only and the persona isn't State
                         .filter((group) => {
                             if (persona?.body_type === "State") return true;
                             return (group.items || []).some((it) => !it.state_only);
                         })
                         .map((group) => (
-                        <div key={group.domain} className="mb-6">
+                        <div key={group.domain} className="mb-6" data-testid={`nav-group-${group.domain.toLowerCase().replace(/\s+/g, "-")}`}>
                             {!collapsed && (
                                 <div
                                     className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2"
-                                    data-testid={`nav-domain-${group.domain.toLowerCase()}`}
+                                    data-testid={`nav-domain-${group.domain.toLowerCase().replace(/\s+/g, "-")}`}
                                 >
                                     {group.domain}
                                 </div>
                             )}
                             <ul className="space-y-0.5">
                                 {group.items
-                                    // MPCA-247 · Per-item persona guard. Items marked `state_only`
-                                    // (e.g. DA Review Inbox, Match Officials Master) are hidden
-                                    // from Division / District Secretaries because MPCA owns
-                                    // all match-official fee & DA workflows in the ERP.
                                     .filter((item) => !item.state_only || persona?.body_type === "State")
                                     .map((item) => (
                                     <li key={item.to}>

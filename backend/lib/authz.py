@@ -32,6 +32,7 @@ from fastapi import Depends, HTTPException, Request
 # ═══════════════════════════════════════════════════════════════════════
 
 class Role(str, Enum):
+    SYS_ADMIN           = "sys_admin"
     MPCA_PRESIDENT      = "mpca_president"
     MPCA_SECRETARY      = "mpca_secretary"
     MPCA_TREASURER      = "mpca_treasurer"
@@ -67,13 +68,19 @@ class Permission(str, Enum):
     GRANTS_SUBMIT           = "grants.submit"
     BUDGETS_APPROVE         = "budgets.approve"
 
-    # Admin
+    # Admin — masters/config, only SYS_ADMIN gets these
     RBAC_MANAGE             = "rbac.manage"
     USERS_MANAGE            = "users.manage"
+    SYSTEM_CONFIG           = "system.config"   # rate cards, tournament master, wiring, rulebook
+    WORKFLOW_MANAGE         = "workflow.manage"  # M&C workflow admin
 
 
 # Role → permission bag ------------------------------------------------
+_ALL_PERMS = set(Permission)
+
 ROLE_MATRIX: dict[Role, set[Permission]] = {
+    # SYS_ADMIN gets everything — tech-layer controls belong here alone
+    Role.SYS_ADMIN: _ALL_PERMS,
     Role.MPCA_PRESIDENT: {
         Permission.DASHBOARD_SEASON_VIEW,  Permission.DASHBOARD_PLAYERS_VIEW,
         Permission.DASHBOARD_GRANTS_VIEW,  Permission.DASHBOARD_BUDGET_VIEW,
@@ -91,7 +98,8 @@ ROLE_MATRIX: dict[Role, set[Permission]] = {
         Permission.GRANTS_READ_ALL,        Permission.BUDGETS_READ_ALL,
         Permission.PLAYERS_APPROVE,        Permission.GRANTS_APPROVE,
         Permission.PLAYERS_DISQUALIFY,     Permission.BUDGETS_APPROVE,
-        Permission.RBAC_MANAGE,            Permission.USERS_MANAGE,
+        # NOTE: RBAC_MANAGE + USERS_MANAGE + SYSTEM_CONFIG + WORKFLOW_MANAGE
+        # moved to SYS_ADMIN only (Iter 110). Secretary retains READ on masters.
     },
     Role.MPCA_TREASURER: {
         Permission.DASHBOARD_SEASON_VIEW,  Permission.DASHBOARD_PLAYERS_VIEW,
@@ -141,6 +149,10 @@ def role_of(user: dict) -> Role:
             pass
     body_type = (user.get("body_type") or "").lower()
     post = (user.get("post") or "").lower()
+    post_title = (user.get("post_title") or "").lower()
+    # Iter 110 · System Administrator persona — technical/masters custodian.
+    if "system administrator" in post_title or "system administrator" in post or "sys_admin" in (user.get("id") or ""):
+        return Role.SYS_ADMIN
     if body_type == "state":
         if "president"   in post: return Role.MPCA_PRESIDENT
         if "treasurer"   in post: return Role.MPCA_TREASURER

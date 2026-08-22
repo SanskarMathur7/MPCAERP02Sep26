@@ -314,7 +314,7 @@ async def require_rbac_admin(request: Request) -> Dict[str, Optional[str]]:
     if principal is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    if principal.role in (Role.MPCA_PRESIDENT, Role.MPCA_SECRETARY):
+    if principal.role in (Role.SYS_ADMIN, Role.MPCA_PRESIDENT, Role.MPCA_SECRETARY):
         return {
             "actor_name": principal.name,
             "actor_role": principal.post or principal.role.value,

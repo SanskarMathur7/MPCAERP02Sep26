@@ -195,6 +195,23 @@ PERSONA_USERS = [
         "body_code": "MPCA",
         "body_name": "MPCA Headquarters",
     },
+    # ─── System Administrator (Iter 110 · master-data custodian) ───
+    {
+        "id": "system-administrator",
+        "email": "sysadmin@mpca.in",
+        "title": "System Administrator",
+        "honorific": "Shri",
+        "name": "Vikas Yadav",
+        "post": "System Administrator, MPCA",
+        "post_title": "System Administrator",
+        "role": "sys_admin",
+        "scope": "Masters, Wiring, Rate Cards, RBAC, Maker-Checker · full technical control",
+        "privileges": ["Manage Masters", "RBAC", "Workflow Config", "System Settings"],
+        "accent": "brass",
+        "body_type": "State",
+        "body_code": "MPCA",
+        "body_name": "MPCA Headquarters",
+    },
 ]
 
 

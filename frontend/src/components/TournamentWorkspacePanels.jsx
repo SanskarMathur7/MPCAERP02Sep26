@@ -148,16 +148,16 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
         onChange?.();
     };
 
-    // M29 · CSV bulk import · Iter 122 — template + parser aligned with
+    // M29 · CSV bulk import · Iter 123 — template + parser aligned with
     // the TournamentMatch model. Columns:
     //   match_label   → maps to `label`     (e.g. "League R1", "SF-1")
     //   stage         → League / Quarter_Final / Semi_Final / Final / Practice
     //   pool_id       → optional pool id (A / B / … or blank)
     //   team_a_code   → home_team body_code (e.g. DIV-IND)
     //   team_b_code   → away_team body_code
-    //   match_date    → YYYY-MM-DD  (from-date)
+    //   date_from     → YYYY-MM-DD  (match start date)
+    //   date_to       → YYYY-MM-DD  (match end date — same as date_from for 1-day matches)
     //   start_time    → HH:MM 24h (default 10:00)
-    //   days          → 1 (LO) / 3-4 (Multi-Day)
     //   ground_id     → Ground.id from Grounds master (preferred) OR
     //   ground_name   → free-text ground name (fallback)
     //   venue_name    → free-text stadium/complex name
@@ -166,15 +166,25 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
     // Officials (umpires / scorers / selectors) are assigned in a follow-up
     // "Assign Officials" screen — NOT part of this CSV.
     const downloadTemplate = () => {
-        const header = "match_label,stage,pool_id,team_a_code,team_b_code,match_date,start_time,days,ground_id,ground_name,venue_name,squad,notes\n";
+        const header = "match_label,stage,pool_id,team_a_code,team_b_code,date_from,date_to,start_time,ground_id,ground_name,venue_name,squad,notes\n";
         const sample =
-            'League R1,League,A,DIV-IND,DIV-BPL,2026-09-01,10:00,1,GRD-MPCA-01,MPCA Main Ground,MPCA Stadium Bhopal,18,Opening match\n' +
-            'League R2,League,A,DIV-JBP,DIV-GWL,2026-09-02,14:00,1,,Jabalpur Main Ground,Jabalpur Cricket Complex,18,\n' +
-            'SF-1,Semi_Final,,DIV-IND,DIV-JBP,2026-09-15,10:00,3,GRD-MPCA-01,MPCA Main Ground,MPCA Stadium Bhopal,18,Multi-day SF\n';
+            'League R1,League,A,DIV-IND,DIV-BPL,2026-09-01,2026-09-01,10:00,GRD-MPCA-01,MPCA Main Ground,MPCA Stadium Bhopal,18,Opening match\n' +
+            'League R2,League,A,DIV-JBP,DIV-GWL,2026-09-02,2026-09-02,14:00,,Jabalpur Main Ground,Jabalpur Cricket Complex,18,\n' +
+            'SF-1,Semi_Final,,DIV-IND,DIV-JBP,2026-09-15,2026-09-17,10:00,GRD-MPCA-01,MPCA Main Ground,MPCA Stadium Bhopal,18,Multi-day SF (3 days auto-calculated)\n';
         const blob = new Blob([header + sample], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a"); a.href = url; a.download = `match-calendar-template-${tournament.id.slice(0,6)}.csv`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    };
+    // Helper — days between two ISO dates inclusive; 1 if invalid / missing to_date.
+    const _daysBetween = (from_iso, to_iso) => {
+        if (!from_iso || !to_iso) return 1;
+        try {
+            const f = new Date(from_iso + "T00:00:00Z");
+            const t = new Date(to_iso + "T00:00:00Z");
+            const diff = Math.round((t - f) / 86400000) + 1;
+            return diff >= 1 ? diff : 1;
+        } catch { return 1; }
     };
     const importCsv = async (file) => {
         if (!file) return;
@@ -192,26 +202,33 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                 console.warn("[CSV import] parse warnings:", parsed.errors.slice(0, 3));
             }
             const rows = (parsed.data || [])
-                .map((r) => ({
-                    // required
-                    stage:      r.stage      || "League",
-                    match_date: r.match_date,
-                    // team codes (support both old and new header names for backwards-compat)
-                    home_team:  r.team_a_code || r.home_team,
-                    away_team:  r.team_b_code || r.away_team,
-                    // optional
-                    start_time: r.start_time || "10:00",
-                    label:      r.match_label || null,
-                    pool_id:    r.pool_id || null,
-                    days:       Number(r.days) || 1,
-                    ground_id:  r.ground_id || null,
-                    ground_name:r.ground_name || "",
-                    venue_name: r.venue_name || "",
-                    squad:      r.squad ? Number(r.squad) : null,
-                    notes:      r.notes || "",
-                }))
+                .map((r) => {
+                    // Iter 123 · Prefer explicit date_from/date_to; fall back to legacy match_date + days.
+                    const from_iso = r.date_from || r.match_date;
+                    const to_iso   = r.date_to   || null;
+                    const days     = to_iso ? _daysBetween(from_iso, to_iso) : (Number(r.days) || 1);
+                    return {
+                        // required
+                        stage:      r.stage      || "League",
+                        match_date: from_iso,
+                        to_date:    to_iso || null,
+                        // team codes (support both old and new header names for backwards-compat)
+                        home_team:  r.team_a_code || r.home_team,
+                        away_team:  r.team_b_code || r.away_team,
+                        // optional
+                        start_time: r.start_time || "10:00",
+                        label:      r.match_label || null,
+                        pool_id:    r.pool_id || null,
+                        days:       days,
+                        ground_id:  r.ground_id || null,
+                        ground_name:r.ground_name || "",
+                        venue_name: r.venue_name || "",
+                        squad:      r.squad ? Number(r.squad) : null,
+                        notes:      r.notes || "",
+                    };
+                })
                 .filter((r) => r.home_team && r.away_team && r.match_date);
-            if (!rows.length) throw new Error("No valid rows found. Header must include: match_label, stage, pool_id, team_a_code, team_b_code, match_date, start_time, days, ground_id, ground_name, venue_name, squad, notes.");
+            if (!rows.length) throw new Error("No valid rows found. Header must include: match_label, stage, pool_id, team_a_code, team_b_code, date_from, date_to, start_time, ground_id, ground_name, venue_name, squad, notes.");
             let created = 0, errors = 0;
             for (const row of rows) {
                 try { await api.post(`/tournaments/${tournament.id}/matches`, row); created++; }

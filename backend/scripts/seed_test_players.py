@@ -27,16 +27,16 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 DIVISIONS = [
-    ("DIV-IND", "Indore Division",       "Indore"),
-    ("DIV-JBP", "Jabalpur Division",     "Jabalpur"),
-    ("DIV-SHD", "Shahdol Division",      "Shahdol"),
-    ("DIV-NMD", "Narmadapuram Division", "Hoshangabad"),
-    ("DIV-SAG", "Sagar Division",        "Sagar"),
-    ("DIV-GWL", "Gwalior Division",      "Gwalior"),
-    ("DIV-CHM", "Chambal Division",      "Morena"),
-    ("DIV-RWA", "Rewa Division",         "Rewa"),
-    ("DIV-BPL", "Bhopal Division",       "Bhopal"),
-    ("DIV-UJN", "Ujjain Division",       "Ujjain"),
+    ("DIV-IND", "Indore Division",       "Indore",      "IND"),
+    ("DIV-JBP", "Jabalpur Division",     "Jabalpur",    "JBP"),
+    ("DIV-SHD", "Shahdol Division",      "Shahdol",     "SHD"),
+    ("DIV-NMD", "Narmadapuram Division", "Hoshangabad", "NMD"),
+    ("DIV-SAG", "Sagar Division",        "Sagar",       "SAG"),
+    ("DIV-GWL", "Gwalior Division",      "Gwalior",     "GWL"),
+    ("DIV-CHM", "Chambal Division",      "Morena",      "CHM"),
+    ("DIV-RWA", "Rewa Division",         "Rewa",        "RWA"),
+    ("DIV-BPL", "Bhopal Division",       "Bhopal",      "BPL"),
+    ("DIV-UJN", "Ujjain Division",       "Ujjain",      "UJN"),
 ]
 
 FIRST_M = ["Aarav","Vihaan","Aditya","Reyansh","Krishna","Ishaan","Kabir","Shaurya",
@@ -85,7 +85,8 @@ async def seed_players(db) -> dict:
     created = 0
     skipped = 0
     per_div: dict[str, int] = {}
-    for body_code, body_name, district in DIVISIONS:
+    for body_code, body_name, district, div_short in DIVISIONS:
+        seq = 0
         for count, gender, role, category, birth_year, prof in ROSTER_MIX:
             first_pool = FIRST_F if gender == "Female" else FIRST_M
             for _ in range(count):
@@ -96,8 +97,12 @@ async def seed_players(db) -> dict:
                 if exists:
                     skipped += 1
                     continue
+                seq += 1
                 doc = {
                     "id": str(uuid.uuid4()),
+                    "player_id": f"MP/{div_short}/2026-27/T{seq:04d}",
+                    "season_year": "2026-27",
+                    "division_folder": body_code,
                     "body_id": body_code,
                     "full_name": name,
                     "father_name": f"Shri {random.choice(LASTS)}",
@@ -112,11 +117,11 @@ async def seed_players(db) -> dict:
                     "address_line": f"{random.randint(1,99)}, Cricket Colony, {district}",
                     "residency_since": f"{birth_year:04d}-06-01",
                     "category": category,
-                    "guest_subtype": ("Guest_Player" if category == "Guest" else None),
+                    "guest_subtype": ("MP_Domicile_Senior" if category == "Guest" else None),
                     "guest_disclosure_signed": (category == "Guest"),
                     "role": role,
                     "batting_style": random.choice(["Right_Hand", "Left_Hand"]),
-                    "bowling_style": ("Right_Off_Spin" if role in ("Bowler","All_Rounder") else "None"),
+                    "bowling_style": ("Right_Arm_Off_Spin" if role in ("Bowler","All_Rounder") else "None"),
                     "height_cm": random.randint(150, 190),
                     "weight_kg": random.randint(45, 90),
                     "aadhaar_last4": f"{random.randint(1000,9999)}",

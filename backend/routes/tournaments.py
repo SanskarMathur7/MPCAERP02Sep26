@@ -752,15 +752,31 @@ async def remove_player_from_squad(squad_id: str, player_id: str):
 
 
 @api_router.get("/tournaments-stats/summary")
-async def tournament_stats():
-    total = await db.tournaments.count_documents({})
-    upcoming = await db.tournaments.count_documents({"status": "Upcoming"})
-    selection = await db.tournaments.count_documents({"status": "Squad_Selection"})
-    in_progress = await db.tournaments.count_documents({"status": "In_Progress"})
-    completed = await db.tournaments.count_documents({"status": "Completed"})
-    squads = await db.squads.count_documents({})
-    # selected players (sum of member counts via aggregation)
-    pipeline = [{"$project": {"sz": {"$size": {"$ifNull": ["$members", []]}}}}, {"$group": {"_id": None, "total": {"$sum": "$sz"}}}]
+async def tournament_stats(request: Request):
+    """Iter 108 (SEC-004): scoped to caller's body.  Tournaments belong to a
+    body (Division/District/State); the filter uses the same host body_id
+    scope semantics as elsewhere."""
+    from lib.authz import get_principal, scope_filter
+    principal = get_principal(request)
+    sf = scope_filter(principal, field="body_id")
+    total = await db.tournaments.count_documents(sf)
+    upcoming = await db.tournaments.count_documents({"status": "Upcoming", **sf})
+    selection = await db.tournaments.count_documents({"status": "Squad_Selection", **sf})
+    in_progress = await db.tournaments.count_documents({"status": "In_Progress", **sf})
+    completed = await db.tournaments.count_documents({"status": "Completed", **sf})
+    # Squads inherit the tournament's scope — narrow via the parent's ids
+    squad_filter = {}
+    if sf:
+        tournament_ids = [t["id"] async for t in db.tournaments.find(sf, {"id": 1, "_id": 0})]
+        squad_filter = {"tournament_id": {"$in": tournament_ids}}
+    squads = await db.squads.count_documents(squad_filter)
+    pipeline = []
+    if squad_filter:
+        pipeline.append({"$match": squad_filter})
+    pipeline += [
+        {"$project": {"sz": {"$size": {"$ifNull": ["$members", []]}}}},
+        {"$group": {"_id": None, "total": {"$sum": "$sz"}}},
+    ]
     selected = 0
     async for row in db.squads.aggregate(pipeline):
         selected = row.get("total", 0)
@@ -772,5 +788,6 @@ async def tournament_stats():
         "completed": completed,
         "total_squads": squads,
         "total_players_selected": selected,
+        "scope": principal.body_code or "MPCA",
     }
 

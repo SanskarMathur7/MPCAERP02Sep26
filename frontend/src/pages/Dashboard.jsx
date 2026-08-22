@@ -1,31 +1,29 @@
 /**
- * Command Centre · Dashboard (Iter 106 · Feb 2026)
+ * Command Centre · Dashboard (Iter 108 · Feb 2026)
  * ------------------------------------------------
- * Refocused as an analytics-forward surface.  The action inbox stays
- * (Pending With Me), everything else is now tabs — each tab is a warm-palette
- * port of the /showcase HUD panels (currently sample data).
- *
- * Tabs:  Season Overview  ·  Grants Board  ·  Budget Health
- * Removed: Fairplay Rankings, Focus Stripes, Divisions Drill-down grid,
- *          Recent Activity list, Quick Actions grid, 6-tile KPI band.
+ * Iter 108: tabs are now permission-gated (see /src/lib/authz.js).  Match
+ * Officials get a super-minimal own-view dashboard; District Secretaries lose
+ * the Budget tab; Division Secretaries see all four tabs but the numbers
+ * inside are auto-scoped by the backend to their DIV-* code.
  */
-import { useState, lazy, Suspense } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Activity, HandCoins, IndianRupee, Users, Sparkles } from "lucide-react";
+import { Activity, HandCoins, IndianRupee, Users, Sparkles, ShieldCheck } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import PendingWithMePanel from "@/components/PendingWithMePanel";
 import { DL, PageShell, PageEyebrow } from "@/lib/designSystem";
+import { can, roleOf, ROLES, PERMISSIONS } from "@/lib/authz";
 
 const WarmSeasonOverview = lazy(() => import("./dashboard-hud/WarmSeasonOverview"));
 const WarmGrantsBoard    = lazy(() => import("./dashboard-hud/WarmGrantsBoard"));
 const WarmBudgetHealth   = lazy(() => import("./dashboard-hud/WarmBudgetHealth"));
 const WarmPlayers        = lazy(() => import("./dashboard-hud/WarmPlayers"));
 
-const TABS = [
-    { id: "season",  label: "Season Overview", icon: Activity,    Component: WarmSeasonOverview },
-    { id: "players", label: "Players",         icon: Users,       Component: WarmPlayers },
-    { id: "grants",  label: "Grants Board",    icon: HandCoins,   Component: WarmGrantsBoard },
-    { id: "budget",  label: "Budget Health",   icon: IndianRupee, Component: WarmBudgetHealth },
+const ALL_TABS = [
+    { id: "season",  label: "Season Overview", icon: Activity,    perm: PERMISSIONS.DASHBOARD_SEASON_VIEW,  Component: WarmSeasonOverview },
+    { id: "players", label: "Players",         icon: Users,       perm: PERMISSIONS.DASHBOARD_PLAYERS_VIEW, Component: WarmPlayers },
+    { id: "grants",  label: "Grants Board",    icon: HandCoins,   perm: PERMISSIONS.DASHBOARD_GRANTS_VIEW,  Component: WarmGrantsBoard },
+    { id: "budget",  label: "Budget Health",   icon: IndianRupee, perm: PERMISSIONS.DASHBOARD_BUDGET_VIEW,  Component: WarmBudgetHealth },
 ];
 
 const personaMeta = (persona) => {
@@ -35,16 +33,88 @@ const personaMeta = (persona) => {
     return { rootLabel: persona.body_name || persona.body_code || "", post: persona.post || "" };
 };
 
+/* ---------- Match Official mini-dashboard ------------------------- */
+const MatchOfficialMini = ({ persona }) => (
+    <PageShell testid="dashboard-page-official">
+        <PageEyebrow
+            title="Match Official Console"
+            meta={`Official · ${persona?.name || ""}`}
+        />
+        <section
+            className="p-8"
+            style={{
+                background: DL.paper,
+                border: `1px solid ${DL.ruleStrong}`,
+                borderRadius: 4,
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75), 0 6px 14px -8px rgba(14,31,27,0.18)",
+            }}
+        >
+            <div className="flex items-center gap-3 mb-4">
+                <ShieldCheck size={20} style={{ color: DL.emerald }} />
+                <div className="text-[13px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
+                    Your Corner
+                </div>
+            </div>
+            <h2 className="text-[28px] tracking-tight" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink }}>
+                Welcome, {persona?.honorific || ""} {persona?.name || ""}
+            </h2>
+            <p className="mt-3 text-[13px] max-w-2xl" style={{ color: DL.muted }}>
+                MPCA-wide analytics are restricted to office-bearers.  From here you can access your own postings,
+                submit DA/TA claims, and review your season history.
+            </p>
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <a href="/officials/me" className="p-4 transition-all hover:-translate-y-0.5"
+                   style={{ background: DL.ivory, border: `1px solid ${DL.ruleStrong}`, borderLeft: `4px solid ${DL.emerald}`, borderRadius: 4 }}
+                   data-testid="official-jump-postings">
+                    <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>My Postings</div>
+                    <div className="mt-1 text-[15px]" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink }}>Upcoming assignments →</div>
+                </a>
+                <a href="/da-forms" className="p-4 transition-all hover:-translate-y-0.5"
+                   style={{ background: DL.ivory, border: `1px solid ${DL.ruleStrong}`, borderLeft: `4px solid ${DL.gold}`, borderRadius: 4 }}
+                   data-testid="official-jump-claims">
+                    <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>DA / TA Claims</div>
+                    <div className="mt-1 text-[15px]" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink }}>Submit &amp; track →</div>
+                </a>
+                <a href="/officials/me?tab=history" className="p-4 transition-all hover:-translate-y-0.5"
+                   style={{ background: DL.ivory, border: `1px solid ${DL.ruleStrong}`, borderLeft: `4px solid ${DL.muted}`, borderRadius: 4 }}
+                   data-testid="official-jump-history">
+                    <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>Season History</div>
+                    <div className="mt-1 text-[15px]" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink }}>All matches officiated →</div>
+                </a>
+            </div>
+        </section>
+    </PageShell>
+);
+
 const Dashboard = () => {
     const { persona } = useAuth();
-    const [activeTab, setActiveTab] = useState("season");
+    const role = useMemo(() => roleOf(persona), [persona]);
+    const TABS = useMemo(() => ALL_TABS.filter((t) => can(role, t.perm)), [role]);
+    const [activeTab, setActiveTab] = useState(TABS[0]?.id || "season");
     const { rootLabel, post } = personaMeta(persona);
-    const Active = TABS.find((t) => t.id === activeTab)?.Component || WarmSeasonOverview;
+    const Active = TABS.find((t) => t.id === activeTab)?.Component || TABS[0]?.Component;
 
     // Personalisation — greeting by wall-clock hour
     const hour = new Date().getHours();
     const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
     const firstName = persona?.name?.split(" ").slice(-1)[0] || persona?.name || "";
+
+    // Match Officials get their own minimal surface
+    if (role === ROLES.MATCH_OFFICIAL) {
+        return <MatchOfficialMini persona={persona} />;
+    }
+
+    // No tabs at all (should never happen for a signed-in user, but fail closed)
+    if (TABS.length === 0 || !Active) {
+        return (
+            <PageShell testid="dashboard-page-empty">
+                <PageEyebrow title="Command Centre" meta="No dashboards available for your role" />
+                <div className="p-8 text-center" style={{ color: DL.muted }}>
+                    Ask your MPCA administrator to grant you dashboard access.
+                </div>
+            </PageShell>
+        );
+    }
 
     return (
         <PageShell testid="dashboard-page">
@@ -78,7 +148,7 @@ const Dashboard = () => {
                 }
             />
 
-            {/* Tab strip */}
+            {/* Tab strip · permission-filtered */}
             <div
                 className="flex flex-wrap items-stretch gap-1 mb-6"
                 style={{ borderBottom: `2px solid ${DL.rule}` }}

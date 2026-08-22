@@ -2,7 +2,7 @@
 from datetime import datetime, timezone, date
 from typing import List, Optional, Literal
 import uuid
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from pydantic import BaseModel, Field, ConfigDict
 
 from core.infra import db, api_router
@@ -77,9 +77,21 @@ async def body_summary(code: str):
 
 
 @api_router.get("/bodies/{code}/children-activity")
-async def body_children_activity(code: str):
+async def body_children_activity(code: str, request: Request):
     """For drill-down ERP dashboard cards: returns per-child summary
-    (members count, claims pending, claims overdue, disbursed-YTD, last activity)."""
+    (members count, claims pending, claims overdue, disbursed-YTD, last activity).
+
+    Iter 108 (SEC-004): Division callers can only inspect their own body's
+    children; District/Match Official callers get 403.  State personas
+    (President / Secretary / Treasurer) retain full visibility.
+    """
+    from lib.authz import get_principal, require_scope
+    principal = get_principal(request)
+    if principal.is_district or principal.is_official:
+        raise HTTPException(403, "Not permitted to drill-down at this level")
+    if not principal.is_state:
+        require_scope(principal, code)
+
     parent = await db.bodies.find_one({"code": code}, {"_id": 0})
     if not parent:
         raise HTTPException(404, "Body not found")

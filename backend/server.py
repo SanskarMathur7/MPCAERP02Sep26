@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from core.infra import api_router, client, logger
+from lib.auth_middleware import AuthMiddleware
 
 # Importing each route module triggers its @api_router decorators.
 from routes import (  # noqa: F401
@@ -136,6 +137,12 @@ async def health():
 
 
 app.include_router(api_router)
+
+# Iter 108 · JWT-based authentication + RBAC (SEC-001, SEC-004).  Every /api/*
+# route except the small public allow-list in lib/auth_middleware.py now
+# requires a valid Bearer token; downstream code reads scope + role from
+# request.state.principal (unspoofable).
+app.add_middleware(AuthMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

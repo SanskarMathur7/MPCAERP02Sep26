@@ -1713,3 +1713,25 @@ _Shipped 27 Jul 2026 · covered in iteration_58 above_
 - `POST /api/tournaments` and `POST /api/grant-claims` now call `is_season_activated(fiscal_cycle)` and return 403 with a user-friendly message when the season is not activated.
 - Frontend banner on `SchemesMaster.jsx` — green when activated, oxblood when not, MPCA-only Export PDF (print-to-PDF) + Upload Signed PDF + Deactivate controls. Non-MPCA sees "Awaiting MPCA" badge.
 - Bootstrap: fiscal cycles 2024-25 / 2025-26 / 2026-27 auto-activated at startup so existing dev data still works. MPCA can re-upload anytime to formalize (bootstrap flag prompts them to do so).
+
+---
+
+## Iter 108 (Feb 22 2026) · RBAC + Body-Scope
+
+### Problem
+Security audit (SEC-001..005) confirmed: `/api/*` routes were unauthenticated; scope was decided from spoofable `X-Body-Type` / `X-Persona-Id` headers; a Division Secretary saw the entire MPCA Dashboard. RBAC console had a no-header bootstrap bypass.
+
+### What shipped
+- **AuthMiddleware** (`/app/backend/lib/auth_middleware.py`) — validates Bearer JWT on every `/api/*` call except `/api/auth/login|logout` and `/api/health`. Fail-closed → 401 on missing/invalid token.
+- **`lib/authz.py`** — `Role`, `Permission`, `ROLE_MATRIX`, `RequestPrincipal`, `get_principal(request)`, `require_permission(perm)`, `scope_filter(principal)`, `require_scope(principal, body_code)`. Single source of truth for RBAC.
+- **`core/scoping.py` refactored** — `get_scope(request)` now reads from `request.state.principal` (JWT-derived) first; the legacy header path is kept only as a fallback for public endpoints. Header-spoofing is dead.
+- **`/api/rbac/*` gated** — requires `mpca_president` or `mpca_secretary` role; no-header bootstrap removed.
+- **Dashboard endpoints scoped** — `/players-stats/summary`, `/tournaments-stats/summary`, `/bodies/{code}/children-activity` now apply `scope_filter()`; Division / District callers see only their own rows.
+- **Frontend** — `lib/authz.js` (mirror of backend matrix), `<Guard>`/`can()` helpers. Dashboard tabs auto-filter by role. Match Official gets a dedicated minimal console. Identity headers stripped from `lib/api.js`.
+- **Tests** — `tests/test_iter108_rbac.py` · 10 passing (auth required, scope enforced, header-spoof blocked, cross-body denied, RBAC gated).
+
+### Backlog (Sprint 3 · P2)
+- Add `require_permission()` on approve/reject/return/disqualify/sanction endpoints (players.py, tournament_budgets.py, reimbursement_claims.py)
+- Nav sidebar gating — hide "Membership Register", "MPCA Schemes", "Grant Claims" etc. from a Division Secretary
+- Wire the four Dashboard tabs to real APIs so Division numbers actually populate (currently sample data with correct SCOPE headers set)
+- Guard by-id GETs on players/tournament_budgets/division_grants (SEC-003)

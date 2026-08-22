@@ -9,30 +9,15 @@ export const api = axios.create({
     timeout: 15000,
 });
 
-// Attach persona (role) + optional email + selected season to every request so
-// backend RBAC + season scoping work. Also attach the JWT bearer token when
-// present so /api/auth/me and protected endpoints authorise properly (Feb 2026).
+// Feb 2026 · JWT bearer only.  Iter 108 (SEC-001): identity/scope headers
+// were removed — the backend derives role + body-scope from the signed JWT
+// via lib/auth_middleware.py; anything sent from the client is ignored.
 api.interceptors.request.use((config) => {
     try {
-        // Feb 2026 · JWT bearer token
         const token = typeof window !== "undefined" && window.localStorage.getItem("mpca_token");
         if (token) {
             config.headers = config.headers || {};
             config.headers["Authorization"] = `Bearer ${token}`;
-        }
-        const raw = typeof window !== "undefined" && window.localStorage.getItem("mpca_persona");
-        if (raw) {
-            const p = JSON.parse(raw);
-            config.headers = config.headers || {};
-            if (p?.id) config.headers["X-Role-Id"] = p.id;
-            if (p?.id) config.headers["X-Persona-Id"] = p.id;
-            if (p?.email) config.headers["X-User-Email"] = p.email;
-            if (p?.body_code) config.headers["X-User-Body-Code"] = p.body_code;
-            if (p?.body_code) config.headers["X-Body-Code"] = p.body_code;
-            if (p?.body_type) config.headers["X-Body-Type"] = p.body_type;
-            if (p?.name) config.headers["X-User-Name"] = p.name;
-            if (p?.name) config.headers["X-Persona-Name"] = p.name;
-            if (p?.post) config.headers["X-Persona-Post"] = p.post;
         }
         // M27 · Global cricketing-season filter — injected on GET only, and
         // only when the caller has NOT already supplied fiscal_cycle. This

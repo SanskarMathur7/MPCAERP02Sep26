@@ -1,7 +1,14 @@
 """Sprint M13 · Body-scope helper for read-side RBAC.
 
-Reads X-Persona-*/X-Body-* headers set by the frontend axios interceptor and
-returns a MongoDB query fragment for the requested collection's body field.
+Iter 108 update ────────────────────────────────────────────────────────
+Scope is now derived from `request.state.principal` (populated by
+lib/auth_middleware.AuthMiddleware from the signed JWT), NOT from
+client-controlled `X-Body-*` / `X-Persona-*` headers.  This closes
+SEC-001 in the security audit.
+
+Legacy header-based reads are retained ONLY as an unsigned fallback for
+public routes (/api/health etc.); for anything gated by the auth
+middleware the state-attached principal is authoritative.
 
 Rules
 ─────
@@ -9,16 +16,6 @@ Rules
 • Division (e.g. DIV-IND)  → own DIV code + all DIST-*-{SUFFIX} children (uses $or)
 • District                 → own DIST code only
 • Match Official           → routes filter by official_name (not body)
-
-Usage
-─────
-    from core.scoping import get_scope, body_scope
-
-    @api_router.get("/members")
-    async def list_members(request: Request):
-        scope = get_scope(request)
-        q = {"is_active": True, **body_scope(scope)}
-        return await db.members.find(q, {"_id": 0}).to_list(2000)
 """
 from typing import Optional
 from fastapi import Request
@@ -47,6 +44,22 @@ class RequestScope:
 
 
 def get_scope(request: Request) -> RequestScope:
+    """JWT-first scope resolution (Iter 108).
+
+    1) If the auth middleware attached a `principal` to `request.state`,
+       derive scope from THAT (unspoofable, JWT-signed).
+    2) Otherwise fall back to legacy headers — reachable only from public
+       routes that bypass the auth middleware.
+    """
+    principal = getattr(request.state, "principal", None)
+    if principal is not None:
+        return RequestScope(
+            persona_id=principal.user_id,
+            body_code=principal.body_code,
+            body_type=principal.body_type,
+            name=principal.name,
+        )
+    # Legacy fallback — only for endpoints not covered by AuthMiddleware.
     h = request.headers
     return RequestScope(
         persona_id=h.get("x-persona-id"),
@@ -79,14 +92,7 @@ def body_scope(scope: RequestScope, field: str = "body_id") -> dict:
 
 
 def in_scope_ids(scope: RequestScope) -> Optional[list]:
-    """Convenience: list of body codes visible to this scope.
-    Returns None for State (means "no filter"). For Division includes DIV code +
-    a lightweight prefix match will be applied on collection use — callers should
-    prefer body_scope() over this."""
+    """Convenience: list of body codes visible to this scope."""
     if scope.is_state or not scope.body_code:
         return None
-    if scope.is_district:
-        return [scope.body_code]
-    if scope.is_division:
-        return [scope.body_code]  # child DIST-*-{suffix} handled via regex in body_scope
     return [scope.body_code]

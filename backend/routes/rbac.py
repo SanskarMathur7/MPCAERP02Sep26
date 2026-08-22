@@ -304,27 +304,24 @@ RBAC_ADMIN_PERSONA_IDS = {"president", "secretary", "system-administrator", "sys
 
 
 async def require_rbac_admin(request: Request) -> Dict[str, Optional[str]]:
-    """FastAPI dependency: gate every RBAC endpoint to President/Secretary/SysAdmin."""
-    actor = _actor_from_request(request)
-    persona_id = (request.headers.get("x-persona-id") or "").lower().strip()
-    body_code = (request.headers.get("x-body-code") or "").upper().strip()
+    """FastAPI dependency: gate every RBAC endpoint to MPCA President /
+    Hon. Secretary.  Iter 108 (SEC-002): auth is now enforced by the global
+    AuthMiddleware, so `request.state.principal` is trusted; the no-header
+    bootstrap bypass and header-forgery paths are gone.
+    """
+    from lib.authz import Role  # local import to avoid circulars at import-time
+    principal = getattr(request.state, "principal", None)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # First-run bootstrap: allow requests when no persona headers are set at all
-    # (used by initial admin seeding & CLI). Once the console is live, personas
-    # always send these headers.
-    if not persona_id:
-        return actor
+    if principal.role in (Role.MPCA_PRESIDENT, Role.MPCA_SECRETARY):
+        return {
+            "actor_name": principal.name,
+            "actor_role": principal.post or principal.role.value,
+            "actor_body": principal.body_code,
+        }
 
-    if persona_id in RBAC_ADMIN_PERSONA_IDS and body_code == "MPCA":
-        return actor
-
-    # System Administrator user record (from `users` collection)
-    if persona_id:
-        user = await db.users.find_one({"id": persona_id}, {"role_id": 1, "_id": 0})
-        if user and user.get("role_id") in ("president", "hon_secretary", "system_administrator"):
-            return actor
-
-    raise HTTPException(403, "RBAC console is restricted to the President, Hon. Secretary and System Administrator.")
+    raise HTTPException(403, "RBAC console is restricted to the President and Hon. Secretary.")
 
 
 # ─────────────────────────── Audit log helper (used by other modules) ───────────────────────────

@@ -483,15 +483,20 @@ async def ai_validate_player_documents(pid: str):
 
 
 @api_router.get("/players-stats/summary")
-async def players_stats():
-    total = await db.players.count_documents({})
-    active = await db.players.count_documents({"status": "Active"})
-    pending = await db.players.count_documents({"status": {"$in": ["Pending", "Under_Division_Review", "Discrepancy_Raised", "Division_Approved"]}})
-    suspended = await db.players.count_documents({"status": {"$in": ["Suspended", "Banned"]}})
+async def players_stats(request: Request):
+    """Iter 108 (SEC-004): stats scoped to caller's body.  State personas see
+    every player; Division/District see only their own scope's rows."""
+    from lib.authz import get_principal, scope_filter
+    principal = get_principal(request)
+    sf = scope_filter(principal, field="body_id")
+    total = await db.players.count_documents(sf)
+    active = await db.players.count_documents({"status": "Active", **sf})
+    pending = await db.players.count_documents({"status": {"$in": ["Pending", "Under_Division_Review", "Discrepancy_Raised", "Division_Approved"]}, **sf})
+    suspended = await db.players.count_documents({"status": {"$in": ["Suspended", "Banned"]}, **sf})
     by_cat = {}
     for cat in ("Local_MP", "Born_Outside", "Guest"):
-        by_cat[cat] = await db.players.count_documents({"category": cat})
-    court_orders = await db.players.count_documents({"court_order_flag": True})
+        by_cat[cat] = await db.players.count_documents({"category": cat, **sf})
+    court_orders = await db.players.count_documents({"court_order_flag": True, **sf})
     return {
         "total_players": total,
         "active_players": active,
@@ -499,6 +504,7 @@ async def players_stats():
         "suspended_players": suspended,
         "by_category": by_cat,
         "court_order_count": court_orders,
+        "scope": principal.body_code or "MPCA",   # transparency for the UI
     }
 
 

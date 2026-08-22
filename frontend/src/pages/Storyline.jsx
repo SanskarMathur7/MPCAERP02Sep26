@@ -4,12 +4,13 @@
  * Uses the shared design system (DL palette, Nunito, embossed cards) so it
  * lives in the same visual language as the rest of the ERP.
  */
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { DL, embossedCard } from "@/lib/designSystem";
 import {
     Sparkles, Cpu, ShieldCheck, HandCoins, Users, Trophy, Calendar,
     FileCheck2, MessageSquare, Database, ScrollText, GitBranch, Building2,
-    ArrowRight, Quote, Award, Landmark,
+    ArrowRight, ArrowLeft, Quote, Award, Landmark, Download, Presentation, X,
 } from "lucide-react";
 
 // ── palette shortcuts ──────────────────────────────────────────────
@@ -162,25 +163,74 @@ const IMPACT = [
 
 // ── Page ───────────────────────────────────────────────────────────
 export default function Storyline() {
+    const [presenter, setPresenter] = useState(false);
+    const [slide, setSlide] = useState(0);
+
+    // Feb 2026 · Presenter keyboard navigation — arrows + escape.
+    useEffect(() => {
+        if (!presenter) return;
+        const onKey = (e) => {
+            if (e.key === "Escape") setPresenter(false);
+            if (e.key === "ArrowRight" || e.key === " ") setSlide((s) => Math.min(6, s + 1));
+            if (e.key === "ArrowLeft")  setSlide((s) => Math.max(0, s - 1));
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [presenter]);
+
+    const slideTitles = useMemo(() => ["Hero", "Act I · Old world", "Act II · Pain points", "Act III · AI arsenal", "Act IV · Impact ledger", "Act V · National vision", "Closer"], []);
+
     return (
         <div
             className="page-enter min-h-screen"
             data-testid="storyline-page"
             style={{ backgroundColor: DL.ivory, fontFamily: DL.fontBody, color: DL.ink }}
         >
-            <div className="px-8 md:px-12 py-10 max-w-[1200px] mx-auto">
-                {/* Back */}
-                <Link
-                    to="/showcase"
-                    className="inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.18em] font-bold mb-6 rounded-full px-4 py-2 transition-colors"
-                    style={{ fontFamily: DL.fontMono, color: DL.ink, border: `1.5px solid ${DL.ruleStrong}` }}
-                    data-testid="storyline-back"
-                >
-                    ← Back to Showcase
-                </Link>
+            {/* Feb 2026 · Print + presenter styles. When body has
+                .storyline-printing, hide everything except the
+                storyline content. Slide-mode is a separate overlay. */}
+            <style>{`
+                @media print {
+                    body > *:not(#storyline-print-root) { display: none !important; }
+                    #storyline-print-root { padding: 0 !important; margin: 0 auto !important; max-width: 100% !important; }
+                    [data-testid="storyline-toolbar"], [data-testid="storyline-back"], [data-testid="storyline-footer-nav"] { display: none !important; }
+                    section { page-break-inside: avoid; }
+                    @page { size: A4; margin: 16mm 14mm; }
+                }
+            `}</style>
+            <div id="storyline-print-root" className="px-8 md:px-12 py-10 max-w-[1200px] mx-auto">
+                {/* Toolbar */}
+                <div className="flex items-center justify-between gap-3 mb-6 flex-wrap" data-testid="storyline-toolbar">
+                    <Link
+                        to="/showcase"
+                        className="inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.18em] font-bold rounded-full px-4 py-2 transition-colors"
+                        style={{ fontFamily: DL.fontMono, color: DL.ink, border: `1.5px solid ${DL.ruleStrong}` }}
+                        data-testid="storyline-back"
+                    >
+                        ← Back to Showcase
+                    </Link>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                            onClick={() => window.print()}
+                            className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-[12px] uppercase tracking-[0.2em] font-bold transition-colors"
+                            style={{ color: DL.ink, border: `1.5px solid ${DL.ruleStrong}`, fontFamily: DL.fontMono, backgroundColor: DL.paper }}
+                            data-testid="storyline-download-pdf"
+                        >
+                            <Download size={14} strokeWidth={2.5} /> Download as PDF
+                        </button>
+                        <button
+                            onClick={() => { setSlide(0); setPresenter(true); }}
+                            className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-[12px] uppercase tracking-[0.2em] font-bold transition-colors"
+                            style={{ backgroundColor: DL.emerald, color: DL.paper, fontFamily: DL.fontMono, boxShadow: "0 14px 30px -14px rgba(13,59,46,0.55)" }}
+                            data-testid="storyline-presenter-btn"
+                        >
+                            <Presentation size={14} strokeWidth={2.5} /> Presenter Mode
+                        </button>
+                    </div>
+                </div>
 
                 {/* Band 1 · Hero */}
-                <div className="p-8 md:p-12 mb-10 relative overflow-hidden" style={emeraldSlab}>
+                <div id="storyline-band-0" className="p-8 md:p-12 mb-10 relative overflow-hidden" style={emeraldSlab}>
                     <Eyebrow>
                         Address to · The Prime Minister of India
                     </Eyebrow>
@@ -205,7 +255,7 @@ export default function Storyline() {
                 </div>
 
                 {/* Band 2 · Act I — the old world */}
-                <section className="mb-14">
+                <section id="storyline-band-1" className="mb-14">
                     <Eyebrow tone="ink">Act I</Eyebrow>
                     <H2>The old world — cricket administration on paper.</H2>
                     <div className="p-8 md:p-10 relative" style={{ ...embossedCard(), borderLeft: `4px solid ${DL.gold}` }}>
@@ -224,7 +274,7 @@ export default function Storyline() {
                 </section>
 
                 {/* Band 3 · Act II — the pain-point grid */}
-                <section className="mb-14">
+                <section id="storyline-band-2" className="mb-14">
                     <Eyebrow tone="ink">Act II · 16 pain points, 16 resolutions</Eyebrow>
                     <H2>What AI has done to every single one.</H2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -233,7 +283,7 @@ export default function Storyline() {
                 </section>
 
                 {/* Band 4 · Act III — the AI features */}
-                <section className="mb-14">
+                <section id="storyline-band-3" className="mb-14">
                     <Eyebrow tone="ink">Act III · The AI arsenal</Eyebrow>
                     <H2>Seven AI capabilities, one product.</H2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -242,7 +292,7 @@ export default function Storyline() {
                 </section>
 
                 {/* Band 5 · Act IV — the impact ledger */}
-                <section className="mb-14">
+                <section id="storyline-band-4" className="mb-14">
                     <Eyebrow tone="ink">Act IV · The impact ledger</Eyebrow>
                     <H2>Before → After · measurable.</H2>
                     <div className="p-8" style={embossedCard()}>
@@ -258,7 +308,7 @@ export default function Storyline() {
                 </section>
 
                 {/* Band 6 · Act V — national vision */}
-                <section className="mb-14">
+                <section id="storyline-band-5" className="mb-14">
                     <Eyebrow tone="ink">Act V · The national vision</Eyebrow>
                     <H2>Why this matters for Bharat.</H2>
                     <div className="p-8 md:p-10" style={embossedCard()}>
@@ -286,7 +336,7 @@ export default function Storyline() {
                 </section>
 
                 {/* Band 7 · The one-line closer */}
-                <div className="p-8 md:p-12 mb-10 relative overflow-hidden" style={emeraldSlab}>
+                <div id="storyline-band-6" className="p-8 md:p-12 mb-10 relative overflow-hidden" style={emeraldSlab}>
                     <Eyebrow>The One-Line Closer</Eyebrow>
                     <p
                         className="mt-4 text-[24px] md:text-[32px] leading-[1.3] tracking-tight"
@@ -302,7 +352,7 @@ export default function Storyline() {
                 </div>
 
                 {/* Footer nav */}
-                <div className="flex flex-wrap gap-3 mt-8">
+                <div className="flex flex-wrap gap-3 mt-8" data-testid="storyline-footer-nav">
                     <Link
                         to="/showcase"
                         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.2em] font-bold"
@@ -321,6 +371,98 @@ export default function Storyline() {
                     </Link>
                 </div>
             </div>
+
+            {/* Feb 2026 · Presenter Mode overlay — full-screen, one band per slide */}
+            {presenter && (
+                <div
+                    className="fixed inset-0 z-[100] overflow-y-auto"
+                    style={{ backgroundColor: DL.ivory }}
+                    data-testid="storyline-presenter-overlay"
+                    onClick={(e) => { if (e.target === e.currentTarget) { /* clicking backdrop does nothing */ } }}
+                >
+                    {/* Top strip */}
+                    <div className="sticky top-0 z-10 flex items-center justify-between px-6 md:px-10 py-3" style={{ background: `linear-gradient(180deg, ${DL.emerald} 0%, #0a2f24 100%)`, borderBottom: `2px solid ${DL.gold}` }}>
+                        <div className="flex items-center gap-4 flex-wrap">
+                            <span className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                                / Presenter · Slide {slide + 1} of 7
+                            </span>
+                            <span className="hidden md:inline text-[15px] font-bold" style={{ fontFamily: DL.fontDisplay, color: DL.paper }}>
+                                {slideTitles[slide]}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setSlide((s) => Math.max(0, s - 1))}
+                                disabled={slide === 0}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-[0.18em] font-bold disabled:opacity-40"
+                                style={{ fontFamily: DL.fontMono, color: DL.emerald, backgroundColor: DL.gold }}
+                                data-testid="presenter-prev"
+                            >
+                                <ArrowLeft size={12} strokeWidth={2.5} /> Prev
+                            </button>
+                            <button
+                                onClick={() => setSlide((s) => Math.min(6, s + 1))}
+                                disabled={slide === 6}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-[0.18em] font-bold disabled:opacity-40"
+                                style={{ fontFamily: DL.fontMono, color: DL.emerald, backgroundColor: DL.gold }}
+                                data-testid="presenter-next"
+                            >
+                                Next <ArrowRight size={12} strokeWidth={2.5} />
+                            </button>
+                            <button
+                                onClick={() => setPresenter(false)}
+                                className="inline-flex items-center gap-1 w-7 h-7 rounded-full text-[13px] font-bold justify-center"
+                                style={{ color: DL.emerald, backgroundColor: DL.paper, fontFamily: DL.fontMono }}
+                                data-testid="presenter-close"
+                                title="Esc"
+                            >
+                                <X size={14} strokeWidth={2.5} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Slide content — reuses the band DOM by cloning via id */}
+                    <PresenterSlide index={slide} />
+
+                    {/* Slide progress dots */}
+                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full" style={{ backgroundColor: DL.emerald, boxShadow: "0 14px 30px -14px rgba(13,59,46,0.55)" }} data-testid="presenter-dots">
+                        {slideTitles.map((_, i) => (
+                            <button
+                                key={i}
+                                onClick={() => setSlide(i)}
+                                className="w-2.5 h-2.5 rounded-full transition-all"
+                                style={{ backgroundColor: i === slide ? DL.gold : "rgba(184,131,40,0.25)" }}
+                                data-testid={`presenter-dot-${i}`}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+
+// ── Presenter slide renderer ──────────────────────────────────────
+// Picks the DOM node for the corresponding band and renders it inside
+// the presenter overlay via a scoped scaled clone.
+const PresenterSlide = ({ index }) => {
+    const [html, setHtml] = useState("");
+    useEffect(() => {
+        const el = document.getElementById(`storyline-band-${index}`);
+        if (el) {
+            // strip the outer id from the clone so we don't create duplicate ids in the DOM
+            const clone = el.cloneNode(true);
+            clone.removeAttribute("id");
+            setHtml(clone.outerHTML);
+        }
+        window.scrollTo({ top: 0, behavior: "instant" });
+    }, [index]);
+    return (
+        <div
+            className="px-8 md:px-16 py-10 md:py-14 min-h-[calc(100vh-64px)] flex items-center justify-center"
+            style={{ backgroundColor: DL.ivory }}
+        >
+            <div className="w-full max-w-[1100px]" dangerouslySetInnerHTML={{ __html: html }} />
+        </div>
+    );
+};

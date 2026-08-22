@@ -120,11 +120,10 @@ const Dashboard = () => {
         <PageShell testid="dashboard-page">
             <PageEyebrow
                 title="Command Centre"
-                meta={`${persona?.body_type || ""} · ${rootLabel}${post ? " · " + post : ""}`}
                 rightAction={
                     <div className="flex items-center gap-4 flex-wrap">
                         <div
-                            className="inline-flex items-center gap-2 px-4 h-[38px] rounded-full"
+                            className="inline-flex items-center gap-2 px-5 h-[46px] rounded-full"
                             style={{
                                 background: `linear-gradient(180deg, ${DL.paper} 0%, ${DL.paperEdge} 100%)`,
                                 border: `1.5px solid ${DL.ruleStrong}`,
@@ -132,15 +131,15 @@ const Dashboard = () => {
                             }}
                             data-testid="dashboard-greeting-chip"
                         >
-                            <Sparkles size={14} strokeWidth={2.5} style={{ color: DL.gold }} />
-                            <span className="text-[13px] font-bold" style={{ color: DL.ink2 }}>{greeting},</span>
-                            <span className="text-[13px] font-bold" style={{ color: DL.ink, fontFamily: DL.fontDisplay }}>
+                            <Sparkles size={18} strokeWidth={2.5} style={{ color: DL.gold }} />
+                            <span className="text-[17px] font-bold" style={{ color: DL.ink2 }}>{greeting},</span>
+                            <span className="text-[17px] font-bold" style={{ color: DL.ink, fontFamily: DL.fontDisplay }}>
                                 {persona?.honorific || ""} {firstName}
                             </span>
                         </div>
                         <div className="text-right">
-                            <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>As On</div>
-                            <div className="text-[16px] font-bold mt-0.5" style={{ color: DL.ink }}>
+                            <div className="text-[13px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>As On</div>
+                            <div className="text-[20px] font-bold mt-1" style={{ color: DL.ink }}>
                                 {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
                             </div>
                         </div>
@@ -163,20 +162,20 @@ const Dashboard = () => {
                             type="button"
                             onClick={() => setActiveTab(t.id)}
                             data-testid={`dashboard-tab-${t.id}`}
-                            className="inline-flex items-center gap-2 px-5 py-3 -mb-[2px] transition-colors"
+                            className="inline-flex items-center gap-2 px-6 py-4 -mb-[2px] transition-colors"
                             style={{
                                 fontFamily: DL.fontMono,
-                                fontSize: 11,
+                                fontSize: 15,
                                 fontWeight: 700,
                                 letterSpacing: "0.22em",
                                 textTransform: "uppercase",
                                 color: isActive ? DL.emerald : DL.muted,
-                                borderBottom: `2px solid ${isActive ? DL.gold : "transparent"}`,
+                                borderBottom: `3px solid ${isActive ? DL.gold : "transparent"}`,
                                 background: isActive ? DL.paper : "transparent",
                                 cursor: "pointer",
                             }}
                         >
-                            <Icon size={13} strokeWidth={2.25} />
+                            <Icon size={18} strokeWidth={2.25} />
                             {t.label}
                         </button>
                     );

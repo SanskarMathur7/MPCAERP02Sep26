@@ -250,22 +250,12 @@ const AppLayout = ({ children }) => {
                 {persona && !collapsed && (
                     <div className="px-6 py-5 border-b border-mpca-brass/20 bg-black/30">
                         <div className="flex items-start justify-between gap-3">
-                            <div className="overline text-[9px] !text-mpca-gold-light/70 mb-2">
+                            <div className="overline text-[13px] !text-mpca-gold-light/70 mb-2 font-bold tracking-widest">
                                 Signed In As
                             </div>
-                            <div className="flex items-center gap-2">
-                                <NotificationBell />
-                                <button
-                                    onClick={() => navigate("/login")}
-                                    data-testid="switch-persona-btn"
-                                    className="text-[9px] tracking-[0.2em] uppercase text-mpca-gold-light/70 hover:text-mpca-gold-light border border-mpca-brass/40 hover:border-mpca-brass px-2 py-1 transition-colors"
-                                    title="Switch persona"
-                                >
-                                    Switch
-                                </button>
-                            </div>
+                            <NotificationBell />
                         </div>
-                        <div className="font-serif text-lg text-mpca-ivory leading-tight">
+                        <div className="font-serif text-xl text-mpca-ivory leading-tight mt-1">
                             {/* Defensive: strip a leading honorific from name so we never render 'Shri Shri …' */}
                             {(() => {
                                 const h = persona.honorific || "";
@@ -307,7 +297,7 @@ const AppLayout = ({ children }) => {
                         <div key={group.domain} className="mb-6" data-testid={`nav-group-${group.domain.toLowerCase().replace(/\s+/g, "-")}`}>
                             {!collapsed && (
                                 <div
-                                    className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2"
+                                    className="overline text-[12px] font-bold !text-mpca-gold-light/80 mb-3 px-2 tracking-[0.28em]"
                                     data-testid={`nav-domain-${group.domain.toLowerCase().replace(/\s+/g, "-")}`}
                                 >
                                     {group.domain}
@@ -322,15 +312,15 @@ const AppLayout = ({ children }) => {
                                             to={item.to}
                                             data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
                                             className={({ isActive }) =>
-                                                `group flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} py-2.5 text-sm transition-all duration-300 border-l-2 ${
+                                                `group flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} py-3 text-[15px] font-medium transition-all duration-300 border-l-2 ${
                                                     isActive
                                                         ? "bg-mpca-brass/10 text-mpca-gold-light border-mpca-brass"
-                                                        : "text-mpca-ivory/70 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
+                                                        : "text-mpca-ivory/80 border-transparent hover:bg-white/5 hover:text-mpca-ivory hover:border-mpca-brass/40"
                                                 }`
                                             }
                                             title={collapsed ? item.label : undefined}
                                         >
-                                            <item.icon size={16} strokeWidth={1.5} />
+                                            <item.icon size={18} strokeWidth={1.75} />
                                             {!collapsed && <span className="tracking-wide ml-3">{item.label}</span>}
                                         </NavLink>
                                     </li>

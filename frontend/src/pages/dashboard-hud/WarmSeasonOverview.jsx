@@ -36,12 +36,12 @@ export default function WarmSeasonOverview() {
 
     return (
         <div>
-            <WarmPageHeader
-                eyebrow="Live · Season 2026-27"
-                title="Season Overview"
-                kicker="Every match, every rupee, every squad — surfaced in one grade-A viewport."
-                right={<div className="flex items-center gap-2"><ScopeChip label={scopeLabel(persona)} /><SampleChip /></div>}
-            />
+            <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
+                <div className="text-[13px] font-bold uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.emerald }}>
+                    ● Live · Season 2026-27
+                </div>
+                <div className="flex items-center gap-2"><ScopeChip label={scopeLabel(persona)} /><SampleChip /></div>
+            </div>
 
             {/* Ticker */}
             <div

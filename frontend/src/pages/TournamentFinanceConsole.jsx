@@ -584,7 +584,11 @@ const TournamentFinanceConsole = () => {
                         { id: "extras",    label: "Extras",           icon: Gavel,         show: true },
                         { id: "invoices",  label: "Invoices",         icon: Receipt,       show: true },
                         { id: "da",        label: "DA / TA Forms",    icon: ClipboardEdit, show: isMPCA },
-                        { id: "actuals",   label: "Actuals vs Budget",icon: Activity,      show: isMPCA },
+                        // Iter 123t · "Actuals vs Budget" hidden per user feedback — the panel's
+                        // auto-rolled-up numbers were confusing (users couldn't trace where each
+                        // amount came from). Keep the route + component around so we can revive
+                        // it once every source (invoices, extras, DA, claims) links back visibly.
+                        // { id: "actuals",   label: "Actuals vs Budget",icon: Activity,      show: isMPCA },
                         { id: "claims",    label: "Reimbursement Claim", icon: FileSignature, show: true },
                         { id: "receipts",  label: "MPCA Receipts",    icon: HandCoins,     show: isMPCA },
                         { id: "closure",   label: "Closure Letter",   icon: ScrollText,    show: isMPCA },

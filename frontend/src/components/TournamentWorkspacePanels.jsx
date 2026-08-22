@@ -662,23 +662,31 @@ const TournamentReceiptsPanel = ({ tournament, canEdit }) => {
     const [receipts, setReceipts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
-    const [form, setForm] = useState({ receipt_date: "", amount_inr: "", mode: "NEFT", reference_no: "", remarks: "" });
+    const [form, setForm] = useState({ receipt_date: "", amount_inr: "", mode: "NEFT", reference_no: "", remarks: "", participant_body_code: "" });
+    // Iter 123t · Load the tournament's participating bodies so MPCA can pin
+    // each receipt to a specific Division / District under this tournament.
+    const [bodies, setBodies] = useState([]);
 
     const load = async () => {
         setLoading(true);
         try {
-            const list = await api.get(`/tournaments/${tournament.id}/receipts`).then((r) => r.data);
+            const [list, parts] = await Promise.all([
+                api.get(`/tournaments/${tournament.id}/receipts`).then((r) => r.data),
+                api.get(`/tournaments/${tournament.id}/participants`).then((r) => r.data).catch(() => []),
+            ]);
             setReceipts(list || []);
+            setBodies(parts || []);
         } finally { setLoading(false); }
     };
     useEffect(() => { if (tournament?.id) load(); }, [tournament?.id]); // eslint-disable-line
 
     const addReceipt = async () => {
         if (!form.receipt_date || !form.amount_inr) return alert("Date and amount are required.");
+        if (!form.participant_body_code) return alert("Pick the Division / body this receipt belongs to.");
         await api.post(`/tournaments/${tournament.id}/receipts`, {
             ...form, amount_inr: parseFloat(form.amount_inr),
         });
-        setForm({ receipt_date: "", amount_inr: "", mode: "NEFT", reference_no: "", remarks: "" });
+        setForm({ receipt_date: "", amount_inr: "", mode: "NEFT", reference_no: "", remarks: "", participant_body_code: "" });
         setCreating(false);
         await load();
     };
@@ -720,9 +728,10 @@ const TournamentReceiptsPanel = ({ tournament, canEdit }) => {
                         <div key={r.id} className="grid grid-cols-12 gap-2 items-center border border-mpca-brass/20 px-3 py-2 text-xs" data-testid={`receipt-row-${idx}`}>
                             <div className="col-span-2 font-mono text-mpca-brass text-[10px]">{r.receipt_no}</div>
                             <div className="col-span-2 font-mono text-mpca-green-dark">{r.receipt_date}</div>
-                            <div className="col-span-2 text-[9px] uppercase tracking-widest text-mpca-oxblood">{r.mode}</div>
-                            <div className="col-span-2 text-mpca-gray-dark text-[11px] font-mono">{r.reference_no || "—"}</div>
-                            <div className="col-span-3 text-right font-mono text-mpca-green-dark font-semibold">₹{Math.round(r.amount_inr).toLocaleString("en-IN")}</div>
+                            <div className="col-span-2 text-[10px] uppercase tracking-widest text-mpca-navy font-semibold" title={r.participant_body_code}>{r.participant_body_code || "—"}</div>
+                            <div className="col-span-1 text-[9px] uppercase tracking-widest text-mpca-oxblood">{r.mode}</div>
+                            <div className="col-span-2 text-mpca-gray-dark text-[11px] font-mono truncate">{r.reference_no || "—"}</div>
+                            <div className="col-span-2 text-right font-mono text-mpca-green-dark font-semibold">₹{Math.round(r.amount_inr).toLocaleString("en-IN")}</div>
                             <div className="col-span-1 text-right">
                                 {canEdit && (
                                     <button onClick={() => removeReceipt(r.id)} className="text-mpca-oxblood/70 hover:text-mpca-oxblood" data-testid={`receipt-delete-${idx}`}>
@@ -737,17 +746,41 @@ const TournamentReceiptsPanel = ({ tournament, canEdit }) => {
 
             {creating && (
                 <div className="mt-4 border border-mpca-oxblood/40 bg-mpca-parchment/30 p-3" data-testid="receipt-create-form">
-                    <div className="overline text-[9px] mb-2">Record MPCA receipt</div>
+                    <div className="overline text-[9px] mb-2">Record MPCA receipt · pin to participant body</div>
                     <div className="grid grid-cols-4 gap-2">
-                        <input type="date" className={inputCls} value={form.receipt_date} onChange={(e) => setForm({ ...form, receipt_date: e.target.value })} data-testid="receipt-date-input" />
-                        <input type="number" placeholder="Amount ₹" className={inputCls} value={form.amount_inr} onChange={(e) => setForm({ ...form, amount_inr: e.target.value })} data-testid="receipt-amount-input" />
-                        <select className={inputCls} value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
-                            <option>NEFT</option>
-                            <option>RTGS</option>
-                            <option>Cheque</option>
-                            <option>Cash</option>
-                        </select>
-                        <input placeholder="UTR / Cheque No" className={inputCls} value={form.reference_no} onChange={(e) => setForm({ ...form, reference_no: e.target.value })} />
+                        <label className="col-span-2 block">
+                            <div className="overline text-[8.5px] mb-0.5">Paid to <span className="text-mpca-oxblood">*</span></div>
+                            <select className={inputCls} value={form.participant_body_code} onChange={(e) => setForm({ ...form, participant_body_code: e.target.value })} data-testid="receipt-body-select" required>
+                                <option value="">— pick Division / body —</option>
+                                {bodies.map((b) => (
+                                    <option key={b.body_code} value={b.body_code}>
+                                        {(b.body_name || b.body_code) + " · " + (b.role || "?")}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="block">
+                            <div className="overline text-[8.5px] mb-0.5">Date <span className="text-mpca-oxblood">*</span></div>
+                            <input type="date" className={inputCls} value={form.receipt_date} onChange={(e) => setForm({ ...form, receipt_date: e.target.value })} data-testid="receipt-date-input" />
+                        </label>
+                        <label className="block">
+                            <div className="overline text-[8.5px] mb-0.5">Amount ₹ <span className="text-mpca-oxblood">*</span></div>
+                            <input type="number" placeholder="0" className={inputCls} value={form.amount_inr} onChange={(e) => setForm({ ...form, amount_inr: e.target.value })} data-testid="receipt-amount-input" />
+                        </label>
+                        <label className="block">
+                            <div className="overline text-[8.5px] mb-0.5">Mode</div>
+                            <select className={inputCls} value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
+                                <option>NEFT</option><option>RTGS</option><option>Cheque</option><option>Cash</option>
+                            </select>
+                        </label>
+                        <label className="col-span-2 block">
+                            <div className="overline text-[8.5px] mb-0.5">UTR / Cheque No</div>
+                            <input placeholder="e.g. IOBA25012345" className={inputCls} value={form.reference_no} onChange={(e) => setForm({ ...form, reference_no: e.target.value })} />
+                        </label>
+                        <label className="col-span-1 block">
+                            <div className="overline text-[8.5px] mb-0.5">Head (optional)</div>
+                            <input placeholder="Budget head / bucket" className={inputCls} value={form.linked_budget_head || ""} onChange={(e) => setForm({ ...form, linked_budget_head: e.target.value })} />
+                        </label>
                         <input placeholder="Remarks" className={inputCls + " col-span-4"} value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} />
                     </div>
                     <div className="flex justify-end gap-2 mt-3">

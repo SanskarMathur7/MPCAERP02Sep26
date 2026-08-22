@@ -540,6 +540,10 @@ class PurposePatchPayload(BaseModel):
     purpose_of_claim: str
 
 
+class AmountPatchPayload(BaseModel):
+    claimed_amount_inr: float
+
+
 class MpcaPaymentPayload(BaseModel):
     utr: str
     amount_inr: float
@@ -816,6 +820,29 @@ async def patch_purpose(cid: str, payload: PurposePatchPayload):
         raise HTTPException(404, "Claim not found")
     await db.grant_claims.update_one({"id": cid}, {"$set": {
         "purpose_of_claim": payload.purpose_of_claim,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    return await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+
+
+# Iter 123d · Division may edit the claim amount BEFORE submission.
+# Once the claim is Submitted / Under_Review / Approved / Payment_Made / Sanctioned
+# the amount is frozen and any further changes must go via MPCA's approve/reject
+# path (which already carries its own approved_amount_inr).
+_AMOUNT_EDITABLE_STATUSES = {"Draft", "Documents_Pending", "Rejected"}
+
+
+@api_router.patch("/grant-claims/{cid}/amount", response_model=GrantClaim)
+async def patch_claim_amount(cid: str, payload: AmountPatchPayload):
+    claim = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
+    if not claim:
+        raise HTTPException(404, "Claim not found")
+    if claim.get("status") not in _AMOUNT_EDITABLE_STATUSES:
+        raise HTTPException(400, f"Amount is locked once the claim is {claim.get('status')}. Ask MPCA to reject-to-Draft first.")
+    if payload.claimed_amount_inr < 0:
+        raise HTTPException(400, "Amount must be zero or positive.")
+    await db.grant_claims.update_one({"id": cid}, {"$set": {
+        "claimed_amount_inr": float(payload.claimed_amount_inr),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }})
     return await db.grant_claims.find_one({"id": cid}, {"_id": 0})

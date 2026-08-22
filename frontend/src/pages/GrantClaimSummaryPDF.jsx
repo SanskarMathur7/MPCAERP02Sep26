@@ -92,7 +92,7 @@ export default function GrantClaimSummaryPDF() {
                     <tr className="border-b border-gray-300"><td className="py-1 pr-2 w-1/3">Scheme</td><td className="py-1 pr-2"><b>{claim.scheme_code}</b> · {schemeName}</td></tr>
                     <tr className="border-b border-gray-300"><td className="py-1 pr-2">Fiscal Cycle</td><td className="py-1 pr-2">{claim.fiscal_cycle}</td></tr>
                     <tr className="border-b border-gray-300"><td className="py-1 pr-2">Claiming Body</td><td className="py-1 pr-2"><b>{bodyName}</b> · {claim.body_id}</td></tr>
-                    <tr className="border-b border-gray-300"><td className="py-1 pr-2">Claim Amount</td><td className="py-1 pr-2 font-mono"><b>{INR(claim.claim_amount_inr)}</b></td></tr>
+                    <tr className="border-b border-gray-300"><td className="py-1 pr-2">Claim Amount</td><td className="py-1 pr-2 font-mono"><b>{INR(claim.claimed_amount_inr)}</b></td></tr>
                     {claim.approved_amount_inr != null && <tr className="border-b border-gray-300"><td className="py-1 pr-2">Approved Amount</td><td className="py-1 pr-2 font-mono"><b>{INR(claim.approved_amount_inr)}</b></td></tr>}
                     <tr className="border-b border-gray-300"><td className="py-1 pr-2">Submitted</td><td className="py-1 pr-2">{fmtDate(claim.submitted_at)} {claim.submitted_by && `· by ${claim.submitted_by}`}</td></tr>
                     {claim.approved_at && <tr className="border-b border-gray-300"><td className="py-1 pr-2">Approved</td><td className="py-1 pr-2">{fmtDate(claim.approved_at)} {claim.approved_by && `· by ${claim.approved_by}`}</td></tr>}
@@ -155,7 +155,7 @@ export default function GrantClaimSummaryPDF() {
                 <>
                     <h3 className="text-lg border-b border-black mb-2 mt-6">5. MPCA Decision</h3>
                     <p className="text-[11px] leading-relaxed mb-4">
-                        This claim is approved for <b>{INR(claim.approved_amount_inr ?? claim.claim_amount_inr)}</b> against scheme <b>{claim.scheme_code}</b> ({schemeName}) for fiscal cycle <b>{claim.fiscal_cycle}</b>.
+                        This claim is approved for <b>{INR(claim.approved_amount_inr ?? claim.claimed_amount_inr)}</b> against scheme <b>{claim.scheme_code}</b> ({schemeName}) for fiscal cycle <b>{claim.fiscal_cycle}</b>.
                         {claim.approval_notes && <> <br /><br />{claim.approval_notes}</>}
                     </p>
                 </>

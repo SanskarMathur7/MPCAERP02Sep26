@@ -328,6 +328,22 @@ const GrantClaims = () => {
             setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
+    // Iter 123d · Division may edit claimed_amount_inr before submission.
+    const [amountDraft, setAmountDraft] = useState("");
+    const [savingAmount, setSavingAmount] = useState(false);
+    useEffect(() => { setAmountDraft(String(selected?.claimed_amount_inr ?? "")); }, [selected?.id, selected?.claimed_amount_inr]);
+    const amountEditable = !!selected && !isMPCA && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status);
+    const saveAmount = async () => {
+        const val = parseFloat(amountDraft);
+        if (isNaN(val) || val < 0) { alert("Enter a valid amount (₹ ≥ 0)."); return; }
+        setSavingAmount(true);
+        try {
+            const { data } = await api.patch(`/grant-claims/${selected.id}/amount`, { claimed_amount_inr: val });
+            setSelected(data);
+            setClaims((prev) => prev.map((c) => c.id === data.id ? data : c));
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setSavingAmount(false); }
+    };
     const [uploadingExtra, setUploadingExtra] = useState(false);
     const addExtraDocument = async () => {
         const description = window.prompt("Description of this supporting document:");
@@ -501,7 +517,31 @@ const GrantClaims = () => {
                                     <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>Scheme {selected.scheme_code} · {selected.claim_ref}</div>
                                     <h2 className="text-[26px] mt-1 leading-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>{selected.scheme_name}</h2>
                                     <div className="text-[13px] mt-1.5 font-semibold" style={{ color: DL.ink2 }}>
-                                        {selected.body_name} · Claimed <span style={{ fontFamily: DL.fontMono, color: DL.ink, fontWeight: 700 }}>{fmt(selected.claimed_amount_inr)}</span>
+                                        {selected.body_name} · Claimed{" "}
+                                        {amountEditable ? (
+                                            <span className="inline-flex items-center gap-1 align-middle">
+                                                <span className="text-mpca-ink">₹</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="any"
+                                                    value={amountDraft}
+                                                    onChange={(e) => setAmountDraft(e.target.value)}
+                                                    className="w-28 px-2 py-0.5 border border-mpca-brass/60 bg-mpca-ivory text-[13px] font-mono focus:outline-none focus:border-mpca-green-dark"
+                                                    data-testid="claim-amount-input"
+                                                />
+                                                <button
+                                                    onClick={saveAmount}
+                                                    disabled={savingAmount || String(selected.claimed_amount_inr ?? "") === amountDraft}
+                                                    className="text-[10px] uppercase tracking-widest px-2 py-1 bg-mpca-green-dark text-mpca-ivory disabled:opacity-40"
+                                                    data-testid="claim-amount-save-btn"
+                                                >
+                                                    {savingAmount ? "…" : "Save"}
+                                                </button>
+                                            </span>
+                                        ) : (
+                                            <span style={{ fontFamily: DL.fontMono, color: DL.ink, fontWeight: 700 }}>{fmt(selected.claimed_amount_inr)}</span>
+                                        )}
                                         {selected.approved_amount_inr != null && <> · Approved <span style={{ fontFamily: DL.fontMono, color: DL.emerald, fontWeight: 700 }}>{fmt(selected.approved_amount_inr)}</span></>}
                                     </div>
                                 </div>

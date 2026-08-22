@@ -19,6 +19,9 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
     const [creating, setCreating] = useState(false);
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState(null);
+    // Iter 123d · CSV dry-run preview — parsed rows are shown in a modal
+    // so the user can eyeball everything BEFORE anything hits the DB.
+    const [previewRows, setPreviewRows] = useState(null);
     const fileRef = useRef(null);
     // MPCA-243 · Ship 2 · Read the wiring step for advisory copy. When
     // `match_calendar.mode == "Manual_PDF"` (BCCI/School/Club/etc.), the
@@ -186,9 +189,11 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
             return diff >= 1 ? diff : 1;
         } catch { return 1; }
     };
+    // Iter 123d · Parse the CSV and open a DRY-RUN preview modal. Nothing hits
+    // the DB until the user confirms via commitImport().
     const importCsv = async (file) => {
         if (!file) return;
-        setImporting(true); setImportResult(null);
+        setImportResult(null);
         try {
             const text = await file.text();
             // M37 · Use PapaParse so commas inside quoted `notes` values don't break parsing
@@ -201,44 +206,63 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
             if (parsed.errors?.length) {
                 console.warn("[CSV import] parse warnings:", parsed.errors.slice(0, 3));
             }
-            const rows = (parsed.data || [])
-                .map((r) => {
-                    // Iter 123 · Prefer explicit date_from/date_to; fall back to legacy match_date + days.
-                    const from_iso = r.date_from || r.match_date;
-                    const to_iso   = r.date_to   || null;
-                    const days     = to_iso ? _daysBetween(from_iso, to_iso) : (Number(r.days) || 1);
-                    return {
-                        // required
-                        stage:      r.stage      || "League",
-                        match_date: from_iso,
-                        to_date:    to_iso || null,
-                        // team codes (support both old and new header names for backwards-compat)
-                        home_team:  r.team_a_code || r.home_team,
-                        away_team:  r.team_b_code || r.away_team,
-                        // optional
-                        start_time: r.start_time || "10:00",
-                        label:      r.match_label || null,
-                        pool_id:    r.pool_id || null,
-                        days:       days,
-                        ground_id:  r.ground_id || null,
-                        ground_name:r.ground_name || "",
-                        venue_name: r.venue_name || "",
-                        squad:      r.squad ? Number(r.squad) : null,
-                        notes:      r.notes || "",
-                    };
-                })
-                .filter((r) => r.home_team && r.away_team && r.match_date);
-            if (!rows.length) throw new Error("No valid rows found. Header must include: match_label, stage, pool_id, team_a_code, team_b_code, date_from, date_to, start_time, ground_id, ground_name, venue_name, squad, notes.");
-            let created = 0, errors = 0;
-            for (const row of rows) {
-                try { await api.post(`/tournaments/${tournament.id}/matches`, row); created++; }
-                catch { errors++; }
-            }
-            setImportResult({ created, errors, total: rows.length });
-            await load(); onChange?.();
+            const teamSet = new Set(teamOptions);
+            const groundSet = new Set(groundOptions.map((g) => g.ground_id || g.id));
+            const previews = (parsed.data || []).map((r, idx) => {
+                // Iter 123 · Prefer explicit date_from/date_to; fall back to legacy match_date + days.
+                const from_iso = r.date_from || r.match_date;
+                const to_iso   = r.date_to   || null;
+                const days     = to_iso ? _daysBetween(from_iso, to_iso) : (Number(r.days) || 1);
+                const row = {
+                    stage:      r.stage      || "League",
+                    match_date: from_iso,
+                    to_date:    to_iso || null,
+                    home_team:  r.team_a_code || r.home_team,
+                    away_team:  r.team_b_code || r.away_team,
+                    start_time: r.start_time || "10:00",
+                    label:      r.match_label || null,
+                    pool_id:    r.pool_id || null,
+                    days:       days,
+                    ground_id:  r.ground_id || null,
+                    ground_name:r.ground_name || "",
+                    venue_name: r.venue_name || "",
+                    squad:      r.squad ? Number(r.squad) : null,
+                    notes:      r.notes || "",
+                };
+                // Validation errors (blocking) + warnings (non-blocking)
+                const errs = [];
+                const warns = [];
+                if (!row.match_date) errs.push("missing date_from");
+                if (!row.home_team) errs.push("missing team_a_code");
+                if (!row.away_team) errs.push("missing team_b_code");
+                if (row.home_team && row.away_team && row.home_team === row.away_team) errs.push("home = away");
+                if (row.home_team && teamSet.size > 0 && !teamSet.has(row.home_team)) warns.push(`team_a "${row.home_team}" not in tournament pools`);
+                if (row.away_team && teamSet.size > 0 && !teamSet.has(row.away_team)) warns.push(`team_b "${row.away_team}" not in tournament pools`);
+                if (row.ground_id && groundSet.size > 0 && !groundSet.has(row.ground_id)) warns.push(`ground_id "${row.ground_id}" not in Grounds master`);
+                if (row.to_date && row.match_date && row.to_date < row.match_date) errs.push("date_to < date_from");
+                return { line: idx + 2, row, errs, warns, ok: errs.length === 0 };
+            });
+            if (!previews.length) throw new Error("No rows found. Ensure the CSV header matches the downloaded template.");
+            setPreviewRows(previews);
         } catch (e) {
             setImportResult({ created: 0, errors: 1, total: 0, error: e.message });
-        } finally { setImporting(false); if (fileRef.current) fileRef.current.value = ""; }
+        } finally { if (fileRef.current) fileRef.current.value = ""; }
+    };
+    // Iter 123d · Actually POST the previewed rows once the user confirms.
+    const commitImport = async () => {
+        if (!previewRows) return;
+        const valid = previewRows.filter((p) => p.ok);
+        if (!valid.length) return;
+        setImporting(true);
+        let created = 0, errors = 0;
+        for (const p of valid) {
+            try { await api.post(`/tournaments/${tournament.id}/matches`, p.row); created++; }
+            catch { errors++; }
+        }
+        setImportResult({ created, errors, total: valid.length, skipped: previewRows.length - valid.length });
+        setPreviewRows(null);
+        setImporting(false);
+        await load(); onChange?.();
     };
 
     const locked = !!tournament?.calendar_fixed;
@@ -285,8 +309,8 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                         <button onClick={downloadTemplate} className="text-[10px] uppercase tracking-widest border border-mpca-brass/40 text-mpca-brass px-2 py-1 flex items-center gap-1" title="Download CSV template" data-testid="calendar-template-btn">
                             <Upload size={11} /> Template
                         </button>
-                        <button onClick={() => fileRef.current?.click()} disabled={importing} className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" data-testid="calendar-import-csv-btn">
-                            {importing ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} Import CSV
+                        <button onClick={() => fileRef.current?.click()} disabled={importing} className="text-[10px] uppercase tracking-widest bg-mpca-brass text-mpca-ivory px-2 py-1 flex items-center gap-1 disabled:opacity-40" title="Parse the CSV and preview all rows before anything is saved" data-testid="calendar-import-csv-btn">
+                            {importing ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} Import CSV · Preview
                         </button>
                         <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => importCsv(e.target.files?.[0])} data-testid="calendar-import-file" />
                         <button onClick={() => setCreating(true)} className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-2 py-1 flex items-center gap-1" data-testid="calendar-add-match-btn">
@@ -346,6 +370,99 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                             onDeleted={async () => { await load(); onChange?.(); }}
                         />
                     ))}
+                </div>
+            )}
+            {/* Iter 123d · CSV Dry-Run Preview Modal */}
+            {previewRows && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" data-testid="csv-preview-modal" onClick={() => !importing && setPreviewRows(null)}>
+                    <div className="bg-mpca-ivory border border-mpca-brass/60 shadow-2xl max-w-6xl w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-5 py-3 border-b border-mpca-brass/40 bg-mpca-parchment">
+                            <div>
+                                <div className="overline text-[9px] text-mpca-brass">Dry Run · CSV Import Preview</div>
+                                <div className="font-serif text-lg text-mpca-green-dark">Review before committing to ERP</div>
+                            </div>
+                            <div className="text-[11px] text-mpca-gray-dark">
+                                <span className="text-mpca-green-dark font-semibold">{previewRows.filter(p => p.ok).length}</span> ready ·
+                                <span className="text-mpca-oxblood font-semibold ml-1">{previewRows.filter(p => !p.ok).length}</span> blocked ·
+                                <span className="text-mpca-brass font-semibold ml-1">{previewRows.filter(p => p.warns.length > 0).length}</span> warnings
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-auto p-3">
+                            <table className="w-full text-[11px]">
+                                <thead className="sticky top-0 bg-mpca-parchment">
+                                    <tr className="text-[9px] uppercase tracking-widest text-mpca-gray-dark border-b border-mpca-brass/40">
+                                        <th className="px-2 py-1.5 text-left">Row</th>
+                                        <th className="px-2 py-1.5 text-left">Status</th>
+                                        <th className="px-2 py-1.5 text-left">Label</th>
+                                        <th className="px-2 py-1.5 text-left">Stage</th>
+                                        <th className="px-2 py-1.5 text-left">Team A → Team B</th>
+                                        <th className="px-2 py-1.5 text-left">Date From → Date To (Days)</th>
+                                        <th className="px-2 py-1.5 text-left">Time</th>
+                                        <th className="px-2 py-1.5 text-left">Ground</th>
+                                        <th className="px-2 py-1.5 text-left">Issues</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {previewRows.map((p, i) => (
+                                        <tr key={i} className={`border-b border-mpca-brass/20 ${!p.ok ? "bg-mpca-oxblood/5" : p.warns.length ? "bg-mpca-brass/5" : ""}`} data-testid={`csv-preview-row-${i}`}>
+                                            <td className="px-2 py-1.5 text-mpca-gray-dark font-mono">{p.line}</td>
+                                            <td className="px-2 py-1.5">
+                                                {p.ok ? (
+                                                    <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 bg-mpca-green-dark/15 text-mpca-green-dark border border-mpca-green-dark/40">READY</span>
+                                                ) : (
+                                                    <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 bg-mpca-oxblood/15 text-mpca-oxblood border border-mpca-oxblood/40">BLOCKED</span>
+                                                )}
+                                            </td>
+                                            <td className="px-2 py-1.5 font-serif text-mpca-green-dark">{p.row.label || "—"}</td>
+                                            <td className="px-2 py-1.5 text-mpca-gray-dark">{p.row.stage}</td>
+                                            <td className="px-2 py-1.5 font-mono">
+                                                <span className={teamOptions.includes(p.row.home_team) ? "text-mpca-ink" : "text-mpca-brass"}>{p.row.home_team || "—"}</span>
+                                                <span className="mx-1 text-mpca-gray-dark">vs</span>
+                                                <span className={teamOptions.includes(p.row.away_team) ? "text-mpca-ink" : "text-mpca-brass"}>{p.row.away_team || "—"}</span>
+                                            </td>
+                                            <td className="px-2 py-1.5 font-mono">
+                                                {p.row.match_date || "—"}
+                                                <span className="text-mpca-gray-dark mx-1">→</span>
+                                                {p.row.to_date || p.row.match_date || "—"}
+                                                <span className="ml-1 text-mpca-brass">({p.row.days}d)</span>
+                                            </td>
+                                            <td className="px-2 py-1.5 font-mono text-mpca-gray-dark">{p.row.start_time}</td>
+                                            <td className="px-2 py-1.5 text-mpca-gray-dark text-[10px]">{p.row.ground_id || p.row.ground_name || "—"}</td>
+                                            <td className="px-2 py-1.5 text-[10px]">
+                                                {p.errs.map((e, j) => <div key={`e-${j}`} className="text-mpca-oxblood">✗ {e}</div>)}
+                                                {p.warns.map((w, j) => <div key={`w-${j}`} className="text-mpca-brass italic">⚠ {w}</div>)}
+                                                {p.ok && p.warns.length === 0 && <span className="text-mpca-green-dark">✓ clean</span>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-mpca-brass/40 bg-mpca-parchment">
+                            <div className="text-[10px] text-mpca-gray-dark italic">
+                                Only rows marked <span className="text-mpca-green-dark font-semibold">READY</span> will be imported. Warnings are advisory — those rows will still be created.
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setPreviewRows(null)}
+                                    disabled={importing}
+                                    className="text-[10px] uppercase tracking-widest px-3 py-1.5 border border-mpca-brass/40 text-mpca-gray-dark hover:bg-mpca-brass/10"
+                                    data-testid="csv-preview-cancel-btn"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={commitImport}
+                                    disabled={importing || previewRows.filter(p => p.ok).length === 0}
+                                    className="text-[10px] uppercase tracking-widest px-3 py-1.5 bg-mpca-green-dark text-mpca-ivory disabled:opacity-40 flex items-center gap-1"
+                                    data-testid="csv-preview-commit-btn"
+                                >
+                                    {importing ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                                    {importing ? "Importing…" : `Import ${previewRows.filter(p => p.ok).length} matches`}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

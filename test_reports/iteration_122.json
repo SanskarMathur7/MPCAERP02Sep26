@@ -1,0 +1,21 @@
+{
+  "summary": "Iter 122 Round 2 RETEST — all 9 backend tests in test_iter122_admin_roles_expansion.py PASSED (9/9). Confirmed Secretary/VP/Joint Sec/SysAdmin can POST /api/tournaments/{tid}/match-officials (200) after adding both capitalized legacy labels and lowercase new role_ids to _ADMIN_ROLES and related admin-role sets across match_officials.py, player_registrations.py, body_documents.py, selection_console.py, members.py. Division Secretary (ind.hs@mpcaonline.com) correctly gets 403 on central assignment (MPCA-only). RBAC users/roles count endpoints also verified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter122_admin_roles_expansion.py",
+    "/app/test_reports/pytest/iter122_r2.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Consider centralising the admin/office-bearer role sets into a single source (e.g., lib/authz.py) rather than duplicating capitalized + lowercase variants across 5+ route files. Currently the legacy label mapping and new role_id names have to be kept in sync in every module, which was the exact root cause of Round 1 failure."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "not tested (per request)"},
+  "test_credentials": "Used mpca@2026 for all listed accounts; none rotated during test.",
+  "seed_data_creation": "None; tests reuse existing seeded tournament and users.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Round 2 fix is complete and verified. All 9 admin-role expansion tests pass in ~1.9s. If future changes touch role gating, re-run pytest /app/backend/tests/test_iter122_admin_roles_expansion.py -v.",
+  "rca of the issue": "Round 1 only added lowercase new role_ids to admin sets, but principal_role_id() returns capitalized legacy labels (Secretary/President/Treasurer/SysAdmin/DivisionSecretary) via _LEGACY_ROLE_MAP. Round 2 added BOTH capitalized labels and lowercase ids to every admin-role set, plus replaced the inline hardcode at match_officials.py:540 (_official_may_respond) with the shared _ADMIN_ROLES constant."
+}

@@ -43,7 +43,15 @@ DOC_KINDS = Literal[
     "Other",
 ]
 
-MPCA_READ_ROLES = {"secretary", "president", "treasurer", "hr_officer", "compliance_officer"}
+MPCA_READ_ROLES = {
+    # Capitalized legacy labels from principal_role_id()
+    "Secretary", "President", "Treasurer", "SysAdmin",
+    # New RBAC role_ids (real MPCA roster)
+    "president", "vice_president", "hon_secretary", "joint_secretary", "hon_treasurer",
+    "sys_admin", "internal_auditor",
+    # Legacy aliases
+    "secretary", "treasurer", "hr_officer", "compliance_officer",
+}
 
 
 class BodyDocument(BaseModel):

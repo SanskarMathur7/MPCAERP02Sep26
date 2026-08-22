@@ -25,7 +25,15 @@ from core.helpers import next_uid
 
 
 # Personas that can edit any member profile / manage categories / bulk-upload.
-_OFFICE_BEARER_ROLES = {"president", "secretary", "treasurer", "division-secretary"}
+_OFFICE_BEARER_ROLES = {
+    # Capitalized legacy labels from principal_role_id()
+    "Secretary", "President", "Treasurer", "SysAdmin", "DivisionSecretary", "DistrictSecretary",
+    # New RBAC role_ids
+    "president", "vice_president", "hon_secretary", "joint_secretary",
+    "hon_treasurer", "division_secretary", "district_secretary", "sys_admin",
+    # Legacy aliases
+    "secretary", "treasurer", "division-secretary",
+}
 
 
 def _actor(role_id: Optional[str], email: Optional[str]) -> dict:

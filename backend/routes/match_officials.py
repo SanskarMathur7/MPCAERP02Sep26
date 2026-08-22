@@ -111,7 +111,21 @@ class TournamentMatchOfficial(TournamentMatchOfficialBase):
     tournament_name: Optional[str] = None
 
 
-_ADMIN_ROLES = {"president", "secretary", "division-secretary", "district-secretary", "treasurer"}
+_ADMIN_ROLES = {
+    # Capitalized legacy labels — this is what `principal_role_id()` actually
+    # returns via _LEGACY_ROLE_MAP in lib/authz.py. Missing these was the
+    # iter 122 bug that blocked Secretary from assigning match officials.
+    "Secretary", "President", "Treasurer", "SysAdmin",
+    "DivisionSecretary", "DistrictSecretary",
+    # New RBAC role_ids (real MPCA roster, post iter 118)
+    "president", "vice_president",
+    "hon_secretary", "joint_secretary",
+    "hon_treasurer",
+    "division_secretary", "district_secretary",
+    "sys_admin",
+    # Legacy dummy persona IDs kept as aliases so old scripts still work.
+    "secretary", "treasurer", "division-secretary", "district-secretary",
+}
 
 
 @api_router.get("/match-officials", response_model=List[MatchOfficial])
@@ -523,7 +537,7 @@ def _official_may_respond(
     Division / District office bearers are explicitly NOT allowed to
     respond on an official's behalf.
     """
-    if x_body_type == "State" and x_role_id in {"secretary", "president", "treasurer"}:
+    if x_body_type == "State" and x_role_id in _ADMIN_ROLES:
         return True
     if x_persona_name and (doc.get("official_name") or "").strip().lower() == x_persona_name.strip().lower():
         return True

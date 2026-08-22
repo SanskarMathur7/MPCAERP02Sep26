@@ -11,7 +11,15 @@ from core.scoping import get_scope
 from core.helpers import _create_notification
 from models import Squad, SquadMember, MatchOfficials, SquadWaiver, MemberDecision
 
-_DIVISION_ROLES = {"division-secretary", "district-secretary", "president", "secretary"}
+_DIVISION_ROLES = {
+    # Capitalized legacy labels from principal_role_id()
+    "Secretary", "President", "DivisionSecretary", "DistrictSecretary",
+    # New RBAC role_ids
+    "division_secretary", "district_secretary",
+    "president", "vice_president", "hon_secretary", "joint_secretary",
+    # Legacy aliases
+    "division-secretary", "district-secretary", "secretary",
+}
 _MPCA_APPROVER_ROLES = {"secretary", "president"}
 
 

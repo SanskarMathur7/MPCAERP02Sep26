@@ -139,6 +139,7 @@ const NAV_DOMAINS = [
             { to: "/sysadmin/analytics", label: "System Analytics", icon: LayoutDashboard },
             { to: "/access-control", label: "Access Control (RBAC)", icon: Shield },
             { to: "/mc-admin", label: "Maker-Checker Console", icon: ShieldCheck },
+            { to: "/sysadmin/eligibility-rules", label: "Eligibility Rules", icon: ShieldCheck },
             { to: "/tournament-master", label: "Tournament Registry", icon: BookOpen },
             { to: "/tournament-wiring", label: "Tournament Wiring", icon: BookOpen },
             { to: "/rate-cards", label: "Rate Cards", icon: BookOpen },

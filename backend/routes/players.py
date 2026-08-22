@@ -533,27 +533,49 @@ async def _resolve_division_of_district(district_body_id: Optional[str]) -> Opti
     return body.get("parent_code")
 
 
+# ── Iter 125 · Eligibility Rules Config (SysAdmin editable, season-scoped) ──
+_DEFAULT_ELIGIBILITY_RULES = {
+    "residency_min_months":       3,   # Local/Residence + Employment
+    "education_min_months_local": 3,   # Local/Education
+    "education_min_months_guest": 12,  # Guest/Education (≥ 1 academic year)
+    "guest_prior_years_min":      2,   # Guest/Out-of-MP prior domestic play
+    "age_of_majority_for_parent": 21,  # Local/Employment via parent
+    "medical_required_by_default": True,
+    "season": "2026-27",
+}
+
+
+async def _load_eligibility_rules(season: Optional[str] = None) -> dict:
+    """Fetch the season's rule config from Mongo; falls back to defaults."""
+    query = {"season": season} if season else {}
+    doc = await db.eligibility_rules_config.find_one(query, {"_id": 0}, sort=[("updated_at", -1)])
+    if not doc:
+        return dict(_DEFAULT_ELIGIBILITY_RULES)
+    merged = dict(_DEFAULT_ELIGIBILITY_RULES)
+    merged.update(doc)
+    return merged
+
+
 @api_router.post("/players/{pid}/eligibility-tag/compute", response_model=Player)
 async def compute_eligibility_tag(pid: str):
     """Runs the sequential decision tree from MPCA_Eligibility_Checks.docx
-    (Season 2025-26) and stores the resulting tag on the player.
-
-    Order:
-      1. Local/Birth      – born within this Division's jurisdiction
-      2. Local/Residence  – bonafide resident ≥ 3 months
-      3. Local/Employment – bonafide employment (self or parent if ≤21)
-      4. Local/Education  – bonafide educational course ≥ 3 months, no distance
-      -- if none match, move to Guest checks --
-      5. Guest/MP-Domicile – born in MP but playing from a Division other than birth
-      6. Guest/Education   – born + resident out of MP, studying in MP ≥ 1 year
-      7. Guest/Out-of-MP   – anything else; requires 2 yr prior domestic play
+    (season configurable via /eligibility-rules) and stores the resulting
+    tag on the player along with a full per-tag verification trail.
     """
     p = await db.players.find_one({"id": pid}, {"_id": 0})
     if not p:
         raise HTTPException(404, "Player not found")
 
+    rules = await _load_eligibility_rules(p.get("season_year") or "2026-27")
+    trace: List[dict] = []
     reasons: List[str] = []
     tag: Optional[str] = None
+
+    def _add(tag_name: str, passed: bool, why: str, source_field: str = "", source_value: str = ""):
+        trace.append({
+            "tag": tag_name, "passed": passed, "why": why,
+            "source_field": source_field, "source_value": str(source_value) if source_value is not None else "",
+        })
 
     # Resolve the parent Division of the player's target body
     target_division = await _resolve_division_of_district(p.get("body_id"))
@@ -561,7 +583,6 @@ async def compute_eligibility_tag(pid: str):
     birth_state = (p.get("place_of_birth_state") or "").strip()
     is_mp_born = birth_state.lower() in ("mp", "madhya pradesh")
     if not birth_division and p.get("place_of_birth_city"):
-        # Best-effort: look up the district by name → parent division
         d = await db.bodies.find_one(
             {"body_type": "District", "$or": [
                 {"name": {"$regex": f"{p['place_of_birth_city']}", "$options": "i"}},
@@ -575,81 +596,130 @@ async def compute_eligibility_tag(pid: str):
     # 1. Local/Birth
     if target_division and birth_division and birth_division == target_division:
         tag = "Local/Birth"
-        reasons.append(f"Born within {target_division} jurisdiction (birth division = {birth_division}).")
+        why = f"Born within {target_division} jurisdiction (birth division = {birth_division})."
+        reasons.append(why)
+        _add("Local/Birth", True, why, "place_of_birth_division", birth_division)
+    else:
+        if not birth_division:
+            _add("Local/Birth", False, "place_of_birth_division not on file — cannot verify birth", "place_of_birth_division", "")
+        elif birth_division != target_division:
+            _add("Local/Birth", False, f"Birth division ({birth_division}) does not match target division ({target_division})", "place_of_birth_division", birth_division)
 
-    # 2. Local/Residence — bonafide resident ≥ 3 months
+    # 2. Local/Residence — bonafide resident ≥ N months
+    residency_min = float(rules.get("residency_min_months") or 3)
     if not tag:
         months_resident = _months_between(p.get("residency_since"))
-        if months_resident >= 3:
+        if not p.get("residency_since"):
+            _add("Local/Residence", False, "residency_since not on file — no proof of residence", "residency_since", "")
+        elif months_resident >= residency_min:
             tag = "Local/Residence"
-            reasons.append(f"Resident in Division for {months_resident:.1f} months (≥ 3 required).")
-        elif p.get("residency_since"):
-            reasons.append(f"Residency insufficient ({months_resident:.1f} months; ≥ 3 required).")
+            why = f"Resident in Division for {months_resident:.1f} months (≥ {residency_min:.0f} required)."
+            reasons.append(why)
+            _add("Local/Residence", True, why, "residency_since", p.get("residency_since"))
+        else:
+            why = f"Residency insufficient ({months_resident:.1f} months; ≥ {residency_min:.0f} required)."
+            reasons.append(why)
+            _add("Local/Residence", False, why, "residency_since", p.get("residency_since"))
 
-    # 3. Local/Employment — bonafide employment (self or parent if ≤21)
-    if not tag and p.get("is_employed") and p.get("employment"):
-        # For the decision tree we assume `employment` string means employer name;
-        # bonafide check is manual — but presence of employment + is_employed flag
-        # combined with 3-month residency proxy is enough to auto-tag.
-        months_resident = _months_between(p.get("residency_since"))
-        if months_resident >= 3:
-            tag = "Local/Employment"
-            reasons.append(f"Employed at {p['employment']} ({months_resident:.1f} months resident).")
+    # 3. Local/Employment — bonafide employment (self or parent if ≤21) + residency
+    if not tag:
+        if not p.get("is_employed") or not p.get("employment"):
+            _add("Local/Employment", False, "Employment (self or parent) not on file", "employment", p.get("employment") or "")
+        else:
+            months_resident = _months_between(p.get("residency_since"))
+            if months_resident >= residency_min:
+                tag = "Local/Employment"
+                why = f"Employed at {p['employment']} ({months_resident:.1f} months resident)."
+                reasons.append(why)
+                _add("Local/Employment", True, why, "employment", p.get("employment"))
+            else:
+                _add("Local/Employment", False, f"Employment present but residency short ({months_resident:.1f}/{residency_min:.0f} months)", "employment", p.get("employment"))
 
-    # 4. Local/Education — 3 months + not distance learning
-    if not tag and p.get("education"):
-        months_resident = _months_between(p.get("residency_since"))
-        if months_resident >= 3 and "distance" not in (p.get("education") or "").lower():
-            tag = "Local/Education"
-            reasons.append(f"Studying at {p['education']} ({months_resident:.1f} months in Division).")
+    # 4. Local/Education — N months + not distance learning
+    education_min_local = float(rules.get("education_min_months_local") or 3)
+    if not tag:
+        if not p.get("education"):
+            _add("Local/Education", False, "Education record not on file", "education", "")
+        else:
+            months_resident = _months_between(p.get("residency_since"))
+            is_distance = "distance" in (p.get("education") or "").lower()
+            if months_resident >= education_min_local and not is_distance:
+                tag = "Local/Education"
+                why = f"Studying at {p['education']} ({months_resident:.1f} months in Division)."
+                reasons.append(why)
+                _add("Local/Education", True, why, "education", p.get("education"))
+            elif is_distance:
+                _add("Local/Education", False, "Course is distance-learning (excluded)", "education", p.get("education"))
+            else:
+                _add("Local/Education", False, f"Course present but residency < {education_min_local:.0f} months ({months_resident:.1f})", "education", p.get("education"))
 
     # ── GUEST TESTS ─────────────────────────────────────────────────────────
-    # 5. Guest/MP-Domicile — born in MP but playing from a different Division
+    # 5. Guest/MP-Domicile
     if not tag:
         if is_mp_born and target_division and birth_division and birth_division != target_division:
             tag = "Guest/MP-Domicile"
-            reasons.append(f"Born in MP ({birth_division}) but registering with {target_division} — MP-Domicile Guest.")
+            why = f"Born in MP ({birth_division}) but registering with {target_division} — MP-Domicile Guest."
+            reasons.append(why)
+            _add("Guest/MP-Domicile", True, why, "place_of_birth_division", birth_division)
+        else:
+            if not is_mp_born:
+                _add("Guest/MP-Domicile", False, f"Not MP-born (place_of_birth_state='{birth_state or '—'}')", "place_of_birth_state", birth_state)
+            elif not birth_division:
+                _add("Guest/MP-Domicile", False, "MP-born but birth division unknown", "place_of_birth_division", "")
 
-    # 6. Guest/Education — Birth AND residence out of MP but studying in MP
-    if not tag and not is_mp_born and p.get("education"):
-        # Admission must be before 1-Sep of previous season. Best-effort using
-        # first_registration_year if available.
-        months_studying = _months_between(p.get("residency_since"))
-        if months_studying >= 12 and "distance" not in (p.get("education") or "").lower():
-            tag = "Guest/Education"
-            reasons.append("Born + resident out of MP, studying in MP for ≥ 1 full academic year.")
+    # 6. Guest/Education
+    education_min_guest = float(rules.get("education_min_months_guest") or 12)
+    if not tag and not is_mp_born:
+        if not p.get("education"):
+            _add("Guest/Education", False, "Non-MP-born and no education record", "education", "")
+        else:
+            months_studying = _months_between(p.get("residency_since"))
+            is_distance = "distance" in (p.get("education") or "").lower()
+            if months_studying >= education_min_guest and not is_distance:
+                tag = "Guest/Education"
+                why = f"Born + resident out of MP, studying in MP for {months_studying:.1f} months (≥ {education_min_guest:.0f})."
+                reasons.append(why)
+                _add("Guest/Education", True, why, "education", p.get("education"))
+            elif is_distance:
+                _add("Guest/Education", False, "Course is distance-learning (excluded)", "education", p.get("education"))
+            else:
+                _add("Guest/Education", False, f"Education present but only {months_studying:.1f} months (≥ {education_min_guest:.0f} needed)", "residency_since", p.get("residency_since"))
 
-    # 7. Guest/Out-of-MP — must show 2 yr prior domestic play
+    # 7. Guest/Out-of-MP
+    guest_prior_min = float(rules.get("guest_prior_years_min") or 2)
     if not tag and not is_mp_born:
         prior_years = 1 if p.get("bcci_registered") else 0
-        # Approx via bcci_registration_year
         if p.get("bcci_registration_year"):
             try:
                 prior_years = max(prior_years, datetime.now(timezone.utc).year - int(p["bcci_registration_year"]))
             except Exception:
                 pass
-        if prior_years >= 2:
+        if prior_years >= guest_prior_min:
             tag = "Guest/Out-of-MP"
-            reasons.append(f"Not MP-born; prior domestic participation ≈ {prior_years} yrs (≥ 2 required).")
+            why = f"Not MP-born; prior domestic participation ≈ {prior_years} yrs (≥ {guest_prior_min:.0f} required)."
+            reasons.append(why)
+            _add("Guest/Out-of-MP", True, why, "bcci_registration_year", p.get("bcci_registration_year") or "")
         else:
-            reasons.append("Not MP-born and prior domestic participation < 2 yrs — Ineligible under 3.3.")
+            why = f"Not MP-born and prior domestic participation {prior_years} yrs (< {guest_prior_min:.0f} required) — fails 3.3."
+            reasons.append(why)
+            _add("Guest/Out-of-MP", False, why, "bcci_registration_year", p.get("bcci_registration_year") or "")
 
     if not tag:
         tag = "Ineligible"
-        reasons.append("None of the 7 tags matched — player does not qualify under the current data on file.")
+        reasons.append("None of the tags matched — player does not qualify under the current data on file.")
 
     now = datetime.now(timezone.utc).isoformat()
     updates = {
         "eligibility_tag": tag,
         "eligibility_reasons": reasons,
+        "eligibility_check_trace": trace,
         "eligibility_computed_at": now,
     }
-    # MPCA-210 · Auto-raise a discrepancy on the player when tag is Ineligible.
     if tag == "Ineligible":
         auto_note = f"[Eligibility] {now[:10]} · Auto-flagged as Ineligible — Division must correct place-of-birth / residency / employment / education records and recompute."
         existing_notes = set(p.get("review_notes") or [])
         if auto_note not in existing_notes:
-            updates["$push_review_note"] = auto_note   # sentinel; expanded below
+            updates["$push_review_note"] = auto_note
     upd_query = {"$set": {k: v for k, v in updates.items() if k != "$push_review_note"}}
     if updates.get("$push_review_note"):
         upd_query["$push"] = {"review_notes": updates["$push_review_note"]}
@@ -663,13 +733,18 @@ class EligibilityTagOverride(BaseModel):
     reason: str = Field(..., min_length=3)
     actor_name: Optional[str] = None
     actor_body_id: Optional[str] = None
+    # Iter 125 · Signed override — the evidence document supporting the override.
+    signed_doc_url: Optional[str] = None
+    signed_doc_filename: Optional[str] = None
 
 
 @api_router.post("/players/{pid}/eligibility-tag/override", response_model=Player)
 async def override_eligibility_tag(pid: str, payload: EligibilityTagOverride):
     """MPCA-210 · Manual tag override — Divisions/MPCA may adjust the auto-tag
-    (e.g. after producing offline proof of employment/residence). Appends a
-    reason to `eligibility_reasons` and a formal audit-trail event.
+    (e.g. after producing offline proof of employment/residence).
+    Iter 125 · Overrides are now signed: caller must attach a signed evidence
+    document (or a strong written reason ≥ 20 chars) before we accept the
+    override; the full override history is retained on the player.
     """
     p = await db.players.find_one({"id": pid}, {"_id": 0})
     if not p:
@@ -680,22 +755,54 @@ async def override_eligibility_tag(pid: str, payload: EligibilityTagOverride):
     }
     if payload.eligibility_tag not in valid:
         raise HTTPException(422, f"Invalid tag. Allowed: {sorted(valid)}")
+    # Signed-override guard — either an evidence doc OR a full-body reason.
+    reason = payload.reason.strip()
+    if not payload.signed_doc_url and len(reason) < 20:
+        raise HTTPException(
+            422,
+            "Override rejected — either upload a signed evidence document OR provide a reason of at least 20 characters describing the supporting proof.",
+        )
     now = datetime.now(timezone.utc).isoformat()
-    stamped = f"[Manual · {now[:10]} · {payload.actor_name or payload.actor_body_id or 'user'}] {payload.eligibility_tag} — {payload.reason.strip()}"
+    stamped = f"[Manual · {now[:10]} · {payload.actor_name or payload.actor_body_id or 'user'}] {payload.eligibility_tag} — {reason}"
     reasons = list(p.get("eligibility_reasons") or [])
     reasons.append(stamped)
+    override_entry = {
+        "tag": payload.eligibility_tag,
+        "reason": reason,
+        "actor_name": payload.actor_name,
+        "actor_body_id": payload.actor_body_id,
+        "signed_doc_url": payload.signed_doc_url,
+        "signed_doc_filename": payload.signed_doc_filename,
+        "at": now,
+    }
+    history = list(p.get("eligibility_override_history") or [])
+    history.append(override_entry)
     await db.players.update_one({"id": pid}, {"$set": {
         "eligibility_tag": payload.eligibility_tag,
         "eligibility_reasons": reasons,
         "eligibility_computed_at": now,
+        "eligibility_override": override_entry,
+        "eligibility_override_history": history,
     }})
     await _append_audit(pid, PlayerAuditEvent(
         actor_name=payload.actor_name or "system",
         actor_role="Eligibility Override",
         actor_body_id=payload.actor_body_id,
         event=f"Eligibility tag manually set → {payload.eligibility_tag}",
-        details=payload.reason.strip(),
+        details=f"{reason}"
+                + (f" · signed doc: {payload.signed_doc_filename}" if payload.signed_doc_filename else ""),
     ))
+    return await db.players.find_one({"id": pid}, {"_id": 0})
+
+
+@api_router.post("/players/{pid}/eligibility-tag/clear-override", response_model=Player)
+async def clear_eligibility_override(pid: str):
+    """Iter 125 · Clear the active override so the next `/compute` call takes
+    effect. History is retained for audit."""
+    p = await db.players.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Player not found")
+    await db.players.update_one({"id": pid}, {"$set": {"eligibility_override": None}})
     return await db.players.find_one({"id": pid}, {"_id": 0})
 
 

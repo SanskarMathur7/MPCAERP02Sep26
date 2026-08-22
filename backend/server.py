@@ -27,6 +27,7 @@ from routes import (  # noqa: F401
     discussions, events, finance_console, tournament_master, rate_cards, unified_budget,
     tournament_wiring, tournament_wiring_status, camp_finance, ux_audit,
     tournament_eligibility, auth, squad_pdf_verify, mc, mc_admin, sysadmin,
+    eligibility_rules,
 )
 from seed import seed_data
 

@@ -47,6 +47,7 @@ export default function GrantClaimSummaryPDF() {
     }, [id]);
 
     const docs = useMemo(() => (claim?.documents || []), [claim]);
+    const extraDocs = useMemo(() => (claim?.extra_documents || []), [claim]);
 
     if (loading || !claim) {
         return <div className="flex items-center justify-center h-64 text-mpca-brass"><Loader2 className="animate-spin" size={16} /> Loading grant summary…</div>;
@@ -158,6 +159,53 @@ export default function GrantClaimSummaryPDF() {
                 AI verdict is already visible per-row in the "AI Verified / Conf%"
                 columns in section 3, and users found the standalone AI section
                 added no additional signal to the printed submission packet. */}
+
+            {/* Iter 125 · Optional Supporting Documents — Division-attached
+                Quotations / MOUs / additional evidence beyond the scheme's
+                required docs. Mirrors the required-docs table columns so MPCA
+                sees the AI verdict on ALL uploaded evidence in one printout. */}
+            {extraDocs.length > 0 && (
+                <>
+                    <h3 className="text-lg border-b border-black mb-2 mt-6">3b. Optional Supporting Documents &middot; {extraDocs.length}</h3>
+                    <table className="w-full text-[11px] border-collapse mb-4" data-testid="grant-extra-docs-table">
+                        <thead>
+                            <tr className="border-b border-black">
+                                <th className="text-left py-1 pr-2 w-6">#</th>
+                                <th className="text-left py-1 pr-2">Description</th>
+                                <th className="text-left py-1 pr-2">Filename</th>
+                                <th className="text-left py-1 pr-2 w-20">Signed</th>
+                                <th className="text-left py-1 pr-2 w-24">AI Verified</th>
+                                <th className="text-right py-1 pr-2 w-14">Conf%</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {extraDocs.map((d, i) => {
+                                const sig = d.signature_detected;
+                                const stamp = d.stamp_detected;
+                                let signedCell = "—";
+                                if (sig && stamp) signedCell = "Signed + Stamped";
+                                else if (sig) signedCell = "Signed";
+                                else if (stamp) signedCell = "Stamped only";
+                                else if (d.ai_verified === true && sig === undefined) signedCell = "n/a";
+                                else if (sig === false && stamp === false) signedCell = "Not signed";
+                                return (
+                                    <tr key={d.doc_id || i} className="border-b border-gray-300">
+                                        <td className="py-1 pr-2">{i + 1}</td>
+                                        <td className="py-1 pr-2"><b>{d.description || "—"}</b></td>
+                                        <td className="py-1 pr-2 text-gray-700">{d.filename || "—"}</td>
+                                        <td className="py-1 pr-2 text-[10.5px] whitespace-nowrap">
+                                            {signedCell}
+                                            {d.signed_by && <div className="text-[9px] text-gray-500 italic mt-0.5 whitespace-normal">by {d.signed_by}</div>}
+                                        </td>
+                                        <td className="py-1 pr-2">{d.ai_verified === true ? "Yes" : d.ai_verified === false ? "No" : "—"}</td>
+                                        <td className="py-1 pr-2 text-right font-mono">{d.ai_confidence != null ? `${Math.round(Number(d.ai_confidence) * 100)}%` : "—"}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </>
+            )}
 
             {/* 4. Approval / Rejection (approval variant only) */}
             {isApproval && (

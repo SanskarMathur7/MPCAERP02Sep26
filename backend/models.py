@@ -831,6 +831,18 @@ class Player(PlayerBase):
     eligibility_tag: Optional[str] = None
     eligibility_reasons: List[str] = Field(default_factory=list)
     eligibility_computed_at: Optional[str] = None
+    # Iter 125 · Per-tag verification trail — captured every time
+    # /players/{id}/eligibility-tag/compute runs. Each entry:
+    #   {tag, passed, why, source_field, source_value, evidence_doc_url}
+    # Displayed in the Player Detail overview so reviewers see exactly why
+    # a player was classified Ineligible / Guest / Local.
+    eligibility_check_trace: List[dict] = Field(default_factory=list)
+    # Iter 125 · Signed manual override audit trail (append-only).
+    # Each entry: {tag, reason, actor_name, actor_body_id, at, doc_url?}
+    # The most recent entry defines the current tag; the compute button is
+    # blocked while an override exists (until an explicit "Clear Override").
+    eligibility_override: Optional[dict] = None
+    eligibility_override_history: List[dict] = Field(default_factory=list)
 
 
 class PlayerCreate(PlayerBase):

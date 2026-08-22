@@ -45,7 +45,9 @@ class GrantClaimDoc(BaseModel):
 
 class GrantClaimExtraDoc(BaseModel):
     """MPCA-250 · Optional supporting document (not required by the scheme).
-    Division uploads any number of these to strengthen their claim."""
+    Division uploads any number of these to strengthen their claim.
+    Iter 125 · Now carries the same AI verification fields as required docs
+    so `ai_review_claim` can validate optional evidence too."""
     model_config = ConfigDict(extra="ignore")
     doc_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     description: str                                 # short label filled by Division
@@ -53,6 +55,14 @@ class GrantClaimExtraDoc(BaseModel):
     file_url: Optional[str] = None
     uploaded_at: Optional[str] = None
     uploaded_by: Optional[str] = None
+    # Iter 125 · AI verdict (mirrors GrantClaimDoc)
+    ai_verified: Optional[bool] = None
+    ai_confidence: Optional[float] = None
+    ai_notes: Optional[str] = None
+    ai_extracted: dict = Field(default_factory=dict)
+    signature_detected: Optional[bool] = None
+    stamp_detected: Optional[bool] = None
+    signed_by: Optional[str] = None
 
 
 class GrantClaimBase(BaseModel):
@@ -75,6 +85,8 @@ class GrantClaimAiSummary(BaseModel):
     overall_confidence: float = 0.0                  # avg of per-doc confidences (0..1)
     docs_verified: int = 0                           # count with ai_verified=True
     docs_total: int = 0
+    extras_verified: int = 0                         # Iter 125 · optional supporting docs verified
+    extras_total: int = 0
     amount_match_note: Optional[str] = None          # e.g. "Claimed ₹1L vs Detected ₹1L (match)"
     critical_issues: List[str] = []                  # explicit red flags
     advisory_notes: List[str] = []                   # softer signals
@@ -245,9 +257,13 @@ async def _ai_verify_document(doc: dict) -> dict:
         chat = LlmChat(api_key=key, session_id=f"doc-verify-{doc['doc_id']}",
                        system_message="You are an MPCA compliance document verifier. Respond in strict JSON only.")
         chat = chat.with_model("gemini", "gemini-3.6-flash")
+        # Iter 125 · Also supports extra_documents (uses `description` when
+        # `required_label` is absent — description is Division-authored, e.g.
+        # "Quotation 1", "Vendor Quote — Kit").
+        expected_label = doc.get("required_label") or doc.get("description") or "Supporting document"
         prompt = f"""Verify if the attached document matches the EXPECTED DOCUMENT TYPE.
 
-EXPECTED: {doc['required_label']}
+EXPECTED: {expected_label}
 
 Return ONLY a JSON object (no prose, no code fences) with keys:
 {{
@@ -362,7 +378,8 @@ async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
     if not claim:
         raise HTTPException(404, "Claim not found")
     docs = claim.get("documents", [])
-    if not docs:
+    extras = claim.get("extra_documents", []) or []
+    if not docs and not extras:
         raise HTTPException(400, "No documents on this claim to review.")
 
     # 1) Re-run per-doc AI for anything missing OR below 0.6 confidence
@@ -374,13 +391,27 @@ async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
             verdict = await _ai_verify_document(d)
             d.update(verdict)
 
+    # Iter 125 · Also verify optional supporting docs (extra_documents) so
+    # MPCA sees whether Quotations / additional evidence are genuine.
+    for d in extras:
+        if not d.get("file_url"):
+            continue
+        conf = float(d.get("ai_confidence") or 0)
+        if not d.get("ai_verified") or conf < 0.6:
+            verdict = await _ai_verify_document(d)
+            d.update(verdict)
+
     # 2) Roll up + cross-checks
     filled = [d for d in docs if d.get("file_url")]
     verified = [d for d in filled if d.get("ai_verified")]
+    filled_extras = [d for d in extras if d.get("file_url")]
+    verified_extras = [d for d in filled_extras if d.get("ai_verified")]
     total_docs = len(docs)
     filled_count = len(filled)
     verified_count = len(verified)
-    avg_conf = round(sum(float(d.get("ai_confidence") or 0) for d in filled) / max(filled_count, 1), 3)
+    # Confidence includes filled extras so approvers see the overall signal.
+    all_filled = filled + filled_extras
+    avg_conf = round(sum(float(d.get("ai_confidence") or 0) for d in all_filled) / max(len(all_filled), 1), 3)
 
     critical: List[str] = []
     advisory: List[str] = []
@@ -388,11 +419,15 @@ async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
 
     if filled_count < total_docs:
         critical.append(f"{total_docs - filled_count} required document(s) missing.")
+    if filled_extras:
+        advisory.append(f"{verified_extras.__len__()}/{len(filled_extras)} optional supporting document(s) AI-verified.")
 
     # Cross-doc · amount consistency: sum any 'amount' fields extracted vs claimed
     claimed = float(claim.get("claimed_amount_inr") or 0)
     detected_amounts: List[float] = []
-    for d in filled:
+    # Iter 125 · Amount cross-check now also considers optional supporting docs
+    # (e.g. Quotation Rs 3,00,000 for infrastructure grant).
+    for d in all_filled:
         keys = (d.get("ai_extracted") or {}).get("key_details") or {}
         raw_amt = keys.get("amount") or keys.get("total") or keys.get("value")
         if isinstance(raw_amt, (int, float)):
@@ -424,7 +459,7 @@ async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
     cycle_year = claim.get("fiscal_cycle", "").split("-")[0]
     if cycle_year and cycle_year.isdigit():
         year_int = int(cycle_year)
-        for d in filled:
+        for d in all_filled:
             keys = (d.get("ai_extracted") or {}).get("key_details") or {}
             date_str = keys.get("date") or ""
             if isinstance(date_str, str) and date_str:
@@ -433,10 +468,11 @@ async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
                 if m:
                     doc_year = int(m.group(1))
                     if doc_year < year_int - 1 or doc_year > year_int + 1:
-                        advisory.append(f"{d['required_label']} is dated {date_str} — outside fiscal cycle {claim.get('fiscal_cycle')}.")
+                        label = d.get("required_label") or d.get("description") or "Document"
+                        advisory.append(f"{label} is dated {date_str} — outside fiscal cycle {claim.get('fiscal_cycle')}.")
 
     # Low confidence signal
-    low_conf = [d for d in filled if float(d.get("ai_confidence") or 0) < 0.5]
+    low_conf = [d for d in all_filled if float(d.get("ai_confidence") or 0) < 0.5]
     if low_conf:
         advisory.append(f"{len(low_conf)} document(s) have AI confidence below 50% — manual eyeball recommended.")
 
@@ -453,6 +489,8 @@ async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
         "overall_confidence": avg_conf,
         "docs_verified": verified_count,
         "docs_total": total_docs,
+        "extras_verified": len(verified_extras),
+        "extras_total": len(filled_extras),
         "amount_match_note": amount_note,
         "critical_issues": critical,
         "advisory_notes": advisory,
@@ -461,6 +499,7 @@ async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
     }
     await db.grant_claims.update_one({"id": cid}, {"$set": {
         "documents": docs,
+        "extra_documents": extras,
         "ai_summary": ai_summary,
         "updated_at": ai_summary["validated_at"],
     }})

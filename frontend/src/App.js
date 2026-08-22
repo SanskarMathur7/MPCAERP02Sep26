@@ -101,6 +101,7 @@ const TournamentCalendarPage = lazy(() => import("@/pages/TournamentCalendarPage
 const AccessControl = lazy(() => import("@/pages/AccessControl"));
 const McAdmin = lazy(() => import("@/pages/McAdmin"));
 const SysAdminAnalytics = lazy(() => import("@/pages/SysAdminAnalytics"));
+const EligibilityRulesAdmin = lazy(() => import("@/pages/EligibilityRulesAdmin"));
 
 const PageLoader = () => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", color: "#64748b", fontFamily: "system-ui, sans-serif" }}>
@@ -215,6 +216,7 @@ function App() {
                         <Route path="/access-control" element={<Protected><AccessControl /></Protected>} />
                         <Route path="/mc-admin" element={<Protected><McAdmin /></Protected>} />
                         <Route path="/sysadmin/analytics" element={<Protected><SysAdminAnalytics /></Protected>} />
+                        <Route path="/sysadmin/eligibility-rules" element={<Protected><EligibilityRulesAdmin /></Protected>} />
                             <Route path="/fixtures" element={<Protected><Fixtures /></Protected>} />
                             <Route path="/audit-log" element={<Protected><AuditLog /></Protected>} />
                             <Route path="/tournaments/:id" element={<Protected><TournamentDetail /></Protected>} />

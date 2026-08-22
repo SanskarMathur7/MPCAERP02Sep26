@@ -1,0 +1,28 @@
+{
+  "summary": "Iter 125 review: all 4 features working end-to-end. Backend: 7/7 pytest pass (eligibility-rules tags/patch/duplicate 409, player compute writes 5-entry trace, override 422/accept/clear + history retained, grant AI review with extras_verified/extras_total). Frontend: SysAdmin /sysadmin/eligibility-rules renders rules-thresholds-card + rules-tags-table (8 rows) + rules-input-residency_min_months; edit + Save Rules works (banner 'Last saved ...' updates). PlayerDetail (Bakshraj Singh) shows eligibility-trace-panel + eligibility-trace-table (5 rows, each row shows source_field with 'empty' verdict e.g. place_of_birth_division empty, residency_since empty), override modal accepts 25-char reason, eligibility-active-override banner shows with reason and Clear button clears it. Grant Claim Summary PDF renders section 3b Optional Supporting Documents (grant-extra-docs-table, 2 rows for Practice Area PRIYAM.pdf and Practice Net ARMOUR.pdf, showing Signed+Stamped/Yes/95% conf). Regression: grant-docs-table still renders (3 rows).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "GrantClaimSummaryPDF - section 3b", "issues": ["'Signed + Stamped by ...' cell wraps one character per line producing a very tall column - CSS word-break/whitespace on the Signed column should be relaxed for readability"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter125.py", "/app/test_reports/pytest/iter125.xml"],
+  "action_items": [
+    "Consider: /grant-claims/:claim_id/summary route currently only accepts internal UUID (e.g. 540a5443-...); direct navigation via human-readable claim number GRC-2026-27-0003 returns 404 from axios call inside GrantClaimSummaryPDF (visible as red runtime overlay). If UX expects lookup by claim_id, add backend endpoint / frontend resolver that maps GRC-xxxx -> UUID or accepts both.",
+    "Minor CSS polish for the Signed column in Optional Supporting Documents table (word wraps too aggressively)."
+  ],
+  "critical_code_review_comments": [
+    "Player override endpoint accepts field name `eligibility_tag` (not `tag`) — reviewer's own agent-to-agent context used `tag`; ensure frontend PlayerDetail.jsx sends `eligibility_tag`. Verified UI flow does work in test, so frontend is correct.",
+    "eligibility-rules duplicate correctly returns 409 on repeat. Good."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter125.py"],
+  "success_rate": {"backend": "100%", "frontend": "100% (with note on claim_id routing)"},
+  "test_credentials": "sysadmin@mpca.in / mpca@2026",
+  "seed_data_creation": "PATCH created eligibility-rules config for 2026-27 (residency_min_months=6 after UI save, was 4 during pytest). Duplicate created 2028-29 clone. Override created + cleared on player a7b53856-...; history retains entry.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Grant summary PDF must be accessed via UUID (e.g. /grant-claims/540a5443-fe92-4e4b-b07f-981166172216/summary) — the human-readable GRC-2026-27-0003 route 404s from the client-side detail fetch. Player a7b53856-... currently has one entry in eligibility_override_history from tests. Eligibility rules for 2028-29 have been duplicated; delete if you need a clean slate.",
+  "rca of the issue": "None - all features working. Only minor UX note about claim_id vs UUID routing on grant summary PDF."
+}

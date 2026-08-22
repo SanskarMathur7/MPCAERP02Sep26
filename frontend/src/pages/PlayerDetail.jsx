@@ -11,7 +11,7 @@ import {
     ArrowLeft, User, FileText, ShieldCheck, ClipboardList, Upload, X, CheckCircle2, AlertTriangle,
     Ban, Loader2, ExternalLink, Trash2, Edit3, Save, Gavel, ScrollText, Sparkles, ShieldAlert, Award, Trophy,
 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, openAuthedFile } from "@/lib/api";
 import CricketLoader from "@/components/CricketLoader";
 import { DL } from "@/lib/designSystem";
 import DocumentPreview from "@/components/DocumentPreview";
@@ -248,11 +248,21 @@ const ELIGIBILITY_TAGS = [
 ];
 
 // MPCA-209 · Eligibility Tag panel — surfaces the decision-tree verdict + a Recompute button.
+// Iter 125 · Adds per-tag verification trace (source_field + why) and a signed
+// override flow that requires an evidence document OR a ≥ 20-char reason.
 const EligibilityTagPanel = ({ player, persona, onChanged }) => {
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState(null);
     const [overrideOpen, setOverrideOpen] = useState(false);
-    const [ovForm, setOvForm] = useState({ eligibility_tag: player.eligibility_tag || "Local/Birth", reason: "" });
+    const [ovForm, setOvForm] = useState({
+        eligibility_tag: player.eligibility_tag || "Local/Birth",
+        reason: "",
+        signed_doc_url: "",
+        signed_doc_filename: "",
+    });
+    const [uploadingSigned, setUploadingSigned] = useState(false);
+    const signedInputRef = useRef(null);
+    const [traceOpen, setTraceOpen] = useState(true);
     const canRecompute = persona && (persona.body_type === "State" || persona.body_code === player.body_id);
 
     const recompute = async () => {
@@ -263,18 +273,50 @@ const EligibilityTagPanel = ({ player, persona, onChanged }) => {
         } catch (e) { setErr(e?.response?.data?.detail || e.message); }
         finally { setBusy(false); }
     };
+    const uploadSignedEvidence = async (file) => {
+        if (!file) return;
+        setUploadingSigned(true); setErr(null);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("related_type", "eligibility_override");
+            fd.append("related_id", player.id);
+            const { data: rec } = await api.post("/uploads", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            setOvForm((f) => ({ ...f, signed_doc_url: rec.url, signed_doc_filename: rec.original_name }));
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setUploadingSigned(false); if (signedInputRef.current) signedInputRef.current.value = ""; }
+    };
     const saveOverride = async () => {
-        if (!ovForm.reason.trim() || ovForm.reason.trim().length < 3) { setErr("Reason must be at least 3 characters."); return; }
+        const reason = ovForm.reason.trim();
+        // Client-side mirror of the backend guard.
+        if (!ovForm.signed_doc_url && reason.length < 20) {
+            setErr("Signed override requires either an evidence document OR a reason of at least 20 characters.");
+            return;
+        }
         setBusy(true); setErr(null);
         try {
             const { data } = await api.post(`/players/${player.id}/eligibility-tag/override`, {
                 eligibility_tag: ovForm.eligibility_tag,
-                reason: ovForm.reason.trim(),
+                reason,
+                signed_doc_url: ovForm.signed_doc_url || null,
+                signed_doc_filename: ovForm.signed_doc_filename || null,
                 actor_name: persona?.display_name || persona?.name,
                 actor_body_id: persona?.body_code,
             });
             onChanged?.(data);
-            setOverrideOpen(false); setOvForm({ eligibility_tag: data.eligibility_tag, reason: "" });
+            setOverrideOpen(false);
+            setOvForm({ eligibility_tag: data.eligibility_tag, reason: "", signed_doc_url: "", signed_doc_filename: "" });
+        } catch (e) { setErr(e?.response?.data?.detail || e.message); }
+        finally { setBusy(false); }
+    };
+    const clearOverride = async () => {
+        if (!window.confirm("Clear the signed override? The next Recompute will re-tag the player automatically.")) return;
+        setBusy(true); setErr(null);
+        try {
+            const { data } = await api.post(`/players/${player.id}/eligibility-tag/clear-override`);
+            onChanged?.(data);
         } catch (e) { setErr(e?.response?.data?.detail || e.message); }
         finally { setBusy(false); }
     };
@@ -311,25 +353,102 @@ const EligibilityTagPanel = ({ player, persona, onChanged }) => {
                 )}
             </div>
             {overrideOpen && canRecompute && (
-                <div className="bg-mpca-cream/40 border-b border-mpca-brass/20 p-4 grid md:grid-cols-3 gap-3 items-end" data-testid="eligibility-override-form">
-                    <label>
-                        <div className="overline text-[9px] mb-1">Set Tag</div>
-                        <select className="input-heritage" value={ovForm.eligibility_tag} onChange={(e) => setOvForm({ ...ovForm, eligibility_tag: e.target.value })} data-testid="override-tag-select">
-                            {ELIGIBILITY_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </label>
-                    <label className="md:col-span-2">
-                        <div className="overline text-[9px] mb-1">Reason / Evidence *</div>
-                        <input className="input-heritage" value={ovForm.reason} onChange={(e) => setOvForm({ ...ovForm, reason: e.target.value })} placeholder="e.g. Bonafide employment letter from XYZ Ltd verified; residency proof attached" data-testid="override-reason-input" />
-                    </label>
-                    <div className="md:col-span-3 flex justify-end">
-                        <button onClick={saveOverride} disabled={busy || !ovForm.reason.trim()} className="btn-heritage-primary disabled:opacity-40" data-testid="override-save-btn">
-                            {busy ? <Loader2 size={11} className="inline animate-spin" /> : <Save size={12} className="inline mr-1" />} Save Override
+                <div className="bg-mpca-cream/40 border-b border-mpca-brass/20 p-4 space-y-3" data-testid="eligibility-override-form">
+                    <div className="grid md:grid-cols-3 gap-3 items-end">
+                        <label>
+                            <div className="overline text-[9px] mb-1">Set Tag</div>
+                            <select className="input-heritage" value={ovForm.eligibility_tag} onChange={(e) => setOvForm({ ...ovForm, eligibility_tag: e.target.value })} data-testid="override-tag-select">
+                                {ELIGIBILITY_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </label>
+                        <label className="md:col-span-2">
+                            <div className="overline text-[9px] mb-1">Reason / Evidence * <span className="text-mpca-oxblood normal-case">(min 20 chars if no doc)</span></div>
+                            <textarea rows={2} className="input-heritage" value={ovForm.reason} onChange={(e) => setOvForm({ ...ovForm, reason: e.target.value })} placeholder="e.g. Bonafide employment letter from XYZ Ltd verified in person by Devashish Nilesey on 20 Aug 2026; residency proof attached." data-testid="override-reason-input" />
+                        </label>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <button type="button" onClick={() => signedInputRef.current?.click()} disabled={uploadingSigned} className="text-[10px] uppercase tracking-widest border border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory px-3 py-1.5 inline-flex items-center gap-1 disabled:opacity-40" data-testid="override-upload-signed-btn">
+                            {uploadingSigned ? <><Loader2 size={11} className="animate-spin" /> Uploading…</> : <><Upload size={11} /> Attach Signed Evidence</>}
+                        </button>
+                        <input type="file" ref={signedInputRef} className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadSignedEvidence(f); }} />
+                        {ovForm.signed_doc_filename && (
+                            <span className="text-[10px] font-mono text-mpca-green-dark border border-mpca-green-dark/40 bg-mpca-green-dark/10 px-2 py-0.5" data-testid="override-signed-filename">
+                                ✓ {ovForm.signed_doc_filename}
+                            </span>
+                        )}
+                        <div className="text-[10px] italic text-mpca-gray-dark flex-1">
+                            Signed override — either attach an evidence document OR provide a reason of at least 20 characters.
+                        </div>
+                        <button onClick={saveOverride} disabled={busy || (!ovForm.signed_doc_url && ovForm.reason.trim().length < 20)} className="btn-heritage-primary disabled:opacity-40" data-testid="override-save-btn">
+                            {busy ? <Loader2 size={11} className="inline animate-spin" /> : <Save size={12} className="inline mr-1" />} Sign & Save Override
                         </button>
                     </div>
                 </div>
             )}
             {err && <div className="p-3 text-[11px] text-mpca-oxblood bg-mpca-oxblood/5">{err}</div>}
+
+            {/* Iter 125 · Active override banner + Clear button */}
+            {player.eligibility_override && canRecompute && (
+                <div className="border-b border-mpca-brass/30 bg-mpca-oxblood/5 p-3 text-[11px] flex items-start justify-between gap-3" data-testid="eligibility-active-override">
+                    <div>
+                        <div className="overline text-[9px] text-mpca-oxblood">Signed Override in force</div>
+                        <div className="mt-1 text-mpca-green-dark">
+                            <b>{player.eligibility_override.tag}</b> — {player.eligibility_override.reason}
+                        </div>
+                        <div className="text-[10px] text-mpca-gray-dark font-mono mt-1">
+                            by {player.eligibility_override.actor_name || player.eligibility_override.actor_body_id || "system"} · {new Date(player.eligibility_override.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                        </div>
+                        {player.eligibility_override.signed_doc_url && (
+                            <button type="button" onClick={() => openAuthedFile(player.eligibility_override.signed_doc_url)} className="text-[10px] text-mpca-brass underline mt-1 inline-flex items-center gap-1" data-testid="override-view-signed">
+                                <FileText size={10} /> View signed evidence · {player.eligibility_override.signed_doc_filename || "attachment"}
+                            </button>
+                        )}
+                    </div>
+                    <button onClick={clearOverride} disabled={busy} className="text-[10px] uppercase tracking-widest border border-mpca-brass text-mpca-brass hover:bg-mpca-brass hover:text-mpca-ivory px-3 py-1.5 disabled:opacity-40" data-testid="override-clear-btn">Clear</button>
+                </div>
+            )}
+
+            {/* Iter 125 · Per-tag verification trail — shows exactly WHY each
+                tag passed or failed, plus the source field / document that was
+                inspected. Collapsible to keep the panel compact for Local tags. */}
+            {(player.eligibility_check_trace || []).length > 0 && (
+                <div className="border-b border-mpca-brass/20" data-testid="eligibility-trace-panel">
+                    <button onClick={() => setTraceOpen((s) => !s)} className="w-full flex items-center justify-between px-4 py-2 text-left hover:bg-mpca-parchment/60" data-testid="eligibility-trace-toggle">
+                        <span className="overline text-[9px] text-mpca-oxblood">Verification Trail · {(player.eligibility_check_trace || []).length} rules checked</span>
+                        <span className="font-mono text-[10px] text-mpca-brass">{traceOpen ? "▼" : "▶"}</span>
+                    </button>
+                    {traceOpen && (
+                        <table className="w-full text-[11px]" data-testid="eligibility-trace-table">
+                            <thead className="bg-mpca-parchment/60 border-y border-mpca-brass/20">
+                                <tr>
+                                    <th className="text-left px-4 py-1.5 w-6"></th>
+                                    <th className="text-left px-2 py-1.5 uppercase tracking-widest text-[9px] text-mpca-brass">Rule</th>
+                                    <th className="text-left px-2 py-1.5 uppercase tracking-widest text-[9px] text-mpca-brass">Verdict / Reason</th>
+                                    <th className="text-left px-2 py-1.5 uppercase tracking-widest text-[9px] text-mpca-brass">Verified From</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {player.eligibility_check_trace.map((t, i) => (
+                                    <tr key={i} className="border-t border-mpca-brass/10">
+                                        <td className={"px-4 py-1.5 font-mono " + (t.passed ? "text-mpca-green-dark" : "text-mpca-oxblood")}>{t.passed ? "✓" : "✗"}</td>
+                                        <td className="px-2 py-1.5 font-mono text-[10px]">{t.tag}</td>
+                                        <td className="px-2 py-1.5 text-mpca-green-dark">{t.why}</td>
+                                        <td className="px-2 py-1.5 text-[10px] font-mono text-mpca-gray-dark">
+                                            {t.source_field ? (
+                                                <>
+                                                    <span className="text-mpca-brass">{t.source_field}</span>
+                                                    {t.source_value ? <span className="ml-1">= “{t.source_value}”</span> : <span className="ml-1 italic text-mpca-oxblood">empty</span>}
+                                                </>
+                                            ) : "—"}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            )}
+
             {(player.eligibility_reasons || []).length > 0 && (
                 <ul className="p-4 space-y-1.5 text-[11px] text-mpca-green-dark" data-testid="eligibility-reasons">
                     {player.eligibility_reasons.map((r, i) => (

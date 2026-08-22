@@ -1,21 +1,20 @@
 /**
- * MPCA Governance Controller · The Wiring Brain (Feb 2026)
- * ────────────────────────────────────────────────────────
- * A living SVG "neural" diagram of the MPCA governance matrix — the decision
- * layer that every tournament action passes through. Rendered as the left
- * panel of the Login page to give the app an AI-first first impression.
+ * MPCA Governance Controller · The Wiring Brain (Feb 2026 · Iter 102 · Interactive)
+ * ─────────────────────────────────────────────────────────────────────────────────
+ * A living SVG diagram of the MPCA governance matrix. Doubles as the login-page
+ * left panel — engaging enough to hold a user while they open their password
+ * manager.
  *
- *   8 tournament types (left column)
- * → 10 lifecycle steps  (middle column)
- * → 4 outcomes          (right column)
- *
- * · Every 3.2s a signal "fires" through a random path, echoing the wiring
- *   subsystem powering real approvals.
- * · Palette: DL.emerald (MPCA-owned), DL.gold (Division/District), DL.paper
- *   (idle wire), rendered on a deep ink canvas so it holds its own next to
- *   the light-panel login form.
+ * Interactions:
+ *   · Auto-fire is ON by default at 500 ms cadence — multiple concurrent gold
+ *     signals travel type → step → outcome, giving a "brain lit up" feel.
+ *   · Click the "▶ Fire · auto" pill to pause auto-fire; a "Fire a signal"
+ *     button then lets the user manually fire one at a time.
+ *   · Hover ANY type or step node — all edges wired to that node light up in
+ *     gold, and the node's own halo pulses. Mouse-out fades everything back.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Play, Pause, Zap } from "lucide-react";
 import { DL } from "@/lib/designSystem";
 
 const TYPES = [
@@ -30,27 +29,25 @@ const TYPES = [
 ];
 
 const STEPS = [
-    { id: "creation",   label: "Tournament Creation", y: 55,  phase: "pre" },
-    { id: "pool",       label: "Pool (Basics)",       y: 120, phase: "pre" },
-    { id: "officials",  label: "Match Official Posting", y: 185, phase: "pre" },
-    { id: "squad",      label: "Squad",               y: 250, phase: "pre" },
-    { id: "sq_approve", label: "Squad Approval",      y: 315, phase: "pre" },
-    { id: "calendar",   label: "Match Calendar",      y: 400, phase: "in" },
-    { id: "budget",     label: "Unified Budget",      y: 465, phase: "in" },
-    { id: "finance",    label: "Finance Console",     y: 555, phase: "post" },
-    { id: "closure",    label: "Tournament Closure",  y: 620, phase: "post" },
-    { id: "visibility", label: "MPCA Visibility",     y: 685, phase: "post" },
+    { id: "creation",   label: "Tournament Creation", y: 55 },
+    { id: "pool",       label: "Pool (Basics)",       y: 120 },
+    { id: "officials",  label: "Match Official Posting", y: 185 },
+    { id: "squad",      label: "Squad",               y: 250 },
+    { id: "sq_approve", label: "Squad Approval",      y: 315 },
+    { id: "calendar",   label: "Match Calendar",      y: 400 },
+    { id: "budget",     label: "Unified Budget",      y: 465 },
+    { id: "finance",    label: "Finance Console",     y: 555 },
+    { id: "closure",    label: "Tournament Closure",  y: 620 },
+    { id: "visibility", label: "MPCA Visibility",     y: 685 },
 ];
 
 const OUTCOMES = [
-    { id: "mpca", label: "MPCA acts",     sub: "wired · 10 steps", y: 215, tone: "m" },
-    { id: "div",  label: "Division acts", sub: "wired · 9 steps",  y: 355, tone: "d" },
+    { id: "mpca", label: "MPCA acts",     sub: "wired · 10 steps",  y: 215, tone: "m" },
+    { id: "div",  label: "Division acts", sub: "wired · 9 steps",   y: 355, tone: "d" },
     { id: "auto", label: "Automatic",     sub: "1 step · computed", y: 495, tone: "a" },
     { id: "na",   label: "Not applicable", sub: "3 steps · absent", y: 635, tone: "n" },
 ];
 
-// Curated set of live wires — a sampling that hints at the full 62-edge matrix
-// without turning the login into a spaghetti graph.
 const IN_EDGES = [
     ["bcci", "creation", "m"], ["bcci", "pool", "m"], ["bcci", "officials", "m"], ["bcci", "squad", "m"], ["bcci", "calendar", "m"], ["bcci", "budget", "m"], ["bcci", "finance", "m"], ["bcci", "closure", "m"],
     ["interdiv", "creation", "m"], ["interdiv", "pool", "m"], ["interdiv", "squad", "d"], ["interdiv", "sq_approve", "m"], ["interdiv", "calendar", "m"], ["interdiv", "budget", "m"], ["interdiv", "finance", "m"], ["interdiv", "closure", "m"],
@@ -78,6 +75,8 @@ const OUT_EDGES = [
 const TYPE_X = 165;
 const STEP_X = 435;
 const OUT_X  = 725;
+const AUTO_INTERVAL_MS = 500;
+const PULSE_DURATION_MS = 2400;
 
 const typeById = (id) => TYPES.find(t => t.id === id);
 const stepById = (id) => STEPS.find(s => s.id === id);
@@ -85,30 +84,62 @@ const outById  = (id) => OUTCOMES.find(o => o.id === id);
 
 const ownerColor = (o) => o === "m" ? DL.gold : o === "a" ? "#5FA3E0" : o === "n" ? "#7A6B4E" : "#C9A45F";
 
-export default function WiringBrain() {
-    const [pulseKey, setPulseKey] = useState(0);
-    const [pulsePath, setPulsePath] = useState(null);
-    const timer = useRef(null);
+let pulseSeq = 0;
 
-    // Fire a fresh signal every 3.2s — a randomly chosen chain
-    // (type → step → outcome) that lights up sequentially.
-    useEffect(() => {
-        const fire = () => {
-            const inE = IN_EDGES[Math.floor(Math.random() * IN_EDGES.length)];
-            const outE = OUT_EDGES.find(e => e[0] === inE[1]) || OUT_EDGES[0];
-            setPulsePath({ t: inE[0], s: inE[1], o: outE[1], owner: inE[2] });
-            setPulseKey(k => k + 1);
-        };
-        fire();
-        timer.current = setInterval(fire, 3200);
-        return () => clearInterval(timer.current);
+export default function WiringBrain() {
+    const [pulses, setPulses] = useState([]);      // array of active { key, t, s, o, owner }
+    const [autoFire, setAutoFire] = useState(true);
+    const [hoveredType, setHoveredType] = useState(null);
+    const [hoveredStep, setHoveredStep] = useState(null);
+    const pulsesRef = useRef(pulses);
+    pulsesRef.current = pulses;
+
+    const firePulse = useCallback((typeId = null, stepId = null) => {
+        // Pick a random in-edge (optionally constrained to the given type/step),
+        // then a random out-edge from that step's fan-out.
+        let candidates = IN_EDGES;
+        if (typeId) candidates = candidates.filter(e => e[0] === typeId);
+        if (stepId) candidates = candidates.filter(e => e[1] === stepId);
+        if (!candidates.length) candidates = IN_EDGES;
+        const inE = candidates[Math.floor(Math.random() * candidates.length)];
+        const outs = OUT_EDGES.filter(e => e[0] === inE[1]);
+        const outE = outs[Math.floor(Math.random() * outs.length)] || OUT_EDGES[0];
+        const key = ++pulseSeq;
+        setPulses(prev => [...prev, { key, t: inE[0], s: inE[1], o: outE[1], owner: inE[2] }]);
+        // Auto-clean after animation completes
+        setTimeout(() => {
+            setPulses(prev => prev.filter(p => p.key !== key));
+        }, PULSE_DURATION_MS);
     }, []);
 
+    useEffect(() => {
+        if (!autoFire) return undefined;
+        // Fire once immediately when auto-fire flips on
+        firePulse();
+        const iv = setInterval(() => {
+            // Cap concurrent pulses to keep the brain readable (~10 at a time)
+            if (pulsesRef.current.length < 10) firePulse();
+        }, AUTO_INTERVAL_MS);
+        return () => clearInterval(iv);
+    }, [autoFire, firePulse]);
+
+    // Highlight edge if it touches the hovered node OR is currently pulsing
+    const isEdgeActive = useCallback((tId, sId) => {
+        if (hoveredType && hoveredType === tId) return true;
+        if (hoveredStep && hoveredStep === sId) return true;
+        return pulses.some(p => p.t === tId && p.s === sId);
+    }, [pulses, hoveredType, hoveredStep]);
+    const isOutEdgeActive = useCallback((sId, oId) => {
+        if (hoveredStep && hoveredStep === sId) return true;
+        return pulses.some(p => p.s === sId && p.o === oId);
+    }, [pulses, hoveredStep]);
+
     const edgeStyle = (owner, active) => ({
-        stroke: active ? ownerColor(owner) : `rgba(200,180,138,${owner === "m" ? 0.35 : 0.14})`,
+        stroke: active ? ownerColor(owner) : `rgba(200,180,138,${owner === "m" ? 0.28 : 0.11})`,
         strokeWidth: active ? 2 : 1,
         fill: "none",
-        transition: "stroke 400ms ease, stroke-width 400ms ease",
+        transition: "stroke 240ms ease, stroke-width 240ms ease",
+        cursor: "default",
     });
 
     return (
@@ -126,7 +157,7 @@ export default function WiringBrain() {
                 opacity: 0.6,
             }} />
 
-            {/* corner label */}
+            {/* corner labels */}
             <div style={{
                 position: "absolute", top: 88, left: 32, zIndex: 3, color: DL.gold,
                 fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.28em", textTransform: "uppercase", fontWeight: 700,
@@ -146,7 +177,52 @@ export default function WiringBrain() {
             }}>
                 Every tournament action routes through this decision layer.
                 <span style={{ color: DL.gold }}> 8 types × 10 lifecycle steps × 4 outcomes = 62 live wires</span>
-                {" "}the association edits, not software.
+                {" "}the association edits, not software. Hover any node · fire a signal.
+            </div>
+
+            {/* Control pills — top-right of brain panel */}
+            <div style={{
+                position: "absolute", top: 24, right: 24, zIndex: 4, display: "flex", gap: 8, alignItems: "center",
+            }} data-testid="brain-controls">
+                <button
+                    type="button"
+                    onClick={() => setAutoFire(v => !v)}
+                    data-testid="brain-toggle-auto"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] uppercase tracking-[0.18em] transition-all"
+                    style={{
+                        backgroundColor: autoFire ? DL.gold : "rgba(14,31,27,0.55)",
+                        color: autoFire ? DL.ink : DL.gold,
+                        border: `1px solid ${DL.gold}`,
+                        fontFamily: DL.fontMono,
+                        fontWeight: 700,
+                        backdropFilter: "blur(8px)",
+                    }}
+                    title={autoFire ? "Pause auto-fire" : "Resume auto-fire"}
+                >
+                    {autoFire ? <Pause size={11} strokeWidth={2.5} /> : <Play size={11} strokeWidth={2.5} />}
+                    {autoFire ? "Auto · 0.5s" : "Paused"}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => firePulse()}
+                    data-testid="brain-fire-signal"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] uppercase tracking-[0.18em] transition-all"
+                    style={{
+                        backgroundColor: "rgba(14,31,27,0.55)",
+                        color: DL.paper,
+                        border: `1px solid ${DL.gold}`,
+                        fontFamily: DL.fontMono,
+                        fontWeight: 700,
+                        backdropFilter: "blur(8px)",
+                        cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = DL.gold; e.currentTarget.style.color = DL.ink; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(14,31,27,0.55)"; e.currentTarget.style.color = DL.paper; }}
+                    title="Fire one signal now"
+                >
+                    <Zap size={11} strokeWidth={2.5} />
+                    Fire a signal
+                </button>
             </div>
 
             {/* live SVG diagram */}
@@ -155,13 +231,14 @@ export default function WiringBrain() {
                 preserveAspectRatio="xMidYMid meet"
                 style={{ position: "absolute", inset: 0, top: 200, width: "100%", height: "calc(100% - 240px)", zIndex: 1 }}
                 aria-label="MPCA Governance wiring brain"
+                onMouseLeave={() => { setHoveredType(null); setHoveredStep(null); }}
             >
                 {/* Column captions */}
                 <text x={TYPE_X} y={12} textAnchor="middle" fill={DL.gold} opacity={0.6} fontFamily={DL.fontMono} fontSize={9} letterSpacing="2.4">TYPES</text>
                 <text x={STEP_X} y={12} textAnchor="middle" fill={DL.gold} opacity={0.6} fontFamily={DL.fontMono} fontSize={9} letterSpacing="2.4">LIFECYCLE STEPS</text>
                 <text x={OUT_X}  y={12} textAnchor="middle" fill={DL.gold} opacity={0.6} fontFamily={DL.fontMono} fontSize={9} letterSpacing="2.4">OUTCOMES</text>
 
-                {/* Phase bands (subtle rounded rects behind step column) */}
+                {/* Phase bands */}
                 <g opacity={0.15}>
                     <rect x={STEP_X - 130} y={50}  width={260} height={280} rx={12} fill="none" stroke={DL.gold} strokeDasharray="2 4" />
                     <rect x={STEP_X - 130} y={395} width={260} height={95}  rx={12} fill="none" stroke={DL.gold} strokeDasharray="2 4" />
@@ -177,7 +254,7 @@ export default function WiringBrain() {
                 <g>
                     {IN_EDGES.map(([tId, sId, owner], i) => {
                         const t = typeById(tId), s = stepById(sId);
-                        const active = pulsePath && pulsePath.t === tId && pulsePath.s === sId;
+                        const active = isEdgeActive(tId, sId);
                         const d = `M${TYPE_X + 18},${t.y} C${(TYPE_X + STEP_X) / 2},${t.y} ${(TYPE_X + STEP_X) / 2},${s.y} ${STEP_X - 18},${s.y}`;
                         return <path key={`in-${i}`} d={d} style={edgeStyle(owner, active)} />;
                     })}
@@ -186,36 +263,59 @@ export default function WiringBrain() {
                 <g>
                     {OUT_EDGES.map(([sId, oId, tone], i) => {
                         const s = stepById(sId), o = outById(oId);
-                        const active = pulsePath && pulsePath.s === sId && pulsePath.o === oId;
+                        const active = isOutEdgeActive(sId, oId);
                         const d = `M${STEP_X + 18},${s.y} C${(STEP_X + OUT_X) / 2},${s.y} ${(STEP_X + OUT_X) / 2},${o.y} ${OUT_X - 18},${o.y}`;
                         return <path key={`out-${i}`} d={d} style={edgeStyle(tone, active)} />;
                     })}
                 </g>
 
-                {/* Type nodes */}
+                {/* Type nodes — hoverable */}
                 <g>
                     {TYPES.map(t => {
-                        const active = pulsePath && pulsePath.t === t.id;
+                        const hovered = hoveredType === t.id;
+                        const active = hovered || pulses.some(p => p.t === t.id);
                         return (
-                            <g key={t.id} transform={`translate(${TYPE_X},${t.y})`}>
+                            <g
+                                key={t.id}
+                                transform={`translate(${TYPE_X},${t.y})`}
+                                onMouseEnter={() => setHoveredType(t.id)}
+                                onMouseLeave={() => setHoveredType(null)}
+                                onClick={() => firePulse(t.id)}
+                                style={{ cursor: "pointer" }}
+                                data-testid={`brain-type-${t.id}`}
+                            >
+                                {/* larger invisible hit target */}
+                                <circle r={22} fill="transparent" />
+                                {hovered && <circle r={18} fill={DL.gold} opacity={0.15} />}
                                 <circle r={active ? 12 : 8} fill={t.owner === "m" ? DL.gold : "#C9A45F"} opacity={active ? 1 : 0.85} style={{ transition: "r 300ms ease, opacity 300ms ease" }} />
                                 <circle r={4} fill={DL.paper} opacity={0.9} />
-                                <text x={-24} y={-2} textAnchor="end" fill={DL.paper} fontFamily={DL.fontBody} fontSize={11.5} fontWeight={700}>{t.label}</text>
+                                <text x={-24} y={-2} textAnchor="end" fill={DL.paper} fontFamily={DL.fontBody} fontSize={11.5} fontWeight={hovered ? 800 : 700} style={{ transition: "font-weight 240ms" }}>{t.label}</text>
                                 <text x={-24} y={12} textAnchor="end" fill="rgba(251,248,241,0.5)" fontFamily={DL.fontMono} fontSize={8.5}>{t.steps}</text>
                             </g>
                         );
                     })}
                 </g>
 
-                {/* Step nodes */}
+                {/* Step nodes — hoverable */}
                 <g>
                     {STEPS.map(s => {
-                        const active = pulsePath && pulsePath.s === s.id;
+                        const hovered = hoveredStep === s.id;
+                        const active = hovered || pulses.some(p => p.s === s.id);
                         return (
-                            <g key={s.id} transform={`translate(${STEP_X},${s.y})`}>
+                            <g
+                                key={s.id}
+                                transform={`translate(${STEP_X},${s.y})`}
+                                onMouseEnter={() => setHoveredStep(s.id)}
+                                onMouseLeave={() => setHoveredStep(null)}
+                                onClick={() => firePulse(null, s.id)}
+                                style={{ cursor: "pointer" }}
+                                data-testid={`brain-step-${s.id}`}
+                            >
+                                <circle r={22} fill="transparent" />
+                                {hovered && <circle r={20} fill={DL.gold} opacity={0.18} />}
                                 <circle r={active ? 15 : 10} fill={DL.emerald} stroke={DL.gold} strokeWidth={active ? 2 : 1} opacity={active ? 1 : 0.9} style={{ transition: "r 300ms ease" }} />
                                 <circle r={5} fill={DL.paper} opacity={active ? 1 : 0.5} />
-                                <text x={20} y={2} fill={DL.paper} fontFamily={DL.fontBody} fontSize={11} fontWeight={active ? 700 : 500} style={{ transition: "font-weight 300ms" }}>{s.label}</text>
+                                <text x={20} y={2} fill={DL.paper} fontFamily={DL.fontBody} fontSize={11} fontWeight={hovered ? 800 : 500} style={{ transition: "font-weight 240ms" }}>{s.label}</text>
                             </g>
                         );
                     })}
@@ -224,7 +324,7 @@ export default function WiringBrain() {
                 {/* Outcome nodes */}
                 <g>
                     {OUTCOMES.map(o => {
-                        const active = pulsePath && pulsePath.o === o.id;
+                        const active = pulses.some(p => p.o === o.id);
                         return (
                             <g key={o.id} transform={`translate(${OUT_X},${o.y})`}>
                                 <circle r={active ? 14 : 10} fill={ownerColor(o.tone)} opacity={active ? 1 : 0.9} style={{ transition: "r 300ms ease" }} />
@@ -236,25 +336,27 @@ export default function WiringBrain() {
                     })}
                 </g>
 
-                {/* Firing dot travels along the pulse path */}
-                {pulsePath && (
-                    <g key={`pulse-${pulseKey}`}>
-                        {[
-                            [TYPE_X, typeById(pulsePath.t).y, STEP_X, stepById(pulsePath.s).y, "0s"],
-                            [STEP_X, stepById(pulsePath.s).y, OUT_X, outById(pulsePath.o).y, "1.2s"],
-                        ].map(([x1, y1, x2, y2, delay], i) => (
-                            <circle key={i} r={4} fill={DL.gold} opacity={0}
-                                style={{
-                                    filter: `drop-shadow(0 0 8px ${DL.gold})`,
-                                }}
-                            >
-                                <animate attributeName="opacity" values="0;1;1;0" dur="1.2s" begin={delay} fill="freeze" />
-                                <animate attributeName="cx" from={x1 + 18} to={x2 - 18} dur="1.2s" begin={delay} fill="freeze" />
-                                <animate attributeName="cy" from={y1} to={y2} dur="1.2s" begin={delay} fill="freeze" />
-                            </circle>
-                        ))}
-                    </g>
-                )}
+                {/* All active pulses — travelling gold dots */}
+                {pulses.map(p => {
+                    const t = typeById(p.t), s = stepById(p.s), o = outById(p.o);
+                    if (!t || !s || !o) return null;
+                    return (
+                        <g key={p.key}>
+                            {[
+                                [TYPE_X, t.y, STEP_X, s.y, "0s"],
+                                [STEP_X, s.y, OUT_X, o.y, "1.2s"],
+                            ].map(([x1, y1, x2, y2, delay], i) => (
+                                <circle key={i} r={4} fill={DL.gold} opacity={0}
+                                    style={{ filter: `drop-shadow(0 0 8px ${DL.gold})` }}
+                                >
+                                    <animate attributeName="opacity" values="0;1;1;0" dur="1.2s" begin={delay} fill="freeze" />
+                                    <animate attributeName="cx" from={x1 + 18} to={x2 - 18} dur="1.2s" begin={delay} fill="freeze" />
+                                    <animate attributeName="cy" from={y1} to={y2} dur="1.2s" begin={delay} fill="freeze" />
+                                </circle>
+                            ))}
+                        </g>
+                    );
+                })}
             </svg>
 
             {/* footer stat strip */}
@@ -274,8 +376,8 @@ export default function WiringBrain() {
                         </div>
                     ))}
                 </div>
-                <div style={{ color: DL.gold, opacity: 0.65, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.2em" }}>
-                    Live · fires every 3.2s
+                <div style={{ color: DL.gold, opacity: 0.75, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.2em" }} data-testid="brain-live-count">
+                    {pulses.length > 0 ? `${pulses.length} signal${pulses.length === 1 ? "" : "s"} live` : "Idle · click Fire"}
                 </div>
             </div>
         </div>

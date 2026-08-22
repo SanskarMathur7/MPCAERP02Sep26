@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
-import { MpcaEmblem } from "@/components/MpcaEmblem";
 import { DL } from "@/lib/designSystem";
 import { api } from "@/lib/api";
 import WiringBrain from "@/components/WiringBrain";
@@ -67,22 +66,6 @@ const Login = () => {
                 data-testid="login-brain-panel"
             >
                 <WiringBrain />
-                {/* Top-right brand plate (kept minimal so it doesn't fight the diagram) */}
-                <Link
-                    to="/"
-                    className="absolute top-6 right-6 z-20 inline-flex items-center gap-2.5 px-3 py-2 rounded-md"
-                    style={{
-                        backgroundColor: "rgba(14,31,27,0.55)",
-                        border: `1px solid ${DL.gold}`,
-                        backdropFilter: "blur(8px)",
-                    }}
-                >
-                    <MpcaEmblem className="w-6 h-7" style={{ color: DL.gold }} />
-                    <div>
-                        <div className="text-[13px] leading-none" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}>MPCA</div>
-                        <div className="text-[8px] tracking-[0.24em] uppercase mt-1" style={{ fontFamily: DL.fontMono, color: DL.gold }}>ERP · v4.2.0</div>
-                    </div>
-                </Link>
             </aside>
 
             {/* ───── RIGHT · Login form ───── */}

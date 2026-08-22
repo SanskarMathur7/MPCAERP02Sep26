@@ -5,11 +5,14 @@
 import Marquee from "react-fast-marquee";
 import { motion } from "framer-motion";
 import { Flag, MapPin } from "lucide-react";
-import { KPIS, LIVE_MATCHES, TICKER, UPCOMING_TOSSES } from "@/pages/design-preview/_mock";
+import { useAuth } from "@/context/AuthContext";
 import { DL } from "@/lib/designSystem";
-import { WarmPanel, WarmKpiHero, WarmChart, WarmPageHeader, WARM_COLORS, PulseDot, SampleChip } from "./_warm";
+import { WarmPanel, WarmKpiHero, WarmChart, WarmPageHeader, WARM_COLORS, PulseDot, SampleChip, ScopeChip } from "./_warm";
+import { useScopedMocks, scopeLabel } from "./_mockScope";
 
 export default function WarmSeasonOverview() {
+    const { persona } = useAuth();
+    const { KPIS, LIVE_MATCHES, TICKER, UPCOMING_TOSSES } = useScopedMocks(persona);
     const velocityOption = {
         grid: { top: 10, right: 6, bottom: 20, left: 6, containLabel: false },
         xAxis: {
@@ -37,7 +40,7 @@ export default function WarmSeasonOverview() {
                 eyebrow="Live · Season 2026-27"
                 title="Season Overview"
                 kicker="Every match, every rupee, every squad — surfaced in one grade-A viewport."
-                right={<SampleChip />}
+                right={<div className="flex items-center gap-2"><ScopeChip label={scopeLabel(persona)} /><SampleChip /></div>}
             />
 
             {/* Ticker */}
@@ -74,6 +77,11 @@ export default function WarmSeasonOverview() {
             {/* Live matches + tosses + velocity */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <WarmPanel title="Live Matches · In-Play" right={<span><PulseDot tone="oxblood" /> &nbsp;{LIVE_MATCHES.length} live</span>} className="lg:col-span-2" testid="warm-live-matches-panel">
+                    {LIVE_MATCHES.length === 0 ? (
+                        <div className="py-8 text-center text-[12.5px]" style={{ color: DL.muted }}>
+                            No live matches under this scope right now.
+                        </div>
+                    ) : (
                     <div className="divide-y" style={{ borderColor: DL.rule }}>
                         {LIVE_MATCHES.map((m, i) => (
                             <motion.div
@@ -102,6 +110,7 @@ export default function WarmSeasonOverview() {
                             </motion.div>
                         ))}
                     </div>
+                    )}
                 </WarmPanel>
 
                 <div className="space-y-4">

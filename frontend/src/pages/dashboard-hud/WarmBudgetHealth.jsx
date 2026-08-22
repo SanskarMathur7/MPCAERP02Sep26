@@ -2,11 +2,14 @@
  * WarmBudgetHealth — ported from /design-preview/BudgetHealth.jsx into the
  * Institutional Warm palette. Treemap · gauge · overrun bars · velocity line.
  */
-import { BUDGET_TREE, BUDGET_UTILISATION, TOP_OVERRUNS, INVOICE_VELOCITY } from "@/pages/design-preview/_mock";
+import { useAuth } from "@/context/AuthContext";
 import { DL } from "@/lib/designSystem";
-import { WarmPanel, WarmChart, WarmKpiHero, WarmPageHeader, WARM_COLORS, SampleChip } from "./_warm";
+import { WarmPanel, WarmChart, WarmKpiHero, WarmPageHeader, WARM_COLORS, SampleChip, ScopeChip } from "./_warm";
+import { useScopedMocks, scopeLabel } from "./_mockScope";
 
 export default function WarmBudgetHealth() {
+    const { persona } = useAuth();
+    const { BUDGET_TREE, BUDGET_UTILISATION, TOP_OVERRUNS, INVOICE_VELOCITY, share } = useScopedMocks(persona);
     const warmParentPalette = [
         WARM_COLORS.emerald, WARM_COLORS.gold, WARM_COLORS.terracotta,
         WARM_COLORS.oxblood, WARM_COLORS.goldSoft, WARM_COLORS.olive,
@@ -115,12 +118,12 @@ export default function WarmBudgetHealth() {
                 eyebrow="Fiscal · 2026-27"
                 title="Budget Health"
                 kicker="Season-wide deployment. Treemap surfaces where money is going; gauge & bars surface how fast."
-                right={<SampleChip />}
+                right={<div className="flex items-center gap-2"><ScopeChip label={scopeLabel(persona)} /><SampleChip /></div>}
             />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                <WarmKpiHero label="Approved Budget" value="30.8" suffix="Cr" accent="emerald" testid="warm-kpi-budget-approved" />
-                <WarmKpiHero label="Committed"       value="22.8" suffix="Cr" accent="gold"    testid="warm-kpi-budget-committed" />
+                <WarmKpiHero label="Approved Budget" value={(30.8 * share).toFixed(1)} suffix="Cr" accent="emerald" testid="warm-kpi-budget-approved" />
+                <WarmKpiHero label="Committed"       value={(22.8 * share).toFixed(1)} suffix="Cr" accent="gold"    testid="warm-kpi-budget-committed" />
                 <WarmKpiHero label="Utilisation"     value={`${Math.round(BUDGET_UTILISATION * 100)}%`} accent="goldSoft" testid="warm-kpi-budget-util" />
                 <WarmKpiHero label="Overrun Heads"   value={TOP_OVERRUNS.filter((o) => o.pct > 100).length} accent="oxblood" testid="warm-kpi-budget-overruns" />
             </div>

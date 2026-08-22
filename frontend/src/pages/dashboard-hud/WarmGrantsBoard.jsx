@@ -3,9 +3,10 @@
  * Institutional Warm palette. Kanban of claims + waterfall + ageing histogram.
  */
 import { motion } from "framer-motion";
-import { GRANT_STAGES, GRANT_CARDS, AGEING_BUCKETS } from "@/pages/design-preview/_mock";
+import { useAuth } from "@/context/AuthContext";
 import { DL } from "@/lib/designSystem";
-import { WarmPanel, WarmChart, WarmKpiHero, WarmPageHeader, WARM_COLORS, SampleChip } from "./_warm";
+import { WarmPanel, WarmChart, WarmKpiHero, WarmPageHeader, WARM_COLORS, SampleChip, ScopeChip } from "./_warm";
+import { useScopedMocks, scopeLabel } from "./_mockScope";
 
 const stageColor = (stageKey) => {
     // Map HUD stage colours → warm palette bins so users still read status at a glance.
@@ -21,6 +22,8 @@ const stageColor = (stageKey) => {
 };
 
 export default function WarmGrantsBoard() {
+    const { persona } = useAuth();
+    const { GRANT_STAGES, GRANT_CARDS, AGEING_BUCKETS } = useScopedMocks(persona);
     const totalCr = GRANT_STAGES.reduce((s, x) => s + x.sum_cr, 0);
 
     // Waterfall of ₹ across stages
@@ -77,13 +80,13 @@ export default function WarmGrantsBoard() {
                 eyebrow="Lifecycle · Grant Claims"
                 title="Grants Board"
                 kicker="Every claim in-flight, ordered by ageing. Column height = volume, colour = stage."
-                right={<SampleChip />}
+                right={<div className="flex items-center gap-2"><ScopeChip label={scopeLabel(persona)} /><SampleChip /></div>}
             />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 <WarmKpiHero label="Claims in Flight" value={GRANT_CARDS.length} accent="gold" testid="warm-kpi-total-claims" />
-                <WarmKpiHero label="Approved Value"   value={GRANT_STAGES.find((s) => s.key === "Approved").sum_cr} suffix="Cr" accent="emerald" testid="warm-kpi-approved-value" />
-                <WarmKpiHero label="Paid YTD"         value={GRANT_STAGES.find((s) => s.key === "Payment_Made").sum_cr} suffix="Cr" accent="emerald" testid="warm-kpi-paid-value" />
+                <WarmKpiHero label="Approved Value"   value={GRANT_STAGES.find((s) => s.key === "Approved")?.sum_cr ?? 0} suffix="Cr" accent="emerald" testid="warm-kpi-approved-value" />
+                <WarmKpiHero label="Paid YTD"         value={GRANT_STAGES.find((s) => s.key === "Payment_Made")?.sum_cr ?? 0} suffix="Cr" accent="emerald" testid="warm-kpi-paid-value" />
                 <WarmKpiHero label="Pipeline"         value={totalCr.toFixed(1)} suffix="Cr" accent="goldSoft" testid="warm-kpi-pipeline" />
             </div>
 

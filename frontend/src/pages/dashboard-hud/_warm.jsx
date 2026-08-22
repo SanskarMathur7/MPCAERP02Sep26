@@ -157,6 +157,24 @@ export const SampleChip = () => (
     </span>
 );
 
+/* ---------- ScopeChip · shows the caller's data scope ---------------- */
+export const ScopeChip = ({ label }) => (
+    <span
+        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-[0.18em]"
+        style={{
+            fontFamily: DL.fontMono,
+            color: DL.emerald,
+            background: "rgba(13,59,46,0.08)",
+            border: `1px solid ${DL.emerald}`,
+        }}
+        data-testid="warm-scope-chip"
+        title="Data scope for the currently signed-in user"
+    >
+        <span style={{ width: 6, height: 6, borderRadius: 999, background: DL.emerald, display: "inline-block" }} />
+        Scope · {label}
+    </span>
+);
+
 /* ---------- WarmPageHeader ------------------------------------------- */
 export const WarmPageHeader = ({ eyebrow, title, kicker, right }) => (
     <div className="flex flex-wrap items-end justify-between gap-4 mb-5 pb-4" style={{ borderBottom: `1px dashed ${DL.rule}` }}>

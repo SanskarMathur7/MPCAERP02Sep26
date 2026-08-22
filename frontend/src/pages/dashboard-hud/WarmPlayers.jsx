@@ -7,13 +7,15 @@
  *        n) Transfers this season.
  */
 import { Users, ShieldCheck, AlertTriangle, Sparkles, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import { DL } from "@/lib/designSystem";
-import { WarmPanel, WarmChart, WarmKpiHero, WarmPageHeader, WARM_COLORS, SampleChip } from "./_warm";
+import { WarmPanel, WarmChart, WarmKpiHero, WarmPageHeader, WARM_COLORS, SampleChip, ScopeChip } from "./_warm";
+import { scopePlayerMocks, scopeLabel } from "./_mockScope";
 
-/* ---------- Sample data ---------------------------------------------- */
-const KPIS = { active: 1284, pending: 63, suspended: 4, debutants_ytd: 187, court_order: 2 };
+/* ---------- Sample data (state-wide baseline) ------------------------ */
+const RAW_KPIS = { active: 1284, pending: 63, suspended: 4, debutants_ytd: 187, court_order: 2 };
 
-const FUNNEL = [
+const RAW_FUNNEL = [
     { name: "Draft",                     value: 1610 },
     { name: "Submitted",                 value: 1502 },
     { name: "Under Division Review",     value: 1420 },
@@ -21,34 +23,34 @@ const FUNNEL = [
     { name: "Active",                    value: 1284 },
 ];
 
-const KYC_AGEING = [
+const RAW_KYC_AGEING = [
     { bucket: "0-7 d",    count: 38, color: WARM_COLORS.emerald },
     { bucket: "8-14 d",   count: 24, color: WARM_COLORS.gold },
     { bucket: "15-30 d",  count: 14, color: WARM_COLORS.goldSoft },
     { bucket: "30+ d",    count:  8, color: WARM_COLORS.oxblood },
 ];
 
-const DOC_COMPLETENESS = { complete: 1147, incomplete: 137, total: 1284 };
+const RAW_DOC_COMPLETENESS = { complete: 1147, incomplete: 137, total: 1284 };
 
-const AI_SPLIT = [
+const RAW_AI_SPLIT = [
     { name: "Clean",           value: 1120, color: WARM_COLORS.emerald },
     { name: "Warning",         value: 128,  color: WARM_COLORS.gold },
     { name: "Suspected Fraud", value: 36,   color: WARM_COLORS.oxblood },
 ];
 
-const GUEST_QUOTAS = [
+const RAW_GUEST_QUOTAS = [
     { label: "MP Domicile",  used: 42,  cap: 60 },
     { label: "Education",    used: 18,  cap: 30 },
     { label: "Out of MP",    used: 27,  cap: 30 },
 ];
 
-const CATEGORY_MIX = [
+const RAW_CATEGORY_MIX = [
     { name: "Local · MP",     value: 1041, color: WARM_COLORS.emerald },
     { name: "Born Outside",   value: 156,  color: WARM_COLORS.gold },
     { name: "Guest",          value: 87,   color: WARM_COLORS.terracotta },
 ];
 
-const AGE_PYRAMID = [
+const RAW_AGE_PYRAMID = [
     { grp: "U-14",   men: 118, women: 42 },
     { grp: "U-16",   men: 164, women: 58 },
     { grp: "U-19",   men: 212, women: 71 },
@@ -56,14 +58,14 @@ const AGE_PYRAMID = [
     { grp: "Senior", men: 288, women: 79 },
 ];
 
-const POSITIONAL = [
+const RAW_POSITIONAL = [
     { name: "Batter",      value: 470, color: WARM_COLORS.emerald },
     { name: "Bowler",      value: 386, color: WARM_COLORS.gold },
     { name: "All-rounder", value: 312, color: WARM_COLORS.terracotta },
     { name: "WK",          value: 116, color: WARM_COLORS.oxblood },
 ];
 
-const CROSS_LOAD = [
+const RAW_CROSS_LOAD = [
     { name: "Aditya Rathore",    squads: 5 }, { name: "Priyansh Sharma", squads: 5 },
     { name: "Rajat Patidar",     squads: 4 }, { name: "Venkatesh Iyer",  squads: 4 },
     { name: "Shubhangi Kulkarni",squads: 4 }, { name: "Yash Dubey",      squads: 3 },
@@ -71,7 +73,7 @@ const CROSS_LOAD = [
     { name: "Puneet Datey",      squads: 3 }, { name: "Aryan Juyal",     squads: 3 },
 ];
 
-const DIV_DISTRIBUTION = [
+const RAW_DIV_DISTRIBUTION = [
     { code: "DIV-IND", players: 214 }, { code: "DIV-BPL", players: 187 },
     { code: "DIV-GWL", players: 156 }, { code: "DIV-JBP", players: 138 },
     { code: "DIV-UJN", players: 124 }, { code: "DIV-CHM", players: 118 },
@@ -79,7 +81,7 @@ const DIV_DISTRIBUTION = [
     { code: "DIV-RWA", players:  82 }, { code: "DIV-STN", players:  66 },
 ];
 
-const TRANSFERS = [
+const RAW_TRANSFERS = [
     { division: "DIV-IND", inbound: 12, outbound:  6, pending: 3 },
     { division: "DIV-BPL", inbound:  8, outbound:  4, pending: 2 },
     { division: "DIV-GWL", inbound:  6, outbound:  9, pending: 4 },
@@ -121,6 +123,18 @@ const GaugeMini = ({ label, used, cap }) => {
 
 /* ---------- Main --------------------------------------------------- */
 export default function WarmPlayers() {
+    const { persona } = useAuth();
+    const {
+        KPIS, FUNNEL, KYC_AGEING, DOC_COMPLETENESS, AI_SPLIT, GUEST_QUOTAS, CATEGORY_MIX,
+        AGE_PYRAMID, POSITIONAL, CROSS_LOAD, DIV_DISTRIBUTION, TRANSFERS,
+    } = scopePlayerMocks(persona, {
+        KPIS: RAW_KPIS, FUNNEL: RAW_FUNNEL, KYC_AGEING: RAW_KYC_AGEING,
+        DOC_COMPLETENESS: RAW_DOC_COMPLETENESS, AI_SPLIT: RAW_AI_SPLIT,
+        GUEST_QUOTAS: RAW_GUEST_QUOTAS, CATEGORY_MIX: RAW_CATEGORY_MIX,
+        AGE_PYRAMID: RAW_AGE_PYRAMID, POSITIONAL: RAW_POSITIONAL,
+        CROSS_LOAD: RAW_CROSS_LOAD, DIV_DISTRIBUTION: RAW_DIV_DISTRIBUTION,
+        TRANSFERS: RAW_TRANSFERS,
+    });
     // Chart options — kept minimal, warm-themed
     const donutOption = {
         tooltip: { trigger: "item", formatter: "{b}<br/><b>{c}</b> ({d}%)" },
@@ -160,7 +174,7 @@ export default function WarmPlayers() {
                 eyebrow="Human Capital · 2026-27"
                 title="Players"
                 kicker="Registrations, KYC, eligibility, squads — the human capital powering every trophy."
-                right={<SampleChip />}
+                right={<div className="flex items-center gap-2"><ScopeChip label={scopeLabel(persona)} /><SampleChip /></div>}
             />
 
             {/* Row 1 · KPI hero band */}

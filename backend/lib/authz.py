@@ -256,19 +256,27 @@ def require_role(*roles: Role):
 def scope_filter(principal: RequestPrincipal, field: str = "body_id") -> dict:
     """Return a Mongo query fragment restricting reads to this principal's scope.
 
-        · State personas       →  {}                      (see everything)
-        · Division persona     →  own DIV + child DIST-*  (regex on suffix)
-        · District persona     →  own DIST only
-        · Match Official       →  {} (their filter is by official_name not body)
+    Iter 108b — Statewide visibility is a PERMISSION, not a body_type.  Only
+    roles carrying `DASHBOARD_STATEWIDE` (Sec + Treasurer today) get the
+    empty filter; everyone else — including the MPCA President — is scoped
+    to their own body_code (and, for a Division, their child districts).
 
-    Callers should merge this into their query dict:
-        q = {"status": "Active", **scope_filter(p)}
+        · Statewide grant           →  {}                     (see everything)
+        · State without statewide   →  {field: "MPCA"}        (HQ-owned rows only)
+        · Division persona          →  own DIV + child DIST-* (regex on suffix)
+        · District persona          →  own DIST only
+        · Match Official            →  {} (their filter is by official_name)
     """
-    if principal.is_state:
+    # 1) Statewide-permission short-circuit
+    if principal.can(Permission.DASHBOARD_STATEWIDE):
         return {}
+    # 2) Fail-closed when scope data is missing
     if not principal.body_code or not principal.body_type:
-        # Missing scope data — refuse to return anything (fail closed).
-        return {"_scope_deny": True}   # matches nothing
+        return {"_scope_deny": True}
+    # 3) State body without statewide permission (e.g. President) → own body only
+    if principal.is_state:
+        return {field: principal.body_code}
+    # 4) Division → own DIV + child DIST-*-{SUFFIX}
     if principal.is_division:
         suffix = principal.division_suffix
         return {
@@ -277,10 +285,11 @@ def scope_filter(principal: RequestPrincipal, field: str = "body_id") -> dict:
                 {field: {"$regex": f"^DIST-.+-{suffix}$"}},
             ]
         }
+    # 5) District → own DIST only
     if principal.is_district:
         return {field: principal.body_code}
+    # 6) Match Official — their filter is by official_id / official_name, not body
     if principal.is_official:
-        # match_officials collection uses "official_id" — routes handle this
         return {}
     return {"_scope_deny": True}
 

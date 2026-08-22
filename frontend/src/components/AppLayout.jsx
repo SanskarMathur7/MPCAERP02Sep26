@@ -56,8 +56,12 @@ const NAV_DOMAINS = [
     {
         domain: "Financial",
         items: [
-            { to: "/schemes", label: "MPCA Schemes Register", icon: BookOpen },
-            { to: "/grant-claims", label: "Grant Claims", icon: HandCoins },
+            // Iter 108d · Schemes Register + Grant Claims are MPCA-only surfaces
+            // (statewide scheme catalogue + state-level claim inbox).  Division /
+            // District Secretaries reach their reimbursement flows through the
+            // Tournament Workspace, not this top-level nav.
+            { to: "/schemes", label: "MPCA Schemes Register", icon: BookOpen, state_only: true },
+            { to: "/grant-claims", label: "Grant Claims", icon: HandCoins, state_only: true },
         ],
     },
     {
@@ -347,6 +351,13 @@ const AppLayout = ({ children }) => {
                                 return persona?.body_type === "State" && ["president", "secretary", "system-administrator"].includes(persona?.id);
                             }
                             return true;
+                        })
+                        // Iter 108d · Hide the whole domain if every item inside is state-only
+                        // and the persona isn't State — otherwise a Division Secretary sees an
+                        // empty "Financial" section header with nothing underneath.
+                        .filter((group) => {
+                            if (persona?.body_type === "State") return true;
+                            return (group.items || []).some((it) => !it.state_only);
                         })
                         .map((group) => (
                         <div key={group.domain} className="mb-6">

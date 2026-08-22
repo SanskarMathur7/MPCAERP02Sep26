@@ -11,6 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from core.infra import api_router, client, logger
 from lib.auth_middleware import AuthMiddleware
+from lib.metrics_middleware import MetricsMiddleware
 
 # Importing each route module triggers its @api_router decorators.
 from routes import (  # noqa: F401
@@ -25,7 +26,7 @@ from routes import (  # noqa: F401
     tournament_workspace, rbac, tournament_participations, body_documents, player_registrations,
     discussions, events, finance_console, tournament_master, rate_cards, unified_budget,
     tournament_wiring, tournament_wiring_status, camp_finance, ux_audit,
-    tournament_eligibility, auth, squad_pdf_verify, mc, mc_admin,
+    tournament_eligibility, auth, squad_pdf_verify, mc, mc_admin, sysadmin,
 )
 from seed import seed_data
 
@@ -159,6 +160,7 @@ app.include_router(api_router)
 # requires a valid Bearer token; downstream code reads scope + role from
 # request.state.principal (unspoofable).
 app.add_middleware(AuthMiddleware)
+app.add_middleware(MetricsMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

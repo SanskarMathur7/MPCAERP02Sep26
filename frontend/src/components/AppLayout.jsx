@@ -88,6 +88,7 @@ const NAV_DOMAINS = [
         domain: "System Administration",
         sys_admin_only: true,
         items: [
+            { to: "/sysadmin/analytics", label: "System Analytics", icon: LayoutDashboard },
             { to: "/access-control", label: "Access Control (RBAC)", icon: Shield },
             { to: "/mc-admin", label: "Maker-Checker Console", icon: ShieldCheck },
             { to: "/tournament-master", label: "Tournament Registry", icon: BookOpen },

@@ -103,15 +103,20 @@ def _public_user(u: dict) -> dict:
 # ═══════════════════════════════════════════════════════════════════════
 
 @api_router.post("/auth/login")
-async def login(body: LoginRequest):
+async def login(body: LoginRequest, request: Request):
+    from lib.sysadmin_metrics import record_failed_login, record_successful_login
     email = body.email.strip().lower()
+    ip = (request.client.host if request.client else "") or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user.get("password_hash", "")):
+        record_failed_login(email, ip)
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not user.get("is_active", True):
+        record_failed_login(email, ip)
         raise HTTPException(status_code=403, detail="Account is disabled — contact MPCA IT")
 
     token = create_access_token(user["id"], email)
+    record_successful_login(email, ip, user.get("role") or user.get("body_type") or "")
     # Stamp last_login (best-effort; failure to write doesn't block login)
     try:
         await db.users.update_one(

@@ -189,6 +189,48 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
             return diff >= 1 ? diff : 1;
         } catch { return 1; }
     };
+    // Iter 123e · Normalise a CSV date cell into ISO `YYYY-MM-DD`.
+    // Accepts:
+    //   • 2026-04-18        (already ISO)
+    //   • 4/18/2026         (M/D/YYYY — US / Excel default)
+    //   • 18/4/2026         (D/M/YYYY — Indian / EU)         ← ambiguous with above, so we check month>12
+    //   • 18-04-2026        (D-M-YYYY)
+    //   • 18-Apr-2026       (D-Mon-YYYY)
+    //   • 2026/04/18        (Y/M/D)
+    // Returns `null` for unparseable cells so the preview flags them BLOCKED.
+    const _MONTHS = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+    const _isoDate = (raw) => {
+        if (!raw) return null;
+        const s = String(raw).trim();
+        if (!s) return null;
+        // Already ISO
+        let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if (m) return `${m[1]}-${String(+m[2]).padStart(2,"0")}-${String(+m[3]).padStart(2,"0")}`;
+        // YYYY/MM/DD
+        m = s.match(/^(\d{4})[\/\.](\d{1,2})[\/\.](\d{1,2})$/);
+        if (m) return `${m[1]}-${String(+m[2]).padStart(2,"0")}-${String(+m[3]).padStart(2,"0")}`;
+        // Numeric with 4-digit year at the end · separator / or - or .
+        m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+        if (m) {
+            let a = +m[1], b = +m[2], y = +m[3];
+            // If first slot > 12, it must be D/M; else assume D/M (Indian default).
+            // Fallback to M/D only when day slot would be invalid (>12) and other is valid.
+            let day, month;
+            if (a > 12 && b <= 12)      { day = a; month = b; }
+            else if (b > 12 && a <= 12) { day = b; month = a; }        // M/D/YYYY (Excel US)
+            else                        { day = a; month = b; }        // Ambiguous → D/M (India)
+            if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+            return `${y}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+        }
+        // D-Mon-YYYY  or  D Mon YYYY
+        m = s.match(/^(\d{1,2})[\-\s]([A-Za-z]{3,})[\-\s](\d{4})$/);
+        if (m) {
+            const mon = _MONTHS[m[2].slice(0,3).toLowerCase()];
+            if (!mon) return null;
+            return `${m[3]}-${String(mon).padStart(2,"0")}-${String(+m[1]).padStart(2,"0")}`;
+        }
+        return null;
+    };
     // Iter 123d · Parse the CSV and open a DRY-RUN preview modal. Nothing hits
     // the DB until the user confirms via commitImport().
     const importCsv = async (file) => {
@@ -210,9 +252,11 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
             const groundSet = new Set(groundOptions.map((g) => g.ground_id || g.id));
             const previews = (parsed.data || []).map((r, idx) => {
                 // Iter 123 · Prefer explicit date_from/date_to; fall back to legacy match_date + days.
-                const from_iso = r.date_from || r.match_date;
-                const to_iso   = r.date_to   || null;
-                const days     = to_iso ? _daysBetween(from_iso, to_iso) : (Number(r.days) || 1);
+                const raw_from = r.date_from || r.match_date;
+                const raw_to   = r.date_to   || null;
+                const from_iso = _isoDate(raw_from);
+                const to_iso   = raw_to ? _isoDate(raw_to) : null;
+                const days     = to_iso && from_iso ? _daysBetween(from_iso, to_iso) : (Number(r.days) || 1);
                 const row = {
                     stage:      r.stage      || "League",
                     match_date: from_iso,
@@ -232,7 +276,9 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                 // Validation errors (blocking) + warnings (non-blocking)
                 const errs = [];
                 const warns = [];
-                if (!row.match_date) errs.push("missing date_from");
+                if (!raw_from) errs.push("missing date_from");
+                else if (!from_iso) errs.push(`unparseable date_from "${raw_from}" — use YYYY-MM-DD`);
+                if (raw_to && !to_iso) errs.push(`unparseable date_to "${raw_to}" — use YYYY-MM-DD`);
                 if (!row.home_team) errs.push("missing team_a_code");
                 if (!row.away_team) errs.push("missing team_b_code");
                 if (row.home_team && row.away_team && row.home_team === row.away_team) errs.push("home = away");

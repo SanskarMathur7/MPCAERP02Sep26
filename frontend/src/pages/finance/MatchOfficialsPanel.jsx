@@ -12,7 +12,6 @@ import { api } from "@/lib/api";
 // Scorer, Selector, Observer. Managers / coaches / trainers / physios are
 // selected by Divisions when they submit their squad — not MPCA-owned.
 const ROLE_OPTIONS = ["Umpire", "Scorer", "Selector", "Observer"];
-const ROLE_SET = new Set(ROLE_OPTIONS);
 
 const MatchOfficialsPanel = ({ tournament, persona }) => {
     const isMPCA = persona?.body_type === "State";
@@ -101,32 +100,49 @@ const MatchOfficialsPanel = ({ tournament, persona }) => {
                     </div>
                 </div>
 
-                {canAssign && (
-                    <div className="grid md:grid-cols-[1.5fr_1fr_1.5fr_auto] gap-2 items-end" data-testid="mo-assign-form">
+                {canAssign && (() => {
+                    // MPCA-323 · Role-first UX: pick role → dropdown filters to only that role's officials.
+                    const filteredOfficials = officials.filter((o) => o.role === form.role);
+                    return (
+                    <div className="grid md:grid-cols-[1fr_1.5fr_1.5fr_auto] gap-2 items-end" data-testid="mo-assign-form">
                         <label className="block">
-                            <div className="overline text-[9px] mb-1">Match Official</div>
-                            <select className="input-heritage !py-1.5" value={form.official_id} onChange={(e) => setForm({ ...form, official_id: e.target.value })} data-testid="mo-official-select">
-                                <option value="">— pick a person —</option>
-                                {officials.filter((o) => ROLE_SET.has(o.role)).map((o) => (
-                                    <option key={o.id} value={o.id}>{o.full_name}{o.grade ? ` · ${o.grade}` : ""}{o.role ? ` · ${o.role}` : ""}</option>
-                                ))}
+                            <div className="overline text-[9px] mb-1">Role</div>
+                            <select
+                                className="input-heritage !py-1.5"
+                                value={form.role}
+                                onChange={(e) => setForm({ ...form, role: e.target.value, official_id: "" })}
+                                data-testid="mo-role-select"
+                            >
+                                {ROLE_OPTIONS.map((k) => <option key={k} value={k}>{k}</option>)}
                             </select>
                         </label>
                         <label className="block">
-                            <div className="overline text-[9px] mb-1">Role</div>
-                            <select className="input-heritage !py-1.5" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} data-testid="mo-role-select">
-                                {ROLE_OPTIONS.map((k) => <option key={k} value={k}>{k}</option>)}
+                            <div className="overline text-[9px] mb-1">Match Official ({filteredOfficials.length} {form.role.toLowerCase()}s)</div>
+                            <select
+                                className="input-heritage !py-1.5"
+                                value={form.official_id}
+                                onChange={(e) => setForm({ ...form, official_id: e.target.value })}
+                                data-testid="mo-official-select"
+                                disabled={filteredOfficials.length === 0}
+                            >
+                                <option value="">
+                                    {filteredOfficials.length === 0 ? `— no ${form.role.toLowerCase()}s available —` : `— pick a ${form.role.toLowerCase()} —`}
+                                </option>
+                                {filteredOfficials.map((o) => (
+                                    <option key={o.id} value={o.id}>{o.full_name}{o.grade ? ` · ${o.grade}` : ""}</option>
+                                ))}
                             </select>
                         </label>
                         <label className="block">
                             <div className="overline text-[9px] mb-1">Notes (optional)</div>
                             <input type="text" className="input-heritage !py-1.5" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} data-testid="mo-notes-input" />
                         </label>
-                        <button className="btn-heritage-primary" onClick={assign} disabled={busy} data-testid="mo-assign-btn">
+                        <button className="btn-heritage-primary" onClick={assign} disabled={busy || !form.official_id} data-testid="mo-assign-btn">
                             <Plus size={12} /> Assign
                         </button>
                     </div>
-                )}
+                    );
+                })()}
                 {!canAssign && (
                     <div className="text-[11px] text-mpca-gray-dark italic flex items-center gap-1">
                         <Info size={12} /> {wiringOwner === "Division" ? "Only the host Division may assign match officials for this tournament." : "Only MPCA can assign match officials centrally. Contact MPCA to raise a request."}

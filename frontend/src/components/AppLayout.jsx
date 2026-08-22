@@ -107,7 +107,11 @@ const NAV_DOMAINS = [
         domain: "Grants",
         items: [
             { to: "/schemes", label: "MPCA Schemes Register", icon: BookOpen, state_only: true },
-            { to: "/grant-claims", label: "Grant Claims", icon: HandCoins, state_only: true },
+            { to: "/grant-claims", label: "Grant Claims (State)", icon: HandCoins, state_only: true },
+            // Iter 123 — Division-side items so Division Secretaries see a Grants
+            // section too. Their scope: incoming grants from MPCA + own claim submissions.
+            { to: "/division-grants", label: "Division Grants", icon: HandCoins },
+            { to: "/reimbursement-claims", label: "Reimbursement Claims", icon: Receipt },
         ],
     },
     {

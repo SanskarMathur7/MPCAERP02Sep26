@@ -266,7 +266,9 @@ async def patch_tournament(tid: str, patch: dict):
                "closure_letter_url", "closure_letter_generated_at",
                # MPCA-102 / MPCA-105 / MPCA-108
                "max_squad_size", "medical_required", "is_womens",
-               "age_cap_years", "age_floor_years"}
+               "age_cap_years", "age_floor_years",
+               # Iter 108e · MPCA-uploaded signed squad PDF for BCCI-family
+               "mpca_signed_squad_url", "mpca_signed_squad_uploaded_at"}
     updates = {k: v for k, v in (patch or {}).items() if k in allowed}
     if updates:
         await db.tournaments.update_one({"id": tid}, {"$set": updates})

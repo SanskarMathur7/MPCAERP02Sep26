@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Loader2, Users, ShieldCheck, ShieldAlert, ChevronRight } from "lucide-react";
+import { Loader2, Users, ShieldCheck, ShieldAlert, ChevronRight, Upload, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
+import { SignedPdfUploadModal } from "./SignedPdfUploadModal";
 
 /**
  * Sprint M28 · Squads panel on the Tournament Workspace
@@ -38,6 +39,11 @@ const TournamentSquadsPanel = ({ tournament, persona, canManage, onChange: _onCh
     // body — because per wiring the roster is a manual signed sheet, not
     // built from the player register per division.
     const [squadStep, setSquadStep] = useState(null);
+    // Iter 108e · Local state for the MPCA-signed PDF upload modal + the
+    // freshly-uploaded URL so the card flips to "Uploaded" without a full
+    // tournament refetch.
+    const [pdfModalOpen, setPdfModalOpen] = useState(false);
+    const [pdfUrlLocal, setPdfUrlLocal] = useState(null);
 
     useEffect(() => {
         let alive = true;
@@ -100,7 +106,10 @@ const TournamentSquadsPanel = ({ tournament, persona, canManage, onChange: _onCh
 
     if (mpcaSignedPdfMode) {
         const anySquad = rows.find(r => r.squad)?.squad;
-        const url = anySquad?.signed_squad_url || tournament.mpca_signed_squad_url;
+        const url = pdfUrlLocal || anySquad?.signed_squad_url || tournament.mpca_signed_squad_url;
+        // Only MPCA-HQ personas can upload the signed PDF (State body).  For
+        // Division / District logins this stays view-only per the wiring.
+        const canUpload = canManage && persona?.body_type === "State";
         return (
             <div className="border border-mpca-brass/30 bg-mpca-ivory p-5 space-y-4" data-testid="panel-squads-manual-pdf">
                 <div>
@@ -116,17 +125,71 @@ const TournamentSquadsPanel = ({ tournament, persona, canManage, onChange: _onCh
                 </div>
                 <div className="border border-dashed border-mpca-brass/40 bg-white p-4">
                     {url ? (
-                        <div className="text-[12px] flex items-center gap-2 flex-wrap" data-testid="squad-manual-pdf-uploaded">
-                            <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 border border-mpca-green-dark/50 bg-mpca-green-dark/5 text-mpca-green-dark">Uploaded</span>
-                            <a href={url} target="_blank" rel="noreferrer" className="text-mpca-oxblood underline break-all">{url}</a>
+                        <div className="flex items-start justify-between gap-4 flex-wrap" data-testid="squad-manual-pdf-uploaded">
+                            <div className="text-[12px] flex items-center gap-2 flex-wrap min-w-0">
+                                <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 border border-mpca-green-dark/50 bg-mpca-green-dark/5 text-mpca-green-dark shrink-0">Uploaded</span>
+                                <a href={url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`}
+                                   target="_blank" rel="noreferrer"
+                                   className="text-mpca-oxblood underline break-all">{url}</a>
+                            </div>
+                            {canUpload && (
+                                <button
+                                    type="button"
+                                    onClick={() => setPdfModalOpen(true)}
+                                    className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 border border-mpca-brass/50 text-mpca-brass hover:bg-mpca-brass/5 shrink-0"
+                                    data-testid="mpca-signed-squad-replace-btn"
+                                >
+                                    <RotateCcw size={11} /> Replace PDF
+                                </button>
+                            )}
                         </div>
                     ) : (
-                        <div className="text-[12px] italic text-mpca-gray-dark" data-testid="squad-manual-pdf-empty">
-                            No signed squad uploaded yet. When MPCA finalises the roster, upload the signed PDF
-                            here — the URL will be stored against this tournament for closure archival.
+                        <div className="flex items-start justify-between gap-4 flex-wrap" data-testid="squad-manual-pdf-empty">
+                            <div className="text-[12px] italic text-mpca-gray-dark flex-1 min-w-0">
+                                No signed squad uploaded yet. When MPCA finalises the roster, upload the signed PDF
+                                here — the URL will be stored against this tournament for closure archival.
+                            </div>
+                            {canUpload ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setPdfModalOpen(true)}
+                                    className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] font-bold px-4 py-2 bg-mpca-green-dark text-white hover:bg-mpca-green-dark/90 shrink-0"
+                                    data-testid="mpca-signed-squad-upload-btn"
+                                >
+                                    <Upload size={12} /> Upload Signed PDF
+                                </button>
+                            ) : (
+                                <div className="text-[10px] uppercase tracking-widest text-mpca-gray-dark/70 shrink-0" data-testid="mpca-signed-squad-upload-locked">
+                                    MPCA-HQ only
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
+
+                {/* Upload modal — streams PDF to /api/uploads, then PATCH the URL onto the tournament */}
+                <SignedPdfUploadModal
+                    open={pdfModalOpen}
+                    onClose={() => setPdfModalOpen(false)}
+                    title={url ? "Replace MPCA Signed Squad PDF" : "Upload MPCA Signed Squad PDF"}
+                    description="Single PDF · signed team-list from the state. Max 20 MB."
+                    metadata={{
+                        related_type: "tournament_signed_squad",
+                        related_id: tournament.id,
+                        body_id: "MPCA",
+                        uploaded_by: persona?.id || persona?.name || "mpca-hq",
+                    }}
+                    onUploaded={async ({ url: newUrl }) => {
+                        await api.patch(`/tournaments/${tournament.id}`, {
+                            mpca_signed_squad_url: newUrl,
+                            mpca_signed_squad_uploaded_at: new Date().toISOString(),
+                        });
+                        setPdfUrlLocal(newUrl);
+                        setPdfModalOpen(false);
+                        if (_onChange) _onChange();
+                    }}
+                    testidPrefix="mpca-signed-squad-modal"
+                />
             </div>
         );
     }

@@ -1176,6 +1176,11 @@ class TournamentBase(BaseModel):
     calendar_fixed: bool = False                 # set true by "Lock Calendar" action
     closure_letter_generated_at: Optional[str] = None
     closure_letter_url: Optional[str] = None
+    # Iter 108e · MPCA-uploaded signed squad PDF (BCCI-family tournaments where
+    # MPCA finalises the roster and hands it to the divisions as a signed PDF
+    # rather than divisions building squads inside the ERP).
+    mpca_signed_squad_url: Optional[str] = None
+    mpca_signed_squad_uploaded_at: Optional[str] = None
     # M2-A: squad announcement timelines
     timelines: SquadTimeline = Field(default_factory=SquadTimeline)
     # M2-A: portal slot config for this tournament (division-shared registration link)

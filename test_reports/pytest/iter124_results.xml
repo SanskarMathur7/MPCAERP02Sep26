@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="2" failures="0" skipped="0" tests="4" time="113.828" timestamp="2026-08-22T21:58:33.522746+00:00" hostname="agent-env-4c7b8162-96d0-4f81-acb9-11f831a40275"><testcase classname="backend.tests.test_iter124_ai_invoice_diff" name="test_invoices_list_regression" time="0.645"><error message="failed on setup with &quot;AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_iter124_ai_invoice_diff.py:37: in invoices
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iter124_ai_invoice_diff" name="test_verify_ai_on_invoice_with_file" time="0.000"><error message="failed on setup with &quot;AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_iter124_ai_invoice_diff.py:37: in invoices
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iter124_ai_invoice_diff" name="test_ai_audit_tournament" time="56.608" /><testcase classname="backend.tests.test_iter124_ai_invoice_diff" name="test_ai_audit_scoped_by_body" time="56.490" /></testsuite></testsuites>

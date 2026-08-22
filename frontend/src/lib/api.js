@@ -685,6 +685,17 @@ export const bulkApproveTournamentInvoices = async (payload) => {
     const { data } = await api.post("/tournament-invoices/bulk-approve", payload);
     return data;
 };
+// Iter 124 · Per-invoice AI diff verify + tournament-wide AI audit
+// Gemini extraction takes ~15s per invoice, audit runs concurrency=3 across N invoices → allow up to 180s.
+export const verifyInvoiceAi = async (iid) => {
+    const { data } = await api.post(`/tournament-invoices/${iid}/verify-ai`, null, { timeout: 60000 });
+    return data;
+};
+export const runTournamentAiAudit = async (tournament_id, body_id) => {
+    const params = body_id ? { body_id } : {};
+    const { data } = await api.post(`/tournaments/${tournament_id}/invoices/ai-audit`, null, { params, timeout: 180000 });
+    return data;
+};
 export const bulkSubmitExtraExpenses = async (payload) => {
     const { data } = await api.post("/extra-expense-requests/bulk-submit", payload);
     return data;

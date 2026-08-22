@@ -147,6 +147,11 @@ async def _compute_summary(tournament_id: str, body_id: str, budget_id: Optional
         "da_total_inr": round(da_total, 2),
         "da_form_count": len(da_forms),
         "heads": rows,
+        # Iter 123aa · Expose referenced IDs so callers (Draft-claim live refresh)
+        # can project them onto the claim doc without re-querying.
+        "invoice_ids": [i["id"] for i in invoices if i.get("id")],
+        "extra_expense_ids": [e["id"] for e in extras if e.get("id")],
+        "da_form_ids": [d["id"] for d in da_forms if d.get("id")],
     }
 
 
@@ -276,6 +281,19 @@ async def list_claims(
     if exclude_consolidated:
         q["parent_claim_id"] = None
     docs = await db.tournament_reimbursement_claims.find(q, {"_id": 0}).sort("created_at", -1).skip(max(skip, 0)).limit(min(max(limit, 1), 5000)).to_list(min(max(limit, 1), 5000))
+    # Iter 123aa · Auto-refresh live summary + referenced ID arrays for Draft claims
+    # so the list card AND the detail page render real numbers + invoice rows
+    # instead of ₹0 / (0). Submitted+ claims freeze the snapshot at submit-time.
+    for d in docs:
+        if d.get("status") == "Draft":
+            try:
+                s = await _compute_summary(d["tournament_id"], d["body_id"], budget_id=d.get("budget_id"))
+                d["summary"] = s
+                d["invoice_ids"] = s.get("invoice_ids") or []
+                d["extra_expense_ids"] = s.get("extra_expense_ids") or []
+                d["da_form_ids"] = s.get("da_form_ids") or []
+            except Exception:
+                pass
     return docs
 
 
@@ -284,6 +302,15 @@ async def get_claim(cid: str):
     doc = await db.tournament_reimbursement_claims.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
+    if doc.get("status") == "Draft":
+        try:
+            s = await _compute_summary(doc["tournament_id"], doc["body_id"], budget_id=doc.get("budget_id"))
+            doc["summary"] = s
+            doc["invoice_ids"] = s.get("invoice_ids") or []
+            doc["extra_expense_ids"] = s.get("extra_expense_ids") or []
+            doc["da_form_ids"] = s.get("da_form_ids") or []
+        except Exception:
+            pass
     return doc
 
 

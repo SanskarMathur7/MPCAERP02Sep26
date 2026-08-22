@@ -1,0 +1,27 @@
+{
+  "summary": "Iter 124 — Tested Per-Invoice AI Diff Chip + Tournament AI Invoice Digest on Madhavrao Scindia Trophy. All 4 backend tests pass (list regression, /verify-ai returning ai_diff.status=green, tournament ai-audit returning count=9/approved=6/needs_review=3/eligible ₹4,38,480, and body_id scoping). Frontend: chips render correctly (6 green + 3 skipped), Run AI Audit button opens the audit panel with correct totals. Fixed one frontend integration bug: axios global 15s timeout was cutting off both AI endpoints — verifyInvoiceAi and runTournamentAiAudit now use per-call timeouts (60s / 180s).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Run AI Audit / Verify AI", "issue": "FIXED — api.js global axios timeout=15000 was cutting the AI audit (30-60s) and per-invoice verify (~15s) calls. Panel showed 'timeout of 15000ms exceeded'. Added explicit timeout: 60s (verify) / 180s (audit) in verifyInvoiceAi and runTournamentAiAudit.", "affected_selectors": ["[data-testid='run-ai-audit-btn']", "[data-testid='ai-audit-approved']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter124_ai_invoice_diff.py", "/app/test_reports/pytest/iter124_results.xml"],
+  "action_items": [
+    "Confirm the api.js timeout fix aligns with your intended axios interceptor pattern (currently overrides only these two calls; other endpoints keep the 15s default)."
+  ],
+  "critical_code_review_comments": [
+    "Global axios timeout=15000ms in /app/frontend/src/lib/api.js is too tight for any AI/LLM-backed endpoint — consider a shared helper for AI calls or bumping the default and letting fast endpoints stay fast via server-side latency.",
+    "The idle chip 'Verify AI' should ideally auto-refresh chips after a successful /verify-ai without needing a manual page reload — verified UI already refreshes via onChanged."
+  ],
+  "updated_files": ["/app/frontend/src/lib/api.js", "/app/backend/tests/test_iter124_ai_invoice_diff.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "sysadmin@mpca.in / mpca@2026",
+  "seed_data_creation": "None. Used existing 9 non-Draft invoices under tournament 99a96938-06cc-4c2a-8ab0-9413f62dc7ed (DIV-GWL).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints /api/tournament-invoices/{iid}/verify-ai and /api/tournaments/{tid}/invoices/ai-audit are healthy. Chips render only after expanding the DIV-GWL group in MPCA persona (grouped view). Frontend AI calls now have per-call timeouts.",
+  "rca of the issue": "Frontend axios instance in /app/frontend/src/lib/api.js:9 sets timeout=15000. Gemini extraction ~15s per invoice; the tournament audit concurrency=3 across 9 invoices takes 30-60s. axios aborted the request → UI showed 'timeout of 15000ms exceeded'. Mitigation: pass per-request { timeout } option overriding the default (60s for single verify, 180s for full audit)."
+}

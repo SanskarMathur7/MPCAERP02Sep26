@@ -2104,6 +2104,33 @@ class AIInvoiceExtraction(BaseModel):
     error: Optional[str] = None
 
 
+class AIInvoiceDiff(BaseModel):
+    """Iter 124 · Per-invoice AI diff summary.
+
+    Compares the typed vendor/date/amount fields against what Gemini extracted
+    from the attached file. `status`:
+      - "green": all three checks pass (fuzzy amount ±₹1, same date, vendor substring)
+      - "amber": at least one mismatch (numeric fields OK but vendor missing, etc.)
+      - "error": file not present or AI extraction failed — user should re-verify
+      - "skipped": no file attached, nothing to diff against
+    """
+    model_config = ConfigDict(extra="ignore")
+    status: Literal["green", "amber", "error", "skipped"] = "skipped"
+    vendor_match: Optional[bool] = None          # substring, case-insensitive
+    date_match: Optional[bool] = None            # exact YYYY-MM-DD
+    amount_match: Optional[bool] = None          # abs(typed - extracted) <= 1
+    extracted_vendor: Optional[str] = None
+    extracted_date: Optional[str] = None
+    extracted_amount: Optional[float] = None
+    typed_vendor: Optional[str] = None
+    typed_date: Optional[str] = None
+    typed_amount: Optional[float] = None
+    mismatches: List[str] = []                   # human-readable mismatch reasons
+    confidence: float = 0.0
+    checked_at: Optional[str] = None             # ISO ts
+    error: Optional[str] = None
+
+
 class TournamentInvoiceBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     tournament_id: str
@@ -2129,6 +2156,7 @@ class TournamentInvoice(TournamentInvoiceBase):
     status: TournamentInvoiceStatus = "Draft"
     ai_extraction: Optional[AIInvoiceExtraction] = None
     ai_extracted: bool = False
+    ai_diff: Optional[AIInvoiceDiff] = None      # Iter 124 · Per-invoice AI diff verdict
     manually_overridden: bool = False
     over_budget_amount_inr: float = 0.0
     eligible_for_grant_inr: float = 0.0

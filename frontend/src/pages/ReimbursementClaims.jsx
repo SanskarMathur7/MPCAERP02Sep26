@@ -567,8 +567,15 @@ export const ReimbursementClaimDetail = () => {
                         {invoices.map((inv) => (
                             <div key={inv.id} className="grid grid-cols-12 gap-2 px-3 py-2 items-center border-b border-mpca-brass/10 text-xs">
                                 <div className="col-span-3 font-mono text-mpca-brass">{inv.invoice_no || inv.invoice_ref}</div>
-                                <div className="col-span-4">{inv.vendor_name}</div>
-                                <div className="col-span-2 text-[10px] text-mpca-gray-dark">{inv.invoice_date}</div>
+                                <div className="col-span-3">{inv.vendor_name}</div>
+                                <div className="col-span-2 text-[10px] uppercase tracking-widest text-mpca-green-dark font-semibold" title="Budget head this invoice is booked against">
+                                    {/* Iter 123aa · Print PDF asks · surface budget head next to each invoice
+                                        so the reimbursement claim is auditable head-by-head. */}
+                                    {(inv.allocations && inv.allocations.length > 0
+                                        ? [...new Set(inv.allocations.map((a) => a.head_label || a.head_code).filter(Boolean))].join(", ")
+                                        : (inv.budget_head_code || "—"))}
+                                </div>
+                                <div className="col-span-1 text-[10px] text-mpca-gray-dark">{inv.invoice_date}</div>
                                 <div className="col-span-2 text-right font-mono">{fmt(inv.total_inr)}</div>
                                 <div className="col-span-1 flex items-center justify-end gap-1.5">
                                     {/* MPCA-258 · Preview modal — full invoice detail incl. head allocations, GST, eligibility. */}

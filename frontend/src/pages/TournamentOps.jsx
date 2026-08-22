@@ -10,6 +10,7 @@ import {
     fetchTournamentInvoices, createTournamentInvoice, aiExtractInvoice,
     submitTournamentInvoice, approveTournamentInvoice, rejectTournamentInvoice,
     updateTournamentInvoice, bulkSubmitTournamentInvoices, bulkApproveTournamentInvoices,
+    verifyInvoiceAi, runTournamentAiAudit,
     bulkSubmitExtraExpenses, bulkApproveExtraExpenses,
     fetchDAForms, updateDAForm, submitDAForm, approveDAForm, rejectDAForm, rebuildDAForms,
     fetchExtraExpenseRequests, createExtraExpenseRequest, submitExtraExpenseRequest,
@@ -20,7 +21,7 @@ import { api, openAuthedFile } from "@/lib/api";
 import {
     ClipboardList, IndianRupee, FileText, Users, Save, Send, CheckCircle2, X,
     Sparkles, Upload, AlertTriangle, Loader2, ArrowUpRight, RotateCcw,
-    Plus, HelpCircle, ScrollText, Gavel, Trash2,
+    Plus, HelpCircle, ScrollText, Gavel, Trash2, ShieldCheck, ShieldAlert,
 } from "lucide-react";
 import WorkflowTimeline from "@/components/WorkflowTimeline";
 
@@ -301,6 +302,78 @@ const BudgetTab = ({ tournament }) => {
 // Sprint T-RIM · Single invoice can now be set off against multiple budget
 // heads. Head dropdown is filtered to only the approved budget line-items
 // for THIS tournament + spending body.
+
+// Iter 124 · Per-invoice AI diff chip. Renders green/amber/grey based on
+// `ai_diff.status`. Clicking triggers a Re-verify against the attached file.
+const AiDiffChip = ({ diff, verifying, onVerify }) => {
+    if (verifying) {
+        return (
+            <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 border border-mpca-brass/40 bg-mpca-parchment text-mpca-brass" data-testid="ai-diff-chip-verifying">
+                <Loader2 size={9} className="animate-spin" /> Verifying…
+            </span>
+        );
+    }
+    if (!diff) {
+        return (
+            <button
+                type="button"
+                onClick={onVerify}
+                className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 border border-mpca-brass/40 hover:bg-mpca-parchment text-mpca-brass"
+                data-testid="ai-diff-chip-idle"
+                title="Run AI verification on the attached invoice"
+            >
+                <Sparkles size={9} /> Verify AI
+            </button>
+        );
+    }
+    if (diff.status === "green") {
+        return (
+            <button
+                type="button"
+                onClick={onVerify}
+                className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 border border-mpca-green-dark/50 bg-mpca-green-dark/10 text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory"
+                data-testid="ai-diff-chip-green"
+                title={`AI verified — vendor/date/amount match the attached file (${Math.round((diff.confidence || 0) * 100)}% confidence). Click to re-verify.`}
+            >
+                <ShieldCheck size={9} /> AI Match
+            </button>
+        );
+    }
+    if (diff.status === "amber") {
+        const tip = (diff.mismatches || []).join("\n") || "AI extraction differs from typed values";
+        return (
+            <button
+                type="button"
+                onClick={onVerify}
+                className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 border border-mpca-oxblood/60 bg-mpca-oxblood/10 text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory"
+                data-testid="ai-diff-chip-amber"
+                title={tip}
+            >
+                <ShieldAlert size={9} /> AI ⚠ Mismatch
+            </button>
+        );
+    }
+    if (diff.status === "error") {
+        return (
+            <button
+                type="button"
+                onClick={onVerify}
+                className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 border border-mpca-brass/60 bg-mpca-brass/10 text-mpca-brass hover:bg-mpca-brass hover:text-mpca-ivory"
+                data-testid="ai-diff-chip-error"
+                title={diff.error || "AI verification error — click to retry"}
+            >
+                <AlertTriangle size={9} /> AI Err · retry
+            </button>
+        );
+    }
+    // skipped (no file)
+    return (
+        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 border border-mpca-gray-dark/30 bg-mpca-parchment/60 text-mpca-gray-dark" data-testid="ai-diff-chip-skipped" title="No file attached — nothing to verify">
+            <Sparkles size={9} /> No file
+        </span>
+    );
+};
+
 export const InvoicesTab = ({ tournament, persona, onChanged }) => {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -315,6 +388,12 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
     const [approvedBudgets, setApprovedBudgets] = useState([]);
     const [selectedBudgetId, setSelectedBudgetId] = useState("");
     const [activeClaim, setActiveClaim] = useState(null);         // MPCA-201 · lock flag
+    // Iter 124 · Per-invoice AI diff verify + tournament-wide AI audit state.
+    const [verifyingIds, setVerifyingIds] = useState({});         // id → bool
+    const [auditRunning, setAuditRunning] = useState(false);
+    const [auditResult, setAuditResult] = useState(null);
+    const [auditError, setAuditError] = useState(null);
+    const [auditExpanded, setAuditExpanded] = useState(true);
     const emptyForm = () => ({
         vendor_name: "", invoice_no: "", invoice_date: "",
         amount_inr: 0, gst_inr: 0, total_inr: 0,
@@ -560,6 +639,38 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
         finally { setBusy(false); }
     };
 
+    // Iter 124 · Per-invoice AI verification. Optimistically flags the row as
+    // "verifying" so the chip shows a spinner while Gemini runs (~15s).
+    const verifyRow = async (iid) => {
+        setVerifyingIds((m) => ({ ...m, [iid]: true }));
+        try {
+            const updated = await verifyInvoiceAi(iid);
+            setInvoices((prev) => prev.map((r) => (r.id === iid ? { ...r, ai_diff: updated.ai_diff } : r)));
+        } catch (e) {
+            setError(e?.response?.data?.detail || e.message);
+        } finally {
+            setVerifyingIds((m) => ({ ...m, [iid]: false }));
+        }
+    };
+
+    // Iter 124 · Tournament-wide AI audit — Division uses this to catch
+    // mismatches before submitting a reimbursement claim; MPCA uses it as an
+    // overarching finance audit before approving invoices in bulk.
+    const runAiAudit = async () => {
+        setAuditRunning(true); setAuditError(null); setAuditResult(null);
+        try {
+            const bodyId = isDivisionScope ? persona?.body_code : undefined;
+            const res = await runTournamentAiAudit(tournament.id, bodyId);
+            setAuditResult(res);
+            // Reload invoices so freshly-persisted diffs propagate to row chips.
+            await load();
+        } catch (e) {
+            setAuditError(e?.response?.data?.detail || e.message);
+        } finally {
+            setAuditRunning(false);
+        }
+    };
+
     const beginEdit = (inv) => {
         setEditing(inv);
         setForm({
@@ -690,6 +801,16 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                         >
                             <Upload size={12} /> Upload Invoice
                         </button>
+                        {/* Iter 124 · Tournament-wide AI Invoice Digest */}
+                        <button
+                            onClick={runAiAudit}
+                            disabled={auditRunning || visibleInvoices.length === 0}
+                            title="Run Gemini on every invoice attached to this tournament to catch typed↔file mismatches before final submission."
+                            className="text-[10px] uppercase tracking-widest border-2 border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                            data-testid="run-ai-audit-btn"
+                        >
+                            {auditRunning ? <><Loader2 size={11} className="animate-spin" /> Running AI Audit…</> : <><Sparkles size={11} /> Run AI Audit</>}
+                        </button>
                     </div>
                 )}
             </div>
@@ -707,6 +828,82 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                 <div className="border border-mpca-brass/40 bg-mpca-parchment/40 p-3 text-xs text-mpca-gray-dark" data-testid="no-approved-budget-msg">
                     <AlertTriangle size={12} className="inline mr-1 text-mpca-oxblood" />
                     No <strong>approved budget</strong> found for {persona?.body_code || "this body"} on this tournament yet. Invoices can only be logged after MPCA sanctions the budget.
+                </div>
+            )}
+
+            {/* Iter 124 · Tournament-wide AI Invoice Digest result panel */}
+            {(auditResult || auditError) && (
+                <div className="border-2 border-mpca-oxblood/50 bg-mpca-oxblood/5" data-testid="ai-audit-panel">
+                    <button
+                        onClick={() => setAuditExpanded((v) => !v)}
+                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-mpca-oxblood/10"
+                    >
+                        <div className="flex items-center gap-2">
+                            <Sparkles size={14} className="text-mpca-oxblood" />
+                            <span className="font-serif text-sm text-mpca-green-dark font-semibold">AI Invoice Audit</span>
+                            {auditResult && (
+                                <span className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">
+                                    · {auditResult.totals.count} invoices audited
+                                </span>
+                            )}
+                        </div>
+                        <span className="text-mpca-oxblood font-mono text-[10px]">{auditExpanded ? "▼" : "▶"}</span>
+                    </button>
+                    {auditExpanded && (
+                        <div className="border-t border-mpca-oxblood/30 p-4 space-y-3">
+                            {auditError && (
+                                <div className="text-xs text-mpca-oxblood" data-testid="ai-audit-error">
+                                    <AlertTriangle size={12} className="inline mr-1" /> {auditError}
+                                </div>
+                            )}
+                            {auditResult && (
+                                <>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                                        <div className="border border-mpca-green-dark/40 bg-mpca-green-dark/10 p-3" data-testid="ai-audit-approved">
+                                            <div className="text-2xl font-bold font-serif text-mpca-green-dark">{auditResult.totals.approved}</div>
+                                            <div className="text-[10px] uppercase tracking-widest text-mpca-green-dark">Approved · AI Match</div>
+                                        </div>
+                                        <div className="border border-mpca-brass/40 bg-mpca-brass/10 p-3" data-testid="ai-audit-needs-review">
+                                            <div className="text-2xl font-bold font-serif text-mpca-brass">{auditResult.totals.needs_review}</div>
+                                            <div className="text-[10px] uppercase tracking-widest text-mpca-brass">Needs Review</div>
+                                        </div>
+                                        <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/10 p-3" data-testid="ai-audit-rejected">
+                                            <div className="text-2xl font-bold font-serif text-mpca-oxblood">{auditResult.totals.rejected}</div>
+                                            <div className="text-[10px] uppercase tracking-widest text-mpca-oxblood">Rejected</div>
+                                        </div>
+                                        <div className="border border-mpca-green-dark/40 bg-mpca-ivory p-3" data-testid="ai-audit-eligible">
+                                            <div className="text-lg font-bold font-mono text-mpca-green-dark">{fmtINR(auditResult.totals.eligible_reimbursement_inr)}</div>
+                                            <div className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">Eligible Reimbursement</div>
+                                        </div>
+                                    </div>
+                                    {auditResult.flagged.length > 0 ? (
+                                        <div>
+                                            <div className="text-[11px] uppercase tracking-widest text-mpca-oxblood font-semibold mb-1">
+                                                Flagged invoices ({auditResult.flagged.length})
+                                            </div>
+                                            <ul className="text-xs space-y-1" data-testid="ai-audit-flagged-list">
+                                                {auditResult.flagged.map((f) => (
+                                                    <li key={f.id} className="flex items-baseline gap-2 border-b border-mpca-oxblood/20 pb-1">
+                                                        <span className="font-mono text-[10px] text-mpca-brass shrink-0">{f.invoice_ref}</span>
+                                                        <span className="text-[9px] uppercase px-1 py-0.5 border border-mpca-oxblood/50 text-mpca-oxblood">{f.ai_status}</span>
+                                                        <span className="text-mpca-gray-dark">{(f.reasons || []).join(" · ")}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    ) : (
+                                        <div className="text-xs text-mpca-green-dark italic">
+                                            <CheckCircle2 size={12} className="inline mr-1" />
+                                            Every invoice matches its attached file. Safe to submit for reimbursement.
+                                        </div>
+                                    )}
+                                    <div className="text-[10px] text-mpca-gray-dark italic">
+                                        Audited {new Date(auditResult.audited_at).toLocaleString("en-IN")} · Gemini 3 Flash
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -752,6 +949,9 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                                                     <td className="px-2 py-1.5 font-mono text-[10px]">{i.invoice_date || "—"}</td>
                                                                     <td className="px-2 py-1.5 font-mono text-right">{fmtINR(i.total_inr)}</td>
                                                                     <td className="px-2 py-1.5"><Pill tone={i.status === "Approved" ? "active" : i.status === "Rejected" ? "suspended" : "pending"} label={i.status} /></td>
+                                                                    <td className="px-2 py-1.5">
+                                                                        <AiDiffChip diff={i.ai_diff} verifying={!!verifyingIds[i.id]} onVerify={() => verifyRow(i.id)} />
+                                                                    </td>
                                                                     <td className="px-2 py-1.5 text-right">
                                                                         {i.status === "Submitted" && (
                                                                             <span className="inline-flex gap-1">
@@ -826,6 +1026,9 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                             </td>
                                             <td className="px-3 py-2">
                                                 <Pill tone={i.status === "Approved" ? "active" : i.status === "Rejected" ? "suspended" : "pending"} label={i.status} />
+                                                <div className="mt-1">
+                                                    <AiDiffChip diff={i.ai_diff} verifying={!!verifyingIds[i.id]} onVerify={() => verifyRow(i.id)} />
+                                                </div>
                                                 {canEditRow && (
                                                     <button onClick={() => beginEdit(i)} className="block text-[9px] uppercase text-mpca-navy underline mt-1" data-testid={`inv-edit-${i.invoice_ref}`}>edit</button>
                                                 )}

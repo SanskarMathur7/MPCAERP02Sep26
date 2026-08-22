@@ -14,7 +14,7 @@ from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
 from models import (
     TournamentInvoice, TournamentInvoiceCreate, TournamentInvoiceStatus,
-    AIInvoiceExtraction, InvoiceHeadAllocation,
+    AIInvoiceExtraction, InvoiceHeadAllocation, AIInvoiceDiff,
 )
 
 # Reuse LLM plumbing already in ai_validator
@@ -250,6 +250,11 @@ async def create_invoice(payload: TournamentInvoiceCreate):
     )
     inv = await _apply_grant_eligibility(inv)
     await db.tournament_invoices.insert_one(inv.model_dump())
+    # Iter 124 · Kick off AI diff verification in the background so the
+    # invoice row shows a chip once the extraction completes. New uploads
+    # get auto-verified; legacy invoices can use the "Re-verify" button.
+    if inv.file_url:
+        asyncio.create_task(_background_verify_invoice(inv.id))
     return inv
 
 
@@ -305,7 +310,15 @@ async def update_invoice(iid: str, patch: TournamentInvoicePatch):
                  "over_budget_amount_inr": inv.over_budget_amount_inr,
                  "eligible_for_grant_inr": inv.eligible_for_grant_inr,
                  "ineligible_for_grant_inr": inv.ineligible_for_grant_inr}
+        # Iter 124 · Invalidate stale AI diff whenever the user edits any of
+        # the three compared fields — a fresh Re-verify is required to
+        # confirm the invoice still matches the attached file.
+        if any(k in updates for k in ("vendor_name", "invoice_date", "amount_inr", "file_url")):
+            final["ai_diff"] = None
         await db.tournament_invoices.update_one({"id": iid}, {"$set": final})
+        # Trigger a background re-diff so the chip refreshes without user action.
+        if inv.file_url and any(k in updates for k in ("vendor_name", "invoice_date", "amount_inr", "file_url")):
+            asyncio.create_task(_background_verify_invoice(iid))
     return await db.tournament_invoices.find_one({"id": iid}, {"_id": 0})
 
 
@@ -500,6 +513,261 @@ async def _apply_grant_eligibility(inv: TournamentInvoice) -> TournamentInvoice:
         inv.ineligible_for_grant_inr = round(inv.total_inr - remaining, 2)
         inv.over_budget_amount_inr = round(inv.total_inr - remaining, 2)
     return inv
+
+
+# ═══════════════════ Iter 124 · Per-Invoice AI Diff ═══════════════════
+
+
+def _compute_ai_diff(
+    typed_vendor: Optional[str],
+    typed_date: Optional[str],
+    typed_amount: Optional[float],
+    extracted: dict,
+) -> AIInvoiceDiff:
+    """Fuzzy compare typed values against Gemini extraction.
+
+    Rules (per user spec, Iter 124):
+      - vendor: extracted substring (case-insensitive, trimmed) present in typed
+                OR vice versa. If either side is empty → mismatch.
+      - date: exact YYYY-MM-DD equality.
+      - amount: |typed - extracted| ≤ ₹1 tolerance (compares against
+                extracted amount_inr, i.e. pre-GST/subtotal; falls back to
+                total_inr when amount_inr is null).
+    Returns AIInvoiceDiff with status green/amber/error.
+    """
+    if extracted.get("error"):
+        return AIInvoiceDiff(
+            status="error",
+            typed_vendor=typed_vendor,
+            typed_date=typed_date,
+            typed_amount=typed_amount,
+            error=str(extracted.get("error"))[:200],
+            checked_at=datetime.now(timezone.utc).isoformat(),
+            confidence=float(extracted.get("confidence") or 0.0),
+        )
+
+    ex_vendor = extracted.get("vendor_name") or ""
+    ex_date = extracted.get("invoice_date") or ""
+    # Prefer pre-GST amount_inr for comparison (matches typed_amount).
+    ex_amount = extracted.get("amount_inr")
+    if ex_amount is None:
+        ex_amount = extracted.get("total_inr")
+
+    # Vendor fuzzy match: substring both ways, case-insensitive.
+    v_typed = (typed_vendor or "").strip().lower()
+    v_ex = (ex_vendor or "").strip().lower()
+    if v_typed and v_ex:
+        vendor_match = (v_ex in v_typed) or (v_typed in v_ex)
+    else:
+        vendor_match = False
+
+    # Date exact match.
+    d_typed = (typed_date or "").strip()
+    d_ex = (ex_date or "").strip()
+    date_match = bool(d_typed) and bool(d_ex) and (d_typed == d_ex)
+
+    # Amount fuzzy: ±₹1.
+    try:
+        a_typed = float(typed_amount or 0)
+        a_ex = float(ex_amount) if ex_amount is not None else None
+        amount_match = (a_ex is not None) and (abs(a_typed - a_ex) <= 1.0)
+    except (TypeError, ValueError):
+        amount_match = False
+        a_ex = None
+
+    mismatches: List[str] = []
+    if not vendor_match:
+        mismatches.append(f"Vendor: typed '{typed_vendor or '—'}' vs AI '{ex_vendor or '—'}'")
+    if not date_match:
+        mismatches.append(f"Date: typed '{typed_date or '—'}' vs AI '{ex_date or '—'}'")
+    if not amount_match:
+        mismatches.append(f"Amount: typed ₹{float(typed_amount or 0):,.2f} vs AI ₹{float(a_ex or 0):,.2f}")
+
+    status = "green" if (vendor_match and date_match and amount_match) else "amber"
+    return AIInvoiceDiff(
+        status=status,
+        vendor_match=vendor_match,
+        date_match=date_match,
+        amount_match=amount_match,
+        extracted_vendor=ex_vendor or None,
+        extracted_date=ex_date or None,
+        extracted_amount=float(a_ex) if a_ex is not None else None,
+        typed_vendor=typed_vendor,
+        typed_date=typed_date,
+        typed_amount=float(typed_amount) if typed_amount is not None else None,
+        mismatches=mismatches,
+        confidence=float(extracted.get("confidence") or 0.0),
+        checked_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+async def _resolve_and_diff_invoice(inv_doc: dict) -> Optional[AIInvoiceDiff]:
+    """Given a persisted invoice doc, run (or reuse) AI extraction and diff.
+    Returns AIInvoiceDiff, or None when there's no file to diff against."""
+    file_url = inv_doc.get("file_url") or ""
+    if not file_url or "/api/uploads/" not in file_url:
+        return AIInvoiceDiff(
+            status="skipped",
+            typed_vendor=inv_doc.get("vendor_name"),
+            typed_date=inv_doc.get("invoice_date"),
+            typed_amount=float(inv_doc.get("amount_inr") or 0),
+            checked_at=datetime.now(timezone.utc).isoformat(),
+        )
+    file_id = file_url.rsplit("/", 1)[-1]
+    rec = await db.uploads.find_one({"id": file_id})
+    if not rec:
+        return AIInvoiceDiff(
+            status="error",
+            error="Attached file record not found",
+            typed_vendor=inv_doc.get("vendor_name"),
+            typed_date=inv_doc.get("invoice_date"),
+            typed_amount=float(inv_doc.get("amount_inr") or 0),
+            checked_at=datetime.now(timezone.utc).isoformat(),
+        )
+    extraction = await _run_invoice_extraction(
+        rec.get("_path") or "",
+        rec.get("mime_type") or "application/octet-stream",
+    )
+    return _compute_ai_diff(
+        typed_vendor=inv_doc.get("vendor_name"),
+        typed_date=inv_doc.get("invoice_date"),
+        typed_amount=float(inv_doc.get("amount_inr") or 0),
+        extracted=extraction,
+    )
+
+
+async def _background_verify_invoice(iid: str):
+    """Fire-and-forget: runs the diff and persists it on the invoice.
+    Wrapped in a try/except so a Gemini failure never propagates."""
+    try:
+        doc = await db.tournament_invoices.find_one({"id": iid}, {"_id": 0})
+        if not doc:
+            return
+        diff = await _resolve_and_diff_invoice(doc)
+        await db.tournament_invoices.update_one(
+            {"id": iid},
+            {"$set": {"ai_diff": diff.model_dump() if diff else None}},
+        )
+    except Exception:  # noqa: BLE001 — best-effort background task
+        pass
+
+
+@api_router.post("/tournament-invoices/{iid}/verify-ai", response_model=TournamentInvoice)
+async def verify_invoice_ai(iid: str):
+    """Iter 124 · Re-run AI extraction on the attached file and compute a diff
+    against the typed vendor/date/amount. Persists the result on the invoice."""
+    doc = await db.tournament_invoices.find_one({"id": iid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Invoice not found")
+    diff = await _resolve_and_diff_invoice(doc)
+    await db.tournament_invoices.update_one(
+        {"id": iid},
+        {"$set": {"ai_diff": diff.model_dump() if diff else None,
+                  "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return await db.tournament_invoices.find_one({"id": iid}, {"_id": 0})
+
+
+# ═══════════════════ Iter 124 · Tournament-wide AI Invoice Digest ═════════
+
+
+@api_router.post("/tournaments/{tid}/invoices/ai-audit")
+async def run_tournament_ai_audit(tid: str, body_id: Optional[str] = None):
+    """Iter 124 · Roll up all invoices on this tournament (optionally scoped to
+    a body) with fresh AI diffs. Returns approved / rejected / needs-review
+    counts + eligible reimbursement total + per-invoice flag list so Division
+    can spot mismatches before submitting a reimbursement claim.
+    """
+    t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "name": 1})
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    q: dict = {"tournament_id": tid, "status": {"$ne": "Draft"}}
+    if body_id:
+        q["body_id"] = body_id
+    invoices = await db.tournament_invoices.find(q, {"_id": 0}).to_list(500)
+
+    diffs_by_inv: dict = {}
+    # Run diffs in parallel with a small concurrency cap (AI calls are ~15s each).
+    sem = asyncio.Semaphore(3)
+
+    async def _run_one(inv):
+        async with sem:
+            diff = await _resolve_and_diff_invoice(inv)
+            diffs_by_inv[inv["id"]] = diff
+
+    await asyncio.gather(*[_run_one(i) for i in invoices])
+
+    approved = 0
+    rejected = 0
+    needs_review = 0
+    eligible_reimb = 0.0
+    flagged: List[dict] = []
+    for inv in invoices:
+        diff = diffs_by_inv.get(inv["id"])
+        # Persist the diff so per-row chips reflect the audit run.
+        await db.tournament_invoices.update_one(
+            {"id": inv["id"]},
+            {"$set": {"ai_diff": diff.model_dump() if diff else None}},
+        )
+        status = (diff.status if diff else "skipped")
+        inv_status = inv.get("status")
+        if inv_status == "Rejected":
+            rejected += 1
+            flagged.append({
+                "invoice_ref": inv.get("invoice_ref"),
+                "id": inv.get("id"),
+                "reasons": ["Invoice already rejected by MPCA"],
+                "ai_status": status,
+            })
+        elif status == "green" and inv_status in ("Approved", "Submitted"):
+            approved += 1
+            eligible_reimb += float(inv.get("eligible_for_grant_inr") or 0)
+        elif status == "amber":
+            needs_review += 1
+            flagged.append({
+                "invoice_ref": inv.get("invoice_ref"),
+                "id": inv.get("id"),
+                "reasons": (diff.mismatches if diff else []),
+                "ai_status": status,
+            })
+        elif status == "error":
+            needs_review += 1
+            flagged.append({
+                "invoice_ref": inv.get("invoice_ref"),
+                "id": inv.get("id"),
+                "reasons": [f"AI verification failed: {diff.error if diff else 'unknown'}"],
+                "ai_status": status,
+            })
+        else:
+            # skipped or approved-without-file → count as approved if approved,
+            # else needs_review (must have file to verify).
+            if inv_status in ("Approved", "Submitted"):
+                if inv.get("file_url"):
+                    approved += 1
+                    eligible_reimb += float(inv.get("eligible_for_grant_inr") or 0)
+                else:
+                    needs_review += 1
+                    flagged.append({
+                        "invoice_ref": inv.get("invoice_ref"),
+                        "id": inv.get("id"),
+                        "reasons": ["No file attached — cannot verify"],
+                        "ai_status": "skipped",
+                    })
+
+    return {
+        "tournament_id": tid,
+        "tournament_name": t.get("name"),
+        "body_id": body_id,
+        "totals": {
+            "count": len(invoices),
+            "approved": approved,
+            "rejected": rejected,
+            "needs_review": needs_review,
+            "eligible_reimbursement_inr": round(eligible_reimb, 2),
+        },
+        "flagged": flagged,
+        "audited_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # ═══════════════════ Budget vs Actual Tracker ═══════════════════

@@ -123,7 +123,7 @@ const Dashboard = () => {
                 rightAction={
                     <div className="flex items-center gap-4 flex-wrap">
                         <div
-                            className="inline-flex items-center gap-2 px-5 h-[46px] rounded-full"
+                            className="inline-flex items-center gap-3 px-6 h-[54px] rounded-full"
                             style={{
                                 background: `linear-gradient(180deg, ${DL.paper} 0%, ${DL.paperEdge} 100%)`,
                                 border: `1.5px solid ${DL.ruleStrong}`,
@@ -131,15 +131,15 @@ const Dashboard = () => {
                             }}
                             data-testid="dashboard-greeting-chip"
                         >
-                            <Sparkles size={18} strokeWidth={2.5} style={{ color: DL.gold }} />
-                            <span className="text-[17px] font-bold" style={{ color: DL.ink2 }}>{greeting},</span>
-                            <span className="text-[17px] font-bold" style={{ color: DL.ink, fontFamily: DL.fontDisplay }}>
+                            <Sparkles size={22} strokeWidth={2.5} style={{ color: DL.gold }} />
+                            <span className="text-[20px] font-bold" style={{ color: DL.ink2 }}>{greeting},</span>
+                            <span className="text-[20px] font-bold" style={{ color: DL.ink, fontFamily: DL.fontDisplay }}>
                                 {persona?.honorific || ""} {firstName}
                             </span>
                         </div>
                         <div className="text-right">
-                            <div className="text-[13px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>As On</div>
-                            <div className="text-[20px] font-bold mt-1" style={{ color: DL.ink }}>
+                            <div className="text-[15px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>As On</div>
+                            <div className="text-[24px] font-bold mt-1" style={{ color: DL.ink }}>
                                 {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
                             </div>
                         </div>
@@ -162,10 +162,10 @@ const Dashboard = () => {
                             type="button"
                             onClick={() => setActiveTab(t.id)}
                             data-testid={`dashboard-tab-${t.id}`}
-                            className="inline-flex items-center gap-2 px-6 py-4 -mb-[2px] transition-colors"
+                            className="inline-flex items-center gap-3 px-7 py-4 -mb-[2px] transition-colors"
                             style={{
                                 fontFamily: DL.fontMono,
-                                fontSize: 15,
+                                fontSize: 17,
                                 fontWeight: 700,
                                 letterSpacing: "0.22em",
                                 textTransform: "uppercase",
@@ -175,7 +175,7 @@ const Dashboard = () => {
                                 cursor: "pointer",
                             }}
                         >
-                            <Icon size={18} strokeWidth={2.25} />
+                            <Icon size={20} strokeWidth={2.25} />
                             {t.label}
                         </button>
                     );
@@ -188,9 +188,6 @@ const Dashboard = () => {
                     <Active />
                 </Suspense>
             </div>
-
-            {/* Action inbox — stays visible under every tab.  MPCA-State personas only. */}
-            {persona?.body_type === "State" && <PendingWithMePanel />}
         </PageShell>
     );
 };

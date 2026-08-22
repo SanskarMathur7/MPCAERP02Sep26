@@ -115,13 +115,13 @@ export const WarmKpiHero = ({ label, value, accent = "emerald", trend, suffix, t
                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
             }}
         >
-            <div className="text-[13px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
-            <div className="mt-2 text-[48px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color }}>
+            <div className="text-[15px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
+            <div className="mt-3 text-[56px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color }}>
                 {value}
-                {suffix && <span className="ml-1 text-[24px]" style={{ color: DL.muted }}>{suffix}</span>}
+                {suffix && <span className="ml-2 text-[28px]" style={{ color: DL.muted }}>{suffix}</span>}
             </div>
             {trend && (
-                <div className="mt-3 text-[13px] font-bold" style={{ fontFamily: DL.fontMono, color: trend.dir === "up" ? DL.emerald : DL.danger }}>
+                <div className="mt-3 text-[15px] font-bold" style={{ fontFamily: DL.fontMono, color: trend.dir === "up" ? DL.emerald : DL.danger }}>
                     {trend.dir === "up" ? "▲" : "▼"} {trend.value} <span style={{ color: DL.muted, fontWeight: 500 }}>{trend.label}</span>
                 </div>
             )}

@@ -239,6 +239,19 @@ const UsersTab = ({ users, roles, onRefresh, persona }) => {
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
     };
 
+    // Iter 118 — Admin resets a user's password. Prompts for new pw + force-reset flag.
+    const resetPassword = async (u) => {
+        if (!u.email) { alert("This user has no email — cannot enable login."); return; }
+        const newPw = window.prompt(`Set a new password for ${u.display_name} (${u.email}).\nMinimum 8 characters. The user will be forced to change it on next sign-in.`);
+        if (!newPw) return;
+        if (newPw.length < 8) { alert("Password must be at least 8 characters."); return; }
+        try {
+            await api.post(`/rbac/users/${u.id}/reset-password`, { new_password: newPw, force_reset: true });
+            alert(`Password reset for ${u.display_name}. They must change it on next sign-in.`);
+            onRefresh();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+    };
+
     const roleName = (rid) => roles.find((r) => r.id === rid)?.name || rid;
 
     return (
@@ -315,23 +328,23 @@ const UsersTab = ({ users, roles, onRefresh, persona }) => {
             )}
 
             <div className="border border-mpca-brass/30 overflow-hidden">
-                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-mpca-green-dark text-mpca-gold-light text-[9px] uppercase tracking-widest">
-                    <div className="col-span-3">Name</div>
-                    <div className="col-span-3">Role</div>
-                    <div className="col-span-2">Body</div>
-                    <div className="col-span-2">Contact</div>
-                    <div className="col-span-1">Status</div>
-                    <div className="col-span-1 text-right">Actions</div>
+                <div className="grid grid-cols-[2.5fr_2.5fr_1.6fr_2.4fr_1fr_3fr] gap-3 px-4 py-2 bg-mpca-green-dark text-mpca-gold-light text-[9px] uppercase tracking-widest">
+                    <div>Name</div>
+                    <div>Role</div>
+                    <div>Body</div>
+                    <div>Contact</div>
+                    <div>Status</div>
+                    <div className="text-right">Actions</div>
                 </div>
                 {users.map((u) => {
                     const editing = editingId === u.id;
                     return (
-                        <div key={u.id} className="grid grid-cols-12 gap-2 px-4 py-2 items-center border-b border-mpca-brass/10 text-xs" data-testid={`rbac-user-row-${u.id}`}>
-                            <div className="col-span-3">
+                        <div key={u.id} className="grid grid-cols-[2.5fr_2.5fr_1.6fr_2.4fr_1fr_3fr] gap-3 px-4 py-2 items-center border-b border-mpca-brass/10 text-xs" data-testid={`rbac-user-row-${u.id}`}>
+                            <div>
                                 <div className="font-serif text-mpca-green-dark">{u.honorific ? u.honorific + " " : ""}{u.display_name}</div>
                                 {u.persona_id && <div className="text-[9px] font-mono text-mpca-brass">{u.persona_id}</div>}
                             </div>
-                            <div className="col-span-3">
+                            <div>
                                 {editing ? (
                                     <select className={inputCls} value={u.role_id} onChange={(e) => patchUser(u.id, { role_id: e.target.value })}>
                                         {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -340,20 +353,23 @@ const UsersTab = ({ users, roles, onRefresh, persona }) => {
                                     <span className="text-mpca-oxblood">{roleName(u.role_id)}</span>
                                 )}
                             </div>
-                            <div className="col-span-2 font-mono text-[10px] text-mpca-brass">{u.body_code} <span className="text-mpca-gray-dark">·</span> {u.body_type}</div>
-                            <div className="col-span-2 text-[10px] text-mpca-gray-dark">{u.email || u.phone || "—"}</div>
-                            <div className="col-span-1">
+                            <div className="font-mono text-[10px] text-mpca-brass">{u.body_code} <span className="text-mpca-gray-dark">·</span> {u.body_type}</div>
+                            <div className="text-[10px] text-mpca-gray-dark truncate" title={u.email || u.phone || ""}>{u.email || u.phone || "—"}</div>
+                            <div>
                                 <span className={`text-[9px] uppercase tracking-widest px-1.5 py-0.5 ${u.is_active ? "bg-mpca-green-dark text-mpca-ivory" : "bg-mpca-parchment text-mpca-gray-dark border border-mpca-brass/30"}`} data-testid={`rbac-user-status-${u.id}`}>
                                     {u.is_active ? "Active" : "Inactive"}
                                 </span>
                             </div>
-                            <div className="col-span-1 text-right">
+                            <div>
                                 {isRbacAdmin(persona) && (
-                                    <div className="flex items-center gap-1 justify-end">
-                                        <button onClick={() => setEditingId(editing ? null : u.id)} className="text-[9px] uppercase text-mpca-brass hover:text-mpca-oxblood" data-testid={`rbac-user-edit-${u.id}`}>
+                                    <div className="flex items-center gap-2.5 justify-end flex-wrap">
+                                        <button onClick={() => setEditingId(editing ? null : u.id)} className="text-[9px] uppercase text-mpca-brass hover:text-mpca-oxblood whitespace-nowrap" data-testid={`rbac-user-edit-${u.id}`}>
                                             {editing ? "Done" : "Edit"}
                                         </button>
-                                        <button onClick={() => patchUser(u.id, { is_active: !u.is_active })} className="text-[9px] uppercase text-mpca-brass hover:text-mpca-oxblood" data-testid={`rbac-user-toggle-${u.id}`}>
+                                        <button onClick={() => resetPassword(u)} className="text-[9px] uppercase text-mpca-brass hover:text-mpca-oxblood whitespace-nowrap" data-testid={`rbac-user-reset-pw-${u.id}`} title="Set a new password for this user">
+                                            Reset PW
+                                        </button>
+                                        <button onClick={() => patchUser(u.id, { is_active: !u.is_active })} className="text-[9px] uppercase text-mpca-brass hover:text-mpca-oxblood whitespace-nowrap" data-testid={`rbac-user-toggle-${u.id}`}>
                                             {u.is_active ? "Deactivate" : "Activate"}
                                         </button>
                                         {!u.persona_id && (

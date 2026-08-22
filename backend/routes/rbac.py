@@ -70,6 +70,12 @@ DEFAULT_ROLE_MATRIX: Dict[str, Dict[str, Any]] = {
         "description": "Chairs the Board, signs resolutions, holds ultimate approval power.",
         "permissions": ALL_PERMISSIONS,   # everything except SysAdmin-only edit
     },
+    "vice_president": {
+        "name": "Vice President",
+        "body_scope": "State",
+        "description": "Deputises President; full read + designated final-approval powers.",
+        "permissions": ALL_PERMISSIONS,
+    },
     "hon_secretary": {
         "name": "Hon. Secretary",
         "body_scope": "State",
@@ -427,9 +433,9 @@ async def seed_roles_and_permissions() -> None:
     #    President/VP/Sec/JS/Treasurer/CAO/Auditor + 10 Division Secretaries.
     bootstrap_roles = [
         ("president",           "president"),
-        ("vice-president",      "president"),           # deputises president
+        ("vice-president",      "vice_president"),       # own dedicated role now
         ("secretary",           "hon_secretary"),
-        ("joint-secretary",     "hon_secretary"),
+        ("joint-secretary",     "joint_secretary"),      # own dedicated role now
         ("treasurer",           "hon_treasurer"),
         ("cao-mpca",            "hon_treasurer"),        # accounts custodian
         ("internal-auditor",    "hon_treasurer"),        # read-only auditor
@@ -444,9 +450,11 @@ async def seed_roles_and_permissions() -> None:
         ("div-sec-bhopal",      "division_secretary"),
         ("div-sec-ujjain",      "division_secretary"),
     ]
+    # Force-assert role_id — corrects any legacy bootstrap that assigned the
+    # wrong role (e.g. vice-president used to inherit `president`).
     for uid, role_id in bootstrap_roles:
         await db.users.update_one(
-            {"id": uid, "$or": [{"role_id": {"$exists": False}}, {"role_id": None}, {"role_id": ""}]},
+            {"id": uid},
             {"$set": {"role_id": role_id, "persona_id": uid}},
         )
 
@@ -512,6 +520,7 @@ async def patch_role(role_id: str, patch: RolePatch, request: Request, actor: Di
 # 15 personas render in the RBAC user table with the correct role badge.
 _POST_TITLE_TO_ROLE_ID = {
     "President":                  "president",
+    "Vice President":             "vice_president",
     "Hon. Secretary":             "hon_secretary",
     "Hon. Treasurer":             "hon_treasurer",
     "Joint Secretary":            "joint_secretary",

@@ -77,14 +77,14 @@ const Login = () => {
                     {/* Header */}
                     <div className="mb-10" data-testid="login-form-header">
                         <div
-                            className="text-[13px] uppercase tracking-[0.28em] font-bold mb-4"
+                            className="text-[18px] uppercase tracking-[0.28em] font-bold mb-4"
                             style={{ fontFamily: DL.fontMono, color: DL.gold }}
                             data-testid="login-eyebrow-mpca"
                         >
                             MPCA&apos;s AI-Based ERP
                         </div>
                         <h1
-                            className="text-5xl md:text-6xl leading-[1.05]"
+                            className="text-6xl md:text-7xl leading-[1.05]"
                             style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink, letterSpacing: "-0.02em" }}
                         >
                             Welcome<span style={{ color: DL.emerald }}>.</span>
@@ -97,13 +97,13 @@ const Login = () => {
                         <div>
                             <label
                                 htmlFor="email"
-                                className="block text-[13px] tracking-[0.22em] uppercase mb-2.5"
+                                className="block text-[18px] tracking-[0.22em] uppercase mb-3"
                                 style={{ fontFamily: DL.fontMono, color: DL.ink2, fontWeight: 700 }}
                             >
                                 Email
                             </label>
                             <div className="relative">
-                                <Mail size={18} strokeWidth={2} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: DL.muted }} />
+                                <Mail size={22} strokeWidth={2} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: DL.muted }} />
                                 <input
                                     id="email"
                                     type="email"
@@ -114,7 +114,7 @@ const Login = () => {
                                     autoComplete="email"
                                     disabled={submitting}
                                     data-testid="login-email-input"
-                                    className="w-full pl-12 pr-4 py-4 text-[16px] outline-none transition-all rounded-md"
+                                    className="w-full pl-14 pr-4 py-5 text-[21px] outline-none transition-all rounded-md"
                                     style={{
                                         backgroundColor: DL.paper,
                                         border: `1.5px solid ${DL.ruleStrong}`,
@@ -133,13 +133,13 @@ const Login = () => {
                         <div>
                             <label
                                 htmlFor="password"
-                                className="block text-[13px] tracking-[0.22em] uppercase mb-2.5"
+                                className="block text-[18px] tracking-[0.22em] uppercase mb-3"
                                 style={{ fontFamily: DL.fontMono, color: DL.ink2, fontWeight: 700 }}
                             >
                                 Password
                             </label>
                             <div className="relative">
-                                <Lock size={18} strokeWidth={2} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: DL.muted }} />
+                                <Lock size={22} strokeWidth={2} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: DL.muted }} />
                                 <input
                                     id="password"
                                     type={showPassword ? "text" : "password"}
@@ -149,7 +149,7 @@ const Login = () => {
                                     autoComplete="current-password"
                                     disabled={submitting}
                                     data-testid="login-password-input"
-                                    className="w-full pl-12 pr-12 py-4 text-[16px] outline-none transition-all rounded-md"
+                                    className="w-full pl-14 pr-14 py-5 text-[21px] outline-none transition-all rounded-md"
                                     style={{
                                         backgroundColor: DL.paper,
                                         border: `1.5px solid ${DL.ruleStrong}`,
@@ -169,7 +169,7 @@ const Login = () => {
                                     aria-label={showPassword ? "Hide password" : "Show password"}
                                     data-testid="login-password-toggle"
                                 >
-                                    {showPassword ? <EyeOff size={18} strokeWidth={2} /> : <Eye size={18} strokeWidth={2} />}
+                                    {showPassword ? <EyeOff size={22} strokeWidth={2} /> : <Eye size={22} strokeWidth={2} />}
                                 </button>
                             </div>
                         </div>
@@ -177,11 +177,11 @@ const Login = () => {
                         {/* Error */}
                         {error && (
                             <div
-                                className="flex items-start gap-2.5 text-[14px] px-4 py-3 rounded-md"
+                                className="flex items-start gap-2.5 text-[19px] px-4 py-4 rounded-md"
                                 style={{ backgroundColor: "rgba(139,31,31,0.06)", border: `1px solid ${DL.danger}`, color: DL.danger }}
                                 data-testid="login-error"
                             >
-                                <AlertCircle size={17} strokeWidth={2.25} className="flex-shrink-0 mt-0.5" />
+                                <AlertCircle size={22} strokeWidth={2.25} className="flex-shrink-0 mt-0.5" />
                                 <span style={{ fontWeight: 600 }}>{error}</span>
                             </div>
                         )}
@@ -191,7 +191,7 @@ const Login = () => {
                             type="submit"
                             disabled={submitting}
                             data-testid="login-submit-btn"
-                            className="group w-full flex items-center justify-center gap-2.5 py-4 text-[16px] tracking-wide transition-all rounded-md"
+                            className="group w-full flex items-center justify-center gap-3 py-5 text-[21px] tracking-wide transition-all rounded-md"
                             style={{
                                 backgroundColor: submitting ? DL.ink2 : DL.emerald,
                                 color: DL.paper,
@@ -205,13 +205,13 @@ const Login = () => {
                             onMouseLeave={(e) => { if (!submitting) e.currentTarget.style.backgroundColor = DL.emerald; }}
                         >
                             <span>{submitting ? "Signing in…" : "Sign in"}</span>
-                            {!submitting && <ArrowRight size={18} strokeWidth={2.5} className="transition-transform group-hover:translate-x-1" />}
+                            {!submitting && <ArrowRight size={22} strokeWidth={2.5} className="transition-transform group-hover:translate-x-1" />}
                         </button>
                     </form>
 
                     {/* Footnote */}
                     <div
-                        className="mt-10 text-center text-[13px] leading-relaxed"
+                        className="mt-10 text-center text-[18px] leading-relaxed"
                         style={{ color: DL.muted, fontFamily: DL.fontMono, letterSpacing: "0.05em" }}
                     >
                         Access is restricted to authorised MPCA office bearers.

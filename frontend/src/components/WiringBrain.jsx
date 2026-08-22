@@ -248,21 +248,21 @@ export default function WiringBrain() {
                     src="/brand/mpca-logo.png"
                     alt="MPCA emblem"
                     style={{
-                        width: 72, height: 72, objectFit: "contain",
+                        width: 84, height: 84, objectFit: "contain",
                         filter: "brightness(0) saturate(100%) invert(72%) sepia(56%) saturate(388%) hue-rotate(2deg) brightness(94%) contrast(90%)",
                     }}
                 />
                 <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
                     <span style={{
                         color: DL.gold, opacity: 0.9,
-                        fontFamily: DL.fontMono, fontSize: 13, fontWeight: 800,
+                        fontFamily: DL.fontMono, fontSize: 18, fontWeight: 800,
                         letterSpacing: "0.24em", textTransform: "uppercase",
                     }}>
                         Madhya Pradesh
                     </span>
                     <span style={{
-                        color: DL.paper, marginTop: 5,
-                        fontFamily: DL.fontMono, fontSize: 13, fontWeight: 700,
+                        color: DL.paper, marginTop: 6,
+                        fontFamily: DL.fontMono, fontSize: 18, fontWeight: 700,
                         letterSpacing: "0.24em", textTransform: "uppercase", opacity: 0.75,
                     }}>
                         Cricket Association
@@ -272,9 +272,9 @@ export default function WiringBrain() {
 
             {/* Eyebrow · left-bottom of brand block */}
             <div style={{
-                position: "absolute", top: 148, left: 40, zIndex: 3,
-                color: DL.gold, opacity: 0.85,
-                fontFamily: DL.fontMono, fontSize: 13, fontWeight: 700,
+                position: "absolute", top: 170, left: 40, zIndex: 3,
+                color: DL.gold, opacity: 0.9,
+                fontFamily: DL.fontMono, fontSize: 18, fontWeight: 700,
                 letterSpacing: "0.24em", textTransform: "uppercase",
             }} data-testid="brain-eyebrow">
                 / wired cricket decisions
@@ -288,7 +288,7 @@ export default function WiringBrain() {
                     type="button"
                     onClick={() => setAutoFire(v => !v)}
                     data-testid="brain-toggle-auto"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] uppercase tracking-[0.18em] transition-all"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-[17px] uppercase tracking-[0.18em] transition-all"
                     style={{
                         backgroundColor: autoFire ? DL.gold : "rgba(14,31,27,0.55)",
                         color: autoFire ? DL.ink : DL.gold,
@@ -299,14 +299,14 @@ export default function WiringBrain() {
                     }}
                     title={autoFire ? "Pause auto-fire" : "Resume auto-fire"}
                 >
-                    {autoFire ? <Pause size={13} strokeWidth={2.5} /> : <Play size={13} strokeWidth={2.5} />}
+                    {autoFire ? <Pause size={17} strokeWidth={2.5} /> : <Play size={17} strokeWidth={2.5} />}
                     {autoFire ? "Live" : "Paused"}
                 </button>
                 <button
                     type="button"
                     onClick={() => firePulse()}
                     data-testid="brain-fire-signal"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] uppercase tracking-[0.18em] transition-all"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-[17px] uppercase tracking-[0.18em] transition-all"
                     style={{
                         backgroundColor: "rgba(14,31,27,0.55)",
                         color: DL.paper,
@@ -320,7 +320,7 @@ export default function WiringBrain() {
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(14,31,27,0.55)"; e.currentTarget.style.color = DL.paper; }}
                     title="Fire one signal now"
                 >
-                    <Zap size={13} strokeWidth={2.5} />
+                    <Zap size={17} strokeWidth={2.5} />
                     Fire a signal
                 </button>
             </div>
@@ -379,7 +379,7 @@ export default function WiringBrain() {
                                 {hovered && <circle r={18} fill={DL.gold} opacity={0.15} />}
                                 <circle r={active ? 12 : 8} fill={t.owner === "m" ? DL.gold : "#C9A45F"} opacity={active ? 1 : 0.85} style={{ transition: "r 300ms ease, opacity 300ms ease" }} />
                                 <circle r={4} fill={DL.paper} opacity={0.9} />
-                                <text x={-26} y={5} textAnchor="end" fill={DL.paper} fontFamily={DL.fontBody} fontSize={14} fontWeight={hovered ? 800 : 700} style={{ transition: "font-weight 240ms" }}>{t.label}</text>
+                                <text x={-28} y={6} textAnchor="end" fill={DL.paper} fontFamily={DL.fontBody} fontSize={19} fontWeight={hovered ? 800 : 700} style={{ transition: "font-weight 240ms" }}>{t.label}</text>
                             </g>
                         );
                     })}
@@ -404,7 +404,7 @@ export default function WiringBrain() {
                                 {hovered && <circle r={20} fill={DL.gold} opacity={0.18} />}
                                 <circle r={active ? 15 : 10} fill={DL.emerald} stroke={DL.gold} strokeWidth={active ? 2 : 1} opacity={active ? 1 : 0.9} style={{ transition: "r 300ms ease" }} />
                                 <circle r={5} fill={DL.paper} opacity={active ? 1 : 0.5} />
-                                <text x={22} y={3} fill={DL.paper} fontFamily={DL.fontBody} fontSize={13.5} fontWeight={hovered ? 800 : 600} style={{ transition: "font-weight 240ms" }}>{s.label}</text>
+                                <text x={24} y={5} fill={DL.paper} fontFamily={DL.fontBody} fontSize={18.5} fontWeight={hovered ? 800 : 600} style={{ transition: "font-weight 240ms" }}>{s.label}</text>
                             </g>
                         );
                     })}
@@ -418,7 +418,7 @@ export default function WiringBrain() {
                             <g key={o.id} transform={`translate(${OUT_X},${o.y})`}>
                                 <circle r={active ? 14 : 10} fill={ownerColor(o.tone)} opacity={active ? 1 : 0.9} style={{ transition: "r 300ms ease" }} />
                                 <circle r={5} fill={DL.paper} opacity={0.9} />
-                                <text x={22} y={5} fill={DL.paper} fontFamily={DL.fontBody} fontSize={14} fontWeight={700}>{o.label}</text>
+                                <text x={24} y={6} fill={DL.paper} fontFamily={DL.fontBody} fontSize={19} fontWeight={700}>{o.label}</text>
                             </g>
                         );
                     })}
@@ -450,7 +450,7 @@ export default function WiringBrain() {
             {/* Minimal live indicator — bottom-left, no data points */}
             <div style={{
                 position: "absolute", bottom: 24, left: 48, zIndex: 3,
-                color: DL.gold, opacity: 0.7, fontFamily: DL.fontMono, fontSize: 12,
+                color: DL.gold, opacity: 0.75, fontFamily: DL.fontMono, fontSize: 17,
                 textTransform: "uppercase", letterSpacing: "0.24em",
             }} data-testid="brain-live-count">
                 {autoFire ? "Live · signals flowing" : pulses.length > 0 ? "Draining…" : "Idle · fire to see it flow"}
@@ -459,7 +459,7 @@ export default function WiringBrain() {
             {/* Anchor stamp — bottom-right (behind trim mark) */}
             <div style={{
                 position: "absolute", bottom: 24, right: 48, zIndex: 3,
-                color: DL.gold, opacity: 0.55, fontFamily: DL.fontMono, fontSize: 12,
+                color: DL.gold, opacity: 0.6, fontFamily: DL.fontMono, fontSize: 17,
                 textTransform: "uppercase", letterSpacing: "0.24em",
             }} data-testid="brain-stamp">
                 MPCA · Est. 1957

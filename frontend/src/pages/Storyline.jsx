@@ -402,19 +402,24 @@ export default function Storyline() {
                 </span>
             </div>
 
-            {/* Slide surface */}
+            {/* Slide surface — items-start so tall slides (e.g. Grants with 7 pain items)
+                don't push their content off the top of the viewport. Vertical
+                padding + safe-center via margin-auto on inner keeps short
+                slides visually centred. */}
             <div
                 key={slide}
-                className="storyline-slide-in absolute inset-0 flex items-center justify-center px-6 md:px-16 py-16"
+                className="storyline-slide-in absolute inset-0 flex items-start justify-center px-6 md:px-16 pt-14 pb-28"
                 style={{ overflowY: "auto" }}
                 data-testid={`storyline-slide-${slide}`}
             >
+                <div className="w-full my-auto" style={{ maxWidth: 1400 }}>
                 {current.kind === "what"          && <WhatSlide        data={current} />}
                 {current.kind === "why"           && <WhySlide         data={current} />}
                 {current.kind === "bucket_intro"  && <BucketIntroSlide data={current} />}
                 {current.kind === "feature"       && <FeatureSlide     data={current} onLive={setPreview} />}
                 {current.kind === "impact"        && <ImpactSlide      data={current} />}
                 {current.kind === "cta"           && <CtaSlide         data={current} />}
+                </div>
             </div>
 
             {/* Bottom controls */}

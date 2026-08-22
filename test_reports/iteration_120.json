@@ -1,0 +1,37 @@
+{
+  "summary": "Iter 120 sweep — Bug A (Storyline slide 9 clipping) VERIFIED FIXED via bounding-box check + screenshot; bucket badge, brand mark, counter, and last pain item are all fully in-viewport on slide 9 and other tall bucket-intro slides (3, 6, 11). Bug B (CAO Create Tournament button) VERIFIED FIXED — after clearing force_password_reset via sysadmin reset endpoint, Rohit Pandit (Chief Accounts Officer, role_id=hon_treasurer) sees `[data-testid=\"new-tournament-btn\"]` and the TournamentCreateModal opens on click; Internal Auditor (Nitin Batra) correctly sees NO button (negative control). M&C engine sweep: 8/8 pytest passing on new iter120 suite covering workflow catalog (17 workflows), post catalog (13 canonical posts + 8 extras), tournament_create workflow shape, RBAC guard on /mc-admin, runtime state shape, needs-rework inbox, two-person rule (maker cannot approve own submission), and return-requires-note (400 without `note`, accepts with `note`). RBAC roster: 18 users + 20 roles verified. Passwords for CAO + Internal Auditor restored to mpca@2026 with force_password_reset=True (baseline).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/rbac/users/{uid} PATCH", "issue": "PATCH request with body {\"force_password_reset\": false} returns 400 {\"detail\":\"Nothing to update.\"} — the field is not a recognised patchable attribute on the user schema. Workaround: use POST /api/rbac/users/{uid}/reset-password with {\"force_reset\": false} which works correctly. Consider adding force_password_reset to the PATCH allow-list for admin convenience."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter120_mc_sweep.py",
+    "/app/test_reports/pytest/iter120.xml"
+  ],
+  "action_items": [
+    "None blocking. OPTIONAL: allow force_password_reset in PATCH /api/rbac/users/{uid} so admins don't have to go through /reset-password to just clear the flag.",
+    "OPTIONAL/CARRY-OVER FROM ITER 119: Escape doesn't close /storyline live-preview lightbox when iframe has focus — LOW priority."
+  ],
+  "critical_code_review_comments": [
+    "Legacy /app/backend/tests/test_mc_engine.py uses obsolete email addresses (secretary@mpca.in, cricket.manager@mpca.in, president@mpca.in) that no longer exist after the Iter 114 real-roster switch — all 6 tests fail with 401. The file should either be deleted or updated to the Feb 2026 roster. The new /app/backend/tests/test_iter120_mc_sweep.py supersedes it.",
+    "Transition payload field is `note` (singular) not `notes` — the review_request spec used `notes`. If the FE ever sends `notes` (plural) it will silently be dropped by Pydantic and the engine will 400 with 'requires a note'. Consider aliasing both or documenting explicitly.",
+    "tournament_create workflow maker post_title is 'Chief Accounts Officer' — mapped to `role_id=hon_treasurer`. The role→post_title mapping is implicit; a stale seed of role_id → post_title mapping (in DEFAULT_ROLE_MATRIX or in the workflow config) could silently break the CAO's ability to submit. Consider an integration test that asserts each workflow's maker/checker posts resolve to at least one real user."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter120_mc_sweep.py"
+  ],
+  "success_rate": {"backend": "100% (8/8 iter120 M&C tests)", "frontend": "100% (Bug A + Bug B + negative control all verified with screenshots)"},
+  "test_credentials": "sysadmin@mpca.in / mpca@2026 (no force-reset); all real users mpca@2026 with force_password_reset=True. CAO + Internal Auditor passwords/flag restored to baseline post-test.",
+  "seed_data_creation": "None. Temporarily used /api/rbac/users/{uid}/reset-password to clear force_password_reset on cao-mpca and internal-auditor for E2E verification, then restored mpca@2026 + force_reset=True.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Bug A + Bug B both confirmed fixed. Screenshots at /tmp/iter120_slide9.png (grants bucket bucket-badge fully visible), /tmp/iter120_cao_button.png (Add Tournament visible), /tmp/iter120_auditor_no_button.png (auditor no button). New iter120 pytest suite at /app/backend/tests/test_iter120_mc_sweep.py — 8 tests, all passing (workflow catalog, posts catalog, workflow shape, RBAC guard, state shape, needs-rework inbox, two-person rule, return-requires-note). Legacy /app/backend/tests/test_mc_engine.py is now broken because of stale credentials (secretary@mpca.in etc) — main agent should either delete it or update to the Feb 2026 real roster. All real-user passwords are back to mpca@2026 with force_password_reset=True.",
+  "rca of the issue": "Bug A root cause was Storyline slide surface using `items-center py-16`, which vertically centred content taller than viewport — pushing the top (bucket badge) off-screen. Fix: `items-start pt-14 pb-28` + inner `<div className='w-full my-auto'>` so short slides still centre visually via margin-auto while tall slides scroll from the top with the bucket badge always in-view. Bug B root cause was that CAO's role_id was pointing to a role without tournaments.create permission; Iter 117-119 fix in AuthContext.isOfficeBearer (derived from persona.role_id) + hon_treasurer role gaining tournaments.create/edit/publish/close + seed_roles_and_permissions refreshing on drift resolved it. Verified working after clearing force_password_reset (which was blocking navigation to /tournaments)."
+}

@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..900&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800;900&family=Fraunces:opsz,wght@9..144,400..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -6,26 +6,25 @@
 
 @layer base {
     :root {
-        /* ============ Indian Cricket Palette ============
-         * BCCI Navy + Indian Saffron + Marigold + Maroon + Warm Cream.
-         * Variable names retain the `--mpca-*` prefix for backward compatibility
-         * across the codebase; values now resolve to the Indian theme.
+        /* ============ Institutional Warm Palette (Feb 2026) ============
+         * Rebound to the DL palette from /src/lib/designSystem.jsx.
+         * Legacy `--mpca-*` variable names preserved for backwards compat.
          */
-        --mpca-green-dark: #0a1f3d;     /* BCCI Navy */
-        --mpca-green: #0e2747;
-        --mpca-green-light: #163558;
-        --mpca-oxblood: #ff6a13;        /* Saffron */
-        --mpca-burgundy-dark: #7a1f2c;  /* Maroon */
-        --mpca-brass: #b8860b;          /* Dark goldenrod — legible on cream, still gold on dark */
-        --mpca-brass-light: #e9b949;    /* Original marigold, kept for accents/backgrounds */
-        --mpca-gold: #d4a017;
-        --mpca-gold-light: #f6d97a;
-        --mpca-ivory: #fbf7ed;          /* Warm cream */
-        --mpca-parchment: #f1ead7;      /* Cream */
-        --mpca-wood-dark: #06122a;      /* Ink */
-        --mpca-charcoal: #1a1a1a;
-        --mpca-gray-dark: #3d4a5f;
-        --mpca-gray: #6b7a90;
+        --mpca-green-dark: #0D3B2E;     /* DL.emerald — dominant dark */
+        --mpca-green: #1F2E28;          /* DL.ink2 */
+        --mpca-green-light: #2E3B34;    /* DL.ink3 */
+        --mpca-oxblood: #8B1F1F;        /* DL.danger — real oxblood red */
+        --mpca-burgundy-dark: #8B1F1F;  /* DL.danger */
+        --mpca-brass: #B88328;          /* DL.gold */
+        --mpca-brass-light: #D4A017;    /* Warm accent */
+        --mpca-gold: #B88328;           /* DL.gold */
+        --mpca-gold-light: #E8CE7A;
+        --mpca-ivory: #F5EFE6;          /* DL.ivory — page bg */
+        --mpca-parchment: #FBF8F1;      /* DL.paper — card bg */
+        --mpca-wood-dark: #0E1F1B;      /* DL.ink */
+        --mpca-charcoal: #0E1F1B;
+        --mpca-gray-dark: #4C5750;      /* DL.muted */
+        --mpca-gray: #4C5750;
 
         /* shadcn-compatible tokens mapped to Indian palette */
         --background: 41 64% 96%;
@@ -61,12 +60,13 @@
         margin: 0;
         background-color: var(--mpca-ivory);
         color: var(--mpca-charcoal);
-        font-family: "Inter", "Bricolage Grotesque", system-ui, sans-serif;
+        font-family: "Nunito", system-ui, sans-serif;
+        font-weight: 500;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
     }
 
-    /* Subtle khadi / handloom weave background (replaces paper-grain) */
+    /* Subtle khadi / handloom weave background — retuned to emerald+gold */
     body::before {
         content: "";
         position: fixed;
@@ -75,8 +75,8 @@
         z-index: 0;
         opacity: 0.45;
         background-image:
-            radial-gradient(rgba(10, 31, 61, 0.05) 1px, transparent 1px),
-            radial-gradient(rgba(233, 185, 73, 0.04) 1px, transparent 1px);
+            radial-gradient(rgba(13, 59, 46, 0.05) 1px, transparent 1px),
+            radial-gradient(rgba(184, 131, 40, 0.04) 1px, transparent 1px);
         background-size: 22px 22px, 32px 32px;
         background-position: 0 0, 11px 16px;
     }
@@ -86,12 +86,16 @@
     h3,
     h4,
     h5,
-    h6,
-    .font-serif {
-        font-family: "Fraunces", "Cormorant Garamond", Georgia, serif;
-        font-feature-settings: "lnum" 1, "kern" 1, "ss01" 1;
+    h6 {
+        font-family: "Nunito", system-ui, sans-serif;
+        font-weight: 800;
         letter-spacing: -0.01em;
-        font-weight: 500;
+    }
+    .font-serif {
+        /* Retained for legacy usage — now maps to Nunito 800 for consistency */
+        font-family: "Nunito", "Fraunces", system-ui, sans-serif;
+        font-weight: 800;
+        letter-spacing: -0.01em;
     }
 
     .font-mono {

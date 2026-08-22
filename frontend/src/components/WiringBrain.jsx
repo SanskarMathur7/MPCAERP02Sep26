@@ -14,7 +14,7 @@
  *     gold, and the node's own halo pulses. Mouse-out fades everything back.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, Pause, Zap } from "lucide-react";
+import { Play, Pause, Zap, RotateCcw, Sparkles } from "lucide-react";
 import { DL } from "@/lib/designSystem";
 
 const TYPES = [
@@ -104,6 +104,21 @@ export default function WiringBrain() {
     const [autoFire, setAutoFire] = useState(true);
     const [hoveredType, setHoveredType] = useState(null);
     const [hoveredStep, setHoveredStep] = useState(null);
+    // Iter 116 — first-time coach mark. Persists in localStorage so repeat
+    // visitors don't get nagged.
+    const [coachVisible, setCoachVisible] = useState(false);
+    const setCoachDismissed = useCallback(() => {
+        setCoachVisible(false);
+        try { window.localStorage.setItem("mpca_brain_coach_seen", "1"); } catch (_) { /* ignore */ }
+    }, []);
+    useEffect(() => {
+        try {
+            if (window.localStorage.getItem("mpca_brain_coach_seen") === "1") return;
+        } catch (_) { /* ignore */ }
+        const showT = setTimeout(() => setCoachVisible(true), 1600);
+        const hideT = setTimeout(() => setCoachDismissed(), 8000);
+        return () => { clearTimeout(showT); clearTimeout(hideT); };
+    }, [setCoachDismissed]);
     const pulsesRef = useRef(pulses);
     pulsesRef.current = pulses;
     // Map<pulseKey, SVGCircleElement>
@@ -241,97 +256,62 @@ export default function WiringBrain() {
                 <path d="M0 18 L18 18 M18 0 L18 18" stroke={DL.gold} strokeWidth="1.25" fill="none" />
             </svg>
 
-            {/* ── Brand lockup · logo + wordmark ── */}
+            {/* ── Compact brand mark · logo + short wordmark, top-left ── */}
             <div style={{
-                position: "absolute", top: 44, left: 40, zIndex: 3,
-                display: "flex", alignItems: "center", gap: 16,
+                position: "absolute", top: 34, left: 40, zIndex: 3,
+                display: "flex", alignItems: "center", gap: 12,
             }} data-testid="brain-brand-lockup">
                 <img
                     src="/brand/mpca-logo.png"
                     alt="MPCA emblem"
                     style={{
-                        width: 84, height: 84, objectFit: "contain",
+                        width: 44, height: 44, objectFit: "contain",
                         filter: "brightness(0) saturate(100%) invert(72%) sepia(56%) saturate(388%) hue-rotate(2deg) brightness(94%) contrast(90%)",
+                        opacity: 0.9,
                     }}
                 />
-                <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-                    <span style={{
-                        color: DL.gold, opacity: 0.9,
-                        fontFamily: DL.fontMono, fontSize: 18, fontWeight: 800,
-                        letterSpacing: "0.24em", textTransform: "uppercase",
-                    }}>
-                        Madhya Pradesh
-                    </span>
-                    <span style={{
-                        color: DL.paper, marginTop: 6,
-                        fontFamily: DL.fontMono, fontSize: 18, fontWeight: 700,
-                        letterSpacing: "0.24em", textTransform: "uppercase", opacity: 0.75,
-                    }}>
-                        Cricket Association
-                    </span>
-                </div>
+                <span style={{
+                    color: DL.gold, opacity: 0.9,
+                    fontFamily: DL.fontMono, fontSize: 13, fontWeight: 800,
+                    letterSpacing: "0.28em", textTransform: "uppercase",
+                }}>
+                    MPCA · ERP
+                </span>
             </div>
 
-            {/* Eyebrow · left-bottom of brand block */}
+            {/* Control chips — top-right · icon-only trio (play/pause · fire · reset) */}
             <div style={{
-                position: "absolute", top: 170, left: 40, zIndex: 3,
-                color: DL.gold, opacity: 0.9,
-                fontFamily: DL.fontMono, fontSize: 18, fontWeight: 700,
-                letterSpacing: "0.24em", textTransform: "uppercase",
-            }} data-testid="brain-eyebrow">
-                / wired cricket decisions
-            </div>
-
-            {/* Control pills — top-right of brain panel */}
-            <div style={{
-                position: "absolute", top: 24, right: 24, zIndex: 4, display: "flex", gap: 8, alignItems: "center",
+                position: "absolute", top: 34, right: 24, zIndex: 4, display: "flex", gap: 8, alignItems: "center",
             }} data-testid="brain-controls">
-                <button
-                    type="button"
+                <IconChip
                     onClick={() => setAutoFire(v => !v)}
-                    data-testid="brain-toggle-auto"
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-[17px] uppercase tracking-[0.18em] transition-all"
-                    style={{
-                        backgroundColor: autoFire ? DL.gold : "rgba(14,31,27,0.55)",
-                        color: autoFire ? DL.ink : DL.gold,
-                        border: `1px solid ${DL.gold}`,
-                        fontFamily: DL.fontMono,
-                        fontWeight: 700,
-                        backdropFilter: "blur(8px)",
-                    }}
+                    testid="brain-toggle-auto"
                     title={autoFire ? "Pause auto-fire" : "Resume auto-fire"}
+                    active={autoFire}
                 >
-                    {autoFire ? <Pause size={17} strokeWidth={2.5} /> : <Play size={17} strokeWidth={2.5} />}
-                    {autoFire ? "Live" : "Paused"}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => firePulse()}
-                    data-testid="brain-fire-signal"
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-[17px] uppercase tracking-[0.18em] transition-all"
-                    style={{
-                        backgroundColor: "rgba(14,31,27,0.55)",
-                        color: DL.paper,
-                        border: `1px solid ${DL.gold}`,
-                        fontFamily: DL.fontMono,
-                        fontWeight: 700,
-                        backdropFilter: "blur(8px)",
-                        cursor: "pointer",
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = DL.gold; e.currentTarget.style.color = DL.ink; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(14,31,27,0.55)"; e.currentTarget.style.color = DL.paper; }}
+                    {autoFire ? <Pause size={15} strokeWidth={2.5} /> : <Play size={15} strokeWidth={2.5} />}
+                </IconChip>
+                <IconChip
+                    onClick={() => { setCoachDismissed(); firePulse(); }}
+                    testid="brain-fire-signal"
                     title="Fire one signal now"
                 >
-                    <Zap size={17} strokeWidth={2.5} />
-                    Fire a signal
-                </button>
+                    <Zap size={15} strokeWidth={2.5} />
+                </IconChip>
+                <IconChip
+                    onClick={() => setPulses([])}
+                    testid="brain-reset"
+                    title="Clear all pulses"
+                >
+                    <RotateCcw size={15} strokeWidth={2.5} />
+                </IconChip>
             </div>
 
             {/* live SVG diagram */}
             <svg
                 viewBox="0 0 860 780"
                 preserveAspectRatio="xMidYMid meet"
-                style={{ position: "absolute", inset: 0, top: 180, width: "100%", height: "calc(100% - 220px)", zIndex: 1 }}
+                style={{ position: "absolute", inset: 0, top: 96, width: "100%", height: "calc(100% - 130px)", zIndex: 1 }}
                 aria-label="MPCA Governance wiring brain"
                 onMouseLeave={() => { setHoveredType(null); setHoveredStep(null); }}
             >
@@ -363,23 +343,38 @@ export default function WiringBrain() {
 
                 {/* Type nodes — hoverable */}
                 <g>
-                    {TYPES.map(t => {
+                    {TYPES.map((t, idx) => {
                         const hovered = hoveredType === t.id;
                         const active = hovered || pulses.some(p => p.t === t.id);
+                        const haloClass = `d${(idx % 6) + 1}`;
                         return (
                             <g
                                 key={t.id}
                                 transform={`translate(${TYPE_X},${t.y})`}
                                 onMouseEnter={() => setHoveredType(t.id)}
                                 onMouseLeave={() => setHoveredType(null)}
-                                onClick={() => firePulse(t.id)}
+                                onClick={() => { setCoachDismissed(); firePulse(t.id); }}
                                 style={{ cursor: "pointer" }}
                                 data-testid={`brain-type-${t.id}`}
                             >
                                 {/* larger invisible hit target */}
                                 <circle r={22} fill="transparent" />
-                                {hovered && <circle r={18} fill={DL.gold} opacity={0.15} />}
-                                <circle r={active ? 12 : 8} fill={t.owner === "m" ? DL.gold : "#C9A45F"} opacity={active ? 1 : 0.85} style={{ transition: "r 300ms ease, opacity 300ms ease" }} />
+                                {/* Iter 116 · Breathing halo — subtle "I'm alive" */}
+                                <circle
+                                    className={`brain-halo ${haloClass}`}
+                                    r={12}
+                                    fill="none"
+                                    stroke={DL.gold}
+                                    strokeWidth={1.25}
+                                    opacity={0}
+                                />
+                                {hovered && <circle r={18} fill={DL.gold} opacity={0.22} />}
+                                <circle
+                                    r={hovered ? 13 : active ? 12 : 8}
+                                    fill={t.owner === "m" ? DL.gold : "#C9A45F"}
+                                    opacity={active ? 1 : 0.85}
+                                    style={{ transition: "r 240ms cubic-bezier(0.22,1,0.36,1), opacity 300ms ease", filter: hovered ? `drop-shadow(0 0 8px ${DL.gold})` : "none" }}
+                                />
                                 <circle r={4} fill={DL.paper} opacity={0.9} />
                                 <text x={-28} y={6} textAnchor="end" fill={DL.paper} fontFamily={DL.fontBody} fontSize={19} fontWeight={hovered ? 800 : 700} style={{ transition: "font-weight 240ms" }}>{t.label}</text>
                             </g>
@@ -389,22 +384,38 @@ export default function WiringBrain() {
 
                 {/* Step nodes — hoverable */}
                 <g>
-                    {STEPS.map(s => {
+                    {STEPS.map((s, idx) => {
                         const hovered = hoveredStep === s.id;
                         const active = hovered || pulses.some(p => p.s === s.id);
+                        const haloClass = `d${(idx % 6) + 1}`;
                         return (
                             <g
                                 key={s.id}
                                 transform={`translate(${STEP_X},${s.y})`}
                                 onMouseEnter={() => setHoveredStep(s.id)}
                                 onMouseLeave={() => setHoveredStep(null)}
-                                onClick={() => firePulse(null, s.id)}
+                                onClick={() => { setCoachDismissed(); firePulse(null, s.id); }}
                                 style={{ cursor: "pointer" }}
                                 data-testid={`brain-step-${s.id}`}
                             >
                                 <circle r={22} fill="transparent" />
-                                {hovered && <circle r={20} fill={DL.gold} opacity={0.18} />}
-                                <circle r={active ? 15 : 10} fill={DL.emerald} stroke={DL.gold} strokeWidth={active ? 2 : 1} opacity={active ? 1 : 0.9} style={{ transition: "r 300ms ease" }} />
+                                <circle
+                                    className={`brain-halo ${haloClass}`}
+                                    r={12}
+                                    fill="none"
+                                    stroke={DL.gold}
+                                    strokeWidth={1.25}
+                                    opacity={0}
+                                />
+                                {hovered && <circle r={20} fill={DL.gold} opacity={0.24} />}
+                                <circle
+                                    r={hovered ? 16 : active ? 15 : 10}
+                                    fill={DL.emerald}
+                                    stroke={DL.gold}
+                                    strokeWidth={active ? 2 : 1}
+                                    opacity={active ? 1 : 0.9}
+                                    style={{ transition: "r 240ms cubic-bezier(0.22,1,0.36,1)", filter: hovered ? `drop-shadow(0 0 8px ${DL.gold})` : "none" }}
+                                />
                                 <circle r={5} fill={DL.paper} opacity={active ? 1 : 0.5} />
                                 <text x={24} y={5} fill={DL.paper} fontFamily={DL.fontBody} fontSize={18.5} fontWeight={hovered ? 800 : 600} style={{ transition: "font-weight 240ms" }}>{s.label}</text>
                             </g>
@@ -449,23 +460,89 @@ export default function WiringBrain() {
                 })}
             </svg>
 
-            {/* Minimal live indicator — bottom-left, no data points */}
-            <div style={{
-                position: "absolute", bottom: 24, left: 48, zIndex: 3,
-                color: DL.gold, opacity: 0.75, fontFamily: DL.fontMono, fontSize: 17,
-                textTransform: "uppercase", letterSpacing: "0.24em",
-            }} data-testid="brain-live-count">
-                {autoFire ? "Live · signals flowing" : pulses.length > 0 ? "Draining…" : "Idle · fire to see it flow"}
-            </div>
+            {/* Iter 116 — First-time coach mark: gold pill near center-bottom
+                that dismisses on click or after 8s. Encourages first tap. */}
+            {coachVisible && (
+                <div
+                    onClick={setCoachDismissed}
+                    data-testid="brain-coach-mark"
+                    className="brain-coach-in"
+                    style={{
+                        position: "absolute", bottom: 72, left: "50%", transform: "translateX(-50%)",
+                        zIndex: 5, display: "inline-flex", alignItems: "center", gap: 8,
+                        padding: "10px 16px", borderRadius: 999,
+                        background: `linear-gradient(135deg, ${DL.gold} 0%, #A0731F 100%)`,
+                        color: DL.ink, fontFamily: DL.fontMono, fontSize: 12, fontWeight: 800,
+                        letterSpacing: "0.18em", textTransform: "uppercase",
+                        boxShadow: "0 16px 30px -12px rgba(184,131,40,0.55), 0 2px 8px rgba(14,31,27,0.35)",
+                        cursor: "pointer",
+                    }}
+                >
+                    <Sparkles size={13} strokeWidth={2.5} />
+                    Tap any node to fire a signal
+                </div>
+            )}
 
             {/* Anchor stamp — bottom-right (behind trim mark) */}
             <div style={{
                 position: "absolute", bottom: 24, right: 48, zIndex: 3,
-                color: DL.gold, opacity: 0.6, fontFamily: DL.fontMono, fontSize: 17,
-                textTransform: "uppercase", letterSpacing: "0.24em",
+                color: DL.gold, opacity: 0.55, fontFamily: DL.fontMono, fontSize: 12,
+                textTransform: "uppercase", letterSpacing: "0.28em",
             }} data-testid="brain-stamp">
                 MPCA · Est. 1957
             </div>
+
+            {/* Breathing halo + coach-mark animations */}
+            <style>{`
+                @keyframes brainBreathe {
+                    0%, 100% { opacity: 0; r: 12; }
+                    50%      { opacity: 0.42; r: 20; }
+                }
+                @keyframes brainCoachIn {
+                    0% { opacity: 0; transform: translate(-50%, 8px); }
+                    100% { opacity: 1; transform: translate(-50%, 0); }
+                }
+                .brain-coach-in { animation: brainCoachIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+                .brain-halo    { animation: brainBreathe 2400ms ease-in-out infinite; transform-origin: center; }
+                .brain-halo.d1 { animation-delay: 0ms; }
+                .brain-halo.d2 { animation-delay: 400ms; }
+                .brain-halo.d3 { animation-delay: 800ms; }
+                .brain-halo.d4 { animation-delay: 1200ms; }
+                .brain-halo.d5 { animation-delay: 1600ms; }
+                .brain-halo.d6 { animation-delay: 2000ms; }
+            `}</style>
         </div>
     );
 }
+
+// Small icon-only chip used by the top-right controls (play/pause · fire · reset).
+const IconChip = ({ onClick, testid, title, active = false, children }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        data-testid={testid}
+        title={title}
+        aria-label={title}
+        className="inline-flex items-center justify-center rounded-full transition-all"
+        style={{
+            width: 32, height: 32,
+            backgroundColor: active ? DL.gold : "rgba(14,31,27,0.55)",
+            color: active ? DL.ink : DL.gold,
+            border: `1px solid ${DL.gold}`,
+            backdropFilter: "blur(8px)",
+            cursor: "pointer",
+        }}
+        onMouseEnter={(e) => {
+            if (active) return;
+            e.currentTarget.style.backgroundColor = DL.gold;
+            e.currentTarget.style.color = DL.ink;
+        }}
+        onMouseLeave={(e) => {
+            if (active) return;
+            e.currentTarget.style.backgroundColor = "rgba(14,31,27,0.55)";
+            e.currentTarget.style.color = DL.gold;
+        }}
+    >
+        {children}
+    </button>
+);

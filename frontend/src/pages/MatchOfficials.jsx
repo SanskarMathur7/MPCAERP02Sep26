@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 
-const ROLES = ["Umpire", "Scorer", "Referee", "Manager", "Coach", "Trainer", "Physio"];
+const ROLES = ["Umpire", "Scorer", "Selector", "Observer", "Referee", "Manager", "Coach", "Trainer", "Physio"];
 const GRADES = ["BCCI_Panel", "State_Panel", "Division_Panel", "District_Panel", "Trainee"];
 
 const empty = { full_name: "", role: "Umpire", grade: "State_Panel", body_id: "MPCA", phone: "", email: "", accreditation_no: "", years_of_experience: 0, fee_per_match_inr: "", is_active: true, notes: "" };

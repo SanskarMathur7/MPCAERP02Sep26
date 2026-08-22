@@ -62,8 +62,39 @@ class WorkflowIn(BaseModel):
 
 @api_router.get("/mc-admin/posts")
 async def api_post_catalog(request: Request):
+    """Iter 112 · Derive the post catalog from the actual `users` collection
+    so any persona added via /access-control automatically appears in the
+    Maker-Checker configurator.  Falls back to POST_CATALOG for scopes that
+    don't yet have any seeded persona (e.g. rare Official body).
+    """
     _require_admin(request)
-    return {"posts": POST_CATALOG}
+    seen: set[tuple[str, str]] = set()
+    posts: list[dict] = []
+    cur = db.users.find(
+        {"post_title": {"$exists": True, "$ne": ""}},
+        {"_id": 0, "post_title": 1, "body_type": 1},
+    )
+    async for u in cur:
+        pt = (u.get("post_title") or "").strip()
+        bt = (u.get("body_type") or "").strip()
+        if not pt or not bt:
+            continue
+        key = (bt, pt)
+        if key in seen:
+            continue
+        seen.add(key)
+        posts.append({"body_scope": bt, "post_title": pt})
+    # Merge in the canonical catalog so scopes without seeded users still show up
+    for p in POST_CATALOG:
+        key = (p["body_scope"], p["post_title"])
+        if key in seen:
+            continue
+        seen.add(key)
+        posts.append(p)
+    # Deterministic ordering: State → Division → District → Official, alpha within
+    order = {"State": 0, "Division": 1, "District": 2, "Official": 3}
+    posts.sort(key=lambda p: (order.get(p["body_scope"], 99), p["post_title"]))
+    return {"posts": posts}
 
 
 @api_router.get("/mc-admin/workflows")

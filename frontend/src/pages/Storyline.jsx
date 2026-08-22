@@ -588,7 +588,9 @@ const CtaSlide = ({ data }) => (
 );
 
 // ═══════════════════════════════════════════════════════════════════
-// Live-preview lightbox
+// Live-preview lightbox — iframes the ACTUAL live page (same origin so the
+// stakeholder sees the current UI + real data if signed in). Fallback to
+// "Open in new tab" if the iframe fails to load.
 // ═══════════════════════════════════════════════════════════════════
 const LivePreview = ({ data, onClose }) => (
     <div
@@ -602,12 +604,12 @@ const LivePreview = ({ data, onClose }) => (
     >
         <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-[1200px] rounded-lg overflow-hidden"
-            style={{ background: DL.paper, boxShadow: "0 40px 100px rgba(0,0,0,0.6)" }}
+            className="relative w-full max-w-[1400px] rounded-lg overflow-hidden flex flex-col"
+            style={{ background: DL.paper, boxShadow: "0 40px 100px rgba(0,0,0,0.6)", height: "88vh" }}
         >
             {/* Header */}
             <div
-                className="flex items-center justify-between px-6 py-4"
+                className="flex items-center justify-between px-6 py-3 shrink-0"
                 style={{ background: DL.emerald, color: DL.paper, borderBottom: `2px solid ${DL.gold}` }}
             >
                 <div className="flex items-center gap-3">
@@ -615,16 +617,21 @@ const LivePreview = ({ data, onClose }) => (
                     <span className="text-[11px] uppercase tracking-[0.24em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
                         Live · {data.label}
                     </span>
+                    <span className="text-[10.5px] uppercase tracking-[0.2em]" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.55)" }}>
+                        {data.path}
+                    </span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Link
-                        to={data.path}
+                    <a
+                        href={data.path}
+                        target="_blank"
+                        rel="noreferrer"
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10.5px] uppercase tracking-[0.22em] font-bold transition-all"
                         style={{ fontFamily: DL.fontMono, color: DL.emerald, background: DL.gold }}
                         data-testid="live-preview-open-page"
                     >
-                        <ExternalLink size={11} strokeWidth={2.5} /> Open Page
-                    </Link>
+                        <ExternalLink size={11} strokeWidth={2.5} /> Open in new tab
+                    </a>
                     <button
                         onClick={onClose}
                         data-testid="live-preview-close"
@@ -636,15 +643,13 @@ const LivePreview = ({ data, onClose }) => (
                 </div>
             </div>
 
-            {/* Screenshot */}
-            <div style={{ maxHeight: "78vh", overflow: "auto", background: DL.ivory }}>
-                <img
-                    src={data.shot}
-                    alt={data.label}
-                    style={{ width: "100%", display: "block" }}
-                    onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.parentElement.innerHTML = '<div style="padding:80px;text-align:center;color:#4C5750;font-family:IBM Plex Mono;font-size:13px;text-transform:uppercase;letter-spacing:0.2em;">Preview unavailable · click Open Page to view live</div>'; }}
-                />
-            </div>
+            {/* Live iframe — same origin so JWT in localStorage works */}
+            <iframe
+                title={`Live · ${data.label}`}
+                src={data.path}
+                data-testid="live-preview-iframe"
+                style={{ flex: 1, width: "100%", border: "none", background: DL.ivory }}
+            />
         </div>
     </div>
 );

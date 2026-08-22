@@ -650,7 +650,17 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                     <ol className="space-y-1 text-[11px]">
                         {reg.audit_events.slice().reverse().map((e) => (
                             <li key={e.id} className="flex items-start gap-2" data-testid={`audit-${e.id}`}>
-                                <span className="text-mpca-brass font-mono shrink-0">{e.timestamp?.slice(11, 16)}</span>
+                                <span className="text-mpca-brass font-mono shrink-0 text-[10.5px]" title={e.timestamp}>
+                                    {/* Iter 123z · Full date + time so the audit trail is unambiguous.
+                                        Was showing HH:MM only ("21:13") which was useless once the
+                                        trail spanned multiple days. */}
+                                    {e.timestamp
+                                        ? new Date(e.timestamp).toLocaleString("en-IN", {
+                                              day: "2-digit", month: "short", year: "2-digit",
+                                              hour: "2-digit", minute: "2-digit", hour12: false,
+                                          })
+                                        : "—"}
+                                </span>
                                 <span className="text-[9px] uppercase tracking-widest px-1 py-0.5 border border-mpca-brass/30 text-mpca-brass shrink-0">{e.event.replace(/_/g, " ")}</span>
                                 <div className="flex-1 min-w-0">
                                     <div className="text-mpca-charcoal truncate">{e.actor_name || "—"}{e.actor_body_id ? ` · ${e.actor_body_id}` : ""}</div>

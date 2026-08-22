@@ -1,0 +1,24 @@
+{
+  "summary": "Iter 123z · Verified both fixes: (a) DocumentPreview modal opens with blob-URL src that resolves via authed axios GET to /api/uploads/{id} — 4/4 registration docs (photo, aadhaar, birth cert, marksheet PDF) rendered inline in the iframe with HTTP 200 + application/pdf, no 401s, no broken previews; (b) Player-Registrations audit trail timestamps now render as 'DD MMM YY, HH:MM' (e.g. '22 Aug 26, 21:13') with full ISO string in the span title. Backend regression pytest confirms /api/uploads/{id} is still JWT-gated (401 no-token, 200 with-token, 404 for bogus id after auth) and full upload-then-fetch round-trip works. No regression observed in the review-pane experience.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter123z_uploads_auth.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "components/DocumentPreview.jsx line 101 has a latent bug: `{isImage(url) ? ... }` calls `isImage` as a function but at line 79 `isImage` is declared as a boolean (`const isImage = isImageByUrl(url) || sniffedType === 'image'`). This throws TypeError if the default trigger is ever rendered. Currently every caller (PlayerRegistrations, PlayerDetail, MeetingDetail) passes `renderTrigger`, so the default branch is dormant — but it's a footgun. Fix: use `isImageByUrl(url)` or just `isImage` (no parens).",
+    "PlayerRegistrations passes `hideExport` to DocumentPreview, which suppresses the New-Tab and Download buttons inside the modal AND the PDF viewer's built-in toolbar (`#toolbar=0&navpanes=0`). If the review-pane spec truly requires reviewers to be able to download/open-in-new-tab, `hideExport` should be dropped for that call-site. If the intent is to prevent casual downloads of KYC docs, the current behaviour is correct — flagging for clarity, not as a bug."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "sysadmin@mpca.in / mpca@2026 used (no force-reset). gwl.hs@mpcaonline.com not needed because sysadmin sees the same Division_Approved queue with the Gwalior SINGH Bakshraj registration containing 4 docs.",
+  "seed_data_creation": "None. Used existing Gwalior SINGH Bakshraj registration (Division_Approved) with 4 attached documents.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter 123z fixes are verified end-to-end. Backend regression file test_iter123z_uploads_auth.py is safe to re-run on future iterations (idempotent, cleans up nothing but the test upload lingers — acceptable). Deferred items (Eligibility Rules admin tab + per-player eligibility override on approve) were explicitly out-of-scope per E1 and not tested. Note the latent bug in DocumentPreview default trigger (line 101) — trivial 1-line fix if you touch the file."
+}

@@ -1,12 +1,11 @@
 import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { useSeason } from "@/context/SeasonContext";
-import { api, fetchAuditLog } from "@/lib/api";
+import { api, fetchAuditLog, fetchPlayerStats, fetchTournamentStats } from "@/lib/api";
 import {
-    Users, Calendar, HandCoins, AlertTriangle, ChevronRight,
-    Building2, MapPin, Landmark, TrendingUp, Inbox, Sparkles, ArrowUpRight,
-    Trophy, TrendingDown, Activity, ScrollText,
+    Users, HandCoins, AlertTriangle, ChevronRight,
+    Building2, MapPin, Sparkles, ArrowUpRight,
+    Trophy, Activity, ScrollText,
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import PendingWithMePanel from "@/components/PendingWithMePanel";
@@ -37,90 +36,60 @@ const personaScope = (persona) => {
     return { rootCode: "MPCA", rootLabel: "MPCA", childLabel: "Divisions" };
 };
 
-const KpiTile = ({ label, value, sub, icon: Icon, accent = "green", testid, source, formula, meaning }) => {
-    // Feb-2026 · Hover tooltip explains WHERE the number comes from,
-    // HOW it's computed, and WHAT it means — one-liner each. Uses the
-    // built-in `title` attribute so it works everywhere without extra deps.
-    const tooltip = [
-        meaning && `${meaning}`,
-        source && `\nSource · ${source}`,
-        formula && `\nFormula · ${formula}`,
-    ].filter(Boolean).join("");
-    const accentColor = accent === "oxblood" ? DL.danger : accent === "brass" ? DL.gold : DL.emerald;
+// Iter 105 · KpiTile removed with the old 6-tile band. FocusStripe (below) is the
+// new tile grammar — richer per-area context, fewer tiles, one primary CTA each.
+
+/**
+ * FocusStripe — one full-width band per core focus area (Players / Tournaments / Grants).
+ * Pattern borrowed from /design-preview/Landing.jsx (numbered eyebrow · icon · big title ·
+ * kicker · inline KPIs · open-arrow) and translated to the Institutional Warm palette.
+ */
+const FocusMiniKpi = ({ label, value, tone = "green" }) => {
+    const color = tone === "warn" ? DL.gold : tone === "danger" ? DL.danger : DL.emerald;
     return (
-        <div
-            className="px-5 py-4 relative cursor-help"
-            style={embossedCard()}
-            data-testid={testid}
-            title={tooltip || undefined}
-        >
-            <div className="flex items-start justify-between mb-2">
-                <span className="text-[12px] uppercase tracking-[0.18em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</span>
-                {tooltip && (
-                    <span className="text-[10px] font-bold" style={{ fontFamily: DL.fontMono, color: DL.muted }} aria-hidden="true">?</span>
-                )}
-            </div>
-            <div className="text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: accent === "green" ? DL.ink : accentColor, fontWeight: 800 }}>{value}</div>
-            {sub && <div className="text-[12.5px] mt-2 font-semibold" style={{ color: DL.ink2 }}>{sub}</div>}
+        <div className="flex flex-col items-start" data-testid={`focus-kpi-${label.toLowerCase().replace(/\s+/g, "-")}`}>
+            <span className="text-[9.5px] uppercase tracking-[0.22em] font-bold mb-1.5" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</span>
+            <span className="text-[30px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color }}>{value}</span>
         </div>
     );
 };
 
-const ScoreBar = ({ score, color = "green" }) => {
-    const colorMap = { green: "bg-mpca-green-deep", oxblood: "bg-mpca-oxblood", brass: "bg-mpca-brass" };
-    return (
-        <div className="h-1.5 bg-mpca-brass/20 rounded-full overflow-hidden">
-            <div
-                className={`h-full ${colorMap[color]} transition-all duration-500`}
-                style={{ width: `${Math.max(2, Math.min(100, score))}%` }}
-            />
-        </div>
-    );
-};
-
-const LeaderboardRow = ({ d, rank, variant }) => {
-    const isTop = variant === "top";
-    const rankColor = isTop ? "text-mpca-green-deep" : "text-mpca-oxblood";
-    const rankBg = isTop ? "bg-mpca-green-deep/10" : "bg-mpca-oxblood/10";
-    return (
-        <div className="flex items-stretch gap-3 py-2.5 border-t border-mpca-brass/20 first:border-t-0" data-testid={`leaderboard-row-${d.code}`}>
-            <div className={`flex items-center justify-center w-9 h-9 font-serif text-lg ${rankColor} ${rankBg} flex-shrink-0`}>
-                #{rank}
-            </div>
-            <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-mono text-mpca-brass tracking-wider mb-0.5">{d.code}</div>
-                <div className="text-sm font-semibold text-mpca-green-dark leading-tight mb-1 truncate">{d.name}</div>
-                <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-[10px]">
-                    <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                            <span className="tracking-widest uppercase text-mpca-gray-dark">Financial</span>
-                            <span className="font-mono text-mpca-charcoal">{d.financial_score}</span>
-                        </div>
-                        <ScoreBar score={d.financial_score} color={d.financial_score >= 60 ? "green" : "oxblood"} />
-                    </div>
-                    <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                            <span className="tracking-widest uppercase text-mpca-gray-dark">Governance</span>
-                            <span className="font-mono text-mpca-charcoal">{d.governance_score}</span>
-                        </div>
-                        <ScoreBar score={d.governance_score} color={d.governance_score >= 60 ? "green" : "oxblood"} />
-                    </div>
-                    <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                            <span className="tracking-widest uppercase text-mpca-gray-dark/60">Player</span>
-                            <span className="font-mono text-mpca-gray-dark/60">—</span>
-                        </div>
-                        <div className="h-1.5 bg-mpca-brass/10 rounded-full" title="Player performance axis — activates with M3/M4/Players modules" />
-                    </div>
+const FocusStripe = ({ n, icon: Icon, title, kicker, kpis, to, testid }) => (
+    <Link
+        to={to}
+        data-testid={testid}
+        className="group flex items-stretch gap-6 p-6 transition-all duration-200 hover:-translate-y-0.5"
+        style={{
+            ...embossedCard(),
+            borderLeft: `4px solid ${DL.gold}`,
+        }}
+    >
+        <div className="flex flex-col justify-between w-[220px] shrink-0 pr-6" style={{ borderRight: `1px dashed ${DL.rule}` }}>
+            <div>
+                <div className="text-[10px] tracking-[0.3em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>— {n} —</div>
+                <div className="mt-4 flex items-center gap-2.5">
+                    <Icon size={22} strokeWidth={1.75} style={{ color: DL.emerald }} />
+                    <span className="text-[24px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink }}>{title}</span>
                 </div>
             </div>
-            <div className="flex flex-col items-end justify-center flex-shrink-0 min-w-[60px]">
-                <div className="overline text-[8px]">Fairplay</div>
-                <div className={`font-serif text-2xl ${rankColor}`}>{d.fairplay_score ?? d.total_score}</div>
+            <div className="text-[11.5px] mt-3 leading-relaxed" style={{ color: DL.muted, fontWeight: 500 }}>
+                {kicker}
             </div>
         </div>
-    );
-};
+        <div className="flex-1 grid grid-cols-3 gap-8 items-center">
+            {kpis.map((k) => <FocusMiniKpi key={k.label} {...k} />)}
+        </div>
+        <div className="flex flex-col items-end justify-between shrink-0 w-24">
+            <span className="text-[9.5px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>Open ▶</span>
+            <ArrowUpRight
+                size={22}
+                strokeWidth={2}
+                className="transition-transform duration-200 group-hover:translate-x-1 group-hover:-translate-y-1"
+                style={{ color: DL.emerald }}
+            />
+        </div>
+    </Link>
+);
 
 const ChildCard = ({ child, onOpen }) => {
     const Icon = child.body_type === "Division" ? Building2 : MapPin;
@@ -181,14 +150,12 @@ const ChildCard = ({ child, onOpen }) => {
 
 const Dashboard = () => {
     const { persona } = useAuth();
-    const { season } = useSeason();
     const navigate = useNavigate();
     const { rootCode, rootLabel, childLabel } = useMemo(() => personaScope(persona), [persona]);
 
-    const [activity, setActivity] = useState(null);   // children-activity result
-    const [stateStats, setStateStats] = useState(null); // for District-only persona
-    const [claimsStats, setClaimsStats] = useState(null);
-    const [performance, setPerformance] = useState(null); // division leaderboard (State persona only)
+    const [activity, setActivity] = useState(null);   // children-activity result (State / Division)
+    const [playerStats, setPlayerStats] = useState(null);      // Iter 105 · Players focus stripe
+    const [tournamentStats, setTournamentStats] = useState(null); // Iter 105 · Tournaments focus stripe
     const [recentAudit, setRecentAudit] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -198,24 +165,13 @@ const Dashboard = () => {
             setLoading(true);
             try {
                 if (childLabel) {
-                    // State or Division persona — load children grid
+                    // State or Division persona — load children grid for the drill-down section
                     const { data: a } = await api.get(`/bodies/${rootCode}/children-activity`);
                     setActivity(a);
-                    // Division performance leaderboard — only relevant at State level
-                    if (persona.body_type === "State") {
-                        try {
-                            const { data: p } = await api.get("/dashboard/fairplay-rankings");
-                            setPerformance(p);
-                        } catch (_) { /* swallow */ }
-                    }
-                } else {
-                    // District persona — load own KPIs only
-                    const { data: s } = await api.get(`/bodies/${rootCode}/summary`);
-                    setStateStats(s);
-                    // Pull this district's claims with explicit body filter
-                    const { data: claims } = await api.get(`/claims?body_id=${rootCode}`);
-                    setClaimsStats(claims);
                 }
+                // Iter 105 · Focus-stripe data (Players / Tournaments) — universal
+                try { setPlayerStats(await fetchPlayerStats()); } catch (_) { /* swallow */ }
+                try { setTournamentStats(await fetchTournamentStats()); } catch (_) { /* swallow */ }
                 // Recent audit trail — universal across personas
                 try {
                     const audit = await fetchAuditLog({ limit: 10 });
@@ -302,139 +258,58 @@ const Dashboard = () => {
                 }
             />
 
-            {/* Roll-up KPI band — Feb-2026 · rewired to REAL figures. */}
-            {totals && (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
-                    <KpiTile
-                        label="Active Members"
-                        value={totals.members.toLocaleString("en-IN")}
-                        sub={`Across ${activity.children.length} ${childLabel}${childLabel && !childLabel.endsWith("s") ? "s" : ""}`}
-                        icon={Users}
-                        accent="green"
-                        testid="kpi-members"
-                        meaning="People on record — MPCA members + registered players — under your scope."
-                        source={`db.members + db.players (status=Active) · scoped to ${persona?.body_code || "your body"} and its child bodies`}
-                        formula="Σ (active members) + Σ (active players) across every direct child body"
-                    />
-                    <KpiTile
-                        label="Pending Claims"
-                        value={totals.pending}
-                        sub={totals.pending === 0 ? "Zero backlog · ERP-clean" : "Awaiting decision"}
-                        icon={Inbox}
-                        accent={totals.pending > 0 ? "brass" : "green"}
-                        testid="kpi-pending"
-                        meaning="Reimbursement claims still moving through the maker-checker workflow."
-                        source="db.claims"
-                        formula="COUNT status IN [Submitted, Division_Recommended, MPCA_Sanctioned, Returned]"
-                    />
-                    <KpiTile
-                        label="Overdue Tasks"
-                        value={totals.overdue}
-                        sub={totals.overdue === 0 ? `All ${activity.children.length} ${childLabel}${childLabel && !childLabel.endsWith("s") ? "s" : ""} on-time` : "SLA breached"}
-                        icon={AlertTriangle}
-                        accent={totals.overdue > 0 ? "oxblood" : "green"}
-                        testid="kpi-overdue"
-                        meaning="Claims that have breached their status-level SLA."
-                        source="db.claims + SLA_HOURS_BY_STATUS table"
-                        formula="Pending claims WHERE (now − last approval-chain timestamp) > SLA-hours-for-status"
-                    />
-                    <KpiTile
-                        label="Disbursed"
-                        value={fmtINR(totals.disbursed)}
-                        sub={`Season · ${season || "current"}`}
-                        icon={HandCoins}
-                        accent="green"
-                        testid="kpi-disbursed"
-                        meaning="Money actually paid out to Divisions / Districts this season."
-                        source={`db.claims WHERE status='Disbursed' AND fiscal_cycle='${season || "current"}'`}
-                        formula="Σ approved_amount_inr (fallback amount_inr)"
-                    />
-                    <KpiTile
-                        label="Grant Utilisation"
-                        value={`${totals.utilisation_pct}%`}
-                        sub={`${fmtINR(totals.disbursed)} of ${fmtINR(totals.grant_pool)}`}
-                        icon={HandCoins}
-                        accent={totals.utilisation_pct >= 70 ? "green" : totals.utilisation_pct >= 30 ? "brass" : "oxblood"}
-                        testid="kpi-utilisation"
-                        meaning="What fraction of the annual grant pool has already been paid out."
-                        source="db.claims (Disbursed) ÷ db.bodies.annual_grant_inr"
-                        formula="(Σ disbursed claims this season) ÷ (Σ annual_grant_inr across all child bodies) × 100"
-                    />
-                    <KpiTile
-                        label="Clean-Slate Bodies"
-                        value={`${totals.clean_bodies}/${activity.children.length}`}
-                        sub="Zero overdue items"
-                        icon={Users}
-                        accent={totals.clean_bodies === activity.children.length ? "green" : totals.clean_bodies >= activity.children.length / 2 ? "brass" : "oxblood"}
-                        testid="kpi-clean-slate"
-                        meaning="Bodies with ZERO overdue claims — the ERP-value flywheel metric."
-                        source="derived from Overdue Tasks per child"
-                        formula="COUNT child bodies WHERE claims_overdue = 0"
-                    />
-                </div>
-            )}
+            {/* Iter 105 · Three Focus Area stripes — Players / Tournaments / Grants.
+                Every other module (Meetings, Members, Rulebook, etc.) remains reachable
+                from the left nav; the dashboard now surfaces ONLY the three primary
+                signals the office bearer needs to act on today. */}
+            <div className="space-y-4 mb-10" data-testid="focus-stripes">
+                <FocusStripe
+                    n="01"
+                    icon={Users}
+                    title="Players"
+                    kicker="Registrations, KYC, eligibility — the human capital of every squad."
+                    to="/players"
+                    testid="focus-players"
+                    kpis={[
+                        { label: "Active", value: (playerStats?.active_players ?? 0).toLocaleString("en-IN") },
+                        { label: "Pending Approval", value: playerStats?.pending_players ?? 0, tone: (playerStats?.pending_players ?? 0) > 0 ? "warn" : "green" },
+                        { label: "Guest · Local · Outside", value: playerStats ? `${playerStats.by_category?.Guest ?? 0} / ${playerStats.by_category?.Local_MP ?? 0} / ${playerStats.by_category?.Born_Outside ?? 0}` : "—" },
+                    ]}
+                />
+                <FocusStripe
+                    n="02"
+                    icon={Trophy}
+                    title="Tournaments"
+                    kicker="Every trophy in flight — from wiring to closure, one glance."
+                    to="/tournaments"
+                    testid="focus-tournaments"
+                    kpis={[
+                        { label: "In Flight", value: tournamentStats?.total_tournaments ?? 0 },
+                        { label: "In Selection", value: tournamentStats?.in_selection ?? 0, tone: (tournamentStats?.in_selection ?? 0) > 0 ? "warn" : "green" },
+                        { label: "In Progress", value: tournamentStats?.in_progress ?? 0 },
+                    ]}
+                />
+                <FocusStripe
+                    n="03"
+                    icon={HandCoins}
+                    title="Grants"
+                    kicker="Every rupee — sanctioned, disbursed, still in the pipeline."
+                    to="/claims"
+                    testid="focus-grants"
+                    kpis={totals ? [
+                        { label: "Utilisation", value: `${totals.utilisation_pct}%`, tone: totals.utilisation_pct >= 70 ? "green" : totals.utilisation_pct >= 30 ? "warn" : "danger" },
+                        { label: "Disbursed", value: fmtINR(totals.disbursed) },
+                        { label: "Overdue", value: totals.overdue, tone: totals.overdue > 0 ? "danger" : "green" },
+                    ] : [
+                        { label: "Utilisation", value: "—" },
+                        { label: "Disbursed", value: "—" },
+                        { label: "Overdue", value: "—" },
+                    ]}
+                />
+            </div>
 
             {/* Sprint M30 · Pending With MPCA (State personas only) */}
             {persona?.body_type === "State" && <PendingWithMePanel />}
-
-            {/* District-only persona — show own claim queue stats */}
-            {!childLabel && Array.isArray(claimsStats) && stateStats && (() => {
-                const by = {};
-                let disbursedTotal = 0;
-                for (const c of claimsStats) {
-                    by[c.status] = (by[c.status] || 0) + 1;
-                    if (c.status === "Disbursed") {
-                        disbursedTotal += Number(c.approved_amount_inr ?? c.amount_inr ?? 0);
-                    }
-                }
-                return (
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-mpca-brass/20 border border-mpca-brass/20 mb-10">
-                        <KpiTile label="My Claims · Draft" value={by.Draft || 0} icon={Inbox} testid="kpi-my-draft" />
-                        <KpiTile label="In Progress" value={(by.Submitted || 0) + (by.Division_Recommended || 0) + (by.MPCA_Sanctioned || 0)} sub="In approval chain" icon={TrendingUp} accent="brass" testid="kpi-my-inprogress" />
-                        <KpiTile label="Returned" value={by.Returned || 0} sub="Needs my attention" icon={AlertTriangle} accent={(by.Returned || 0) > 0 ? "oxblood" : "green"} testid="kpi-my-returned" />
-                        <KpiTile label="Disbursed YTD" value={fmtINR(disbursedTotal)} sub={`${by.Disbursed || 0} claims paid`} icon={HandCoins} testid="kpi-my-disbursed" />
-                    </div>
-                );
-            })()}
-
-            {/* Division Performance Leaderboard — State persona only */}
-            {performance && performance.divisions.length > 0 && (
-                <section className="mb-12" data-testid="performance-leaderboard">
-                    <div className="flex items-end justify-between mb-5">
-                        <div>
-                            <div className="overline">Fairplay Index · Fiscal {performance.fiscal_cycle}</div>
-                            <h2 className="font-serif text-2xl text-mpca-green-dark mt-1">
-                                Fairplay Rankings
-                            </h2>
-                            <p className="text-[11px] text-mpca-gray-dark mt-1 max-w-2xl">
-                                Composite score across <strong className="text-mpca-charcoal">Financial</strong> (grant utilization · overdue · AI reject rate), <strong className="text-mpca-charcoal">Corporate Governance</strong> (AGM · elections · disclosures · active members), and a forthcoming <strong className="text-mpca-charcoal">Player Performance</strong> axis (lights up when M3, M4 and Player modules go live).
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="grid lg:grid-cols-2 gap-6">
-                        <div className="bulletin-card p-6" data-testid="leaderboard-top">
-                            <div className="flex items-center gap-2 mb-3 pb-3 border-b border-mpca-brass/30">
-                                <Trophy size={16} strokeWidth={1.75} className="text-mpca-green-deep" />
-                                <div className="overline !text-mpca-green-deep">Fairplay Top 3</div>
-                            </div>
-                            {performance.top.map((d) => (
-                                <LeaderboardRow key={d.code} d={d} rank={d.rank} variant="top" />
-                            ))}
-                        </div>
-
-                        <div className="bulletin-card p-6" data-testid="leaderboard-bottom">
-                            <div className="flex items-center gap-2 mb-3 pb-3 border-b border-mpca-brass/30">
-                                <TrendingDown size={16} strokeWidth={1.75} className="text-mpca-oxblood" />
-                                <div className="overline !text-mpca-oxblood">Fairplay · Needs Attention</div>
-                            </div>
-                            {performance.bottom.map((d) => (
-                                <LeaderboardRow key={d.code} d={d} rank={d.rank} variant="bottom" />
-                            ))}
-                        </div>
-                    </div>
-                </section>
-            )}
 
             {/* Children grid (Division cards for State persona; District cards for Division persona) */}
             {activity && activity.children.length > 0 && (
@@ -532,40 +407,8 @@ const Dashboard = () => {
                 </section>
             )}
 
-            {/* Quick-jump grid — universal */}
-            <section>
-                <div className="overline mb-4">Quick Actions</div>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <Link to="/claims" className="bulletin-card p-4 hover:border-mpca-oxblood transition-colors flex items-center justify-between" data-testid="quick-claims">
-                        <div className="flex items-center gap-3">
-                            <HandCoins size={16} strokeWidth={1.5} className="text-mpca-oxblood" />
-                            <span className="text-sm">Grant Claims</span>
-                        </div>
-                        <ChevronRight size={14} strokeWidth={1.5} className="text-mpca-gray-dark" />
-                    </Link>
-                    <Link to="/members" className="bulletin-card p-4 hover:border-mpca-oxblood transition-colors flex items-center justify-between" data-testid="quick-members">
-                        <div className="flex items-center gap-3">
-                            <Users size={16} strokeWidth={1.5} className="text-mpca-oxblood" />
-                            <span className="text-sm">Membership Register</span>
-                        </div>
-                        <ChevronRight size={14} strokeWidth={1.5} className="text-mpca-gray-dark" />
-                    </Link>
-                    <Link to="/meetings" className="bulletin-card p-4 hover:border-mpca-oxblood transition-colors flex items-center justify-between" data-testid="quick-meetings">
-                        <div className="flex items-center gap-3">
-                            <Calendar size={16} strokeWidth={1.5} className="text-mpca-oxblood" />
-                            <span className="text-sm">AGM & Meetings</span>
-                        </div>
-                        <ChevronRight size={14} strokeWidth={1.5} className="text-mpca-gray-dark" />
-                    </Link>
-                    <Link to="/rulebook" className="bulletin-card p-4 hover:border-mpca-oxblood transition-colors flex items-center justify-between" data-testid="quick-rulebook">
-                        <div className="flex items-center gap-3">
-                            <Sparkles size={16} strokeWidth={1.5} className="text-mpca-oxblood" />
-                            <span className="text-sm">AI Rulebook</span>
-                        </div>
-                        <ChevronRight size={14} strokeWidth={1.5} className="text-mpca-gray-dark" />
-                    </Link>
-                </div>
-            </section>
+            {/* Iter 105 · Quick Actions grid removed — the three Focus Stripes above
+                serve as the primary jump targets. Secondary modules stay in the left nav. */}
         </PageShell>
     );
 };

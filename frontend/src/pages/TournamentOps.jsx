@@ -441,7 +441,9 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                 allocations: [{
                     head_code: matched?.code || "",
                     head_label: matched?.label || "",
-                    amount_inr: matched ? aiTotal : 0,
+                    // Iter 123u · Seed with the pre-GST amount, not the total,
+                    // so the allocation matches the head-tracking base.
+                    amount_inr: matched ? (preview.prefill.amount_inr || 0) : 0,
                 }],
                 ai_extracted: true,
             }));
@@ -944,16 +946,30 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
 
                             {error && <div className="border border-mpca-oxblood/40 bg-mpca-oxblood/5 text-mpca-oxblood p-2 text-xs" data-testid="inv-error">{error}</div>}
                         </div>
-                        <div className="px-6 pb-5 flex justify-end gap-3">
-                            <button onClick={() => { setAddOpen(false); setEditing(null); setForm(emptyForm()); setAiPreview(null); }} className="btn-heritage-ghost">Cancel</button>
-                            <button
-                                onClick={editing ? saveEdit : save}
-                                disabled={busy || !allHeadsPicked || allocMismatch || budgetHeads.length === 0 || invoiceTotal <= 0}
-                                className="btn-heritage-primary disabled:opacity-40 disabled:cursor-not-allowed"
-                                data-testid="inv-save"
-                            >
-                                {busy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} {editing ? "Save Changes" : "Save Invoice"}
-                            </button>
+                        <div className="px-6 pb-5 flex items-end justify-between gap-3">
+                            <div className="text-[10.5px] italic text-mpca-gray-dark max-w-[420px] leading-tight" data-testid="inv-save-hint">
+                                {/* Iter 123w · Explain why Save is disabled so users don't stall */}
+                                {budgetHeads.length === 0
+                                    ? "⚠ No approved budget yet — MPCA must sanction the budget before invoices can be booked."
+                                    : invoiceTotal <= 0
+                                        ? "Enter a positive invoice total to save."
+                                        : !allHeadsPicked
+                                            ? "Pick a budget head in every allocation row."
+                                            : allocMismatch
+                                                ? `Allocations must sum to the pre-GST amount (₹${fmtINR(preGstBase)}). GST is booked separately.`
+                                                : "Ready to save."}
+                            </div>
+                            <div className="flex gap-3">
+                                <button onClick={() => { setAddOpen(false); setEditing(null); setForm(emptyForm()); setAiPreview(null); }} className="btn-heritage-ghost">Cancel</button>
+                                <button
+                                    onClick={editing ? saveEdit : save}
+                                    disabled={busy || !allHeadsPicked || allocMismatch || budgetHeads.length === 0 || invoiceTotal <= 0}
+                                    className="btn-heritage-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                                    data-testid="inv-save"
+                                >
+                                    {busy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} {editing ? "Save Changes" : "Save Invoice"}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

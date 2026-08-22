@@ -1,0 +1,31 @@
+{
+  "summary": "Iter 123w — verified the three Tournament Ops Invoices/Extras asks. Backend pytest 3/3 passed (invoice pre-GST validator: OK path 200 with allocation sum == amount_inr; BAD path 422 with 'pre-GST' in error; bulk-submit then bulk-approve invoices flow flips Draft→Submitted→Approved via GET verification). Extras bulk-approve backend test skipped at first because only pre-existing extra was Approved; the endpoint was subsequently exercised end-to-end via the UI after seeding a Submitted extra (see frontend section) — endpoint returned 200 and moved the extra to Approved. Frontend: (1) inv-save-hint present, visible, and shows the correct disabled-Save reason ('Enter a positive invoice total to save.') with inv-save disabled; (2) bulk-submit-invoices-btn 'SUBMIT ALL 1 TO MPCA' visible on Invoices tab as Gwalior Division Secretary and clicking it flipped INV-2026-27-0006 from Draft to Submitted (verified on refresh); (3) bulk-approve-extra-body-select dropdown appears for MPCA on Extras tab when ≥1 Submitted extra exists ('DIV-GWL · Approve 1 Submitted'); selecting DIV-GWL flipped the TEST 123w extra to Approved and the Extras Approved total moved from ₹45,000 to ₹46,234.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Finance Console (any tournament, tested on Madhavrao Scindia Trophy)", "issues": ["React hydration console warning: 'In HTML, <span> cannot be a child of <option>' inside the bulk-approve-extra-body-select. The <option> for each body currently wraps the count in a <span>, which is invalid HTML. Cosmetic only — the dropdown works — but should be a plain string like `${g.body_id} · Approve ${g.rows.length} Submitted` without the inner <span>."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter123w_invoice_extras.py",
+    "/app/test_reports/pytest/iter123w.xml"
+  ],
+  "action_items": [
+    "(Nit) Remove the inner <span> inside the <option> at TournamentOps.jsx:1335 to silence the React hydration warning for the bulk-approve-extra-body-select dropdown."
+  ],
+  "critical_code_review_comments": [
+    "tournament_invoices.create_invoice does not gate on the caller's principal — a Division Secretary can theoretically POST an invoice with body_id != their own body. The bulk-submit / bulk-approve endpoints likewise don't cross-check the caller's scope against payload.body_id. If not enforced upstream (e.g. via UI-only), consider adding a principal check inside these endpoints for SEC parity with other Division/MPCA routes.",
+    "extra_expense.bulk_submit_extras / bulk_approve_extras swallow every HTTPException per row and continue silently. If a subset fails (e.g. one is Info_Requested and cannot submit), the caller only sees submitted_count and has no per-row error info — worth returning a `failed:[{id,reason}]` list so the UI can surface partial failures.",
+    "TournamentOps.jsx is 1555 lines and now hosts InvoicesTab (~660 lines) + ExtrasTab (~360 lines) in the same module. Consider splitting InvoicesTab and ExtrasTab into their own files under /pages/tournament-ops/."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (3/3 executed, 1 skipped by design)", "frontend": "100% (3/3 requested checks)"},
+  "test_credentials": "sysadmin@mpca.in / mpca@2026 (works, no force-reset); gwl.hs@mpcaonline.com / mpca@2026 (works, force-reset was already cleared as noted in review request).",
+  "seed_data_creation": "Created 3 test invoices on Madhavrao Scindia Trophy for DIV-GWL (TEST_VENDOR_123w_ok, TEST_BULK_0_*, TEST_BULK_1_*) plus one Submitted extra request EER/MPCA/2026-27/00002 'TEST 123w Ground Staff' (₹1,234) which was then approved through the UI dropdown. These remain in the database and can be cleaned up if desired.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter 123w asks are fully verified end-to-end (backend pytest + browser). If the main agent tightens the <option> to drop the inner <span> (design nit), a lightweight retest is unnecessary — the functional behavior is already green. The backend regression file is /app/backend/tests/test_iter123w_invoice_extras.py and can be re-run standalone: `pytest backend/tests/test_iter123w_invoice_extras.py -v`.",
+  "rca of the issue": "The user's original 'Save stays disabled silently' bug was caused by (a) the AI-seeded allocation using post-GST total (fixed in prior iter) and (b) no visible feedback when the head dropdown was still on '— Select head —'. Iter 123w adds the inv-save-hint element with a cascade of messages (no budget → positive amount → pick head → mismatch → ready to save). Verified live: the hint updates as the user changes the form; the Save button's disabled state is correctly reflected."
+}

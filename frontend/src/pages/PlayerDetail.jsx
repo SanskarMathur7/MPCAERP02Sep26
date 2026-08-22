@@ -424,7 +424,8 @@ const EligibilityTagPanel = ({ player, persona, onChanged }) => {
                                     <th className="text-left px-4 py-1.5 w-6"></th>
                                     <th className="text-left px-2 py-1.5 uppercase tracking-widest text-[9px] text-mpca-brass">Rule</th>
                                     <th className="text-left px-2 py-1.5 uppercase tracking-widest text-[9px] text-mpca-brass">Verdict / Reason</th>
-                                    <th className="text-left px-2 py-1.5 uppercase tracking-widest text-[9px] text-mpca-brass">Verified From</th>
+                                    <th className="text-left px-2 py-1.5 uppercase tracking-widest text-[9px] text-mpca-brass">Data Field</th>
+                                    <th className="text-left px-2 py-1.5 uppercase tracking-widest text-[9px] text-mpca-brass">KYC Evidence</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -440,6 +441,11 @@ const EligibilityTagPanel = ({ player, persona, onChanged }) => {
                                                     {t.source_value ? <span className="ml-1">= “{t.source_value}”</span> : <span className="ml-1 italic text-mpca-oxblood">empty</span>}
                                                 </>
                                             ) : "—"}
+                                        </td>
+                                        <td className="px-2 py-1.5 text-[10px] text-mpca-gray-dark">
+                                            {t.evidence
+                                                ? <span className="font-mono">{t.evidence}</span>
+                                                : <span className="italic text-mpca-oxblood">no KYC doc uploaded for this check</span>}
                                         </td>
                                     </tr>
                                 ))}

@@ -8,6 +8,7 @@ import {
     Gavel, FileSignature, Lock, LockOpen, RadioTower, Info,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import FinanceSummaryByBodyPanel from "./finance/FinanceSummaryByBodyPanel";
 import { useAuth } from "@/context/AuthContext";
 import { useWiringOwnerMatch, useWiringStep } from "@/lib/useWiring";
 import DivisionCampFinancePanel from "@/components/DivisionCampFinancePanel";
@@ -414,6 +415,11 @@ const TournamentFinanceConsole = () => {
             {showDivisionCampPanel && (
                 <DivisionCampFinancePanel tournament={tournament} persona={persona} />
             )}
+
+            {/* Iter 126 · Body-wise financial summary — surfaces advance vs
+                MPCA-approved vs remaining outstanding per Division so MPCA
+                and the treasurer can spot pending payments at a glance. */}
+            <FinanceSummaryByBodyPanel tournamentId={id} personaBodyType={persona?.body_type} />
 
             {/* MPCA-230 · Unified Budget → Finance Console linkage.
                 For tournaments covered by the Unified Budget engine, replace

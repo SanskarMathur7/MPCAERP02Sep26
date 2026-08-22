@@ -2,15 +2,35 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Info } from "lucide-react";
 
-// ─────────── Colour palette by tournament_type ───────────
+// Iter 126 · Colour palette aligned with the Tournament Registry categories
+// (Inter-Divisional / Inter-District / BCCI / Championship / Invitational /
+// Inter-School / Inter-Club / Camps). Both `tournament_type` and `scope`
+// on the tournament doc are consulted.
 const TYPE_STYLE = {
-    MPCA_InterDivisional: { bg: "bg-mpca-green/20", border: "border-mpca-green", text: "text-mpca-green-dark", label: "Inter-Divisional" },
-    MPCA_Championship:    { bg: "bg-mpca-oxblood/15", border: "border-mpca-oxblood", text: "text-mpca-oxblood", label: "Championship" },
-    BCCI:                 { bg: "bg-mpca-brass/20", border: "border-mpca-brass", text: "text-mpca-brass", label: "BCCI" },
-    Invitational:         { bg: "bg-mpca-charcoal/15", border: "border-mpca-charcoal", text: "text-mpca-charcoal", label: "Invitational" },
-    Other:                { bg: "bg-mpca-gray/20", border: "border-mpca-gray-dark", text: "text-mpca-gray-dark", label: "Other" },
+    MPCA_InterDivisional: { bg: "bg-mpca-green-dark/15", border: "border-mpca-green-dark", text: "text-mpca-green-dark", label: "Inter-Divisional" },
+    Inter_District:       { bg: "bg-mpca-brass/15",      border: "border-mpca-brass",      text: "text-mpca-brass",      label: "Inter-District"  },
+    MPCA_Championship:    { bg: "bg-mpca-oxblood/15",    border: "border-mpca-oxblood",    text: "text-mpca-oxblood",    label: "Championship"    },
+    BCCI:                 { bg: "bg-mpca-brass/25",      border: "border-mpca-brass",      text: "text-mpca-brass",      label: "BCCI"            },
+    Invitational:         { bg: "bg-mpca-charcoal/15",   border: "border-mpca-charcoal",   text: "text-mpca-charcoal",   label: "Invitational"    },
+    Inter_School:         { bg: "bg-mpca-navy/15",       border: "border-mpca-navy",       text: "text-mpca-navy",       label: "Inter-School"    },
+    Inter_Club:           { bg: "bg-mpca-navy/10",       border: "border-mpca-navy",       text: "text-mpca-navy",       label: "Inter-Club"      },
+    Camp:                 { bg: "bg-mpca-gold/15",       border: "border-mpca-gold",       text: "text-mpca-brass",      label: "Camps"           },
+    Other:                { bg: "bg-mpca-gray/20",       border: "border-mpca-gray-dark",  text: "text-mpca-gray-dark",  label: "Other"           },
 };
-const styleFor = (t) => TYPE_STYLE[t?.tournament_type] || TYPE_STYLE.Other;
+const styleFor = (t) => {
+    if (!t) return TYPE_STYLE.Other;
+    if (TYPE_STYLE[t.tournament_type]) return TYPE_STYLE[t.tournament_type];
+    if (t.scope && TYPE_STYLE[t.scope]) return TYPE_STYLE[t.scope];
+    // Registry category fallback (e.g. Vacation_Camp / Periodical_Coaching_Camp)
+    const cat = (t.master_category || t.category || "").toLowerCase();
+    if (cat.includes("camp")) return TYPE_STYLE.Camp;
+    if (cat.includes("school")) return TYPE_STYLE.Inter_School;
+    if (cat.includes("club")) return TYPE_STYLE.Inter_Club;
+    if (cat.includes("district")) return TYPE_STYLE.Inter_District;
+    if (cat.includes("divisional")) return TYPE_STYLE.MPCA_InterDivisional;
+    if (cat.includes("bcci")) return TYPE_STYLE.BCCI;
+    return TYPE_STYLE.Other;
+};
 
 // ─────────── Date helpers ───────────
 const startOfMonth = (y, m) => new Date(y, m, 1);
@@ -29,15 +49,27 @@ const TournamentCalendarView = ({ tournaments, bodies, matches }) => {
     const [month, setMonth] = useState(now.getMonth());
     const [scope, setScope] = useState("All"); // All | State | Division | District
     const [bodyId, setBodyId] = useState("all"); // specific body code or 'all'
+    // Iter 126b · Ground filter — pick a ground to see its availability across
+    // the month (dates with a match at that ground are lit up; every other
+    // cell is a "free" ground-slot when a ground is selected).
+    const [groundId, setGroundId] = useState("all");
 
     // MPCA-132 · Index fixtures by (tournament_id, ISO date) so the calendar
     // paints a tournament ONLY on actual match days (not every day between
     // start_date and end_date). Falls back to span-paint when a tournament
     // has no fixtures yet — with a dashed "unscheduled" style so the user
     // knows the calendar is showing a placeholder window, not real matches.
+    // Iter 126b · Fixtures pre-filtered by ground_id when a specific ground is
+    // selected — so the tile paint below and the ground-availability sidebar
+    // both work off the same subset.
+    const filteredMatches = useMemo(() => {
+        if (groundId === "all") return matches || [];
+        return (matches || []).filter((m) => (m.ground_id || "") === groundId);
+    }, [matches, groundId]);
+
     const matchesByTid = useMemo(() => {
         const map = new Map();   // tid → { dates:Set<ISO>, byDate:Map<ISO, [fixtures]> }
-        (matches || []).forEach((f) => {
+        filteredMatches.forEach((f) => {
             const d = (f.match_date || f.scheduled_date || "").slice(0, 10);
             if (!d) return;
             const tid = f.tournament_id;
@@ -53,7 +85,7 @@ const TournamentCalendarView = ({ tournaments, bodies, matches }) => {
             bucket.byDate.set(d, arr);
         });
         return map;
-    }, [matches]);
+    }, [filteredMatches]);
 
     // Filter tournaments by host body scope + selection
     const filtered = useMemo(() => {
@@ -85,38 +117,39 @@ const TournamentCalendarView = ({ tournaments, bodies, matches }) => {
     const monthFirst = new Date(year, month, 1);
     const monthLast = new Date(year, month, dim);
 
-    // MPCA-132 · Prefer match-day paint. For each tournament with fixtures,
-    // include it in the day only if that ISO date is a match day. If a
-    // tournament has NO fixtures yet, fall back to start→end span paint but
-    // mark those cells as "unscheduled" so we can visually distinguish.
+    // Iter 126 · Calendar shows only ACTUAL match days (from the tournament's
+    // Match Calendar). Tournaments without any published fixtures don't paint
+    // the day grid at all — they surface in the "Undated / Awaiting Schedule"
+    // section below, so the month view never looks like every tournament runs
+    // every day of the month just because a span was declared.
     const tournamentsForDate = (date) => {
         if (!date) return [];
         const iso = toISODate(date);
         return filtered.reduce((acc, t) => {
             const bucket = matchesByTid.get(t.id);
-            if (bucket && bucket.dates.size > 0) {
-                // Match-scheduled tournament — only paint on actual match days.
-                if (bucket.dates.has(iso)) {
-                    acc.push({ tournament: t, fixtures: bucket.byDate.get(iso) || [], unscheduled: false });
-                }
-                return acc;
-            }
-            // Fallback: no fixtures yet — paint the span as an "unscheduled" window
-            const s = parseDate(t.start_date);
-            const e = parseDate(t.end_date) || s;
-            if (s && s <= date && e >= date) {
-                acc.push({ tournament: t, fixtures: [], unscheduled: true });
+            if (bucket && bucket.dates.has(iso)) {
+                acc.push({ tournament: t, fixtures: bucket.byDate.get(iso) || [], unscheduled: false });
             }
             return acc;
-        }, []).sort((a, b) => Number(a.unscheduled) - Number(b.unscheduled));
+        }, []);
     };
 
-    const undated = filtered.filter((t) => !t.start_date);
+    // Iter 126 · A tournament is "unscheduled" if it has no fixtures yet
+    // (regardless of whether start_date was set). Truly undated OR fixture-less
+    // tournaments land in the bottom "Awaiting Schedule" section.
+    const unscheduled = filtered.filter((t) => {
+        const bucket = matchesByTid.get(t.id);
+        return !bucket || bucket.dates.size === 0;
+    });
     const monthTournaments = filtered.filter((t) => {
-        const s = parseDate(t.start_date);
-        const e = parseDate(t.end_date) || s;
-        if (!s) return false;
-        return s <= monthLast && e >= monthFirst;
+        // A tournament is "in this month" iff any of its fixtures fall in it.
+        const bucket = matchesByTid.get(t.id);
+        if (!bucket || bucket.dates.size === 0) return false;
+        for (const iso of bucket.dates) {
+            const d = new Date(iso + "T00:00:00");
+            if (d >= monthFirst && d <= monthLast) return true;
+        }
+        return false;
     });
 
     const goPrev = () => {
@@ -140,6 +173,48 @@ const TournamentCalendarView = ({ tournaments, bodies, matches }) => {
         { id: "Division", label: "Divisions" },
         { id: "District", label: "Districts" },
     ];
+
+    // Iter 126b · Ground options gathered from all fixtures. `ground_name`
+    // snapshot is what gets displayed; grounds without an id are grouped
+    // under a synthetic "By name" bucket so old fixtures still filter.
+    const groundOptions = useMemo(() => {
+        const seen = new Map(); // id → name
+        (matches || []).forEach((m) => {
+            const gid = m.ground_id || (m.ground_name ? `name:${m.ground_name}` : "");
+            if (!gid) return;
+            if (!seen.has(gid)) seen.set(gid, m.ground_name || m.venue_name || gid);
+        });
+        return Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [matches]);
+
+    // Iter 126b · When a specific ground is selected, compute per-day booking
+    // status for that ground within the current month so the availability
+    // strip can render busy/free days.
+    const groundAvailability = useMemo(() => {
+        if (groundId === "all") return null;
+        const busy = new Map(); // ISO → [fixtures]
+        filteredMatches.forEach((f) => {
+            const d = (f.match_date || f.scheduled_date || "").slice(0, 10);
+            if (!d) return;
+            const arr = busy.get(d) || [];
+            arr.push(f);
+            busy.set(d, arr);
+        });
+        const days = [];
+        for (let day = 1; day <= daysInMonth(year, month); day += 1) {
+            const iso = toISODate(new Date(year, month, day));
+            days.push({ iso, day, fixtures: busy.get(iso) || [] });
+        }
+        return {
+            groundName: (groundOptions.find((g) => g.id === groundId) || {}).name || groundId,
+            days,
+            busyDays: Array.from(busy.keys()).filter((k) => {
+                const d = new Date(k + "T00:00:00");
+                return d >= monthFirst && d <= monthLast;
+            }).length,
+        };
+    }, [groundId, groundOptions, filteredMatches, year, month, monthFirst, monthLast]);
 
     return (
         <div data-testid="tournament-calendar-view">
@@ -204,6 +279,22 @@ const TournamentCalendarView = ({ tournaments, bodies, matches }) => {
                         </select>
                     )}
 
+                    {/* Iter 126b · Ground filter */}
+                    {groundOptions.length > 0 && (
+                        <select
+                            value={groundId}
+                            onChange={(e) => setGroundId(e.target.value)}
+                            className="input-heritage !py-1.5 !text-xs max-w-[240px]"
+                            data-testid="cal-ground-select"
+                            title="Filter fixtures by ground to see day-by-day availability"
+                        >
+                            <option value="all">All grounds ({groundOptions.length})</option>
+                            {groundOptions.map((g) => (
+                                <option key={g.id} value={g.id}>{g.name}</option>
+                            ))}
+                        </select>
+                    )}
+
                     <div className="ml-auto text-[10px] uppercase tracking-widest text-mpca-gray-dark">
                         <span data-testid="cal-month-count">{monthTournaments.length}</span> in this month · {filtered.length} total
                     </div>
@@ -218,12 +309,56 @@ const TournamentCalendarView = ({ tournaments, bodies, matches }) => {
                         <span className="w-1.5 h-1.5 rounded-full bg-current" /> {s.label}
                     </span>
                 ))}
-                {/* MPCA-132 · "Unscheduled" style — dashed border + faded text —
-                    marks tournaments whose fixtures aren't published yet. */}
+                {/* Iter 126 · Unscheduled tournaments no longer paint the grid;
+                    they show at the bottom of the page. */}
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 border border-dashed border-mpca-gray-dark opacity-60 italic text-mpca-gray-dark">
-                    <span className="w-1.5 h-1.5 rounded-full bg-current" /> Unscheduled
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" /> Unscheduled (see below)
                 </span>
             </div>
+
+            {/* Iter 126b · Ground availability strip — shows busy/free days for
+                the selected ground so schedulers can eyeball capacity before
+                booking a fixture. */}
+            {groundAvailability && (
+                <div className="bulletin-card p-4 mb-4" data-testid="cal-ground-availability">
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                        <div>
+                            <div className="overline text-mpca-oxblood">Ground Availability</div>
+                            <div className="font-serif text-lg text-mpca-green-dark">{groundAvailability.groundName}</div>
+                        </div>
+                        <div className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">
+                            <span className="text-mpca-oxblood font-semibold">{groundAvailability.busyDays}</span> busy · <span className="text-mpca-green-dark font-semibold">{groundAvailability.days.length - groundAvailability.busyDays}</span> free · {MONTH_NAMES[month]} {year}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-16 md:grid-cols-31 gap-1" style={{ gridTemplateColumns: `repeat(${groundAvailability.days.length}, minmax(0, 1fr))` }}>
+                        {groundAvailability.days.map((d) => {
+                            const busy = d.fixtures.length > 0;
+                            const tip = busy
+                                ? d.fixtures.map((f) => `${f.home_team || "?"} v ${f.away_team || "?"}${(f.start_time || f.scheduled_time) ? " @ " + (f.start_time || f.scheduled_time) : ""}`).join(" · ")
+                                : "Free · ground is available on this date";
+                            return (
+                                <div
+                                    key={d.iso}
+                                    title={`${d.iso} — ${tip}`}
+                                    className={`aspect-square flex items-center justify-center text-[10px] font-mono border ${
+                                        busy
+                                            ? "bg-mpca-oxblood/70 text-mpca-ivory border-mpca-oxblood"
+                                            : "bg-mpca-green-dark/10 text-mpca-green-dark border-mpca-green-dark/30"
+                                    }`}
+                                    data-testid={`ground-cell-${d.iso}`}
+                                >
+                                    {d.day}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="mt-2 flex items-center gap-4 text-[10px] text-mpca-gray-dark">
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-mpca-oxblood/70" /> Booked</span>
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-mpca-green-dark/10 border border-mpca-green-dark/30" /> Available</span>
+                        <span className="italic ml-auto">Hover a cell for the fixtures on that day. Change ground from the toolbar.</span>
+                    </div>
+                </div>
+            )}
 
             {/* Calendar Grid */}
             <div className="bulletin-card overflow-hidden mb-8" data-testid="cal-grid">
@@ -253,19 +388,19 @@ const TournamentCalendarView = ({ tournaments, bodies, matches }) => {
                                     </div>
                                 )}
                                 <div className="mt-1 space-y-0.5">
-                                    {trns.slice(0, 3).map(({ tournament: t, fixtures, unscheduled }) => {
+                                    {trns.slice(0, 3).map(({ tournament: t, fixtures }) => {
                                         const s = styleFor(t);
-                                        // MPCA-132 · Compose tooltip from actual fixtures if any.
+                                        // Iter 126 · Fixtures always populated (span-fallback removed).
                                         const fixTip = fixtures.length > 0
                                             ? " · " + fixtures.slice(0, 3).map((f) => `${f.home_team} v ${f.away_team}${(f.start_time || f.scheduled_time) ? " @ " + (f.start_time || f.scheduled_time) : ""}`).join(", ")
-                                            : (unscheduled ? " · Unscheduled — no match fixtures yet" : "");
+                                            : "";
                                         return (
                                             <Link
-                                                key={t.id + (fixtures[0]?.id || "span")}
+                                                key={t.id + (fixtures[0]?.id || "-")}
                                                 to={`/tournaments/${t.id}`}
-                                                className={`block text-[10px] px-1.5 py-0.5 border-l-2 ${s.border} ${s.bg} ${s.text} truncate hover:opacity-80 transition ${unscheduled ? "opacity-60 italic border-dashed" : ""}`}
+                                                className={`block text-[10px] px-1.5 py-0.5 border-l-2 ${s.border} ${s.bg} ${s.text} truncate hover:opacity-80 transition`}
                                                 title={`${t.name} · Host ${t.host_body_id}${t.venue_name_snapshot ? " · " + t.venue_name_snapshot : ""}${fixTip}`}
-                                                data-testid={unscheduled ? `cal-trn-unsched-${t.id}` : `cal-trn-${t.id}`}
+                                                data-testid={`cal-trn-${t.id}`}
                                             >
                                                 {t.name}{fixtures.length > 1 ? ` (×${fixtures.length})` : ""}
                                             </Link>
@@ -281,15 +416,15 @@ const TournamentCalendarView = ({ tournaments, bodies, matches }) => {
                 </div>
             </div>
 
-            {/* Undated tournaments */}
-            {undated.length > 0 && (
+            {/* Iter 126 · Unscheduled tournaments (no match calendar fixtures yet). */}
+            {unscheduled.length > 0 && (
                 <div className="bulletin-card p-6" data-testid="cal-undated">
                     <div className="flex items-center gap-2 mb-3">
                         <Info size={14} className="text-mpca-oxblood" strokeWidth={1.5} />
-                        <div className="overline">Undated — Awaiting Schedule ({undated.length})</div>
+                        <div className="overline">Awaiting Match Calendar ({unscheduled.length})</div>
                     </div>
                     <div className="grid md:grid-cols-2 gap-2">
-                        {undated.map((t) => {
+                        {unscheduled.map((t) => {
                             const s = styleFor(t);
                             return (
                                 <Link
@@ -300,11 +435,14 @@ const TournamentCalendarView = ({ tournaments, bodies, matches }) => {
                                 >
                                     <span className={`text-sm font-serif ${s.text} truncate`}>{t.name}</span>
                                     <span className="text-[10px] font-mono uppercase tracking-wider text-mpca-gray-dark shrink-0">
-                                        {t.host_body_id}
+                                        {t.host_body_id}{t.start_date ? " · " + t.start_date : ""}
                                     </span>
                                 </Link>
                             );
                         })}
+                    </div>
+                    <div className="mt-3 text-[10px] italic text-mpca-gray-dark">
+                        These tournaments have no fixtures in the Match Calendar yet. Publish fixtures in the tournament workspace to have them light up here on the correct dates.
                     </div>
                 </div>
             )}

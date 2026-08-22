@@ -696,6 +696,11 @@ export const runTournamentAiAudit = async (tournament_id, body_id) => {
     const { data } = await api.post(`/tournaments/${tournament_id}/invoices/ai-audit`, null, { params, timeout: 180000 });
     return data;
 };
+// Iter 126 · Division-wise financial summary for Finance Console
+export const fetchFinanceSummaryByBody = async (tournament_id) => {
+    const { data } = await api.get(`/tournaments/${tournament_id}/finance-summary-by-body`);
+    return data;
+};
 export const bulkSubmitExtraExpenses = async (payload) => {
     const { data } = await api.post("/extra-expense-requests/bulk-submit", payload);
     return data;

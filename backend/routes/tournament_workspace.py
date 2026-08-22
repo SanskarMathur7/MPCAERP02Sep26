@@ -258,6 +258,162 @@ async def delete_tournament_receipt(tid: str, rid: str):
     return {"deleted": True}
 
 
+# ─────────────────────────── Iter 126 · Body-wise financial summary ───────────
+
+@api_router.get("/tournaments/{tid}/finance-summary-by-body")
+async def finance_summary_by_body(tid: str):
+    """Iter 126 · Division-wise financial summary for the Finance Console.
+
+    For each participating body (Division/District/Club) shows:
+      - claim_status          (Draft/Submitted/Approved/Rejected/—)
+      - eligible_amount_inr   sum of `eligible_for_grant_inr` on Approved invoices
+                              + Approved extras (spent-that-passes-budget)
+      - claim_amount_inr      the Division's claim amount, if a claim exists
+      - mpca_approved_inr     `approved_amount_inr` from the reimbursement claim
+                              (source of truth once MPCA has decided).
+      - paid_amount_inr       sum of `tournament_receipts.amount_inr` scoped to
+                              this body (via participant_body_code)
+      - advance_before_claim  paid_amount that predates the claim's approval
+                              (i.e. a genuine advance)
+      - remaining_amount_inr  outstanding = (mpca_approved OR eligible) - paid
+                              (never negative — surplus surfaced as overpaid).
+      - overpaid_amount_inr   only set when paid > approved (rare but possible
+                              when advances exceed final sanction).
+    """
+    if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
+        raise HTTPException(404, "Tournament not found")
+
+    # Load all supporting docs in parallel-ish (sequential is fine at this scale).
+    invoices = await db.tournament_invoices.find({"tournament_id": tid}, {"_id": 0}).to_list(1000)
+    extras = await db.extra_expense_requests.find({"tournament_id": tid}, {"_id": 0}).to_list(1000)
+    claims = await db.tournament_reimbursement_claims.find({"tournament_id": tid}, {"_id": 0}).to_list(200)
+    receipts = await db.tournament_receipts.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
+    participants = await db.tournament_participations.find({"tournament_id": tid}, {"_id": 0}).to_list(200)
+
+    # Body-name lookup so the UI can render "Gwalior Division (DIV-GWL)".
+    body_codes = {p.get("body_code") for p in participants if p.get("body_code")}
+    body_codes |= {inv.get("body_id") for inv in invoices if inv.get("body_id")}
+    body_codes |= {c.get("body_id") for c in claims if c.get("body_id")}
+    body_codes = {b for b in body_codes if b}
+    body_docs = await db.bodies.find({"code": {"$in": list(body_codes)}}, {"_id": 0, "code": 1, "name": 1}).to_list(len(body_codes) + 1) if body_codes else []
+    body_name_by_code = {b["code"]: b.get("name") for b in body_docs}
+
+    def _bucket_key(code):
+        return code or "UNKNOWN"
+
+    rows: Dict[str, dict] = {}
+
+    def _get(code):
+        k = _bucket_key(code)
+        if k not in rows:
+            rows[k] = {
+                "body_code": code,
+                "body_name": body_name_by_code.get(code) or code,
+                "claim_status": None,
+                "claim_ref": None,
+                "claim_id": None,
+                "claim_amount_inr": 0.0,
+                "eligible_amount_inr": 0.0,
+                "mpca_approved_inr": None,
+                "paid_amount_inr": 0.0,
+                "advance_before_claim": 0.0,
+                "remaining_amount_inr": 0.0,
+                "overpaid_amount_inr": 0.0,
+                "receipts_count": 0,
+                "invoices_count": 0,
+                "extras_count": 0,
+            }
+        return rows[k]
+
+    # Seed rows from participations so bodies with no invoices still show.
+    for p in participants:
+        code = p.get("body_code")
+        if code:
+            _get(code)
+
+    # Invoices — only "Approved" are eligible for reimbursement.
+    for inv in invoices:
+        r = _get(inv.get("body_id"))
+        r["invoices_count"] += 1
+        if inv.get("status") == "Approved":
+            r["eligible_amount_inr"] += float(inv.get("eligible_for_grant_inr") or 0)
+
+    # Extras — Approved extras count toward eligibility.
+    for e in extras:
+        r = _get(e.get("body_id") or e.get("requesting_body_code"))
+        r["extras_count"] += 1
+        if e.get("status") == "Approved":
+            # Prefer eligible_amount_inr if present, else approved_amount_inr, else amount_inr.
+            amt = e.get("eligible_amount_inr") or e.get("approved_amount_inr") or e.get("amount_inr") or 0
+            r["eligible_amount_inr"] += float(amt)
+
+    # Claims — the source of truth once MPCA has decided.
+    for c in claims:
+        r = _get(c.get("body_id"))
+        r["claim_status"] = c.get("status")
+        r["claim_ref"] = c.get("claim_ref")
+        r["claim_id"] = c.get("id")
+        r["claim_amount_inr"] = float(c.get("total_claim_inr") or c.get("claimed_amount_inr") or 0)
+        if c.get("status") == "Approved":
+            r["mpca_approved_inr"] = float(c.get("approved_amount_inr") or c.get("total_claim_inr") or 0)
+
+    # Receipts — MPCA payments back to Divisions (advances + reimbursements).
+    approved_at_by_body: Dict[str, str] = {c.get("body_id"): c.get("approved_at") or "" for c in claims if c.get("status") == "Approved"}
+    for r_doc in receipts:
+        code = r_doc.get("participant_body_code")
+        # Skip receipts with no body attribution (legacy) so we don't inflate.
+        if not code:
+            continue
+        row = _get(code)
+        amt = float(r_doc.get("amount_inr") or 0)
+        row["paid_amount_inr"] += amt
+        row["receipts_count"] += 1
+        # If the receipt predates claim approval → it's an advance.
+        approved_at = approved_at_by_body.get(code) or ""
+        receipt_ts = (r_doc.get("receipt_date") or "") + "T00:00:00"
+        if not approved_at or receipt_ts < approved_at:
+            row["advance_before_claim"] += amt
+
+    # Finalise per-row math + totals.
+    totals = {
+        "eligible_amount_inr": 0.0, "mpca_approved_inr": 0.0,
+        "paid_amount_inr": 0.0, "advance_before_claim": 0.0,
+        "remaining_amount_inr": 0.0, "overpaid_amount_inr": 0.0,
+    }
+    for r in rows.values():
+        # Source of truth = MPCA-approved amount when claim is Approved; else
+        # the internally computed eligible amount.
+        source = r["mpca_approved_inr"] if r["mpca_approved_inr"] is not None else r["eligible_amount_inr"]
+        remaining = round(source - r["paid_amount_inr"], 2)
+        if remaining < 0:
+            r["overpaid_amount_inr"] = round(-remaining, 2)
+            r["remaining_amount_inr"] = 0.0
+        else:
+            r["remaining_amount_inr"] = remaining
+            r["overpaid_amount_inr"] = 0.0
+        # Round every number to 2 dp.
+        for k in ("eligible_amount_inr", "claim_amount_inr", "paid_amount_inr",
+                  "advance_before_claim", "remaining_amount_inr", "overpaid_amount_inr"):
+            r[k] = round(r[k], 2)
+        if r["mpca_approved_inr"] is not None:
+            r["mpca_approved_inr"] = round(r["mpca_approved_inr"], 2)
+            totals["mpca_approved_inr"] += r["mpca_approved_inr"]
+        totals["eligible_amount_inr"] += r["eligible_amount_inr"]
+        totals["paid_amount_inr"] += r["paid_amount_inr"]
+        totals["advance_before_claim"] += r["advance_before_claim"]
+        totals["remaining_amount_inr"] += r["remaining_amount_inr"]
+        totals["overpaid_amount_inr"] += r["overpaid_amount_inr"]
+    for k in totals:
+        totals[k] = round(totals[k], 2)
+
+    return {
+        "tournament_id": tid,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "rows": sorted(rows.values(), key=lambda x: (x["body_code"] or "")),
+        "totals": totals,
+    }
+
+
 # ───────────────────────────── Input Variables + Calendar Lock ─────────────────────────────
 
 class InputVariablesPayload(BaseModel):

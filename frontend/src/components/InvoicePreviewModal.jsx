@@ -8,8 +8,8 @@
  * uploader attached one.
  */
 import { X, FileText, ExternalLink } from "lucide-react";
+import { openAuthedFile } from "@/lib/api";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 const fmt = (n) => `\u20B9${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const fmtDate = (s) => (s ? new Date(String(s).length > 10 ? s : s + "T12:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—");
 
@@ -25,9 +25,9 @@ export default function InvoicePreviewModal({ invoice, bodyName, onClose }) {
     const allocs = invoice.allocations || [];
     const eligibility = invoice.grant_eligibility || {};
     const overBudget = Number(eligibility.over_budget_amount_inr || 0);
-    const fileHref = invoice.file_url
-        ? (invoice.file_url.startsWith("http") ? invoice.file_url : `${BACKEND_URL}${invoice.file_url}`)
-        : null;
+    // Iter 126 · Route file open through openAuthedFile so the JWT is attached.
+    // Raw `<a href=/api/uploads/...>` returned 401 for MPCA reviewers.
+    const hasFile = !!invoice.file_url;
 
     return (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-start justify-center pt-16 pb-8 px-4" onClick={onClose} data-testid="invoice-preview-modal">
@@ -120,16 +120,15 @@ export default function InvoicePreviewModal({ invoice, bodyName, onClose }) {
 
                 {/* Signed file link */}
                 <div className="px-5 py-4 flex items-center justify-between gap-3">
-                    {fileHref ? (
-                        <a
-                            href={fileHref}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1.5"
+                    {hasFile ? (
+                        <button
+                            type="button"
+                            onClick={() => openAuthedFile(invoice.file_url)}
+                            className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 flex items-center gap-1.5 hover:bg-mpca-oxblood/80"
                             data-testid="invoice-preview-open-file"
                         >
                             <FileText size={13} /> Open signed invoice file <ExternalLink size={11} />
-                        </a>
+                        </button>
                     ) : (
                         <span className="text-[11px] italic text-mpca-gray-dark">No signed file attached to this invoice record.</span>
                     )}

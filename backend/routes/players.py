@@ -1,7 +1,7 @@
 """Routes · Player Module (M1)."""
 import re
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import HTTPException, Request
 from fastapi.responses import Response
 
@@ -515,7 +515,9 @@ def _months_between(iso_from: Optional[str], iso_to: Optional[str] = None) -> fl
         return 0.0
     try:
         d_from = datetime.fromisoformat(iso_from[:10])
-        d_to = datetime.fromisoformat((iso_to or "")[:10]) if iso_to else datetime.now(timezone.utc)
+        # Keep both sides tz-naive; d_from is naive because we parsed a bare
+        # date, so drop tz from `now` too.
+        d_to = datetime.fromisoformat((iso_to or "")[:10]) if iso_to else datetime.utcnow()
         return (d_to - d_from).days / 30.0
     except Exception:
         return 0.0
@@ -571,10 +573,92 @@ async def compute_eligibility_tag(pid: str):
     reasons: List[str] = []
     tag: Optional[str] = None
 
-    def _add(tag_name: str, passed: bool, why: str, source_field: str = "", source_value: str = ""):
+    # Iter 126 · Also inspect the player's KYC documents so the trace can
+    # name the actual proof (Birth Certificate, Aadhaar, School Marksheet)
+    # that was checked for each rule — not just the on-file text field.
+    docs = p.get("documents") or []
+    docs_by_type: dict = {}
+    for d in docs:
+        docs_by_type.setdefault(d.get("doc_type"), []).append(d)
+
+    def _doc_evidence(*doc_types) -> str:
+        """Return a short human-readable citation for the first-found doc(s)
+        among the requested types — used by the 'Verified from' column so the
+        approver knows WHICH file backed a passing rule."""
+        parts: List[str] = []
+        for t in doc_types:
+            for d in docs_by_type.get(t, []):
+                label = t.replace("_", " ").title()
+                fname = d.get("filename")
+                if fname:
+                    verified_flag = " · verified" if d.get("verified") else " · not yet verified"
+                    parts.append(f"{label}: {fname}{verified_flag}")
+                else:
+                    parts.append(f"{label} on file (no filename)")
+                break  # only cite one per type
+        return " · ".join(parts)
+
+    # Iter 126c · Bridge to the KYC AI report. When the player's KYC docs went
+    # through /ai-full-review at registration time, Gemini extracted structured
+    # facts (birth cert DOB, marksheet institute, aadhaar year, etc.). We pull
+    # those and use them as (a) higher-authority values than the typed form
+    # fields when the typed field is empty, and (b) additional citation for
+    # the "KYC Evidence" column so approvers see WHAT the AI actually read.
+    ai_facts: Dict[str, Any] = {}
+    linked_reg = await db.player_registrations.find_one(
+        {"linked_player_id": pid}, {"_id": 0, "ai_full_report": 1, "player_data": 1}
+    )
+    if linked_reg:
+        ai_ext = (linked_reg.get("ai_full_report") or {}).get("extraction") or {}
+        ai_facts = {
+            "bc_dob":            (ai_ext.get("birth_certificate") or {}).get("extracted_dob"),
+            "bc_name":           (ai_ext.get("birth_certificate") or {}).get("extracted_name"),
+            "bc_qr_present":     (ai_ext.get("birth_certificate") or {}).get("qr_present"),
+            "aadhaar_dob":       (ai_ext.get("aadhaar") or {}).get("extracted_dob"),
+            "aadhaar_name":      (ai_ext.get("aadhaar") or {}).get("extracted_name"),
+            "aadhaar_year":      (ai_ext.get("aadhaar") or {}).get("issued_or_updated_year"),
+            "ms_institute":      (ai_ext.get("marksheet") or {}).get("board_or_institution"),
+            "ms_years":          (ai_ext.get("marksheet") or {}).get("years_detected") or [],
+            "ms_student_name":   (ai_ext.get("marksheet") or {}).get("student_name"),
+            "ms_distinct_years": (ai_ext.get("marksheet") or {}).get("distinct_academic_years"),
+            "overall_confidence": ai_ext.get("overall_confidence"),
+        }
+        # Registration-form snapshot carries the residency/employment/education
+        # fields the applicant SUBMITTED (not always mirrored onto Player).
+        reg_pd = linked_reg.get("player_data") or {}
+        for k in ("place_of_birth_state", "place_of_birth_city", "place_of_birth_division",
+                  "residency_since", "employment", "education", "is_employed"):
+            if not p.get(k) and reg_pd.get(k):
+                p[k] = reg_pd[k]  # promote from registration snapshot
+
+    def _cite_ai(key: str) -> str:
+        """Emit a short 'AI extracted' citation for the KYC Evidence column."""
+        v = ai_facts.get(key)
+        if v is None or v == "" or v == []:
+            return ""
+        if isinstance(v, list):
+            v = ", ".join(str(x) for x in v[:3])
+        return f" · AI: {v}"
+
+    def _has_verified(*doc_types) -> bool:
+        for t in doc_types:
+            for d in docs_by_type.get(t, []):
+                if d.get("verified"):
+                    return True
+        return False
+
+    def _doc_evidence_full(kyc_types: List[str], ai_keys: List[str]) -> str:
+        """Combined citation: the KYC doc filename+verified state PLUS the AI
+        extracted facts the engine actually looked at."""
+        base = _doc_evidence(*kyc_types)
+        ai_parts = [_cite_ai(k) for k in ai_keys]
+        return base + "".join(ai_parts)
+
+    def _add(tag_name: str, passed: bool, why: str, source_field: str = "", source_value: str = "", evidence: str = ""):
         trace.append({
             "tag": tag_name, "passed": passed, "why": why,
             "source_field": source_field, "source_value": str(source_value) if source_value is not None else "",
+            "evidence": evidence,     # Iter 126 · e.g. "Birth Certificate: Bakshraj_BC.pdf (verified)"
         })
 
     # Resolve the parent Division of the player's target body
@@ -592,102 +676,186 @@ async def compute_eligibility_tag(pid: str):
         if d:
             birth_division = d.get("parent_code")
 
+    # Iter 126c · Promote AI-extracted values when typed fields are empty. This
+    # is what closes the loop the user reported: verified KYC docs whose AI
+    # extraction confirmed the player's identity were being ignored because
+    # the compute engine only looked at the typed form fields.
+    ai_promoted: List[str] = []              # human-readable trail of what we promoted
+    if ai_facts:
+        # Institute (education) from Marksheet extraction.
+        if not p.get("education") and ai_facts.get("ms_institute"):
+            p["education"] = ai_facts["ms_institute"]
+            ai_promoted.append(f"education = '{ai_facts['ms_institute']}' (AI · Marksheet)")
+        # Residency proxy — Aadhaar issued/updated year is a defensible lower
+        # bound on how long the applicant has been in the state (Aadhaar
+        # enrollments are done in-person at Seva Kendras). We only promote if
+        # (a) typed `residency_since` is empty AND (b) the Aadhaar year is
+        # older than the season year — i.e. actually shows residency history.
+        try:
+            aad_yr = int(str(ai_facts.get("aadhaar_year") or "").strip() or 0)
+        except (ValueError, TypeError):
+            aad_yr = 0
+        if not p.get("residency_since") and aad_yr and aad_yr <= datetime.now(timezone.utc).year:
+            residency_iso = f"{aad_yr}-01-01"
+            p["residency_since"] = residency_iso
+            ai_promoted.append(f"residency_since = {residency_iso} (AI · Aadhaar enrolled {aad_yr})")
+        # Marksheet years also imply schooling continuity in the Division.
+        ms_years = ai_facts.get("ms_years") or []
+        if not p.get("residency_since") and ms_years:
+            # Take the earliest year we saw on a marksheet.
+            try:
+                earliest = min(int(str(y).split("-")[0]) for y in ms_years if str(y)[:4].isdigit())
+                p["residency_since"] = f"{earliest}-06-01"
+                ai_promoted.append(f"residency_since = {earliest}-06-01 (AI · earliest marksheet {earliest})")
+            except (ValueError, TypeError):
+                pass
+        # DOB cross-check — if birth cert + Aadhaar both extracted the same
+        # DOB AND it matches player.date_of_birth, we mark the birth check as
+        # AI-corroborated even in the absence of a place_of_birth_division.
+        bc_dob = (ai_facts.get("bc_dob") or "")[:10]
+        aad_dob = (ai_facts.get("aadhaar_dob") or "")[:10]
+        p_dob = (p.get("date_of_birth") or "")[:10]
+        ai_dob_corroborated = bool(bc_dob) and bool(p_dob) and bc_dob == p_dob and (not aad_dob or aad_dob == p_dob)
+        if ai_dob_corroborated and _has_verified("birth_certificate"):
+            ai_promoted.append(f"DOB {p_dob} corroborated by AI (Birth Certificate + Aadhaar)")
+    # Save the promoted-facts trail so the UI can show a small chip above the
+    # verification trail explaining "AI facts used".
+    if ai_promoted:
+        trace.insert(0, {
+            "tag": "AI · KYC Facts Promoted",
+            "passed": True,
+            "why": " · ".join(ai_promoted),
+            "source_field": "player_registrations.ai_full_report",
+            "source_value": f"overall_confidence={ai_facts.get('overall_confidence') or '—'}",
+            "evidence": _doc_evidence("birth_certificate", "aadhar", "samagra_id", "marksheet_10", "marksheet_12"),
+        })
+
     # ── LOCAL TESTS ─────────────────────────────────────────────────────────
-    # 1. Local/Birth
+    # 1. Local/Birth — verified against Birth Certificate / Passport in KYC.
+    #    AI facts consulted: bc_dob, bc_name, bc_qr_present.
+    birth_evidence = _doc_evidence_full(
+        ["birth_certificate", "passport"], ["bc_dob", "bc_name", "bc_qr_present"],
+    )
     if target_division and birth_division and birth_division == target_division:
         tag = "Local/Birth"
         why = f"Born within {target_division} jurisdiction (birth division = {birth_division})."
+        if not birth_evidence:
+            why += " — WARNING: no birth certificate / passport uploaded in KYC."
         reasons.append(why)
-        _add("Local/Birth", True, why, "place_of_birth_division", birth_division)
+        _add("Local/Birth", True, why, "place_of_birth_division", birth_division, birth_evidence)
     else:
+        missing_doc_note = "" if birth_evidence else " · no birth certificate / passport in KYC"
         if not birth_division:
-            _add("Local/Birth", False, "place_of_birth_division not on file — cannot verify birth", "place_of_birth_division", "")
+            _add("Local/Birth", False, "place_of_birth_division not on file — cannot verify birth" + missing_doc_note, "place_of_birth_division", "", birth_evidence)
         elif birth_division != target_division:
-            _add("Local/Birth", False, f"Birth division ({birth_division}) does not match target division ({target_division})", "place_of_birth_division", birth_division)
+            _add("Local/Birth", False, f"Birth division ({birth_division}) does not match target division ({target_division})", "place_of_birth_division", birth_division, birth_evidence)
 
-    # 2. Local/Residence — bonafide resident ≥ N months
+    # 2. Local/Residence — Aadhaar / Samagra ID / Affidavit substantiate residence
     residency_min = float(rules.get("residency_min_months") or 3)
+    residency_evidence = _doc_evidence_full(
+        ["aadhar", "samagra_id", "affidavit"], ["aadhaar_year"],
+    )
     if not tag:
         months_resident = _months_between(p.get("residency_since"))
         if not p.get("residency_since"):
-            _add("Local/Residence", False, "residency_since not on file — no proof of residence", "residency_since", "")
+            why = "residency_since not on file — no proof of residence"
+            if not residency_evidence:
+                why += " · no Aadhaar / Samagra / Affidavit uploaded"
+            _add("Local/Residence", False, why, "residency_since", "", residency_evidence)
         elif months_resident >= residency_min:
             tag = "Local/Residence"
             why = f"Resident in Division for {months_resident:.1f} months (≥ {residency_min:.0f} required)."
+            if not residency_evidence:
+                why += " — WARNING: no Aadhaar / Samagra / Affidavit uploaded in KYC."
             reasons.append(why)
-            _add("Local/Residence", True, why, "residency_since", p.get("residency_since"))
+            _add("Local/Residence", True, why, "residency_since", p.get("residency_since"), residency_evidence)
         else:
             why = f"Residency insufficient ({months_resident:.1f} months; ≥ {residency_min:.0f} required)."
             reasons.append(why)
-            _add("Local/Residence", False, why, "residency_since", p.get("residency_since"))
+            _add("Local/Residence", False, why, "residency_since", p.get("residency_since"), residency_evidence)
 
-    # 3. Local/Employment — bonafide employment (self or parent if ≤21) + residency
+    # 3. Local/Employment — Affidavit / Employment letter is the KYC proof
+    employment_evidence = _doc_evidence("affidavit")
     if not tag:
         if not p.get("is_employed") or not p.get("employment"):
-            _add("Local/Employment", False, "Employment (self or parent) not on file", "employment", p.get("employment") or "")
+            _add("Local/Employment", False, "Employment (self or parent) not on file", "employment", p.get("employment") or "", employment_evidence)
         else:
             months_resident = _months_between(p.get("residency_since"))
             if months_resident >= residency_min:
                 tag = "Local/Employment"
                 why = f"Employed at {p['employment']} ({months_resident:.1f} months resident)."
+                if not employment_evidence:
+                    why += " — WARNING: no signed affidavit / employment letter in KYC."
                 reasons.append(why)
-                _add("Local/Employment", True, why, "employment", p.get("employment"))
+                _add("Local/Employment", True, why, "employment", p.get("employment"), employment_evidence)
             else:
-                _add("Local/Employment", False, f"Employment present but residency short ({months_resident:.1f}/{residency_min:.0f} months)", "employment", p.get("employment"))
+                _add("Local/Employment", False, f"Employment present but residency short ({months_resident:.1f}/{residency_min:.0f} months)", "employment", p.get("employment"), employment_evidence)
 
-    # 4. Local/Education — N months + not distance learning
+    # 4. Local/Education — Transfer Certificate / 10th / 12th Marksheet is the KYC proof
     education_min_local = float(rules.get("education_min_months_local") or 3)
+    education_evidence = _doc_evidence_full(
+        ["transfer_certificate", "marksheet_10", "marksheet_12"],
+        ["ms_institute", "ms_distinct_years", "ms_years"],
+    )
     if not tag:
         if not p.get("education"):
-            _add("Local/Education", False, "Education record not on file", "education", "")
+            _add("Local/Education", False, "Education record not on file", "education", "", education_evidence)
         else:
             months_resident = _months_between(p.get("residency_since"))
             is_distance = "distance" in (p.get("education") or "").lower()
             if months_resident >= education_min_local and not is_distance:
                 tag = "Local/Education"
                 why = f"Studying at {p['education']} ({months_resident:.1f} months in Division)."
+                if not education_evidence:
+                    why += " — WARNING: no Transfer Certificate / Marksheet uploaded in KYC."
                 reasons.append(why)
-                _add("Local/Education", True, why, "education", p.get("education"))
+                _add("Local/Education", True, why, "education", p.get("education"), education_evidence)
             elif is_distance:
-                _add("Local/Education", False, "Course is distance-learning (excluded)", "education", p.get("education"))
+                _add("Local/Education", False, "Course is distance-learning (excluded)", "education", p.get("education"), education_evidence)
             else:
-                _add("Local/Education", False, f"Course present but residency < {education_min_local:.0f} months ({months_resident:.1f})", "education", p.get("education"))
+                _add("Local/Education", False, f"Course present but residency < {education_min_local:.0f} months ({months_resident:.1f})", "education", p.get("education"), education_evidence)
 
     # ── GUEST TESTS ─────────────────────────────────────────────────────────
-    # 5. Guest/MP-Domicile
+    # 5. Guest/MP-Domicile — Birth Certificate / Samagra proves MP birth
     if not tag:
+        mp_domicile_evidence = _doc_evidence("birth_certificate", "samagra_id")
         if is_mp_born and target_division and birth_division and birth_division != target_division:
             tag = "Guest/MP-Domicile"
             why = f"Born in MP ({birth_division}) but registering with {target_division} — MP-Domicile Guest."
+            if not mp_domicile_evidence:
+                why += " — WARNING: no birth certificate / samagra ID uploaded."
             reasons.append(why)
-            _add("Guest/MP-Domicile", True, why, "place_of_birth_division", birth_division)
+            _add("Guest/MP-Domicile", True, why, "place_of_birth_division", birth_division, mp_domicile_evidence)
         else:
             if not is_mp_born:
-                _add("Guest/MP-Domicile", False, f"Not MP-born (place_of_birth_state='{birth_state or '—'}')", "place_of_birth_state", birth_state)
+                _add("Guest/MP-Domicile", False, f"Not MP-born (place_of_birth_state='{birth_state or '—'}')", "place_of_birth_state", birth_state, mp_domicile_evidence)
             elif not birth_division:
-                _add("Guest/MP-Domicile", False, "MP-born but birth division unknown", "place_of_birth_division", "")
+                _add("Guest/MP-Domicile", False, "MP-born but birth division unknown", "place_of_birth_division", "", mp_domicile_evidence)
 
-    # 6. Guest/Education
+    # 6. Guest/Education — Transfer Certificate / Marksheet is the KYC proof
     education_min_guest = float(rules.get("education_min_months_guest") or 12)
     if not tag and not is_mp_born:
         if not p.get("education"):
-            _add("Guest/Education", False, "Non-MP-born and no education record", "education", "")
+            _add("Guest/Education", False, "Non-MP-born and no education record", "education", "", education_evidence)
         else:
             months_studying = _months_between(p.get("residency_since"))
             is_distance = "distance" in (p.get("education") or "").lower()
             if months_studying >= education_min_guest and not is_distance:
                 tag = "Guest/Education"
                 why = f"Born + resident out of MP, studying in MP for {months_studying:.1f} months (≥ {education_min_guest:.0f})."
+                if not education_evidence:
+                    why += " — WARNING: no Transfer Certificate / Marksheet uploaded."
                 reasons.append(why)
-                _add("Guest/Education", True, why, "education", p.get("education"))
+                _add("Guest/Education", True, why, "education", p.get("education"), education_evidence)
             elif is_distance:
-                _add("Guest/Education", False, "Course is distance-learning (excluded)", "education", p.get("education"))
+                _add("Guest/Education", False, "Course is distance-learning (excluded)", "education", p.get("education"), education_evidence)
             else:
-                _add("Guest/Education", False, f"Education present but only {months_studying:.1f} months (≥ {education_min_guest:.0f} needed)", "residency_since", p.get("residency_since"))
+                _add("Guest/Education", False, f"Education present but only {months_studying:.1f} months (≥ {education_min_guest:.0f} needed)", "residency_since", p.get("residency_since"), education_evidence)
 
-    # 7. Guest/Out-of-MP
+    # 7. Guest/Out-of-MP — Passport / BCCI ID is the KYC proof
     guest_prior_min = float(rules.get("guest_prior_years_min") or 2)
     if not tag and not is_mp_born:
+        prior_evidence = _doc_evidence("passport", "aadhar")
         prior_years = 1 if p.get("bcci_registered") else 0
         if p.get("bcci_registration_year"):
             try:
@@ -698,11 +866,11 @@ async def compute_eligibility_tag(pid: str):
             tag = "Guest/Out-of-MP"
             why = f"Not MP-born; prior domestic participation ≈ {prior_years} yrs (≥ {guest_prior_min:.0f} required)."
             reasons.append(why)
-            _add("Guest/Out-of-MP", True, why, "bcci_registration_year", p.get("bcci_registration_year") or "")
+            _add("Guest/Out-of-MP", True, why, "bcci_registration_year", p.get("bcci_registration_year") or "", prior_evidence)
         else:
             why = f"Not MP-born and prior domestic participation {prior_years} yrs (< {guest_prior_min:.0f} required) — fails 3.3."
             reasons.append(why)
-            _add("Guest/Out-of-MP", False, why, "bcci_registration_year", p.get("bcci_registration_year") or "")
+            _add("Guest/Out-of-MP", False, why, "bcci_registration_year", p.get("bcci_registration_year") or "", prior_evidence)
 
     if not tag:
         tag = "Ineligible"

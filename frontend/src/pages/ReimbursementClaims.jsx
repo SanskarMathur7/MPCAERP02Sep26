@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, FileText, Eye, CheckCircle2, XCircle, ClipboardList } from "lucide-react";
-import { api, BACKEND_URL } from "@/lib/api";
+import { api, BACKEND_URL, openAuthedFile } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import CricketLoader from "@/components/CricketLoader";
 import InvoicePreviewModal from "@/components/InvoicePreviewModal";
@@ -587,7 +587,17 @@ export const ReimbursementClaimDetail = () => {
                                     >
                                         <Eye size={13} />
                                     </button>
-                                    {inv.file_url && <a href={`${BACKEND_URL}${inv.file_url}`} target="_blank" rel="noreferrer" className="text-mpca-brass" title="Open signed file" data-testid={`view-inv-file-${inv.id}`}><FileText size={12} /></a>}
+                                    {inv.file_url && (
+                                        <button
+                                            type="button"
+                                            onClick={() => openAuthedFile(inv.file_url)}
+                                            className="text-mpca-brass hover:text-mpca-oxblood"
+                                            title="Open signed file"
+                                            data-testid={`view-inv-file-${inv.id}`}
+                                        >
+                                            <FileText size={12} />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -619,11 +629,14 @@ export const ReimbursementClaimDetail = () => {
                             </div>
                         </div>
                         {claim.mpca_signed_pdf_url && (
-                            <a href={`${BACKEND_URL}${claim.mpca_signed_pdf_url}`} target="_blank" rel="noreferrer"
-                                className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-parchment px-3 py-1.5 flex items-center gap-1"
-                                data-testid="decision-signed-pdf-link">
+                            <button
+                                type="button"
+                                onClick={() => openAuthedFile(claim.mpca_signed_pdf_url)}
+                                className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-parchment px-3 py-1.5 flex items-center gap-1 hover:bg-mpca-green-dark/80"
+                                data-testid="decision-signed-pdf-link"
+                            >
                                 <FileText size={12} /> MPCA-Signed Review PDF
-                            </a>
+                            </button>
                         )}
                     </div>
                     {(reviewSummary?.heads || []).length > 0 && (

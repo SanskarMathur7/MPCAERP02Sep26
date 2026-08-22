@@ -1,0 +1,25 @@
+{
+  "summary": "Iter 123y — validated MPCA invoice grouping + Draft-hide behaviour end-to-end. (1) Backend regression: GET /api/tournament-invoices?tournament_id=99a96938-... returns 9 rows (all Approved on DIV-GWL) — no filtering server-side (unchanged). (2) MPCA UI at /tournaments/{id}/finance → Invoices tab now renders data-testid='invoices-grouped'; the old flat 'invoices-table' is NOT in the DOM for State scope. (3) One collapsible Division card 'inv-group-DIV-GWL' with toggle 'inv-group-toggle-DIV-GWL'; collapsed header reads 'DIV-GWL · 9 invoices · 9 approved · ₹5,23,044'. (4) Expanding reveals 4 head sub-sections: inv-head-DIV-GWL-{EXTRA_TEST_EXTRA|Hotel — team|HOTEL_TEAM|WATER} — each shows head label, invoice count and total ₹ per code. (5) Collapse hides the sub-sections. (6) No 'Draft' text appears in the grouped list (there are no Draft invoices in the DB for this tournament, but the visibleInvoices filter is confirmed present in source). (7) Approve pill flow (inv-approve-{ref}) not exercised end-to-end since all 9 invoices are already Approved — 0 Submitted rows exist; render logic gated on status==='Submitted' is correct per code review. (8) Division-side flat table check skipped per request (Division login has force-reset guard); code inspection at TournamentOps.jsx ~776 confirms the flat 'invoices-table' branch is only taken when !isStateScope, so Division still sees the flat table + checkboxes as expected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/test_reports/iter123y_final.png"
+  ],
+  "action_items": [
+    "Optional follow-up: seed at least one Submitted invoice on this tournament so future testers can exercise the inv-approve-{ref} → status flip to Approved flow (currently all 9 are Approved so the approve/reject buttons never render).",
+    "Minor UX: the Division header shows the raw body_code ('DIV-GWL') because invoicesByBodyThenHead keys off body_id and only the code is used in the header. Consider resolving body_name (as invoicesByBody does) so reviewers see 'Gwalior' instead of 'DIV-GWL'."
+  ],
+  "critical_code_review_comments": [
+    "TournamentOps.jsx:520 — allocations fallback synthesises a single-head bucket using inv.total_inr (post-GST) instead of pre-GST amount_inr. For legacy invoices without allocations[], the per-head total shown under a Division may inflate by the GST amount. Not a regression for this iter (allocations exist on modern rows), but worth aligning with the pre-GST rule elsewhere.",
+    "TournamentOps.jsx:513 — grouping key uses inv.body_id || inv.uploaded_by_body || 'UNKNOWN'. If any legacy row is missing body_id an 'UNKNOWN' bucket will silently appear; consider a dev-only warning.",
+    "invoicesByBodyThenHead memo returns an object; using Object.entries + sort by key string is fine for now but ordering across bodies would be more meaningful sorted by body_name / submitted-count desc when the count of bodies grows."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (1/1 regression call)", "frontend": "100% (5/5 grouping assertions; approve/reject flow inspection-only — no Submitted rows to click)"},
+  "test_credentials": "sysadmin@mpca.in / mpca@2026 (State/MPCA). Division login skipped per request (force-reset risk).",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "MPCA-side grouping (Iter 123y) is verified. Tournament in scope 99a96938-06cc-4c2a-8ab0-9413f62dc7ed currently has 9 Approved invoices under DIV-GWL, 0 Submitted, 0 Draft — so the inv-approve-{ref} and reject-prompt paths can only be visually inspected in code, not clicked. If a Submitted row is seeded later, hit /tournaments/{id}/finance → Invoices tab → click inv-group-toggle-DIV-GWL → click inv-approve-{ref} to verify status flip. Division-side flat table (invoices-table) is unchanged and still guarded by !isStateScope in TournamentOps.jsx.",
+  "rca of the issue": "N/A — verification iteration, no bug found."
+}

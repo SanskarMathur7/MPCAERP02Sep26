@@ -499,6 +499,36 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
     const toggleSel = (id) => setSelected((m) => ({ ...m, [id]: !m[id] }));
 
     // Group by body for MPCA bulk-approve buttons
+    // Iter 123y · MPCA never sees Draft invoices — Division must Submit first.
+    const visibleInvoices = useMemo(
+        () => isStateScope ? invoices.filter((i) => i.status !== "Draft") : invoices,
+        [invoices, isStateScope]
+    );
+
+    // Iter 123y · MPCA view — group visible invoices by Division → then by head
+    const [expandedBodies, setExpandedBodies] = useState({});
+    const invoicesByBodyThenHead = useMemo(() => {
+        const bodies = {};
+        for (const inv of visibleInvoices) {
+            const body = inv.body_id || inv.uploaded_by_body || "UNKNOWN";
+            if (!bodies[body]) bodies[body] = { body_name: inv.body_name || null, rows: [], byHead: {}, total: 0, submitted: 0, approved: 0, rejected: 0 };
+            bodies[body].rows.push(inv);
+            bodies[body].total += Number(inv.total_inr || 0);
+            if (inv.status === "Submitted") bodies[body].submitted++;
+            else if (inv.status === "Approved") bodies[body].approved++;
+            else if (inv.status === "Rejected") bodies[body].rejected++;
+            const allocs = (inv.allocations && inv.allocations.length) ? inv.allocations : [{ head_code: inv.budget_head_code || "—", head_label: HEAD_CODE_TO_LABEL[inv.budget_head_code] || "—", amount_inr: inv.total_inr }];
+            for (const a of allocs) {
+                const key = a.head_code || "—";
+                if (!bodies[body].byHead[key]) bodies[body].byHead[key] = { label: a.head_label || HEAD_CODE_TO_LABEL[key] || key, rows: [], total: 0 };
+                bodies[body].byHead[key].rows.push(inv);
+                bodies[body].byHead[key].total += Number(a.amount_inr || 0);
+            }
+        }
+        return bodies;
+    }, [visibleInvoices]);
+    const toggleBody = (b) => setExpandedBodies((prev) => ({ ...prev, [b]: !prev[b] }));
+
     const invoicesByBody = useMemo(() => {
         const g = {};
         for (const i of invoices) {
@@ -681,11 +711,70 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
             )}
 
             {loading ? <div className="p-8 text-center"><Loader2 className="animate-spin inline" /></div> : (
-                invoices.length === 0 ? (
+                visibleInvoices.length === 0 ? (
                     <div className="p-10 border border-mpca-brass/30 text-center text-mpca-gray-dark italic font-serif" data-testid="no-invoices">
-                        No invoices yet.
+                        {isStateScope ? "No submitted invoices yet — Divisions must submit before invoices arrive here." : "No invoices yet."}
+                    </div>
+                ) : isStateScope ? (
+                    /* Iter 123y · MPCA view — collapsible Division → Head grouping */
+                    <div className="space-y-2" data-testid="invoices-grouped">
+                        {Object.entries(invoicesByBodyThenHead).sort(([a],[b]) => a.localeCompare(b)).map(([body, g]) => {
+                            const open = !!expandedBodies[body];
+                            return (
+                                <div key={body} className="border border-mpca-brass/40 bg-mpca-ivory" data-testid={`inv-group-${body}`}>
+                                    <button onClick={() => toggleBody(body)} className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-mpca-parchment/60" data-testid={`inv-group-toggle-${body}`}>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-mpca-oxblood font-mono text-[10px]">{open ? "▼" : "▶"}</span>
+                                            <span className="font-serif text-sm text-mpca-green-dark font-semibold">{g.body_name || body}</span>
+                                            <span className="text-[10px] uppercase tracking-widest text-mpca-gray-dark">{g.rows.length} invoice{g.rows.length === 1 ? "" : "s"}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest">
+                                            {g.submitted > 0 && <span className="px-1.5 py-0.5 bg-mpca-brass/15 text-mpca-brass border border-mpca-brass/40" title="Submitted awaiting your approval">{g.submitted} to review</span>}
+                                            {g.approved > 0 && <span className="px-1.5 py-0.5 bg-mpca-green-dark/15 text-mpca-green-dark border border-mpca-green-dark/40">{g.approved} approved</span>}
+                                            {g.rejected > 0 && <span className="px-1.5 py-0.5 bg-mpca-oxblood/15 text-mpca-oxblood border border-mpca-oxblood/40">{g.rejected} rejected</span>}
+                                            <span className="font-mono text-mpca-green-dark font-semibold">{fmtINR(g.total)}</span>
+                                        </div>
+                                    </button>
+                                    {open && (
+                                        <div className="border-t border-mpca-brass/30">
+                                            {Object.entries(g.byHead).sort(([a],[b]) => a.localeCompare(b)).map(([hcode, h]) => (
+                                                <div key={hcode} className="border-b border-mpca-brass/20 last:border-b-0" data-testid={`inv-head-${body}-${hcode}`}>
+                                                    <div className="flex items-center justify-between px-4 py-1.5 bg-mpca-parchment/40 text-[11px]">
+                                                        <span className="uppercase tracking-widest text-mpca-brass">{h.label}</span>
+                                                        <span className="font-mono text-mpca-green-dark">{h.rows.length} · {fmtINR(h.total)}</span>
+                                                    </div>
+                                                    <table className="w-full text-[12px]" data-testid={`inv-head-table-${body}-${hcode}`}>
+                                                        <tbody>
+                                                            {h.rows.map((i) => (
+                                                                <tr key={i.id + "-" + hcode} className="border-t border-mpca-brass/10 hover:bg-mpca-parchment/30">
+                                                                    <td className="px-4 py-1.5 font-mono text-[10px]">{i.invoice_ref}</td>
+                                                                    <td className="px-2 py-1.5">{i.vendor_name || "—"}</td>
+                                                                    <td className="px-2 py-1.5 font-mono text-[10px]">{i.invoice_date || "—"}</td>
+                                                                    <td className="px-2 py-1.5 font-mono text-right">{fmtINR(i.total_inr)}</td>
+                                                                    <td className="px-2 py-1.5"><Pill tone={i.status === "Approved" ? "active" : i.status === "Rejected" ? "suspended" : "pending"} label={i.status} /></td>
+                                                                    <td className="px-2 py-1.5 text-right">
+                                                                        {i.status === "Submitted" && (
+                                                                            <span className="inline-flex gap-1">
+                                                                                <button onClick={async () => { await approveTournamentInvoice(i.id); await load(); onChanged?.(); }} className="text-[9px] uppercase text-mpca-green-dark underline" data-testid={`inv-approve-${i.invoice_ref}`}>approve</button>
+                                                                                <button onClick={async () => { const r = window.prompt("Rejection reason:"); if (r) { await rejectTournamentInvoice(i.id, r); await load(); } }} className="text-[9px] uppercase text-mpca-oxblood underline">reject</button>
+                                                                            </span>
+                                                                        )}
+                                                                        {i.file_url && <button type="button" onClick={() => openAuthedFile(i.file_url)} className="text-[9px] text-mpca-brass underline ml-2 hover:text-mpca-oxblood" data-testid={`inv-view-file-${i.id}`}>view file</button>}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 ) : (
+                    /* Division view — existing flat table */
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm" data-testid="invoices-table">
                             <thead className="bg-mpca-parchment border-b border-mpca-brass/40">
@@ -697,7 +786,7 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {invoices.map((i) => {
+                                {visibleInvoices.map((i) => {
                                     const over = i.over_budget_amount_inr > 0;
                                     const allocs = (i.allocations && i.allocations.length) ? i.allocations : null;
                                     const canEditRow = isDivisionScope && !locked;

@@ -115,12 +115,15 @@ async def lifespan(app: FastAPI):
         # Feb 2026 · Iter 109 · Dynamic Maker-Checker workflow templates
         try:
             from scripts.seed_mc_workflows import seed_mc_workflows
+            from scripts.seed_mc_defaults import seed_mc_defaults
             from core.infra import db as _db
             rr = await seed_mc_workflows(_db)
+            dd = await seed_mc_defaults(_db)
             import logging
             logging.getLogger("mpca").info(
-                "M&C workflows seeded — created=%s kept=%s",
+                "M&C workflows seeded — created=%s kept=%s · defaults patched=%s skipped=%s",
                 len(rr["created"]), len(rr["kept"]),
+                len(dd["patched"]), len(dd["skipped"]),
             )
         except Exception as e:
             import logging

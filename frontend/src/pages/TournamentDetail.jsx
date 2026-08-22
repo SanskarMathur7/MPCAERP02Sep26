@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import TournamentProgressionRibbon from "@/components/TournamentProgressionRibbon";
+import ApprovalChain from "@/components/ApprovalChain";
 import { WiringComplianceChip } from "@/lib/wiringCompliance";
 import InputVariablesPanel from "@/components/InputVariablesPanel";
 import { DL, PageShell, embossedCard } from "@/lib/designSystem";
@@ -514,6 +515,17 @@ const TournamentDetail = () => {
             {/* Band 3 · Progression Ribbon (single source of truth for phase) */}
             <div className="mb-6">
                 <TournamentProgressionRibbon tournamentId={id} refreshKey={progressKey} />
+            </div>
+
+            {/* Band 3b · Iter 122 — inline Maker-Checker approval chain.
+                Shows PendingReview status, audit chain, and Approve/Return/Reject
+                buttons to whichever office bearer has the matching post. */}
+            <div className="mb-8" data-testid="tournament-approval-chain">
+                <ApprovalChain
+                    workflowKey="tournament_create"
+                    docId={id}
+                    onChange={() => setProgressKey((k) => k + 1)}
+                />
             </div>
 
             {/* Band 4 · Workspace grid (was "Setup Boxes") */}

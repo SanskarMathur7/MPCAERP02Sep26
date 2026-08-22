@@ -121,6 +121,18 @@ const TournamentDetail = () => {
     const [myParticipation, setMyParticipation] = useState(null);   // M39x
     const [wiringFlags, setWiringFlags] = useState({});             // MPCA-235 · Ship 3 · flag per box
     const [parentTournament, setParentTournament] = useState(null); // MPCA-254 · Ship B · linked Inter-Div tournament (for camps)
+    // Feb 2026 · Age-Filter Preview badge on the hero — fetched from
+    // `/tournaments/{tid}/eligibility-spec` so Divisions see the DOB
+    // window + medical requirement before opening the squad picker.
+    const [eligSpec, setEligSpec] = useState(null);
+    useEffect(() => {
+        if (!id) return;
+        let alive = true;
+        api.get(`/tournaments/${id}/eligibility-spec`)
+            .then(r => { if (alive) setEligSpec(r.data); })
+            .catch(() => { if (alive) setEligSpec(null); });
+        return () => { alive = false; };
+    }, [id]);
 
     // MPCA-235 · Ship 3 · Read the wiring status once and build a box-testid → {flag, owner} map
     // so each SetupBox shows a Mandatory / Optional / Optional·Not Used badge AND the note text
@@ -413,6 +425,22 @@ const TournamentDetail = () => {
                             Linked to · {parentTournament.name}
                             <ChevronRight size={11} strokeWidth={2.5} />
                         </button>
+                    )}
+                    {/* Feb 2026 · Age-Filter Preview badge — shows the DOB/gender/medical rules from tournament_master */}
+                    {eligSpec?.master_matched && (
+                        <span
+                            className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase tracking-[0.18em] font-bold rounded-full"
+                            style={{ backgroundColor: "rgba(184,131,40,0.12)", border: `1.5px solid ${DL.gold}`, color: DL.gold, fontFamily: DL.fontMono }}
+                            title={`Eligibility rules from Tournament Master${eligSpec.master_name ? ` · ${eligSpec.master_name}` : ""}`}
+                            data-testid="trn-hero-eligibility-badge"
+                        >
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: DL.gold }} />
+                            {eligSpec.age_grp || (eligSpec.gender === "Women" ? "Women" : "Men")}
+                            {eligSpec.gender && eligSpec.age_grp && ` · ${eligSpec.gender}`}
+                            {eligSpec.born_on_or_before && ` · born ≤ ${eligSpec.born_on_or_before}`}
+                            {eligSpec.born_on_or_after && ` · born ≥ ${eligSpec.born_on_or_after}`}
+                            {eligSpec.medical_required && " · Medical Req"}
+                        </span>
                     )}
                 </div>
                 <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mt-7">

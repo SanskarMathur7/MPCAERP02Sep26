@@ -1,0 +1,22 @@
+{
+  "summary": "Tournament Player Eligibility Engine + endpoint + Tournament Registry UI all verified. Backend: 10/10 pytests passed in /app/backend/tests/test_tournament_eligibility.py (9 unit tests on check_player_for_tournament + 1 e2e on /api/tournaments/{tid}/eligible-players). Endpoint contract confirmed with correct envelope keys {tournament, counts, eligible, ineligible}. Frontend: All 12 expected Inter-Divisional rows show correct DOB fenceposts (Boys U-23 2003-09-01, Parmanand 2003-09-01, Hiralal Gaikwad 2007-09-01, SM Khan 2007-09-01, MM Jagdale 2012/2010-09-01, AW Kanmadikar 2015/2012-09-01, Girls U-18 2007-09-01, Girls U-15 2013/2010-09-01, CS Nayudu 2003-09-01, Bhausaheb Nimbalkar 2007-09-01, Bhau Nivsarkar 2012/2010-09-01, Rameshwar Pratap 2014/2011-09-01). Medical=YES rendered for MM Jagdale, AW Kanmadikar, Girls U-15, Bhau Nivsarkar, Rameshwar Pratap. Edit flow: Changed MM Jagdale born_on_or_before from 2012-09-01→2012-08-01, PATCH persisted and row re-rendered with new date; reverted back to 2012-09-01 successfully. Squad Picker UI not tested per E1 instructions (no seeded players).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "observations": [
+    "Live BCCI Ranji Trophy · Plate tournament actually DID match a tournament_master row (category=BCCI, name exact match). Task hypothesis said master_matched=false; in reality master_matched=true but with all null DOB/gender/medical fields, so engine returns all players as eligible (functionally equivalent to no enforcement). This is correct behaviour per the engine spec (rule 1-4 all pass on null master fields).",
+    "Endpoint returns 200 with counts {total:0, eligible:0, ineligible:0} when no players are in DB (as expected — only 1 tournament, 0 players seeded)."
+  ],
+  "test_report_links": ["/app/backend/tests/test_tournament_eligibility.py", "/app/test_reports/pytest/iter96_eligibility.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "core/tournament_eligibility.py: _player_dob has a subtle bug — for non-string dob values it returns None on first key even if second key holds a valid string (the walrus-like assignment sets v=None when player.get(k) is not a string, skipping the truthy check). In practice players store dob as ISO string so no impact, but tighten to `v = player.get(k); if isinstance(v,str) and v.strip(): return v.strip()`.",
+    "routes/tournament_eligibility.py: body_id regex match uses `{body_code}$` without escaping — a body_code containing regex metachars could throw. Consider re.escape."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "persona-chip-secretary (Sanjeev Dua) used for /tournament-master flow.",
+  "seed_data_creation": "Pytest fixture seeded 1 tournament + 3 players (auto cleanup after run).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Registry UI reads flattened top-level DOB / medical fields correctly. PATCH /tournament-master/{id} tested working via row Edit → Save Changes button. Endpoint /api/tournaments/{tid}/eligible-players is stable. Squad Picker UI not exercised — needs seeded players and an Inter_Divisional tournament linked to a master row before it can be validated live."
+}

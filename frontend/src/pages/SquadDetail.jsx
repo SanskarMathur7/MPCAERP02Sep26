@@ -80,6 +80,12 @@ const SquadDetail = () => {
     // notification firing, and section headers so users are never told
     // "Submit to MPCA" when the wiring says no MPCA approval exists.
     const [wiringApprovalFlag, setWiringApprovalFlag] = useState(null);
+    // Feb 2026 · Tournament Player Eligibility Engine — per-body split from
+    // `/tournaments/{tid}/eligible-players`. Populated after players load.
+    // Shape: { tournament: {...}, byPlayerId: Map<id, {ok, reasons[]}> }
+    const [eligibility, setEligibility] = useState(null);
+    // MPCA override to bypass eligibility block (State personas only)
+    const [eligibilityOverride, setEligibilityOverride] = useState(false);
 
     // Fetch the wiring status for this squad's tournament and read the 'squad'
     // step's `mode` attribute. Advisory only — both PDF upload and player picker
@@ -98,6 +104,25 @@ const SquadDetail = () => {
             .catch(() => { if (alive) { setWiringSquadMode(null); setWiringApprovalFlag(null); } });
         return () => { alive = false; };
     }, [tournament?.id]);
+
+    // Feb 2026 · Eligibility engine — fetch the split for THIS body once the
+    // tournament + squad are resolved. Re-fetches when the squad's body changes.
+    useEffect(() => {
+        if (!tournament?.id || !squad?.body_id) return;
+        let alive = true;
+        api.get(`/tournaments/${tournament.id}/eligible-players`, {
+            params: { body_code: squad.body_id, limit: 5000 },
+        })
+            .then(r => {
+                if (!alive) return;
+                const byId = new Map();
+                (r.data?.eligible || []).forEach(p => byId.set(p.id, { ok: true, reasons: [] }));
+                (r.data?.ineligible || []).forEach(p => byId.set(p.id, { ok: false, reasons: p.eligibility_reasons || [] }));
+                setEligibility({ tournament: r.data?.tournament || null, byPlayerId: byId, counts: r.data?.counts || null });
+            })
+            .catch(() => { if (alive) setEligibility(null); });
+        return () => { alive = false; };
+    }, [tournament?.id, squad?.body_id]);
 
     const bootstrap = useCallback(async () => {
         setLoading(true);
@@ -183,6 +208,16 @@ const SquadDetail = () => {
     };
 
     const handleAdd = async (player, opts = {}) => {
+        // Feb 2026 · Block ineligible picks unless MPCA-State toggles override.
+        const eLookup = eligibility?.byPlayerId?.get(player.id);
+        if (eLookup && !eLookup.ok && !eligibilityOverride) {
+            alert(
+                `${player.full_name || "This player"} is not eligible for this tournament:\n\n` +
+                (eLookup.reasons || []).map(r => `• ${r}`).join("\n") +
+                (isMPCA ? "\n\nTurn on 'MPCA Override' in the eligibility banner above to force-pick." : "")
+            );
+            return;
+        }
         await guardAsync(async () => {
             await addPlayerToSquad(squad.id, {
                 player_id: player.id,
@@ -503,6 +538,63 @@ const SquadDetail = () => {
             )}
 
             {/* MPCA-235 · Ship 6 · Wiring-driven squad-mode banner (advisory) */}
+            {/* Feb 2026 · Eligibility Engine banner — DOB/gender/medical rules from tournament_master */}
+            {eligibility?.tournament?.master_matched && (
+                <div
+                    data-testid="squad-eligibility-banner"
+                    className="mb-4 border border-mpca-oxblood/40 bg-mpca-parchment/60 px-4 py-3 text-[11px]"
+                >
+                    <div className="flex items-start gap-3">
+                        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-mpca-oxblood" />
+                        <div className="flex-1">
+                            <div className="uppercase tracking-widest text-[10px] text-mpca-oxblood mb-1 font-mono">
+                                Eligibility rules · {eligibility.tournament.master_name || eligibility.tournament.name}
+                            </div>
+                            <div className="text-mpca-green-dark flex flex-wrap gap-x-4 gap-y-1">
+                                {eligibility.tournament.gender && (
+                                    <span data-testid="elig-rule-gender">
+                                        <b>Gender:</b> {eligibility.tournament.gender}
+                                    </span>
+                                )}
+                                {eligibility.tournament.age_grp && (
+                                    <span data-testid="elig-rule-age"><b>Age:</b> {eligibility.tournament.age_grp}</span>
+                                )}
+                                {eligibility.tournament.born_on_or_before && (
+                                    <span data-testid="elig-rule-boob">
+                                        <b>Born on/before:</b> {eligibility.tournament.born_on_or_before}
+                                    </span>
+                                )}
+                                {eligibility.tournament.born_on_or_after && (
+                                    <span data-testid="elig-rule-boa">
+                                        <b>Born on/after:</b> {eligibility.tournament.born_on_or_after}
+                                    </span>
+                                )}
+                                {eligibility.tournament.medical_required && (
+                                    <span data-testid="elig-rule-medical" className="text-mpca-oxblood font-mono uppercase">
+                                        Medical clearance required
+                                    </span>
+                                )}
+                            </div>
+                            {eligibility.counts && (
+                                <div className="mt-1 text-[10px] text-mpca-gray-dark font-mono" data-testid="elig-counts">
+                                    Pool: {eligibility.counts.total} · <span className="text-mpca-green-dark">Eligible {eligibility.counts.eligible}</span> · <span className="text-mpca-oxblood">Ineligible {eligibility.counts.ineligible}</span>
+                                </div>
+                            )}
+                        </div>
+                        {isMPCA && (eligibility.counts?.ineligible || 0) > 0 && (
+                            <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-mpca-oxblood cursor-pointer" data-testid="elig-mpca-override-toggle">
+                                <input
+                                    type="checkbox"
+                                    checked={eligibilityOverride}
+                                    onChange={(e) => setEligibilityOverride(e.target.checked)}
+                                />
+                                MPCA Override
+                            </label>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {wiringSquadMode && wiringSquadMode.mode !== "NA" && (
                 <div
                     data-testid="squad-wiring-mode-banner"
@@ -678,10 +770,13 @@ const SquadDetail = () => {
                             </div>
                         ) : filteredPool.map((p) => {
                             const testKey = (p.player_id || p.id).replace(/\//g, "-");
+                            const eLookup = eligibility?.byPlayerId?.get(p.id);
+                            const isIneligible = !!(eLookup && !eLookup.ok);
+                            const canPickThis = !isIneligible || eligibilityOverride;
                             return (
-                                <div key={p.id} className="px-5 py-3 grid grid-cols-12 items-center gap-3" data-testid={`squad-pool-row-${testKey}`} data-player-id={p.id} data-player-no={p.player_id}>
+                                <div key={p.id} className={"px-5 py-3 grid grid-cols-12 items-center gap-3 " + (isIneligible ? "bg-mpca-oxblood/5" : "")} data-testid={`squad-pool-row-${testKey}`} data-player-id={p.id} data-player-no={p.player_id} data-ineligible={isIneligible ? "true" : "false"}>
                                     <div className="col-span-1">
-                                        <div className="w-9 h-9 rounded-full bg-mpca-parchment text-mpca-green-dark flex items-center justify-center text-[10px] font-serif shrink-0">
+                                        <div className={"w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-serif shrink-0 " + (isIneligible ? "bg-mpca-oxblood/20 text-mpca-oxblood" : "bg-mpca-parchment text-mpca-green-dark")}>
                                             {(p.full_name || "?").split(" ").filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"}
                                         </div>
                                     </div>
@@ -697,12 +792,34 @@ const SquadDetail = () => {
                                                 {p.bowling_style && <>Bowls {p.bowling_style.replace(/_/g, " ")}</>}
                                             </div>
                                         )}
+                                        {isIneligible && (
+                                            <div className="mt-1 flex flex-wrap gap-1" data-testid={`elig-reasons-${testKey}`}>
+                                                {eLookup.reasons.map((r, i) => {
+                                                    const [code, ...rest] = r.split(":");
+                                                    const detail = rest.join(":").trim();
+                                                    const label = code.replace(/_/g, " ");
+                                                    return (
+                                                        <span key={i} className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest px-1.5 py-0.5 border border-mpca-oxblood/50 bg-mpca-oxblood/10 text-mpca-oxblood font-mono" title={detail}>
+                                                            <XCircle size={9} /> {label}
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="col-span-5 flex justify-end gap-1">
                                         {canEdit && !busy && (
                                             <>
-                                                <button onClick={() => handleAdd(p)} className="text-[10px] uppercase tracking-[0.15em] px-2 py-1 border border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory transition-colors" data-testid={`squad-pool-pick-${testKey}`}>+ Pick</button>
-                                                {!captain && (
+                                                <button
+                                                    onClick={() => handleAdd(p)}
+                                                    disabled={!canPickThis}
+                                                    className={"text-[10px] uppercase tracking-[0.15em] px-2 py-1 border transition-colors " + (canPickThis ? "border-mpca-green-dark text-mpca-green-dark hover:bg-mpca-green-dark hover:text-mpca-ivory" : "border-mpca-oxblood/40 text-mpca-oxblood/60 cursor-not-allowed")}
+                                                    title={canPickThis ? "Add to squad" : (eLookup?.reasons || []).join(" · ")}
+                                                    data-testid={`squad-pool-pick-${testKey}`}
+                                                >
+                                                    {canPickThis ? "+ Pick" : "Blocked"}
+                                                </button>
+                                                {!captain && canPickThis && (
                                                     <button onClick={() => handleAdd(p, { captain: true })} className="text-[10px] uppercase tracking-[0.15em] px-2 py-1 border border-mpca-oxblood text-mpca-oxblood hover:bg-mpca-oxblood hover:text-mpca-ivory transition-colors" data-testid={`squad-pool-cap-${testKey}`}>+ Cap</button>
                                                 )}
                                             </>

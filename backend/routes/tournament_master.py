@@ -133,20 +133,46 @@ async def eligible_tournaments_for_player(pid: str):
         ("category", 1), ("sort_order", 1), ("name", 1),
     ]).to_list(500)
 
-    def _eligible(m: dict) -> bool:
-        # Gender check
-        if m.get("gender") and player_gender and m["gender"] != player_gender:
-            return False
-        # Date window check
+    def _eligible(m: dict) -> tuple:
+        """Return (eligible, has_rules) — a row is "decidable" only when
+        the master has a concrete DOB window OR is explicitly Senior with
+        no upper age cap. Rows with `age_grp` set but no DOB window are
+        undecidable (the registry needs the DOB fenceposts filled in)."""
+        m_gender = (m.get("gender") or "").strip()
+        m_age = (m.get("age_grp") or "").strip()
         boob = (m.get("born_on_or_before") or "").strip()
         boa = (m.get("born_on_or_after") or "").strip()
-        if boob and dob and dob > boob:
-            return False
-        if boa and dob and dob < boa:
-            return False
-        return True
 
-    eligible = [m for m in masters if _eligible(m)]
+        has_dob = bool(boob or boa)
+        # Senior with no window is decidable (open to any adult). Every
+        # other age_grp requires an explicit window before we can decide.
+        senior_open = m_age.lower() == "senior" and not has_dob
+        has_rules = bool(m_gender and (has_dob or senior_open))
+        if not has_rules:
+            return False, False
+
+        # Gender
+        if m_gender and player_gender and m_gender != player_gender:
+            return False, True
+        if m_gender and not player_gender:
+            return False, True
+        # DOB window
+        if has_dob and not dob:
+            return False, True
+        if boob and dob and dob > boob:
+            return False, True
+        if boa and dob and dob < boa:
+            return False, True
+        return True, True
+
+    eligible = []
+    open_rows = []
+    for m in masters:
+        ok, has_rules = _eligible(m)
+        if ok:
+            eligible.append(m)
+        elif not has_rules:
+            open_rows.append(m)
     return {
         "player_id": pid,
         "player_name": player.get("full_name"),
@@ -154,6 +180,11 @@ async def eligible_tournaments_for_player(pid: str):
         "player_gender": player_gender,
         "eligible_count": len(eligible),
         "tournaments": eligible,
+        # Feb 2026 · master rows with no gender/DOB rules — the app can't
+        # confirm eligibility so they're returned separately so MPCA knows
+        # the registry has gaps to fill.
+        "undecidable_count": len(open_rows),
+        "undecidable_tournaments": open_rows,
     }
 
 SEED_BCCI = [

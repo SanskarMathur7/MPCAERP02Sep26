@@ -47,6 +47,12 @@ export default function TournamentMasterRegistry() {
     const [editingId, setEditingId] = useState(null);
     const [editingForm, setEditingForm] = useState(emptyForm());
     const [showInactive, setShowInactive] = useState(false);
+    // Feb 2026 · Inline-editable Registry — save-on-blur PATCH for DOB
+    // fenceposts, medical toggle, and guest quotas. `savingIds` shows
+    // an inline "…" spinner beside the saving cell. `savedIds` briefly
+    // flashes a ✓ so MPCA sees the change persisted.
+    const [savingIds, setSavingIds] = useState(new Set());
+    const [savedIds, setSavedIds] = useState(new Set());
 
     const activeCategory = useMemo(() => CATEGORIES.find((c) => c.code === tab), [tab]);
     const isReadOnly = activeCategory?.readOnly || !canEdit;
@@ -144,6 +150,33 @@ export default function TournamentMasterRegistry() {
             await load();
         } catch (e) { setError(e?.response?.data?.detail || e.message); }
         finally { setBusy(false); }
+    };
+
+    // Feb 2026 · Inline save-on-blur. `patch` is a partial (e.g. { born_on_or_before: "2012-08-01" }).
+    // Optimistically updates the local buckets so the row re-renders without a full reload,
+    // then PATCHes the backend and flashes a saved indicator.
+    const saveField = async (row, patch) => {
+        // Optimistic local update
+        setBuckets((prev) => {
+            const next = { ...prev };
+            const list = (next[tab] || []).map((x) => x.id === row.id ? { ...x, ...patch } : x);
+            next[tab] = list;
+            return next;
+        });
+        setSavingIds((prev) => { const n = new Set(prev); n.add(row.id); return n; });
+        try {
+            await api.patch(`/tournament-master/${row.id}`, patch);
+            setSavedIds((prev) => { const n = new Set(prev); n.add(row.id); return n; });
+            setTimeout(() => {
+                setSavedIds((prev) => { const n = new Set(prev); n.delete(row.id); return n; });
+            }, 1400);
+        } catch (e) {
+            setError(e?.response?.data?.detail || e.message);
+            // Reload to revert optimistic update on error
+            await load();
+        } finally {
+            setSavingIds((prev) => { const n = new Set(prev); n.delete(row.id); return n; });
+        }
     };
 
     const rows = buckets[tab] || [];
@@ -374,35 +407,47 @@ export default function TournamentMasterRegistry() {
                                                 <span className="text-mpca-brass">{PLAY_TYPE_LABEL[r.play_type] || (r.play_type || "—")}</span>
                                             )}
                                         </td>
-                                        <td className="px-3 py-2 text-[10px] font-mono text-mpca-navy">
-                                            {isEditing
-                                                ? <input type="date" className="input-heritage !py-1 !text-xs" value={editingForm.born_on_or_before || ""} onChange={(e) => setEditingForm({ ...editingForm, born_on_or_before: e.target.value })} />
-                                                : (r.born_on_or_before || "—")}
+                                        <td className="px-3 py-2 text-[10px] font-mono text-mpca-navy" data-testid={`registry-cell-boob-${r.id}`}>
+                                            {isEditing ? (
+                                                <input type="date" className="input-heritage !py-1 !text-xs" value={editingForm.born_on_or_before || ""} onChange={(e) => setEditingForm({ ...editingForm, born_on_or_before: e.target.value })} />
+                                            ) : !isReadOnly ? (
+                                                <InlineDateCell row={r} field="born_on_or_before" saveField={saveField} savingIds={savingIds} savedIds={savedIds} testid={`registry-inline-boob-${r.id}`} />
+                                            ) : (r.born_on_or_before || "—")}
                                         </td>
-                                        <td className="px-3 py-2 text-[10px] font-mono text-mpca-navy">
-                                            {isEditing
-                                                ? <input type="date" className="input-heritage !py-1 !text-xs" value={editingForm.born_on_or_after || ""} onChange={(e) => setEditingForm({ ...editingForm, born_on_or_after: e.target.value })} />
-                                                : (r.born_on_or_after || "—")}
-                                        </td>
-                                        <td className="px-3 py-2 text-center font-mono text-[11px]">
-                                            {isEditing
-                                                ? <input type="number" min="0" className="input-heritage !py-1 !text-xs w-16" value={editingForm.max_guest_mp_domicile} onChange={(e) => setEditingForm({ ...editingForm, max_guest_mp_domicile: e.target.value })} />
-                                                : <span className={r.max_guest_mp_domicile > 0 ? "text-mpca-oxblood" : "text-mpca-gray-dark"}>{r.max_guest_mp_domicile ?? 0}</span>}
-                                        </td>
-                                        <td className="px-3 py-2 text-center font-mono text-[11px]">
-                                            {isEditing
-                                                ? <input type="number" min="0" className="input-heritage !py-1 !text-xs w-16" value={editingForm.max_guest_education} onChange={(e) => setEditingForm({ ...editingForm, max_guest_education: e.target.value })} />
-                                                : <span className={r.max_guest_education > 0 ? "text-mpca-oxblood" : "text-mpca-gray-dark"}>{r.max_guest_education ?? 0}</span>}
+                                        <td className="px-3 py-2 text-[10px] font-mono text-mpca-navy" data-testid={`registry-cell-boa-${r.id}`}>
+                                            {isEditing ? (
+                                                <input type="date" className="input-heritage !py-1 !text-xs" value={editingForm.born_on_or_after || ""} onChange={(e) => setEditingForm({ ...editingForm, born_on_or_after: e.target.value })} />
+                                            ) : !isReadOnly ? (
+                                                <InlineDateCell row={r} field="born_on_or_after" saveField={saveField} savingIds={savingIds} savedIds={savedIds} testid={`registry-inline-boa-${r.id}`} />
+                                            ) : (r.born_on_or_after || "—")}
                                         </td>
                                         <td className="px-3 py-2 text-center font-mono text-[11px]">
-                                            {isEditing
-                                                ? <input type="number" min="0" className="input-heritage !py-1 !text-xs w-16" value={editingForm.max_guest_out_of_mp} onChange={(e) => setEditingForm({ ...editingForm, max_guest_out_of_mp: e.target.value })} />
-                                                : <span className={r.max_guest_out_of_mp > 0 ? "text-mpca-oxblood" : "text-mpca-gray-dark"}>{r.max_guest_out_of_mp ?? 0}</span>}
+                                            {isEditing ? (
+                                                <input type="number" min="0" className="input-heritage !py-1 !text-xs w-16" value={editingForm.max_guest_mp_domicile} onChange={(e) => setEditingForm({ ...editingForm, max_guest_mp_domicile: e.target.value })} />
+                                            ) : !isReadOnly ? (
+                                                <InlineNumberCell row={r} field="max_guest_mp_domicile" saveField={saveField} savingIds={savingIds} savedIds={savedIds} testid={`registry-inline-mp-${r.id}`} />
+                                            ) : <span className={r.max_guest_mp_domicile > 0 ? "text-mpca-oxblood" : "text-mpca-gray-dark"}>{r.max_guest_mp_domicile ?? 0}</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-center font-mono text-[11px]">
+                                            {isEditing ? (
+                                                <input type="number" min="0" className="input-heritage !py-1 !text-xs w-16" value={editingForm.max_guest_education} onChange={(e) => setEditingForm({ ...editingForm, max_guest_education: e.target.value })} />
+                                            ) : !isReadOnly ? (
+                                                <InlineNumberCell row={r} field="max_guest_education" saveField={saveField} savingIds={savingIds} savedIds={savedIds} testid={`registry-inline-edu-${r.id}`} />
+                                            ) : <span className={r.max_guest_education > 0 ? "text-mpca-oxblood" : "text-mpca-gray-dark"}>{r.max_guest_education ?? 0}</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-center font-mono text-[11px]">
+                                            {isEditing ? (
+                                                <input type="number" min="0" className="input-heritage !py-1 !text-xs w-16" value={editingForm.max_guest_out_of_mp} onChange={(e) => setEditingForm({ ...editingForm, max_guest_out_of_mp: e.target.value })} />
+                                            ) : !isReadOnly ? (
+                                                <InlineNumberCell row={r} field="max_guest_out_of_mp" saveField={saveField} savingIds={savingIds} savedIds={savedIds} testid={`registry-inline-outmp-${r.id}`} />
+                                            ) : <span className={r.max_guest_out_of_mp > 0 ? "text-mpca-oxblood" : "text-mpca-gray-dark"}>{r.max_guest_out_of_mp ?? 0}</span>}
                                         </td>
                                         <td className="px-3 py-2 text-center text-[10px]">
-                                            {isEditing
-                                                ? <input type="checkbox" checked={!!editingForm.medical_required} onChange={(e) => setEditingForm({ ...editingForm, medical_required: e.target.checked })} />
-                                                : (r.medical_required
+                                            {isEditing ? (
+                                                <input type="checkbox" checked={!!editingForm.medical_required} onChange={(e) => setEditingForm({ ...editingForm, medical_required: e.target.checked })} />
+                                            ) : !isReadOnly ? (
+                                                <InlineToggleCell row={r} field="medical_required" saveField={saveField} savingIds={savingIds} savedIds={savedIds} testid={`registry-inline-medical-${r.id}`} />
+                                            ) : (r.medical_required
                                                     ? <span className="uppercase tracking-widest text-mpca-oxblood font-mono">Yes</span>
                                                     : <span className="uppercase tracking-widest text-mpca-gray-dark font-mono">No</span>)}
                                         </td>
@@ -455,3 +500,79 @@ export default function TournamentMasterRegistry() {
         </div>
     );
 }
+
+
+/**
+ * Feb 2026 · Inline-editable cells for the Registry table. Each renders a
+ * native input pre-filled from `row[field]`, and calls `saveField(row, patch)`
+ * on blur when the value has actually changed. Uses local state so the user
+ * can freely type without racing the network — persists on blur/Enter.
+ */
+const StatusDot = ({ saving, saved }) => (
+    <span className="inline-block w-2 h-2 rounded-full ml-1 align-middle" title={saving ? "Saving…" : saved ? "Saved" : ""}
+        style={{ background: saving ? "#c4b48a" : saved ? "#2e7d3e" : "transparent" }} />
+);
+
+const InlineDateCell = ({ row, field, saveField, savingIds, savedIds, testid }) => {
+    const [val, setVal] = useState(row[field] || "");
+    useEffect(() => { setVal(row[field] || ""); }, [row[field]]);
+    const commit = () => {
+        const next = val || null;
+        if ((row[field] || null) !== next) saveField(row, { [field]: next });
+    };
+    return (
+        <span className="inline-flex items-center gap-1">
+            <input
+                type="date"
+                data-testid={testid}
+                className="input-heritage !py-1 !text-xs !w-[8.5rem] bg-transparent border-transparent hover:bg-mpca-parchment/60 hover:border-mpca-brass/40 focus:border-mpca-brass focus:bg-white"
+                value={val}
+                onChange={(e) => setVal(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
+            />
+            <StatusDot saving={savingIds.has(row.id)} saved={savedIds.has(row.id)} />
+        </span>
+    );
+};
+
+const InlineNumberCell = ({ row, field, saveField, savingIds, savedIds, testid }) => {
+    const [val, setVal] = useState(row[field] ?? 0);
+    useEffect(() => { setVal(row[field] ?? 0); }, [row[field]]);
+    const commit = () => {
+        const n = parseInt(val) || 0;
+        if ((row[field] ?? 0) !== n) saveField(row, { [field]: n });
+    };
+    return (
+        <span className="inline-flex items-center">
+            <input
+                type="number"
+                min="0"
+                data-testid={testid}
+                className="input-heritage !py-1 !text-xs !w-14 text-center bg-transparent border-transparent hover:bg-mpca-parchment/60 hover:border-mpca-brass/40 focus:border-mpca-brass focus:bg-white"
+                value={val}
+                onChange={(e) => setVal(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
+            />
+            <StatusDot saving={savingIds.has(row.id)} saved={savedIds.has(row.id)} />
+        </span>
+    );
+};
+
+const InlineToggleCell = ({ row, field, saveField, savingIds, savedIds, testid }) => {
+    const on = !!row[field];
+    const commit = (e) => {
+        const next = e.target.checked;
+        if (on !== next) saveField(row, { [field]: next });
+    };
+    return (
+        <label className="inline-flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" data-testid={testid} checked={on} onChange={commit} />
+            <span className={"text-[10px] uppercase tracking-widest font-mono " + (on ? "text-mpca-oxblood" : "text-mpca-gray-dark")}>
+                {on ? "Yes" : "No"}
+            </span>
+            <StatusDot saving={savingIds.has(row.id)} saved={savedIds.has(row.id)} />
+        </label>
+    );
+};

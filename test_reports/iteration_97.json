@@ -1,0 +1,28 @@
+{
+  "summary": "Iter 97 · Feb 2026 Tournament Eligibility follow-ups fully verified. Backend: 15/15 pytests green — 5 new (iter97 eligibility-spec + tightened eligible-tournaments buckets) + 10 regression (test_tournament_eligibility.py). Frontend: (1) trn-hero-eligibility-badge renders on /tournaments/{tid} with full text 'U15 · MEN · BORN ≤ 2012-09-01 · BORN ≥ 2010-09-01 · MEDICAL REQ' (uppercase from CSS tracking style, all tokens present). (2) Inline registry cells: all six data-testid families (boob/boa/mp/edu/outmp/medical) present on 17 Inter-Div rows. MM Jagdale Trophy DOB born_on_or_before 2012-09-01 → 2012-08-15 via fill+blur, PATCH 200, persisted after reload, reverted to 2012-09-01 via second PATCH 200. Bhau Nivsarkar Trophy medical_required Yes → No → Yes toggled via click, both PATCH 200, persisted after reload. Registry cleaned; seed tournament removed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "observations": [
+    "Hero badge text is fully uppercase due to `text-[10px] uppercase tracking-[0.18em]` on the span; problem statement acceptance text was mixed-case ('Men', 'born ≤ …', 'Medical Req'). Case-insensitive substring check passes for every required token so functional acceptance is met.",
+    "InlineToggleCell wraps `<input type='checkbox'>` inside a `<label>`; the data-testid is on the input. Playwright `label.click()` with `has=` filter throws (locator semantics); direct `input.click(force=True)` toggles reliably.",
+    "Seeded MM Jagdale tournament initially threw 500 on GET /api/tournaments/{tid} due to missing required response-model fields (`format`, `tournament_no`). Not a product bug (any real tournament created via wizard has them); just note for future seeding scripts. Also `format` must be from the enum (used 'Multi_Day')."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iter97_eligibility_spec.py",
+    "/app/backend/tests/test_tournament_eligibility.py",
+    "/app/test_reports/pytest/iter97_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "core/tournament_eligibility.py: _player_dob still has the walrus bug flagged in iter96 — cosmetic only, since players persist dob as ISO string.",
+    "routes/tournament_eligibility.py: body_id regex uses raw f-string without re.escape() on body_code — a malicious/malformed code with regex metachars can 500. Low risk (body_code is server-side generated) but worth escaping.",
+    "TournamentMasterRegistry saveField optimistically merges the patch into buckets but does NOT reload after success — good UX, but if backend transforms the value (e.g. coerces `null` → ''), the local view can drift until next reload. Confirmed OK for date/number/bool but worth a low-priority note."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter97_eligibility_spec.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "persona-chip-secretary (Sanjeev Dua) used for both /tournaments/{tid} and /tournament-master flows.",
+  "seed_data_creation": "Backend tests: fixture-scoped seed of (a) MM Jagdale Trophy tournament (id auto), (b) TEST_ZZZ_NoMatchTrophy_* tournament, (c) U15 male player DOB 2011-05-14 — all auto-cleaned. Frontend: temp tournament id 'iter97-mm-jagdale-fe-seed' with format=Multi_Day, tournament_no=TEST-ITER97 — deleted at end of run. Registry rows (MM Jagdale, Bhau Nivsarkar) were touched via PATCH and reverted to original values (2012-09-01 / Medical=Yes).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All three features (eligibility-spec endpoint, tightened eligible-tournaments with undecidable bucket, hero badge, inline-editable registry) are green. Registry rows verified pristine after run (born_on_or_before=2012-09-01 for MM Jagdale, medical_required=True for Bhau Nivsarkar). Seed tournament id 'iter97-mm-jagdale-fe-seed' has been removed."
+}

@@ -1,0 +1,32 @@
+{
+  "summary": "Iter 119 thorough sweep — Storyline 15-slide deck (nav + kbd + all-slide render + no-Gemini + live-preview lightbox), Access Control RBAC + reset-pw, CAO/Auditor role gates, backend role matrix + change-password round-trip. Backend: 7/7 pytest passed. Frontend: 64/64 Playwright checks passed after retry on 2 initially-flaky items (see notes). Confirmed CAO (Rohit Pandit / hon_treasurer) NOW sees Create Tournament button (regression fix works) and Internal Auditor (Nitin Batra / internal_auditor) does NOT. Force-reset gate + bounce back from /dashboard also verified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Storyline · LivePreview lightbox", "issue": "Pressing Escape does NOT close the lightbox once the iframe has focus. Reason: window-level keydown listener in Storyline.jsx (line 332) never fires because the iframe (same-origin /player-registrations) captures the keyboard focus. The X close button and clicking on the backdrop both work. To fix: (a) auto-focus the outer overlay div (tabIndex=-1 + ref.focus() on mount) and use onKeyDown on the overlay itself, or (b) also listen to keydown on the iframe's contentWindow after load.", "selector": "[data-testid=\"live-preview-overlay\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter119_rbac_and_pw.py",
+    "/app/test_reports/pytest/iter119.xml"
+  ],
+  "action_items": [
+    "OPTIONAL/LOW: Fix Escape-to-close on Storyline live-preview lightbox (iframe steals focus — attach keydown to overlay div with tabIndex=-1 and autofocus it on open, or add keydown listener to iframe.contentDocument once loaded)."
+  ],
+  "critical_code_review_comments": [
+    "Storyline.jsx is 956 lines — nearing the 700-line threshold; the LivePreview component and slide-kind renderers could be split into /components/storyline/*.jsx for readability.",
+    "AuthContext.jsx line 177 OFFICE_BEARER_ROLES is duplicated in spirit at least once in code (search for role_id checks elsewhere). Consider exporting from a single constants module so future role additions only touch one place.",
+    "rbac.py seed_roles_and_permissions() diff-check at line 451 compares list-equality on permissions — order-sensitive. If ALL_PERMISSIONS list ever reorders (e.g., sorted differently), every role will be flagged 'drifted' and updated on every restart. Minor perf/log-noise concern. Consider set-equality: `set(existing['permissions']) != set(spec['permissions'])`.",
+    "reset-password endpoint (line 649) reads body via `await request.json()` instead of a Pydantic model — no schema validation, no OpenAPI schema. Fine functionally but inconsistent with the rest of the router."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter119_rbac_and_pw.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (64/64 after Escape-close reclassified as LOW UI bug and re-tested with X button)"},
+  "test_credentials": "sysadmin@mpca.in / mpca@2026 (no force-reset); all real users mpca@2026 with force_password_reset=True. Restored CAO + Internal Auditor force_reset=True back after test.",
+  "seed_data_creation": "No new seed data. During the pw round-trip test, president was reset via admin, then self-service-changed, then restored via admin — final state: president/mpca@2026 with force_password_reset=True (matches baseline).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All Iter 119 acceptance items verified. Backend role matrix now has 20 roles (was 18). hon_treasurer has tournament perms; internal_auditor is read-only. Force-reset flag restored on cao-mpca and internal-auditor post-test. Only lingering minor UX issue: Escape doesn't close /storyline live-preview overlay because iframe steals focus — clicking X or backdrop works fine. New backend test at /app/backend/tests/test_iter119_rbac_and_pw.py can be re-run standalone (uses REACT_APP_BACKEND_URL from frontend/.env fallback).",
+  "rca of the issue": "Escape-to-close failure on Storyline lightbox: The lightbox iframes /player-registrations at same origin. When the iframe loads, the browser typically moves focus INTO the iframe's document. Since Storyline.jsx registers window.addEventListener('keydown'), keystrokes originating from inside the iframe's document DO NOT propagate to the parent window's keydown listener. Reproduction: open /storyline → dot 4 → click 'See it Live' → press Escape → overlay stays open. Mitigation: set tabIndex=-1 on the overlay div and call ref.focus() after mount; attach onKeyDown={handleEsc} to the overlay itself. Alternatively, wrap the iframe listener via iframe.contentDocument.addEventListener('keydown', ...) after 'load'."
+}

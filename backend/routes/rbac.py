@@ -85,12 +85,31 @@ DEFAULT_ROLE_MATRIX: Dict[str, Dict[str, Any]] = {
     "hon_treasurer": {
         "name": "Hon. Treasurer",
         "body_scope": "State",
-        "description": "Final approver on all finance and receipts.",
+        "description": "Final approver on all finance and receipts; co-approver on tournament creation & closure.",
         "permissions": [
             *_all("budgets", "invoices", "extras", "reimbursement_claims", "grant_claims", "receipts", "closure"),
-            "members.view", "tournaments.view", "squads.view", "da_forms.view", "da_forms.approve",
+            # Iter 119 — Treasurer/CAO also make & approve tournament actions
+            # (they hold the budget). Wired into M&C as maker on tournament
+            # create/close, checker on squad approvals.
+            "members.view",
+            "tournaments.view", "tournaments.create", "tournaments.edit", "tournaments.publish", "tournaments.close",
+            "squads.view", "squads.approve",
+            "da_forms.view", "da_forms.approve",
             "match_officials.view", "match_officials.approve_da", "schemes.view", "schemes.edit",
             "rbac.view", "rbac.audit_log",
+        ],
+    },
+    "internal_auditor": {
+        "name": "Internal Auditor",
+        "body_scope": "State",
+        "description": "Independent read-only reviewer of financial books, vouchers and audit trail.",
+        "permissions": [
+            "budgets.view", "invoices.view", "extras.view",
+            "reimbursement_claims.view", "grant_claims.view",
+            "receipts.view", "closure.view",
+            "tournaments.view", "squads.view", "members.view",
+            "da_forms.view", "match_officials.view", "schemes.view",
+            "rbac.view", "rbac.audit_log", "disclosures.view", "governance.view",
         ],
     },
     "joint_secretary": {
@@ -419,12 +438,32 @@ async def log_audit_event(
 
 async def seed_roles_and_permissions() -> None:
     """Seed the 13 default roles + bootstrap 6 initial users from personas (Q5 hybrid)."""
-    # 1) roles
+    # 1) roles — insert new; refresh permissions/name/description if the
+    #    matrix drifted since last boot (Iter 119 — was insert-only, so
+    #    permission grants like tournaments.create on hon_treasurer never
+    #    propagated to production).
     for role_id, spec in DEFAULT_ROLE_MATRIX.items():
         existing = await db.roles.find_one({"id": role_id})
         if not existing:
             role = Role(id=role_id, **spec)
             await db.roles.insert_one(role.model_dump())
+        else:
+            drift = (
+                existing.get("permissions") != spec["permissions"]
+                or existing.get("name") != spec["name"]
+                or existing.get("description") != spec.get("description")
+                or existing.get("body_scope") != spec.get("body_scope")
+            )
+            if drift:
+                await db.roles.update_one(
+                    {"id": role_id},
+                    {"$set": {
+                        "permissions": spec["permissions"],
+                        "name": spec["name"],
+                        "description": spec.get("description"),
+                        "body_scope": spec.get("body_scope"),
+                    }},
+                )
 
     # 2) bootstrap users from personas (idempotent).
     #    Iter 114 — Real MPCA roster is seeded by `scripts/seed_users.py`.
@@ -437,8 +476,8 @@ async def seed_roles_and_permissions() -> None:
         ("secretary",           "hon_secretary"),
         ("joint-secretary",     "joint_secretary"),      # own dedicated role now
         ("treasurer",           "hon_treasurer"),
-        ("cao-mpca",            "hon_treasurer"),        # accounts custodian
-        ("internal-auditor",    "hon_treasurer"),        # read-only auditor
+        ("cao-mpca",            "hon_treasurer"),         # accounts custodian, budget authority
+        ("internal-auditor",    "internal_auditor"),      # own read-only role
         ("div-sec-indore",      "division_secretary"),
         ("div-sec-jabalpur",    "division_secretary"),
         ("div-sec-shahdol",     "division_secretary"),
@@ -522,6 +561,8 @@ _POST_TITLE_TO_ROLE_ID = {
     "President":                  "president",
     "Vice President":             "vice_president",
     "Hon. Secretary":             "hon_secretary",
+    "Chief Accounts Officer":     "hon_treasurer",
+    "Internal Auditor":           "internal_auditor",
     "Hon. Treasurer":             "hon_treasurer",
     "Joint Secretary":            "joint_secretary",
     "Chief Accounts Officer":     "chief_accounts_officer",

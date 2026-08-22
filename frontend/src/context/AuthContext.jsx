@@ -169,6 +169,13 @@ export const AuthProvider = ({ children }) => {
         setPersona(null);
     };
 
+    // Iter 119 — office-bearer derivation now uses RBAC role_id, not a
+    // hardcoded persona ID list. This unlocks VP, Joint Secretary, CAO,
+    // Internal Auditor and every real Division Secretary (div-sec-*) so
+    // they see Create Tournament (per their M&C maker configuration) and
+    // other office-bearer-only UI.
+    const OFFICE_BEARER_ROLES = ["president", "vice_president", "hon_secretary", "joint_secretary", "hon_treasurer", "division_secretary", "district_secretary", "sys_admin"];
+
     return (
         <AuthContext.Provider value={{
             persona,
@@ -176,7 +183,7 @@ export const AuthProvider = ({ children }) => {
             loginWithCredentials,
             logout,
             isAuthed: !!persona,
-            isOfficeBearer: !!persona && ["president", "secretary", "treasurer", "division-secretary", "division-secretary-gwl"].includes(persona.id),
+            isOfficeBearer: !!persona && OFFICE_BEARER_ROLES.includes(persona.role_id),
         }}>
             {children}
         </AuthContext.Provider>

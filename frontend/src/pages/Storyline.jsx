@@ -16,7 +16,7 @@
  *   · "See it live" opens a lightbox with the captured ERP screenshot
  *     + a link to open the real page in a new tab
  */
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { DL } from "@/lib/designSystem";
 import {
@@ -112,7 +112,7 @@ const SLIDES = [
         icon: FileCheck2,
         eyebrow: "Players · AI 01 / 02",
         featureName: "AI Vision · Player Document Verifier",
-        problem: "Verifying 1,200 player documents a year — Aadhaar, DOB proofs, school records — at midnight, by hand.",
+        problem: "Every field of every Aadhaar, DOB proof and school certificate cross-checked against the registration form — 1,200 documents a year.",
         aiVerb: "EXTRACTS",
         aiDescription: "AI Vision reads every document, extracts DOB / name / issuing authority, and flags mismatches inside 30 seconds per player.",
         metric: { before: "15-30 min", after: "30 sec", label: "per player · verification time" },
@@ -196,7 +196,7 @@ const SLIDES = [
         eyebrow: "HOW · Grants",
         icon: HandCoins,
         title: "Every scheme rupee — traced from MPCA to the boundary rope.",
-        subtitle: "MPCA disburses grants to 10 Divisions under 20+ schemes — Grounds, U-16 camps, Vacation camps, Coaching allowances, BCCI-linked reimbursements. Divisions submit stacks of scanned invoices; Accounts spends 1-2 working days per claim matching each line against the rate card. Small padding across many invoices compounds to lakhs of leaked spend annually.",
+        subtitle: "MPCA disburses grants to 10 Divisions under 20+ schemes — Grounds, U-16 camps, Vacation camps, Coaching allowances, BCCI-linked reimbursements. Every rupee travels the same six-step path: application, sanction, disbursal, spend, claim, reconciliation. Six chances for error. Six queues to sit in.",
         pains: [
             "Divisions submit scanned invoices in bulk — often 40-60 per tournament",
             "Accounts opens each one, keys it into a ledger, cross-checks against rate cards line-by-line",
@@ -215,7 +215,7 @@ const SLIDES = [
         icon: HandCoins,
         eyebrow: "Grants · AI 01 / 01",
         featureName: "AI Reimbursement Claim Verifier",
-        problem: "Accounts team spends 1-2 working days per claim — matching each invoice against rate cards, scheme heads and budget ceilings by hand.",
+        problem: "10 Divisions × 40 tournaments × 40-60 invoices each. A backlog nobody could clear by hand.",
         aiVerb: "VERIFIES",
         aiDescription: "The AI Claim Engine OCRs every invoice, extracts vendor / amount / GST / date, matches against the applicable rate card, and flags duplicates + inflation.",
         metric: { before: "1-2 days", after: "90 seconds", label: "per claim · verification time" },
@@ -234,7 +234,7 @@ const SLIDES = [
         eyebrow: "HOW · Governance & Compliance",
         icon: Landmark,
         title: "The approval matrix lived in a Word doc. Everyone remembered it differently.",
-        subtitle: "MPCA's approval chains — who signs, in what order, for what amount — were folk knowledge. Signed contracts and MoUs sat in a cupboard, reviewed line-by-line when there was time. Compliance was a hope; the audit trail was an email thread.",
+        subtitle: "Every association action needs approvals in a specific order. Who signs first, who signs next, what amount triggers what escalation. When that logic lived in a Word doc, it lived nowhere at all.",
         pains: [
             "Approval matrix maintained as a Word document — copies drift, versions diverge",
             "Requests get sent to the wrong person, rebound, delay, or die in an inbox",
@@ -252,7 +252,7 @@ const SLIDES = [
         icon: GitBranch,
         eyebrow: "Governance · AI 01 / 02",
         featureName: "Dynamic Wiring Engine — Workflow Orchestrator",
-        problem: "MPCA's approval matrix lived in a Word doc. Everyone remembered it differently. Approvals rebounded, delayed, or got lost.",
+        problem: "Requests routed to the wrong person, then rebounded, then delayed. Nobody remembered who approved ₹40,000 extras — the Cricket Manager or the Manager.",
         aiVerb: "ROUTES",
         aiDescription: "Every action's approval chain is encoded as configurable data. The engine routes each request to the right actor, in the right order, with an immutable audit stamp.",
         metric: { before: "3-5 days", after: "Same day", label: "per approval cycle" },
@@ -893,14 +893,36 @@ const CtaSlide = ({ data }) => (
 // stakeholder sees the current UI + real data if signed in). Fallback to
 // "Open in new tab" if the iframe fails to load.
 // ═══════════════════════════════════════════════════════════════════
-const LivePreview = ({ data, onClose }) => (
+const LivePreview = ({ data, onClose }) => {
+    // Iter 119 — same-origin iframe captures keyboard focus, so a window-
+    // level keydown never fires. We (a) autofocus the overlay div in case
+    // the user has not yet clicked into the iframe, AND (b) also attach the
+    // Escape listener to the iframe's contentDocument on load (works because
+    // the iframe is same-origin).
+    const overlayRef = React.useRef(null);
+    const iframeRef = React.useRef(null);
+    React.useEffect(() => { overlayRef.current?.focus(); }, []);
+    const handleKey = React.useCallback((e) => {
+        if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    }, [onClose]);
+    const attachToIframe = () => {
+        try {
+            const doc = iframeRef.current?.contentDocument;
+            if (doc) doc.addEventListener("keydown", handleKey);
+        } catch (_) { /* cross-origin — ignore, X button still works */ }
+    };
+    return (
     <div
+        ref={overlayRef}
+        tabIndex={-1}
+        onKeyDown={handleKey}
         onClick={onClose}
         data-testid="live-preview-overlay"
         style={{
             position: "fixed", inset: 0, zIndex: 20,
             background: "rgba(6, 13, 12, 0.88)", backdropFilter: "blur(6px)",
             display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+            outline: "none",
         }}
     >
         <div
@@ -946,6 +968,8 @@ const LivePreview = ({ data, onClose }) => (
 
             {/* Live iframe — same origin so JWT in localStorage works */}
             <iframe
+                ref={iframeRef}
+                onLoad={attachToIframe}
                 title={`Live · ${data.label}`}
                 src={data.path}
                 data-testid="live-preview-iframe"
@@ -953,4 +977,5 @@ const LivePreview = ({ data, onClose }) => (
             />
         </div>
     </div>
-);
+    );
+};

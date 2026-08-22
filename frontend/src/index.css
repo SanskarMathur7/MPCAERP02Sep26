@@ -534,6 +534,19 @@
     background: linear-gradient(180deg, #E5B428 0%, #C89430 100%) !important;
 }
 
+/* Iter 123s · Utility for scrollable strips (finance tabs, wizard steps)
+ * where we want touch/wheel scroll without the ugly native scrollbar. */
+.no-scrollbar {
+    scrollbar-width: none !important;               /* Firefox */
+    -ms-overflow-style: none !important;            /* IE/Edge legacy */
+}
+.no-scrollbar::-webkit-scrollbar {
+    display: none !important;                       /* Chrome/Safari */
+    width: 0 !important;
+    height: 0 !important;
+}
+
+
 /* ═════ Iter 112 · Cross-page font consistency ═════════════════════════
  * Many legacy pages use `<h1 className="font-serif text-4xl md:text-5xl">`
  * which now renders MUCH bigger than the new Dashboard scale.  We normalise

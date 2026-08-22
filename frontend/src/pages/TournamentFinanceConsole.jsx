@@ -577,7 +577,7 @@ const TournamentFinanceConsole = () => {
                 they HOST — they act as MPCA there so they need every tab
                 even before budgets exist. */}
             {(anyBudgetsExist || isDistrict || (persona?.body_type === "Division" && tournament?.host_body_id === persona?.body_code)) && (
-                <div className="mb-4 flex items-center gap-1 border-b border-mpca-brass/30 overflow-x-auto" data-testid="fc-tabs">
+                <div className="mb-4 flex items-center gap-1 border-b border-mpca-brass/30 overflow-x-auto no-scrollbar" data-testid="fc-tabs">
                     {[
                         { id: "pipeline",  label: "Pipeline",         icon: LayoutGrid,    show: isMPCA },
                         { id: "budgets",   label: "Budgets",          icon: Wallet,        show: true },
@@ -593,7 +593,7 @@ const TournamentFinanceConsole = () => {
                         const active = activeTab === t.id;
                         return (
                             <button key={t.id} onClick={() => setActiveTab(t.id)}
-                                className={`px-4 py-2.5 text-[11px] uppercase tracking-widest font-semibold flex items-center gap-2 border-b-2 shrink-0 transition-colors ${
+                                className={`px-3 py-2.5 text-[10.5px] uppercase tracking-widest font-semibold flex items-center gap-1.5 border-b-2 shrink-0 transition-colors whitespace-nowrap ${
                                     active
                                         ? "border-mpca-oxblood text-mpca-oxblood"
                                         : "border-transparent text-mpca-gray-dark hover:text-mpca-green-dark"

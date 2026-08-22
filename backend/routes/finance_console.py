@@ -1021,7 +1021,7 @@ def _next_action_hint(budget: dict, claim: dict, role: str) -> Dict[str, str]:
         return {"waiting_on": "MPCA", "action": "Send to Division"}
     if bs == "Sent_To_Division":
         return {"waiting_on": (budget or {}).get("body_id", "Division"),
-                "action": "Accept / Request revision"}
+                "action": "Accept & Sanction"}
     if bs == "Revision_Requested":
         return {"waiting_on": "MPCA", "action": "Revise & re-send"}
     if bs == "Accepted_By_Division":

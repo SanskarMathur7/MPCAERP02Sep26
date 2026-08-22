@@ -62,11 +62,11 @@ export const PageShell = ({ children, testid = "ds-page-shell" }) => (
 export const PageEyebrow = ({ title, meta, rightAction, links = [] }) => (
     <div className="mb-8 flex items-center justify-between gap-6 flex-wrap">
         <div className="flex items-baseline gap-4 flex-wrap">
-            <span className="text-[24px] uppercase tracking-[0.16em] font-black" style={{ fontFamily: DL.fontMono, color: DL.ink }}>
+            <span className="text-[19px] uppercase tracking-[0.18em] font-black" style={{ fontFamily: DL.fontMono, color: DL.ink }}>
                 / {title}
             </span>
             {meta && (
-                <span className="text-[18px] uppercase tracking-[0.22em] font-semibold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
+                <span className="text-[14px] uppercase tracking-[0.22em] font-semibold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
                     {meta}
                 </span>
             )}
@@ -74,7 +74,7 @@ export const PageEyebrow = ({ title, meta, rightAction, links = [] }) => (
                 <a
                     key={l.href}
                     href={l.href}
-                    className="text-[17px] uppercase tracking-[0.22em] font-bold underline underline-offset-4"
+                    className="text-[13px] uppercase tracking-[0.22em] font-bold underline underline-offset-4"
                     style={{ fontFamily: DL.fontMono, color: DL.emerald }}
                     data-testid={l.testid}
                 >

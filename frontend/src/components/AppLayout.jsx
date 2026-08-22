@@ -279,7 +279,7 @@ const AppLayout = ({ children }) => {
                 )}
 
                 {/* Primary nav */}
-                <nav className={`flex-1 ${collapsed ? "px-2" : "px-4"} py-6 overflow-y-auto`}>
+                <nav className={`sidebar-scroll flex-1 ${collapsed ? "px-2" : "px-4"} py-6 overflow-y-scroll`}>
                     {(persona?.id === "match-official" ? OFFICIAL_NAV_DOMAINS : NAV_DOMAINS)
                         .filter((group) => {
                             // Iter 110 · System Administration section only for sys-admin persona.

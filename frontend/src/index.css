@@ -505,3 +505,31 @@
     }
     table { font-size: 10px; }
 }
+
+/* Iter 112 · Always-visible sidebar scrollbar (permanent, brass on dark) */
+.sidebar-scroll {
+    scrollbar-width: auto !important;
+    scrollbar-color: #D4A017 rgba(14, 31, 27, 0.7) !important;
+    overflow-y: scroll !important;
+}
+.sidebar-scroll::-webkit-scrollbar {
+    width: 14px !important;
+    -webkit-appearance: none;
+    background: rgba(14, 31, 27, 0.7);
+    display: block !important;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+    background: rgba(14, 31, 27, 0.7);
+    border-left: 1px solid rgba(184, 131, 40, 0.4);
+    box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.5);
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #D4A017 0%, #B88328 100%) !important;
+    border-radius: 7px !important;
+    border: 2px solid rgba(14, 31, 27, 0.7) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 0 0 1px rgba(184, 131, 40, 0.5);
+    min-height: 60px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #E5B428 0%, #C89430 100%) !important;
+}

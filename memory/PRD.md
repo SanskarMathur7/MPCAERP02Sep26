@@ -5,6 +5,8 @@
 > Started: Jan 2026 · Last update: Feb 2026 — MPCA-254 Showcase redraft (Phase 1 tabbed doc with HLD/LLD/PRD)
 
 ## Recent Changelog
+- **Feb 2026 — Inter-Divisional eligibility spec backfill**: All 16 Inter-Divisional entries in `tournament_master` now carry an `eligibility_spec` object (gender, age_group, format, `dob_born_on_before`, `dob_born_on_after`, `max_out_of_state`, `medical_required`) sourced from the user's Excel `MPCA_Tournament_Registry_Eligibility.xlsx`. Migration script at `backend/scripts/backfill_interdiv_eligibility.py`. Added new Girls U-15 Trophy (sort_order 115). Wiring gap identified: existing residency engine (`compute_eligibility_tag`) does NOT cross-check the tournament's `eligibility_spec`. Squad picker in Tournament Detail therefore still shows all Local/Birth players regardless of age/gender/medical fit. Next session must build: (a) tournament-eligibility engine `check_player_for_tournament()`, (b) `GET /api/tournaments/{id}/eligible-players` endpoint, (c) frontend squad picker replacement.
+
 - **Feb 2026 — Sub-pages rollout**: TournamentDetail, PlayerDetail and Claim Detail now consume the Delhigence DL palette.
   - `TournamentDetail.jsx` — outer wrapped in `PageShell` (ivory + Nunito), the dark-navy gradient hero swapped for an **embossed emerald slab** (`linear-gradient(#0D3B2E → #0a2f24)` + 4-layer shadow), gold eyebrow (`TRN-… · Championship · Fourday-Senior`), Nunito 800 title, gold status pills. Status-action buttons are now gold pills. Back-to-Tournaments becomes a ghost pill.
   - `PlayerDetail.jsx` — same emerald hero treatment on the top slab. Player photo/initials tile keeps its portrait shape but the border switches to gold (was oxblood). Name in Nunito 800.

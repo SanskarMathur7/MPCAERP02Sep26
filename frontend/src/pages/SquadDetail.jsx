@@ -265,6 +265,11 @@ const SquadDetail = () => {
             const { data: upload } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
             const { data: updated } = await api.post(`/squads/${squad.id}/signed-copy`, { signed_copy_url: upload.url });
             setSquad(updated);
+            // Iter 108f · auto-fire AI cross-check right after upload
+            try {
+                const { data: v } = await api.post(`/squads/${squad.id}/verify-signed-copy`);
+                setSquad((s) => ({ ...(s || updated), pdf_verification: v }));
+            } catch (verifyErr) { /* the summary card will show a manual "Verify" button */ }
         } catch (err) { alert(err?.response?.data?.detail || err.message); }
         finally { e.target.value = ""; }
     };
@@ -526,6 +531,84 @@ const SquadDetail = () => {
                     <div className="border border-mpca-ivory/20 px-3 py-1.5"><span className="text-mpca-ivory/60 uppercase tracking-wider text-[9px] block">Pool Available</span><span className="font-mono text-mpca-ivory">{players.length}</span></div>
                 </div>
             </div>
+
+            {/* Iter 108f · AI cross-check of signed PDF vs digitally-picked roster */}
+            {squad.signed_copy_url && (
+                <div className="mt-4 border border-mpca-brass/30 bg-white" data-testid="squad-pdf-verify-card">
+                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-mpca-brass/20 bg-mpca-ivory">
+                        <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold text-mpca-green-dark">
+                            Signed Copy · AI Cross-check
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {squad.pdf_verification?.check && (
+                                <span
+                                    className={
+                                        "px-2 py-0.5 text-[10px] uppercase tracking-widest font-bold border " +
+                                        (squad.pdf_verification.check.verdict === "clean"
+                                            ? "bg-mpca-green-light text-mpca-green-dark border-mpca-green-deep/40"
+                                            : "bg-mpca-brass/15 text-mpca-brass border-mpca-brass/50")
+                                    }
+                                    data-testid="pdf-verify-verdict"
+                                >
+                                    {squad.pdf_verification.check.match_pct}% match · {squad.pdf_verification.check.verdict}
+                                </span>
+                            )}
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={async () => {
+                                    try {
+                                        const { data } = await api.post(`/squads/${squad.id}/verify-signed-copy`);
+                                        setSquad((s) => ({ ...s, pdf_verification: data }));
+                                    } catch (err) { alert(err?.response?.data?.detail || err.message); }
+                                }}
+                                className="text-[10px] uppercase tracking-[0.18em] font-bold px-3 py-1 border border-mpca-brass/50 text-mpca-brass hover:bg-mpca-brass/5 disabled:opacity-60 flex items-center gap-1.5"
+                                data-testid="pdf-verify-run-btn"
+                            >
+                                <Sparkles size={11} /> {squad.pdf_verification ? "Re-verify" : "Verify with AI"}
+                            </button>
+                        </div>
+                    </div>
+
+                    {squad.pdf_verification?.parsed && (
+                        <div className="p-3 space-y-3">
+                            {(squad.pdf_verification.check?.extra_in_pdf?.length > 0 ||
+                              squad.pdf_verification.check?.missing_in_pdf?.length > 0) && (
+                                <div className="text-[11px] p-2 border border-mpca-brass/40 bg-mpca-brass/5 text-mpca-brass" data-testid="pdf-verify-mismatch">
+                                    <b>Mismatches:</b>
+                                    {squad.pdf_verification.check.missing_in_pdf.length > 0 && (
+                                        <div className="mt-1">In roster but NOT in PDF: {squad.pdf_verification.check.missing_in_pdf.map(m => m.full_name).join(", ")}</div>
+                                    )}
+                                    {squad.pdf_verification.check.extra_in_pdf.length > 0 && (
+                                        <div className="mt-1">In PDF but NOT in roster: {squad.pdf_verification.check.extra_in_pdf.map(m => m.name).join(", ")}</div>
+                                    )}
+                                </div>
+                            )}
+                            <div>
+                                <div className="text-[10px] uppercase tracking-widest text-mpca-gray-dark mb-2">
+                                    Squad Summary · read from PDF
+                                    {squad.pdf_verification.parsed.captain && <> · C {squad.pdf_verification.parsed.captain}</>}
+                                    {squad.pdf_verification.parsed.vice_captain && <> · VC {squad.pdf_verification.parsed.vice_captain}</>}
+                                </div>
+                                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-1.5" data-testid="pdf-verify-players">
+                                    {(squad.pdf_verification.parsed.players || []).map((p, i) => (
+                                        <div key={i} className="flex items-center gap-2 px-2 py-1 border border-mpca-brass/20 bg-mpca-ivory/40 text-[11.5px]">
+                                            <span className="w-5 text-[9.5px] font-mono text-mpca-gray-dark">{i + 1}</span>
+                                            <span className="flex-1 truncate font-semibold text-mpca-charcoal">{p.name}</span>
+                                            <span className="text-[9px] uppercase tracking-widest text-mpca-gray-dark">{p.role}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {!squad.pdf_verification && (
+                        <div className="p-4 text-[11px] italic text-mpca-gray-dark">
+                            Click &quot;Verify with AI&quot; to read the PDF and cross-check names against the {members.length}-player roster picked in the ERP.
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Iter 108c · The "still in Draft" banner is retired.  Tournament status
                 is now auto-derived from the calendar (see TournamentDetail.jsx ·

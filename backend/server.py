@@ -113,6 +113,20 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             import logging
             logging.getLogger("mpca").warning("User seeding failed: %s", e)
+        # Feb 2026 · Iter 112 · Ground + Match Official roster from MPCA roster
+        try:
+            from scripts.seed_mpca_roster import seed_grounds_and_officials
+            from core.infra import db as _db
+            rr = await seed_grounds_and_officials(_db)
+            import logging
+            logging.getLogger("mpca").info(
+                "MPCA roster seeded — grounds created=%s kept=%s · umpires created=%s kept=%s",
+                rr["grounds"]["created"], rr["grounds"]["kept"],
+                rr["umpires"]["created"], rr["umpires"]["kept"],
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger("mpca").warning("Roster seeding failed: %s", e)
         # Feb 2026 · Iter 109 · Dynamic Maker-Checker workflow templates
         try:
             from scripts.seed_mc_workflows import seed_mc_workflows

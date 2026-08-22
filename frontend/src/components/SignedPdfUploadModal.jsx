@@ -7,8 +7,8 @@
  */
 import { useRef, useState, useEffect } from "react";
 import { Upload, FileText, X, Loader2, ShieldCheck } from "lucide-react";
+import { api } from "@/lib/api";
 
-const API = process.env.REACT_APP_BACKEND_URL;
 const MAX_BYTES = 20 * 1024 * 1024;
 
 const fmtSize = (n) => {
@@ -78,12 +78,12 @@ export const SignedPdfUploadModal = ({
             if (metadata.uploaded_by) fd.append("uploaded_by", metadata.uploaded_by);
             if (metadata.related_type) fd.append("related_type", metadata.related_type);
             if (metadata.related_id) fd.append("related_id", metadata.related_id);
-            const res = await fetch(`${API}/api/uploads`, { method: "POST", body: fd });
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({}));
-                throw new Error(body.detail || `Upload failed (${res.status})`);
-            }
-            const record = await res.json();
+            // Iter 123j · Use the shared axios `api` instance so the JWT
+            // Authorization header auto-attaches via the request interceptor.
+            // Raw `fetch` here caused every upload to fail with 401 Not authenticated.
+            const { data: record } = await api.post("/uploads", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
             await onUploaded?.(record);
             onClose?.();
         } catch (e) {

@@ -164,19 +164,19 @@ export default function WarmBudgetHealth() {
                         <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold mb-3" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
                             Every Line Item · Sorted by ₹
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2" data-testid="warm-line-items-list">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3" data-testid="warm-line-items-list">
                             {leafRows.map((r) => {
                                 const pct = (r.value / maxLeaf) * 100;
                                 return (
-                                    <div key={`${r.parent}-${r.name}`} className="flex items-center gap-3">
-                                        <div className="w-28 shrink-0 min-w-0">
-                                            <div className="text-[12px] font-semibold truncate" style={{ color: DL.ink }} title={r.name}>{r.name}</div>
-                                            <div className="text-[9.5px] truncate" style={{ color: DL.muted, fontFamily: DL.fontMono }} title={r.parent}>{r.parent}</div>
+                                    <div key={`${r.parent}-${r.name}`} className="flex items-center gap-3 min-w-0">
+                                        <div className="w-40 shrink-0 min-w-0">
+                                            <div className="text-[12.5px] font-semibold leading-tight" style={{ color: DL.ink }} title={r.name}>{r.name}</div>
+                                            <div className="text-[10px] mt-0.5 leading-tight" style={{ color: DL.muted, fontFamily: DL.fontMono }} title={r.parent}>{r.parent}</div>
                                         </div>
-                                        <div className="flex-1 h-3 relative rounded-sm overflow-hidden" style={{ background: DL.ivory, border: `1px solid ${DL.rule}` }}>
+                                        <div className="flex-1 min-w-0 h-3 relative rounded-sm overflow-hidden" style={{ background: DL.ivory, border: `1px solid ${DL.rule}` }}>
                                             <div className="h-full" style={{ width: `${pct}%`, background: r.color, transition: "width 500ms ease" }} />
                                         </div>
-                                        <div className="w-14 text-right text-[11.5px] font-bold" style={{ fontFamily: DL.fontMono, color: r.color }}>
+                                        <div className="w-16 shrink-0 text-right text-[11.5px] font-bold" style={{ fontFamily: DL.fontMono, color: r.color }}>
                                             ₹{r.value}Cr
                                         </div>
                                     </div>
@@ -189,15 +189,15 @@ export default function WarmBudgetHealth() {
                 <WarmPanel title="Utilisation Gauge" testid="warm-gauge-panel">
                     <WarmChart option={gaugeOption} height={220} testid="warm-gauge-chart" />
                 </WarmPanel>
-
-                <WarmPanel title="Top 5 Overrun Heads" testid="warm-overrun-panel">
-                    <WarmChart option={overrunOption} height={220} testid="warm-overrun-chart" />
-                </WarmPanel>
             </div>
 
-            <div className="mt-4">
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <WarmPanel title="Top 5 Overrun Heads" testid="warm-overrun-panel">
+                    <WarmChart option={overrunOption} height={240} testid="warm-overrun-chart" />
+                </WarmPanel>
+
                 <WarmPanel title="Invoice Velocity · Monthly" testid="warm-velocity-monthly-panel">
-                    <WarmChart option={velocityOption} height={160} testid="warm-velocity-monthly-chart" />
+                    <WarmChart option={velocityOption} height={240} testid="warm-velocity-monthly-chart" />
                 </WarmPanel>
             </div>
         </div>

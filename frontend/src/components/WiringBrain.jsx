@@ -188,8 +188,53 @@ export default function WiringBrain() {
                 opacity: 0.6,
             }} />
 
+            {/* ── Corner trim marks · institutional-blueprint detail ── */}
+            <svg aria-hidden width="18" height="18" style={{ position: "absolute", top: 18, left: 18, zIndex: 3, opacity: 0.55 }}>
+                <path d="M0 0 L18 0 M0 0 L0 18" stroke={DL.gold} strokeWidth="1.25" fill="none" />
+            </svg>
+            <svg aria-hidden width="18" height="18" style={{ position: "absolute", top: 18, right: 18, zIndex: 3, opacity: 0.55 }}>
+                <path d="M0 0 L18 0 M18 0 L18 18" stroke={DL.gold} strokeWidth="1.25" fill="none" />
+            </svg>
+            <svg aria-hidden width="18" height="18" style={{ position: "absolute", bottom: 18, left: 18, zIndex: 3, opacity: 0.55 }}>
+                <path d="M0 18 L18 18 M0 0 L0 18" stroke={DL.gold} strokeWidth="1.25" fill="none" />
+            </svg>
+            <svg aria-hidden width="18" height="18" style={{ position: "absolute", bottom: 18, right: 18, zIndex: 3, opacity: 0.55 }}>
+                <path d="M0 18 L18 18 M18 0 L18 18" stroke={DL.gold} strokeWidth="1.25" fill="none" />
+            </svg>
+
+            {/* ── Brand lockup · logo + wordmark + eyebrow + title ── */}
             <div style={{
-                position: "absolute", top: 60, left: 32, zIndex: 3,
+                position: "absolute", top: 44, left: 40, zIndex: 3,
+                display: "flex", alignItems: "center", gap: 12,
+            }} data-testid="brain-brand-lockup">
+                <img
+                    src="/brand/mpca-logo.png"
+                    alt="MPCA emblem"
+                    style={{
+                        width: 42, height: 42, objectFit: "contain",
+                        filter: "brightness(0) saturate(100%) invert(72%) sepia(56%) saturate(388%) hue-rotate(2deg) brightness(94%) contrast(90%)",
+                    }}
+                />
+                <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
+                    <span style={{
+                        color: DL.gold, opacity: 0.9,
+                        fontFamily: DL.fontMono, fontSize: 9.5, fontWeight: 800,
+                        letterSpacing: "0.24em", textTransform: "uppercase",
+                    }}>
+                        Madhya Pradesh
+                    </span>
+                    <span style={{
+                        color: DL.paper, marginTop: 3,
+                        fontFamily: DL.fontMono, fontSize: 9.5, fontWeight: 700,
+                        letterSpacing: "0.24em", textTransform: "uppercase", opacity: 0.7,
+                    }}>
+                        Cricket Association
+                    </span>
+                </div>
+            </div>
+
+            <div style={{
+                position: "absolute", top: 108, left: 40, zIndex: 3,
                 color: DL.gold, opacity: 0.85,
                 fontFamily: DL.fontMono, fontSize: 10, fontWeight: 700,
                 letterSpacing: "0.24em", textTransform: "uppercase",
@@ -197,11 +242,20 @@ export default function WiringBrain() {
                 / wired cricket decisions
             </div>
             <div style={{
-                position: "absolute", top: 88, left: 32, zIndex: 3, color: DL.paper,
-                fontFamily: DL.fontDisplay, fontSize: 26, fontWeight: 800, letterSpacing: "-0.01em",
-                maxWidth: 420, lineHeight: 1.1,
+                position: "absolute", top: 132, left: 40, zIndex: 3, color: DL.paper,
+                fontFamily: DL.fontDisplay, fontSize: 28, fontWeight: 800, letterSpacing: "-0.015em",
+                maxWidth: 460, lineHeight: 1.05,
             }}>
                 MPCA&apos;s AI-Based ERP
+                <span style={{ color: DL.gold }}>.</span>
+            </div>
+            <div style={{
+                position: "absolute", top: 172, left: 40, zIndex: 3,
+                color: DL.paper, opacity: 0.55,
+                fontFamily: DL.fontBody, fontSize: 12, fontWeight: 500,
+                maxWidth: 380, lineHeight: 1.5,
+            }}>
+                One wired system for every trophy, camp, and match-day decision.
             </div>
 
             {/* Control pills — top-right of brain panel */}
@@ -253,7 +307,7 @@ export default function WiringBrain() {
             <svg
                 viewBox="0 0 860 780"
                 preserveAspectRatio="xMidYMid meet"
-                style={{ position: "absolute", inset: 0, top: 200, width: "100%", height: "calc(100% - 240px)", zIndex: 1 }}
+                style={{ position: "absolute", inset: 0, top: 220, width: "100%", height: "calc(100% - 260px)", zIndex: 1 }}
                 aria-label="MPCA Governance wiring brain"
                 onMouseLeave={() => { setHoveredType(null); setHoveredStep(null); }}
             >
@@ -389,11 +443,20 @@ export default function WiringBrain() {
 
             {/* Minimal live indicator — bottom-left, no data points */}
             <div style={{
-                position: "absolute", bottom: 22, left: 32, zIndex: 3,
+                position: "absolute", bottom: 24, left: 48, zIndex: 3,
                 color: DL.gold, opacity: 0.6, fontFamily: DL.fontMono, fontSize: 9,
                 textTransform: "uppercase", letterSpacing: "0.24em",
             }} data-testid="brain-live-count">
                 {autoFire ? "Live · signals flowing" : pulses.length > 0 ? "Draining…" : "Idle · fire to see it flow"}
+            </div>
+
+            {/* Anchor stamp — bottom-right (behind trim mark) */}
+            <div style={{
+                position: "absolute", bottom: 24, right: 48, zIndex: 3,
+                color: DL.gold, opacity: 0.45, fontFamily: DL.fontMono, fontSize: 9,
+                textTransform: "uppercase", letterSpacing: "0.24em",
+            }} data-testid="brain-stamp">
+                MPCA · Est. 1957
             </div>
         </div>
     );

@@ -62,14 +62,26 @@ class WorkflowIn(BaseModel):
 
 @api_router.get("/mc-admin/posts")
 async def api_post_catalog(request: Request):
-    """Iter 112 · Derive the post catalog from the actual `users` collection
-    so any persona added via /access-control automatically appears in the
-    Maker-Checker configurator.  Falls back to POST_CATALOG for scopes that
-    don't yet have any seeded persona (e.g. rare Official body).
+    """Iter 113 · SINGLE source of truth for both /access-control and the
+    Maker-Checker configurator: `db.rbac_roles`.  Any role added / renamed
+    there flows automatically here (and vice-versa via the RBAC seed).
     """
     _require_admin(request)
     seen: set[tuple[str, str]] = set()
     posts: list[dict] = []
+    # Primary source: RBAC role catalog (db.roles)
+    cur = db.roles.find({}, {"_id": 0, "name": 1, "body_scope": 1})
+    async for r in cur:
+        pt = (r.get("name") or "").strip()
+        bt = (r.get("body_scope") or "Any").strip()
+        if not pt:
+            continue
+        key = (bt, pt)
+        if key in seen:
+            continue
+        seen.add(key)
+        posts.append({"body_scope": bt, "post_title": pt})
+    # Fallback: users collection posts (covers seeded personas that predate rbac_roles)
     cur = db.users.find(
         {"post_title": {"$exists": True, "$ne": ""}},
         {"_id": 0, "post_title": 1, "body_type": 1},
@@ -84,15 +96,8 @@ async def api_post_catalog(request: Request):
             continue
         seen.add(key)
         posts.append({"body_scope": bt, "post_title": pt})
-    # Merge in the canonical catalog so scopes without seeded users still show up
-    for p in POST_CATALOG:
-        key = (p["body_scope"], p["post_title"])
-        if key in seen:
-            continue
-        seen.add(key)
-        posts.append(p)
-    # Deterministic ordering: State → Division → District → Official, alpha within
-    order = {"State": 0, "Division": 1, "District": 2, "Official": 3}
+    # Deterministic ordering: State → Division → District → Any → Official
+    order = {"State": 0, "Division": 1, "District": 2, "Any": 3, "Official": 4}
     posts.sort(key=lambda p: (order.get(p["body_scope"], 99), p["post_title"]))
     return {"posts": posts}
 

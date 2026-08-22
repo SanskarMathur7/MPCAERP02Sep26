@@ -203,15 +203,82 @@ DEFAULT_ROLE_MATRIX: Dict[str, Dict[str, Any]] = {
             "calendar.view", "members.view",
         ],
     },
-    "data_entry": {
-        "name": "Data Entry Clerk",
-        "body_scope": "Any",
-        "description": "Enters raw data (players, invoices). Cannot submit or approve.",
+    "data_entry_mpca": {
+        "name": "Data Entry Clerk (MPCA)",
+        "body_scope": "State",
+        "description": "MPCA data-entry: enters raw data (players, invoices, venues). Cannot submit or approve.",
         "permissions": [
             "members.view", "members.create", "members.edit",
             "players.view", "players.create", "players.edit",
             "invoices.view", "invoices.upload",
             "venues.view", "calendar.view", "tournaments.view",
+        ],
+    },
+    "data_entry_division": {
+        "name": "Data Entry Clerk (Division)",
+        "body_scope": "Division",
+        "description": "Division data-entry: enters raw data scoped to the Division. Cannot submit or approve.",
+        "permissions": [
+            "members.view", "members.create", "members.edit",
+            "players.view", "players.create", "players.edit",
+            "invoices.view", "invoices.upload",
+            "venues.view", "calendar.view", "tournaments.view",
+        ],
+    },
+    # ── Iter 113 · MPCA internal posts (mirrors Maker-Checker post catalog) ──
+    "chief_accounts_officer": {
+        "name": "Chief Accounts Officer",
+        "body_scope": "State",
+        "description": "MPCA accounts custodian; prepares claim & budget packets for treasurer sign-off.",
+        "permissions": [
+            "budgets.view", "budgets.edit", "budgets.submit",
+            "invoices.view", "invoices.upload", "invoices.approve",
+            "reimbursement_claims.view", "reimbursement_claims.create",
+            "grant_claims.view", "grant_claims.create",
+            "receipts.view", "receipts.record",
+        ],
+    },
+    "joint_secretary": {
+        "name": "Joint Secretary",
+        "body_scope": "State",
+        "description": "Assists Hon. Secretary; drafts and coordinates but does not final-approve.",
+        "permissions": [
+            "members.view", "members.edit", "members.create",
+            "tournaments.view", "tournaments.edit",
+            "governance.view", "governance.schedule",
+            "calendar.view", "calendar.create", "calendar.edit",
+            "disclosures.view", "disclosures.submit",
+        ],
+    },
+    "manager": {
+        "name": "Manager",
+        "body_scope": "State",
+        "description": "MPCA operations manager; day-to-day admin without approval authority.",
+        "permissions": [
+            "members.view", "tournaments.view", "tournaments.edit",
+            "venues.view", "calendar.view", "calendar.create",
+            "match_officials.view", "governance.view",
+        ],
+    },
+    "selection_chairperson": {
+        "name": "Selection Chairperson",
+        "body_scope": "State",
+        "description": "Chair of the Selection Committee; convenes selections but does not touch finance.",
+        "permissions": [
+            "squads.view", "squads.build", "squads.submit",
+            "players.view", "players.edit",
+            "tournaments.view", "calendar.view",
+        ],
+    },
+    "cricket_manager": {
+        "name": "Cricket Manager",
+        "body_scope": "State",
+        "description": "Owns cricket operations · fixtures + officials + venues.",
+        "permissions": [
+            "tournaments.view", "tournaments.create", "tournaments.edit",
+            "calendar.view", "calendar.create", "calendar.edit",
+            "match_officials.view",
+            "venues.view", "players.view",
         ],
     },
 }
@@ -261,6 +328,11 @@ class RBACUserCreate(BaseModel):
     body_code: str = "MPCA"
     body_type: str = "State"
     is_active: bool = True
+    # Iter 113 · Admin-set-password path (option a in the roll-out plan).
+    # If BOTH email + initial_password are provided, the row is written with a
+    # bcrypt password_hash so the person can sign in.
+    initial_password: Optional[str] = None
+    force_password_reset: bool = True
 
 
 class RBACUserPatch(BaseModel):
@@ -427,9 +499,60 @@ async def patch_role(role_id: str, patch: RolePatch, request: Request, actor: Di
 
 # ─────── Users ───────
 
+# Iter 113 · Map seeded-persona post titles → RBAC role ids so the seeded
+# 15 personas render in the RBAC user table with the correct role badge.
+_POST_TITLE_TO_ROLE_ID = {
+    "President":                  "president",
+    "Hon. Secretary":             "hon_secretary",
+    "Hon. Treasurer":             "hon_treasurer",
+    "Joint Secretary":            "joint_secretary",
+    "Chief Accounts Officer":     "chief_accounts_officer",
+    "Manager":                    "manager",
+    "Selection Chairperson":      "selection_chairperson",
+    "Cricket Manager":            "cricket_manager",
+    "System Administrator":       "system_administrator",
+    "Division Secretary":         "division_secretary",
+    "Division Treasurer":         "division_treasurer",
+    "District Secretary":         "district_secretary",
+    "Match Official":             "match_official",
+    "Data Entry Clerk (MPCA)":    "data_entry_mpca",
+    "Data Entry Clerk (Division)": "data_entry_division",
+}
+
+
+def _normalize_persona_row(u: dict) -> dict:
+    """Convert a seeded-persona doc into the RBACUser shape so it renders in the table."""
+    # Seeded rows have `name` + `post_title`; RBAC rows have `display_name` + `role_id`.
+    body_type = u.get("body_type") or "State"
+    body_code = u.get("body_code") or "MPCA"
+    if u.get("display_name") and u.get("role_id"):
+        return u  # already RBAC-shaped
+    post_title = (u.get("post_title") or "").strip()
+    # Prefer persona.role (seeded rows store the role slug directly for sys_admin)
+    role_id = _POST_TITLE_TO_ROLE_ID.get(post_title) or u.get("role") or "hon_secretary"
+    # Match sys_admin persona to its role name in db.roles (seeded as system_administrator)
+    if post_title == "System Administrator" or (u.get("id") == "system-administrator"):
+        role_id = "system_administrator"
+    return {
+        "id":            u.get("id") or "",
+        "display_name":  u.get("name") or u.get("display_name") or "",
+        "honorific":     u.get("honorific"),
+        "email":         u.get("email"),
+        "phone":         u.get("phone"),
+        "role_id":       role_id,
+        "body_code":     body_code,
+        "body_type":     body_type,
+        "is_active":     u.get("is_active", True),
+        "persona_id":    u.get("persona_id") or u.get("id"),
+        "created_at":    u.get("created_at") or datetime.now(timezone.utc).isoformat(),
+        "updated_at":    u.get("updated_at") or datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @api_router.get("/rbac/users", response_model=List[RBACUser])
 async def list_users(_: Dict = Depends(require_rbac_admin)):
-    docs = await db.users.find({}, {"_id": 0}).to_list(1000)
+    raw = await db.users.find({}, {"_id": 0}).to_list(1000)
+    docs = [_normalize_persona_row(u) for u in raw]
     docs.sort(key=lambda u: (0 if u.get("body_type") == "State" else 1 if u.get("body_type") == "Division" else 2,
                              u.get("display_name", "")))
     return docs
@@ -441,14 +564,58 @@ async def create_user(payload: RBACUserCreate, request: Request, actor: Dict = D
     if not await db.roles.find_one({"id": payload.role_id}, {"_id": 1}):
         raise HTTPException(400, f"Unknown role_id: {payload.role_id}")
     user = RBACUser(**payload.model_dump())
-    await db.users.insert_one(user.model_dump())
+    doc = user.model_dump()
+    # Iter 113 · If admin provided an initial password, also seed sign-in credentials.
+    # Email is required for login, so we only hash if BOTH email + initial_password are set.
+    initial_pw = getattr(payload, "initial_password", None)
+    if initial_pw and payload.email:
+        import bcrypt as _bcrypt
+        doc["password_hash"] = _bcrypt.hashpw(initial_pw.encode("utf-8"), _bcrypt.gensalt(rounds=12)).decode("utf-8")
+        doc["force_password_reset"] = bool(getattr(payload, "force_password_reset", True))
+        doc["email"] = payload.email.strip().lower()
+        # Mirror the seeded-persona shape so this user also appears in login-capable list
+        doc["name"] = payload.display_name
+        doc["post_title"] = doc.get("post_title") or ""
+    await db.users.insert_one(doc)
     await log_audit_event(
         **actor,
         action="rbac.user_created",
         entity=f"user:{user.id}",
-        changes={"display_name": user.display_name, "role_id": user.role_id, "body_code": user.body_code},
+        changes={"display_name": user.display_name, "role_id": user.role_id, "body_code": user.body_code,
+                 "login_enabled": bool(initial_pw and payload.email)},
     )
     return user
+
+
+@api_router.post("/rbac/users/{uid}/reset-password")
+async def reset_password(uid: str, request: Request, actor: Dict = Depends(require_rbac_admin)):
+    """Iter 113 · Admin resets a user's password.
+    Body: { "new_password": "...", "force_reset": true }
+    """
+    body = await request.json()
+    new_pw = (body.get("new_password") or "").strip()
+    force = bool(body.get("force_reset", True))
+    if len(new_pw) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    user = await db.users.find_one({"id": uid}, {"_id": 0})
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not user.get("email"):
+        raise HTTPException(400, "User has no email — cannot enable login")
+    import bcrypt as _bcrypt
+    pw_hash = _bcrypt.hashpw(new_pw.encode("utf-8"), _bcrypt.gensalt(rounds=12)).decode("utf-8")
+    await db.users.update_one({"id": uid}, {"$set": {
+        "password_hash": pw_hash,
+        "force_password_reset": force,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    await log_audit_event(
+        **actor,
+        action="rbac.user_password_reset",
+        entity=f"user:{uid}",
+        changes={"force_reset": force},
+    )
+    return {"ok": True, "user_id": uid, "force_password_reset": force}
 
 
 @api_router.patch("/rbac/users/{uid}", response_model=RBACUser)

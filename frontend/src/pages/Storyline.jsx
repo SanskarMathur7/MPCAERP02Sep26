@@ -29,21 +29,75 @@ import {
 // ═══════════════════════════════════════════════════════════════════
 
 const SLIDES = [
-    // ── Slide 1 · Thesis ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // WHAT · The Problem
+    // ═══════════════════════════════════════════════════════════════
     {
-        kind: "thesis",
-        eyebrow: "The Thesis",
-        overline: "MPCA · Enterprise Resource Planning",
-        title: "Cricket administration, rewired by AI.",
-        subtitle: "One state board. Ten Divisions. Forty tournaments a year. Every action manual, until now.",
-        stats: [
-            { label: "AI features live in production", value: "7" },
-            { label: "Manual routines replaced", value: "16" },
-            { label: "Staff-hours saved per season (est.)", value: "1,700+" },
-            { label: "State boards that could adopt this", value: "38" },
+        kind: "what",
+        eyebrow: "WHAT · The Problem",
+        overline: "The state of cricket administration today",
+        title: "Cricket administration runs on paper, memory, and follow-up.",
+        subtitle: "The Madhya Pradesh Cricket Association manages 10 Divisions, 40 tournaments a year, and thousands of players. Every action — until now — was manual. Every decision left a paper trail nobody could search.",
+        pains: [
+            { value: "15-30 min", label: "To verify ONE player document" },
+            { value: "1-2 days",  label: "To verify ONE reimbursement invoice" },
+            { value: "3-5 days",  label: "Every single approval hop" },
+            { value: "6 hrs",     label: "Per squad-selection meeting" },
+            { value: "8 weeks",   label: "End-to-end reimbursement" },
+            { value: "0",         label: "Machine-readable audit trail" },
         ],
     },
-    // ── Slides 2-8 · Seven AI features ──────────────────────────────
+
+    // ═══════════════════════════════════════════════════════════════
+    // WHY · AI is the answer
+    // ═══════════════════════════════════════════════════════════════
+    {
+        kind: "why",
+        eyebrow: "WHY · The Insight",
+        title: "AI does the pattern work. Humans do the judgement work.",
+        subtitle: "Cricket administration is 80% pattern work — verifying documents, matching invoices, routing approvals, checking eligibility. AI is built for exactly that. Give machines the drudgery, and humans get 5× more time for the game itself.",
+        columns: [
+            {
+                heading: "What humans do best",
+                accent: "gold",
+                items: [
+                    "Selection judgement · reading a player's temperament",
+                    "Strategy · playing conditions, opposition, bench balance",
+                    "Negotiation · sponsors, vendors, BCCI liaison",
+                    "Mentorship · coaching camps, talent scouting",
+                    "Ceremony · presiding, presenting, representing",
+                ],
+            },
+            {
+                heading: "What AI does best",
+                accent: "emerald",
+                items: [
+                    "OCR & extraction · Aadhaar, DOB, invoices, contracts",
+                    "Cross-verification · DOB vs. bracket, rate vs. card",
+                    "Routing · sending each request to the right actor, in order",
+                    "Audit · stamping every action, immutably, forever",
+                    "Pattern flagging · duplicates, outliers, non-standard clauses",
+                ],
+            },
+        ],
+        punch: "Cricket administrations don't need more staff. They need to hand the pattern work to AI.",
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // HOW · Seven AI features — the ERP we built
+    // ═══════════════════════════════════════════════════════════════
+    {
+        kind: "how_intro",
+        eyebrow: "HOW · What we built",
+        title: "The MPCA ERP. Seven AI features solving seven problems.",
+        subtitle: "Every problem on the last slide, resolved by one AI feature in the ERP. Same product, same code, running live in production today. The next seven slides walk you through each one — the problem, the AI verb, the metric, and a live look at the actual page.",
+        stats: [
+            { label: "AI features live in production", value: "7" },
+            { label: "Manual routines replaced",       value: "16" },
+            { label: "Staff-hours saved per season",   value: "1,700+" },
+            { label: "State boards that could adopt",   value: "38" },
+        ],
+    },
     {
         kind: "feature",
         icon: FileCheck2,
@@ -135,10 +189,10 @@ const SLIDES = [
         dividend: "= Governance stops being policy and becomes architecture",
         livePage: { label: "Tournament Wiring", path: "/tournament-wiring", shot: "/ux-audit/president/tournament-wiring.png" },
     },
-    // ── Slide 9 · Consolidated impact ───────────────────────────────
+    // ── Consolidated impact ────────────────────────────────────────
     {
         kind: "impact",
-        eyebrow: "The Bottom Line",
+        eyebrow: "HOW · The bottom line",
         title: "Seven AI features. One product. Real numbers.",
         rows: [
             ["Player document verification",    "15-30 min",   "30 sec"],
@@ -156,7 +210,7 @@ const SLIDES = [
             { value: "100%",       label: "Immutable audit trail" },
         ],
     },
-    // ── Slide 10 · Call-to-action ───────────────────────────────────
+    // ── CTA ─────────────────────────────────────────────────────────
     {
         kind: "cta",
         eyebrow: "The Ask",
@@ -270,10 +324,12 @@ export default function Storyline() {
                 style={{ overflowY: "auto" }}
                 data-testid={`storyline-slide-${slide}`}
             >
-                {current.kind === "thesis"  && <ThesisSlide  data={current} />}
-                {current.kind === "feature" && <FeatureSlide data={current} onLive={setPreview} />}
-                {current.kind === "impact"  && <ImpactSlide  data={current} />}
-                {current.kind === "cta"     && <CtaSlide     data={current} />}
+                {current.kind === "what"       && <WhatSlide     data={current} />}
+                {current.kind === "why"        && <WhySlide      data={current} />}
+                {current.kind === "how_intro"  && <HowIntroSlide data={current} />}
+                {current.kind === "feature"    && <FeatureSlide  data={current} onLive={setPreview} />}
+                {current.kind === "impact"     && <ImpactSlide   data={current} />}
+                {current.kind === "cta"        && <CtaSlide      data={current} />}
             </div>
 
             {/* Bottom controls */}
@@ -330,24 +386,136 @@ const NavBtn = ({ children, onClick, disabled, testid, primary }) => (
 );
 
 // ═══════════════════════════════════════════════════════════════════
-// Slide 1 · Thesis
+// Slide 1 · WHAT · The Problem
 // ═══════════════════════════════════════════════════════════════════
-const ThesisSlide = ({ data }) => (
+const WhatSlide = ({ data }) => (
+    <div className="max-w-[1200px] w-full">
+        <div className="text-center mb-9">
+            <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-4" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                {data.eyebrow}
+            </div>
+            <div className="text-[11.5px] uppercase tracking-[0.22em] font-bold mb-5" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.55)" }}>
+                {data.overline}
+            </div>
+            <h1
+                className="text-[48px] md:text-[68px] leading-[1.05] tracking-tight mb-6"
+                style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
+                data-testid="what-title"
+            >
+                {data.title}
+            </h1>
+            <p className="text-[17px] md:text-[19px] leading-[1.6] max-w-[860px] mx-auto" style={{ color: "rgba(245,239,230,0.78)" }}>
+                {data.subtitle}
+            </p>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {data.pains.map((p, i) => (
+                <div
+                    key={p.label}
+                    className="p-5 rounded-md"
+                    style={{
+                        background: "rgba(139,31,31,0.10)",
+                        border: "1px solid rgba(139,31,31,0.42)",
+                        borderLeft: "3px solid #C24F4F",
+                    }}
+                    data-testid={`what-pain-${i}`}
+                >
+                    <div className="text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: "#E88787", fontWeight: 800 }}>
+                        {p.value}
+                    </div>
+                    <div className="text-[12.5px] mt-2 leading-snug font-semibold" style={{ color: DL.paper }}>
+                        {p.label}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
+// ═══════════════════════════════════════════════════════════════════
+// Slide 2 · WHY · AI is the answer
+// ═══════════════════════════════════════════════════════════════════
+const WhySlide = ({ data }) => (
+    <div className="max-w-[1200px] w-full">
+        <div className="text-center mb-10">
+            <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-5" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                {data.eyebrow}
+            </div>
+            <h1
+                className="text-[44px] md:text-[62px] leading-[1.05] tracking-tight mb-6"
+                style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
+                data-testid="why-title"
+            >
+                {data.title}
+            </h1>
+            <p className="text-[16px] md:text-[18px] leading-[1.6] max-w-[900px] mx-auto" style={{ color: "rgba(245,239,230,0.78)" }}>
+                {data.subtitle}
+            </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+            {data.columns.map((col) => (
+                <div
+                    key={col.heading}
+                    className="p-6 rounded-md"
+                    style={{
+                        background: col.accent === "gold" ? "rgba(184,131,40,0.08)" : "rgba(13,59,46,0.30)",
+                        border: `1px solid ${col.accent === "gold" ? "rgba(184,131,40,0.42)" : "rgba(43,110,89,0.6)"}`,
+                    }}
+                >
+                    <div
+                        className="text-[10.5px] uppercase tracking-[0.24em] font-bold mb-4"
+                        style={{ fontFamily: DL.fontMono, color: col.accent === "gold" ? DL.gold : "#7EC49E" }}
+                    >
+                        {col.heading}
+                    </div>
+                    <ul className="space-y-3">
+                        {col.items.map((it) => (
+                            <li key={it} className="flex items-start gap-2.5 text-[14px] leading-[1.5]" style={{ color: DL.paper }}>
+                                <span
+                                    className="mt-2 h-1.5 w-1.5 rounded-full shrink-0"
+                                    style={{ background: col.accent === "gold" ? DL.gold : "#7EC49E" }}
+                                />
+                                <span>{it}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ))}
+        </div>
+
+        <blockquote
+            className="text-[18px] md:text-[22px] leading-[1.5] italic max-w-[880px] mx-auto text-center px-6 py-5 rounded-md"
+            style={{
+                color: DL.paper,
+                background: "rgba(184,131,40,0.06)",
+                border: `1px solid ${DL.gold}`,
+                borderLeft: `4px solid ${DL.gold}`,
+            }}
+            data-testid="why-punch"
+        >
+            {data.punch}
+        </blockquote>
+    </div>
+);
+
+// ═══════════════════════════════════════════════════════════════════
+// Slide 3 · HOW · Intro to the product
+// ═══════════════════════════════════════════════════════════════════
+const HowIntroSlide = ({ data }) => (
     <div className="max-w-[1120px] w-full text-center">
-        <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-6" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.9 }}>
-            {data.overline}
+        <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-5" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+            {data.eyebrow}
         </div>
         <h1
-            className="text-[64px] md:text-[92px] leading-[1] tracking-tight mb-8"
+            className="text-[46px] md:text-[68px] leading-[1.05] tracking-tight mb-7"
             style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
-            data-testid="thesis-title"
+            data-testid="how-intro-title"
         >
             {data.title}
         </h1>
-        <p
-            className="text-[19px] md:text-[22px] leading-[1.55] max-w-[820px] mx-auto mb-14"
-            style={{ color: "rgba(245,239,230,0.75)", fontFamily: DL.fontBody }}
-        >
+        <p className="text-[17px] md:text-[19px] leading-[1.6] max-w-[880px] mx-auto mb-12" style={{ color: "rgba(245,239,230,0.78)" }}>
             {data.subtitle}
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-[900px] mx-auto">
@@ -355,7 +523,7 @@ const ThesisSlide = ({ data }) => (
                 <div
                     key={s.label}
                     className="p-5 rounded-md"
-                    style={{ background: "rgba(184,131,40,0.08)", border: "1px solid rgba(184,131,40,0.32)" }}
+                    style={{ background: "rgba(184,131,40,0.10)", border: "1px solid rgba(184,131,40,0.4)" }}
                 >
                     <div className="text-[38px] leading-none" style={{ fontFamily: DL.fontDisplay, color: DL.gold, fontWeight: 800 }}>
                         {s.value}

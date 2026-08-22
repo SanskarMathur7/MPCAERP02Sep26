@@ -1392,6 +1392,7 @@ const PlayerDetail = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [tab, setTab] = useState("overview");
+    const [photoBroken, setPhotoBroken] = useState(false);
 
     const load = async () => {
         try {
@@ -1458,17 +1459,22 @@ const PlayerDetail = () => {
                         {(() => {
                             // MPCA-208 · Player-photo placeholder.
                             // Priority: 1) player.photo_url, 2) photo in KYC documents, 3) initials tile.
+                            // Fix (Iter 104): if the img 404s we flip `photoBroken` state so React
+                            // renders the initials placeholder in-place. Prior version mutated the
+                            // `nextSibling`'s inline style — but that "next sibling" was actually the
+                            // text column, breaking the whole header layout.
                             const photoDoc = (player.documents || []).find((d) => d.type === "photo" && d.file_url);
                             const photoSrc = player.photo_url || photoDoc?.file_url || null;
                             const initials = (player.full_name || "").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-                            return photoSrc ? (
+                            const showImg = photoSrc && !photoBroken;
+                            return showImg ? (
                                 <img
                                     src={photoSrc.startsWith("http") ? photoSrc : `${API}${photoSrc}`}
                                     alt={player.full_name}
                                     className="w-28 h-36 md:w-32 md:h-40 object-cover shrink-0"
                                     style={{ border: `4px solid ${DL.gold}`, borderRadius: "4px", backgroundColor: "rgba(184,131,40,0.1)" }}
                                     data-testid="player-photo"
-                                    onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
+                                    onError={() => setPhotoBroken(true)}
                                 />
                             ) : (
                                 <div

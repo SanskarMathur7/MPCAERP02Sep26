@@ -851,12 +851,22 @@ _AMOUNT_EDITABLE_STATUSES = {"Draft", "Documents_Pending", "Rejected"}
 
 
 @api_router.patch("/grant-claims/{cid}/amount", response_model=GrantClaim)
-async def patch_claim_amount(cid: str, payload: AmountPatchPayload):
+async def patch_claim_amount(cid: str, payload: AmountPatchPayload, request: Request):
     claim = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
     if not claim:
         raise HTTPException(404, "Claim not found")
-    if claim.get("status") not in _AMOUNT_EDITABLE_STATUSES:
-        raise HTTPException(400, f"Amount is locked once the claim is {claim.get('status')}. Ask MPCA to reject-to-Draft first.")
+    # Iter 123n · MPCA reviewers may override the claimed amount in Submitted /
+    # Under_Review too — before they sign the approval PDF the amount often
+    # needs a small adjustment (rate correction, cheque rounding). Division
+    # can still edit in the original Draft / Documents_Pending / Rejected
+    # states.
+    from lib.authz import get_principal
+    principal = get_principal(request)
+    is_mpca = getattr(principal, "is_state", False) or (getattr(principal, "body_type", "") == "State")
+    status_ok = claim.get("status") in _AMOUNT_EDITABLE_STATUSES
+    mpca_ok = is_mpca and claim.get("status") in ("Submitted", "Under_Review")
+    if not (status_ok or mpca_ok):
+        raise HTTPException(400, f"Amount is locked once the claim is {claim.get('status')}.")
     if payload.claimed_amount_inr < 0:
         raise HTTPException(400, "Amount must be zero or positive.")
     await db.grant_claims.update_one({"id": cid}, {"$set": {

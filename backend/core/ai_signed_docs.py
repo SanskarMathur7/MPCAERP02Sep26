@@ -24,19 +24,29 @@ from emergentintegrations.llm.chat import (
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 AI_CALL_TIMEOUT = float(os.environ.get("AI_CALL_TIMEOUT", "45"))
 AI_MODEL_PROVIDER = "gemini"
-AI_MODEL_NAME = "gemini-3-flash-preview"
+AI_MODEL_NAME = "gemini-3.6-flash"
 
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "/app/backend/uploads"))
 
 
-def _local_file_from_url(url: str) -> Optional[Path]:
-    """Resolve an /api/uploads/<name> URL back to the on-disk path."""
+async def _local_file_from_url(url: str) -> Optional[Path]:
+    """Resolve an /api/uploads/<id> URL to the on-disk path.
+    Iter 123n · Files are stored under year-month subdirs (see routes/uploads.py::target_dir),
+    NOT flat under UPLOAD_DIR. Look up the `_path` on the DB record instead."""
     if not url:
         return None
-    # Accepts "/api/uploads/xyz.pdf" or absolute URLs pointing to the same
     m = re.search(r"/uploads/([^/?#]+)$", url)
     if not m:
         return None
+    file_id = m.group(1).split(".")[0]
+    from core.infra import db as _db
+    rec = await _db.uploads.find_one({"id": file_id})
+    if not rec:
+        return None
+    disk_path = rec.get("_path")
+    if disk_path and Path(disk_path).exists():
+        return Path(disk_path)
+    # Legacy fallback — flat UPLOAD_DIR
     p = UPLOAD_DIR / m.group(1)
     return p if p.exists() else None
 
@@ -119,7 +129,7 @@ async def summarise_signed_minutes(meeting: dict) -> Dict[str, Any]:
         }
     """
     url = meeting.get("signed_minutes_url")
-    path = _local_file_from_url(url) if url else None
+    path = await _local_file_from_url(url) if url else None
     if not path:
         return {"summary": "", "resolutions": [],
                 "warnings": ["signed_minutes_url is missing or file not found on disk."], "raw": ""}
@@ -179,50 +189,56 @@ SQUAD_SYSTEM = (
 )
 
 SQUAD_USER_TEMPLATE = """Attached is the signed squad nomination PDF/image for:
-    Tournament: {tournament_name}
+    Tournament: {tournament_name}  ·  Format: {format_hint}  ·  Category: {category_hint}
     Division/District: {body_name} ({body_code})
     Team: {team_name}
-    Roster in ERP (name · role · UID): {members_summary}
 
-Return **STRICT JSON** (no prose, no code fences):
+The Division has DIGITALLY selected the following 18-19 players in the ERP roster
+(these are the *authoritative* names — the PDF must match them). Below each name
+is the player's role, age bracket, category, gender and club/academy so you can
+gauge selection quality and highlight any structural bias:
+
+{members_summary}
+
+Please cross-check the attached PDF against this ERP roster AND analyse the
+selection quality. Return **STRICT JSON** (no prose, no code fences):
 {{
   "verdict": "Looks_Good | Needs_Attention | Reject_Recommended",
   "confidence": 0.0-1.0,
+  "signature_present": true | false,
+  "official_seal_present": true | false,
+  "player_count_matches": true | false,
+  "pdf_matches_roster": {{"matched": <int>, "extra_in_pdf": [<name>], "missing_in_pdf": [<name>]}},
+  "selection_review": {{
+    "gender_balance": "one sentence — e.g. '17M / 2W, women's tournament needs ≥12W'",
+    "age_spread": "one sentence — e.g. 'Skewed to Senior (14/19); only 2 U-23 slots filled'",
+    "category_mix": "one sentence — e.g. '15 Local_MP · 3 Born_Outside · 1 Guest — within quota'",
+    "role_balance": "one sentence — batters/bowlers/all-rounders/wk mix vs typical 6-6-4-2",
+    "club_concentration": "one sentence — is any single club/academy over-represented?",
+    "bias_flags": ["short bullet on any concerning bias, or empty list if none"]
+  }},
   "comments": [
-    "Bullet-point observation, e.g. 'Signature present in bottom-right corner.'",
-    "'Player X on the PDF (Ravi K) is not in the ERP roster — check name spelling.'"
+    "3-6 crisp reviewer-facing bullets combining PDF-match + selection observations."
   ],
-  "signature_present": true,
-  "official_seal_present": true,
-  "player_count_matches": true,
   "warnings": []
 }}
 
-Guidelines:
-- `Looks_Good` — signed, sealed, players match roster (allowing minor spelling drift).
-- `Needs_Attention` — one or two issues (missing seal, one name mismatch, unclear date).
-- `Reject_Recommended` — signature missing, wrong tournament header, obvious tampering, or ≥3 player mismatches. STILL only advisory.
-- Never fabricate observations. If the PDF is unreadable, say so and set verdict to `Needs_Attention`.
+Verdict guide:
+- `Looks_Good` — PDF is signed & sealed, ≥95% player names match, selection is balanced.
+- `Needs_Attention` — one or two name mismatches, missing seal, or a mild bias flag.
+- `Reject_Recommended` — signature missing, ≥3 name mismatches, or serious structural bias
+  (e.g. all 19 from one club, or gender-tournament fully wrong-gendered). STILL only advisory.
+- Never fabricate. If PDF is unreadable, say so and pick `Needs_Attention`.
 """
 
 
 async def review_signed_squad(squad: dict, tournament: dict) -> Dict[str, Any]:
-    """Runs Gemini over the squad's `signed_copy_url`.
-
-    Returns:
-        {
-          "verdict": str,
-          "confidence": float,
-          "comments": [str],
-          "warnings": [str],
-          "signature_present": bool | None,
-          "official_seal_present": bool | None,
-          "player_count_matches": bool | None,
-          "raw": str,
-        }
-    """
+    """Runs Gemini over the squad's `signed_copy_url` and returns a rich
+    verdict combining PDF cross-check + selection-quality analysis.
+    Iter 123n · Now enriches the roster summary with age/gender/category/club
+    metadata so the LLM can flag selection bias — not just PDF authenticity."""
     url = squad.get("signed_copy_url")
-    path = _local_file_from_url(url) if url else None
+    path = await _local_file_from_url(url) if url else None
     if not path:
         return {"verdict": "Needs_Attention", "confidence": 0.0, "comments": [],
                 "warnings": ["signed_copy_url missing or file not found on disk."], "raw": ""}
@@ -230,11 +246,48 @@ async def review_signed_squad(squad: dict, tournament: dict) -> Dict[str, Any]:
         return {"verdict": "Needs_Attention", "confidence": 0.0, "comments": [],
                 "warnings": ["EMERGENT_LLM_KEY not configured — AI review skipped."], "raw": ""}
 
+    # Iter 123n · Enrich each member with age/category/gender/club from the players collection
+    from core.infra import db as _db
+    from datetime import date as _date
     members = squad.get("members") or []
-    members_summary = "; ".join([
-        f"{m.get('player_name') or m.get('name') or '?'} · {m.get('role') or '?'} · {m.get('uid') or ''}"
-        for m in members[:20]
-    ]) or "(empty roster)"
+    member_ids = [m.get("player_id") for m in members if m.get("player_id")]
+    players_by_id: Dict[str, dict] = {}
+    if member_ids:
+        async for p in _db.players.find({"id": {"$in": member_ids}}, {"_id": 0}):
+            players_by_id[p["id"]] = p
+    def _age(dob_iso: Optional[str]) -> Optional[int]:
+        if not dob_iso: return None
+        try:
+            y, mo, d = map(int, dob_iso[:10].split("-"))
+            today = _date.today()
+            return today.year - y - (1 if (today.month, today.day) < (mo, d) else 0)
+        except Exception: return None
+    def _age_bracket(age: Optional[int]) -> str:
+        if age is None: return "?"
+        if age < 14: return "U-14"
+        if age < 16: return "U-16"
+        if age < 19: return "U-19"
+        if age < 23: return "U-23"
+        if age < 40: return "Senior"
+        return "Veteran"
+    lines = []
+    for m in members[:22]:
+        pid = m.get("player_id")
+        p = players_by_id.get(pid) or {}
+        age = _age(p.get("date_of_birth"))
+        lines.append(
+            f"  · {p.get('full_name') or m.get('player_name') or '?'} "
+            f"· {(m.get('role') or p.get('role') or '?').replace('_', ' ')}"
+            f" · age {age or '?'} ({_age_bracket(age)})"
+            f" · {p.get('gender') or '?'}"
+            f" · {p.get('category') or '?'}"
+            f" · {p.get('club_academy') or '(no club)'}"
+        )
+    members_summary = "\n".join(lines) or "  · (empty roster)"
+
+    tournament_name = (tournament or {}).get("name", "(unknown tournament)")
+    format_hint = (tournament or {}).get("format") or (tournament or {}).get("match_format") or "?"
+    category_hint = (tournament or {}).get("category") or (tournament or {}).get("age_group") or "Senior · Men"
 
     attachment = FileContentWithMimeType(file_path=str(path), mime_type=_mime_for(path))
     chat = LlmChat(
@@ -244,7 +297,9 @@ async def review_signed_squad(squad: dict, tournament: dict) -> Dict[str, Any]:
     ).with_model(AI_MODEL_PROVIDER, AI_MODEL_NAME)
     msg = UserMessage(
         text=SQUAD_USER_TEMPLATE.format(
-            tournament_name=tournament.get("name", "(unknown tournament)") if tournament else "(unknown)",
+            tournament_name=tournament_name,
+            format_hint=format_hint,
+            category_hint=category_hint,
             body_name=squad.get("body_id") or "?",
             body_code=squad.get("body_id") or "?",
             team_name=squad.get("team_name") or "?",
@@ -270,6 +325,8 @@ async def review_signed_squad(squad: dict, tournament: dict) -> Dict[str, Any]:
         "signature_present": parsed.get("signature_present"),
         "official_seal_present": parsed.get("official_seal_present"),
         "player_count_matches": parsed.get("player_count_matches"),
+        "pdf_matches_roster": parsed.get("pdf_matches_roster") or {},
+        "selection_review": parsed.get("selection_review") or {},
         "warnings": [str(w) for w in (parsed.get("warnings") or [])][:10],
         "raw": raw_str,
     }

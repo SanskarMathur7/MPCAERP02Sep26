@@ -458,6 +458,11 @@ async def rerun_squad_ai_review(sid: str):
         "ai_review_verdict": verdict.get("verdict"),
         "ai_review_comments": verdict.get("comments") or [],
         "ai_review_confidence": verdict.get("confidence"),
+        # Iter 123n · richer fields for the MPCA review card
+        "ai_review_signature_present": verdict.get("signature_present"),
+        "ai_review_seal_present": verdict.get("official_seal_present"),
+        "ai_review_pdf_matches_roster": verdict.get("pdf_matches_roster") or {},
+        "ai_review_selection": verdict.get("selection_review") or {},
         "ai_review_generated_at": now,
     }})
     return await db.squads.find_one({"id": sid}, {"_id": 0})

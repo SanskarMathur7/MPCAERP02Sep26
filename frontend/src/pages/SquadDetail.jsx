@@ -195,22 +195,31 @@ const SquadDetail = () => {
 
     useEffect(() => { bootstrap(); }, [bootstrap]);
 
-    // Iter 123m · Auto-fire the AI cross-check when MPCA opens a squad that
-    // has a signed copy but hasn't been verified yet. Fires exactly once per
-    // squad id (avoids retriggering on every setSquad). Silent on error so
-    // the manual "Verify with AI" button still works as a fallback.
+    // Iter 123m/n · Auto-fire BOTH the PDF cross-check AND the enriched AI
+    // review (bias + roster match) when MPCA opens a squad that has a signed
+    // copy but hasn't been checked yet. Silent on error so manual buttons
+    // remain the fallback.
     const [autoVerifiedFor, setAutoVerifiedFor] = useState(null);
     useEffect(() => {
         const isMPCAReviewer = persona?.body_type === "State";
-        if (!squad || !isMPCAReviewer) return;
-        if (!squad.signed_copy_url || squad.pdf_verification) return;
+        if (!squad || !isMPCAReviewer || !squad.signed_copy_url) return;
         if (autoVerifiedFor === squad.id) return;
         setAutoVerifiedFor(squad.id);
         (async () => {
-            try {
-                const { data } = await api.post(`/squads/${squad.id}/verify-signed-copy`);
-                setSquad((s) => ({ ...(s || {}), pdf_verification: data }));
-            } catch { /* leave the manual button visible */ }
+            // 1. Deterministic PDF→roster cross-check
+            if (!squad.pdf_verification) {
+                try {
+                    const { data } = await api.post(`/squads/${squad.id}/verify-signed-copy`);
+                    setSquad((s) => ({ ...(s || {}), pdf_verification: data }));
+                } catch { /* leave manual button visible */ }
+            }
+            // 2. Rich LLM verdict (bias, signature, seal, selection quality)
+            if (!squad.ai_review_verdict) {
+                try {
+                    const { data } = await api.post(`/squads/${squad.id}/ai-review`);
+                    setSquad(data);
+                } catch { /* leave manual Re-run button visible */ }
+            }
         })();
     }, [squad, persona, autoVerifiedFor]);
 
@@ -564,8 +573,8 @@ const SquadDetail = () => {
                                     className={
                                         "px-2 py-0.5 text-[10px] uppercase tracking-widest font-bold border " +
                                         (squad.pdf_verification.check.verdict === "clean"
-                                            ? "bg-mpca-green-light text-mpca-green-dark border-mpca-green-deep/40"
-                                            : "bg-mpca-brass/15 text-mpca-brass border-mpca-brass/50")
+                                            ? "bg-mpca-green-dark text-mpca-ivory border-mpca-green-dark"
+                                            : "bg-mpca-brass text-mpca-ivory border-mpca-brass")
                                     }
                                     data-testid="pdf-verify-verdict"
                                 >
@@ -737,10 +746,11 @@ const SquadDetail = () => {
                 </div>
             )}
 
-            {/* M39g · AI Review of signed squad PDF — visible to MPCA reviewers */}
-            {isMPCA && squad.signed_copy_url && (squad.ai_review_status || squad.ai_review_verdict) && (() => {
+            {/* M39g / Iter 123n · AI Review of signed squad PDF — always visible to
+                MPCA when a signed copy exists (auto-fires on load if not yet run) */}
+            {isMPCA && squad.signed_copy_url && (() => {
                 const verdict = squad.ai_review_verdict;
-                const status = squad.ai_review_status;
+                const status = squad.ai_review_status || (verdict ? "Completed" : "Pending");
                 const tone = verdict === "Looks_Good" ? "border-emerald-300 bg-emerald-50 text-emerald-900"
                     : verdict === "Reject_Recommended" ? "border-mpca-oxblood bg-mpca-oxblood/5 text-mpca-oxblood"
                     : "border-mpca-brass bg-mpca-brass/10 text-mpca-brass";
@@ -769,6 +779,40 @@ const SquadDetail = () => {
                                         )}
                                         {status === "Failed" && "AI review failed — click Re-run below."}
                                     </div>
+                                    {/* Iter 123n · Structured evidence chips */}
+                                    {status === "Completed" && (
+                                        <div className="mt-2 flex flex-wrap gap-1.5 text-[9.5px] uppercase tracking-widest" data-testid="squad-ai-chips">
+                                            {squad.ai_review_signature_present === true && <span className="px-1.5 py-0.5 border border-current">Signature ✓</span>}
+                                            {squad.ai_review_signature_present === false && <span className="px-1.5 py-0.5 border border-mpca-oxblood text-mpca-oxblood">Signature ✗</span>}
+                                            {squad.ai_review_seal_present === true && <span className="px-1.5 py-0.5 border border-current">Seal ✓</span>}
+                                            {squad.ai_review_seal_present === false && <span className="px-1.5 py-0.5 border border-mpca-brass text-mpca-brass">Seal ✗</span>}
+                                            {squad.ai_review_pdf_matches_roster && Number.isInteger(squad.ai_review_pdf_matches_roster.matched) && (
+                                                <span className="px-1.5 py-0.5 border border-current">
+                                                    PDF↔Roster: {squad.ai_review_pdf_matches_roster.matched} matched
+                                                    {(squad.ai_review_pdf_matches_roster.missing_in_pdf?.length ?? 0) > 0 && ` · ${squad.ai_review_pdf_matches_roster.missing_in_pdf.length} missing in PDF`}
+                                                    {(squad.ai_review_pdf_matches_roster.extra_in_pdf?.length ?? 0) > 0 && ` · ${squad.ai_review_pdf_matches_roster.extra_in_pdf.length} extra in PDF`}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                    {/* Iter 123n · Selection-quality digest */}
+                                    {squad.ai_review_selection && Object.keys(squad.ai_review_selection).length > 0 && (
+                                        <div className="mt-2 border-t border-current/20 pt-2 space-y-0.5 text-[10.5px]" data-testid="squad-ai-selection-review">
+                                            <div className="uppercase tracking-widest text-[8.5px] opacity-70 mb-1">Selection quality</div>
+                                            {squad.ai_review_selection.gender_balance && <div><b>Gender:</b> {squad.ai_review_selection.gender_balance}</div>}
+                                            {squad.ai_review_selection.age_spread && <div><b>Age spread:</b> {squad.ai_review_selection.age_spread}</div>}
+                                            {squad.ai_review_selection.category_mix && <div><b>Category mix:</b> {squad.ai_review_selection.category_mix}</div>}
+                                            {squad.ai_review_selection.role_balance && <div><b>Role balance:</b> {squad.ai_review_selection.role_balance}</div>}
+                                            {squad.ai_review_selection.club_concentration && <div><b>Club spread:</b> {squad.ai_review_selection.club_concentration}</div>}
+                                            {Array.isArray(squad.ai_review_selection.bias_flags) && squad.ai_review_selection.bias_flags.length > 0 && (
+                                                <div className="mt-1 text-mpca-oxblood"><b>Bias flags:</b>
+                                                    <ul className="list-disc pl-5">
+                                                        {squad.ai_review_selection.bias_flags.map((b, i) => <li key={i}>{b}</li>)}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                     {Array.isArray(squad.ai_review_comments) && squad.ai_review_comments.length > 0 && (
                                         <ul className="mt-2 list-disc pl-5 space-y-0.5" data-testid="squad-ai-comments">
                                             {squad.ai_review_comments.map((c, i) => <li key={i}>{c}</li>)}

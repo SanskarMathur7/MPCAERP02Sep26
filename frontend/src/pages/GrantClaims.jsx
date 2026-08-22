@@ -347,7 +347,10 @@ const GrantClaims = () => {
     const [amountDraft, setAmountDraft] = useState("");
     const [savingAmount, setSavingAmount] = useState(false);
     useEffect(() => { setAmountDraft(String(selected?.claimed_amount_inr ?? "")); }, [selected?.id, selected?.claimed_amount_inr]);
-    const amountEditable = !!selected && !isMPCA && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status);
+    const amountEditable = !!selected && (
+        (!isMPCA && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status)) ||
+        (isMPCA && ["Submitted", "Under_Review"].includes(selected.status))
+    );
     const saveAmount = async () => {
         const val = parseFloat(amountDraft);
         if (isNaN(val) || val < 0) { alert("Enter a valid amount (₹ ≥ 0)."); return; }
@@ -436,7 +439,13 @@ const GrantClaims = () => {
     const canSubmit = !isMPCA && selected && ["Draft", "Documents_Pending", "Rejected"].includes(selected.status) && allDocsUploaded && !!selected.signed_submission_url;
     // MPCA-245 · MPCA must upload signed approval PDF before Approve unlocks
     const canUploadMpcaSigned = isMPCA && selected && ["Submitted", "Under_Review"].includes(selected.status);
-    const canReview = isMPCA && selected && ["Submitted", "Under_Review"].includes(selected.status) && !!selected.signed_approval_url;
+    // Iter 123n · Split gate:
+    //   canReviewSoft — Request More Docs is available as soon as the claim
+    //                   reaches MPCA (Submitted / Under_Review), independent
+    //                   of whether the MPCA-signed approval PDF is uploaded.
+    //   canReview     — Approve / Reject still require the signed approval PDF.
+    const canReviewSoft = isMPCA && selected && ["Submitted", "Under_Review"].includes(selected.status);
+    const canReview = canReviewSoft && !!selected?.signed_approval_url;
     // MPCA-245 · Payment_Made — MPCA marks after approval
     const canMarkPayment = isMPCA && selected && ["Approved", "Sanctioned"].includes(selected.status);
     // MPCA-112 · MPCA can also REJECT a claim after it was Approved
@@ -603,17 +612,19 @@ const GrantClaims = () => {
                                             <Upload size={11} /> {selected?.signed_approval_url ? "Replace MPCA Signed" : "Upload MPCA Signed"}
                                         </button>
                                     )}
+                                    {canReviewSoft && (
+                                        <button
+                                            className="border border-mpca-brass text-mpca-brass px-3 py-1.5 text-[11px] uppercase tracking-widest hover:bg-mpca-brass/10"
+                                            onClick={reopenForDocs}
+                                            title="Send back to Division so they can upload / correct paperwork. The reason will be posted to the Discussion tab."
+                                            data-testid="reopen-for-docs-btn"
+                                        >
+                                            <RotateCcw size={12} className="inline mr-1" /> Request More Docs
+                                        </button>
+                                    )}
                                     {canReview && (
                                         <>
                                             <button className="btn-heritage-primary" onClick={approveClaim} data-testid="approve-claim-btn"><CheckCircle2 size={12} /> Approve</button>
-                                            <button
-                                                className="border border-mpca-brass text-mpca-brass px-3 py-1.5 text-[11px] uppercase tracking-widest hover:bg-mpca-brass/10"
-                                                onClick={reopenForDocs}
-                                                title="Send back to Division so they can upload / correct paperwork. The reason will be posted to the Discussion tab."
-                                                data-testid="reopen-for-docs-btn"
-                                            >
-                                                <RotateCcw size={12} className="inline mr-1" /> Request More Docs
-                                            </button>
                                             <button className="border border-mpca-oxblood text-mpca-oxblood px-3 py-1.5 text-[11px] uppercase tracking-widest" onClick={rejectClaim} data-testid="reject-claim-btn"><XCircle size={12} className="inline mr-1" /> Reject</button>
                                         </>
                                     )}

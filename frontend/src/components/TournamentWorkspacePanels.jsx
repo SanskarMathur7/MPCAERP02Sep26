@@ -47,6 +47,27 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
         await load(); onChange?.();
         if (failed) alert(`Deleted ${ok} · ${failed} failed`);
     };
+    // Iter 123o · Bulk assign pool_id across selected matches.
+    const [bulkPool, setBulkPool] = useState("");
+    const [bulkPooling, setBulkPooling] = useState(false);
+    const bulkAssignPool = async () => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) return;
+        const targetPool = bulkPool || null;
+        const label = targetPool || "— none —";
+        if (!window.confirm(`Assign pool "${label}" to ${ids.length} match${ids.length === 1 ? "" : "es"}?`)) return;
+        setBulkPooling(true);
+        let ok = 0, failed = 0;
+        for (const mid of ids) {
+            try { await api.patch(`/tournaments/${tournament.id}/matches/${mid}`, { pool_id: targetPool }); ok++; }
+            catch { failed++; }
+        }
+        setBulkPooling(false);
+        clearSelection();
+        setBulkPool("");
+        await load(); onChange?.();
+        if (failed) alert(`Updated ${ok} · ${failed} failed`);
+    };
     const fileRef = useRef(null);
     // MPCA-243 · Ship 2 · Read the wiring step for advisory copy. When
     // `match_calendar.mode == "Manual_PDF"` (BCCI/School/Club/etc.), the
@@ -281,11 +302,15 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                 const raw_to   = r.date_to   || null;
                 const from_iso = _isoDate(raw_from);
                 const to_iso   = raw_to ? _isoDate(raw_to) : null;
-                const days     = to_iso && from_iso ? _daysBetween(from_iso, to_iso) : (Number(r.days) || 1);
+                // Iter 123o · If date_to is missing OR equals date_from, force to_date
+                // to date_from so single-day matches persist a real to_date (was
+                // saving null → the fixture editor rendered an empty "Date to" field).
+                const effective_to = to_iso || from_iso;
+                const days     = (to_iso && from_iso) ? _daysBetween(from_iso, to_iso) : (Number(r.days) || 1);
                 const row = {
                     stage:      r.stage      || "League",
                     match_date: from_iso,
-                    to_date:    to_iso || null,
+                    to_date:    effective_to,
                     home_team:  r.team_a_code || r.home_team,
                     away_team:  r.team_b_code || r.away_team,
                     start_time: r.start_time || "10:00",
@@ -421,10 +446,33 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                         )}
                     </div>
                     {selectedIds.size > 0 && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {/* Iter 123o · Bulk assign pool */}
+                            {poolOptions.length > 0 && (
+                                <div className="flex items-center gap-1 border border-mpca-brass/40 px-2 py-1" data-testid="bulk-pool-cluster">
+                                    <span className="text-[9px] uppercase tracking-widest text-mpca-gray-dark font-mono">Pool →</span>
+                                    <select
+                                        className="text-[10px] bg-transparent border-0 focus:outline-none text-mpca-green-dark uppercase tracking-widest font-mono"
+                                        value={bulkPool}
+                                        onChange={(e) => setBulkPool(e.target.value)}
+                                        data-testid="bulk-pool-select"
+                                    >
+                                        <option value="">— none —</option>
+                                        {poolOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                    <button
+                                        onClick={bulkAssignPool}
+                                        disabled={bulkPooling}
+                                        className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory px-2 py-0.5 disabled:opacity-40"
+                                        data-testid="bulk-pool-apply-btn"
+                                    >
+                                        {bulkPooling ? "…" : "Apply"}
+                                    </button>
+                                </div>
+                            )}
                             <button
                                 onClick={clearSelection}
-                                disabled={bulkDeleting}
+                                disabled={bulkDeleting || bulkPooling}
                                 className="text-[10px] uppercase tracking-widest px-2 py-1 border border-mpca-brass/40 text-mpca-gray-dark hover:bg-mpca-brass/10"
                                 data-testid="bulk-clear-btn"
                             >
@@ -432,7 +480,7 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                             </button>
                             <button
                                 onClick={bulkDelete}
-                                disabled={bulkDeleting}
+                                disabled={bulkDeleting || bulkPooling}
                                 className="text-[10px] uppercase tracking-widest px-2 py-1 bg-mpca-oxblood text-mpca-ivory disabled:opacity-40 flex items-center gap-1"
                                 data-testid="bulk-delete-btn"
                             >

@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
-import { MpcaEmblem, MpcaLogoMark } from "@/components/MpcaEmblem";
+import { MpcaEmblem } from "@/components/MpcaEmblem";
 import { DL } from "@/lib/designSystem";
 import { api } from "@/lib/api";
+import WiringBrain from "@/components/WiringBrain";
 
 /**
  * Feb 2026 · Single JWT-based Login
@@ -60,80 +61,33 @@ const Login = () => {
             style={{ backgroundColor: DL.ivory, fontFamily: DL.fontBody, color: DL.ink }}
             data-testid="login-page"
         >
-            {/* ───── LEFT · Brand pane ───── */}
+            {/* ───── LEFT · The Wiring Brain — MPCA's governance controller ───── */}
             <aside
-                className="relative lg:w-2/5 px-8 md:px-14 py-10 lg:py-16 flex flex-col justify-between overflow-hidden"
-                style={{
-                    background: `linear-gradient(160deg, ${DL.emerald} 0%, ${DL.ink} 60%, ${DL.ink2} 100%)`,
-                    color: DL.paper,
-                }}
+                className="relative lg:w-[58%] min-h-[420px] lg:min-h-screen overflow-hidden"
+                data-testid="login-brain-panel"
             >
-                {/* subtle field-lines overlay */}
-                <div
-                    aria-hidden
-                    className="absolute inset-0 opacity-[0.06] pointer-events-none"
+                <WiringBrain />
+                {/* Top-right brand plate (kept minimal so it doesn't fight the diagram) */}
+                <Link
+                    to="/"
+                    className="absolute top-6 right-6 z-20 inline-flex items-center gap-2.5 px-3 py-2 rounded-md"
                     style={{
-                        backgroundImage: "repeating-linear-gradient(115deg, rgba(255,255,255,0.4) 0 1px, transparent 1px 42px)",
+                        backgroundColor: "rgba(14,31,27,0.55)",
+                        border: `1px solid ${DL.gold}`,
+                        backdropFilter: "blur(8px)",
                     }}
-                />
-
-                {/* Top wordmark */}
-                <div className="relative z-10">
-                    <Link to="/" className="inline-flex items-center gap-3">
-                        <MpcaEmblem className="w-10 h-12" style={{ color: DL.gold }} />
-                        <div>
-                            <div className="text-xl leading-none" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}>MPCA</div>
-                            <div
-                                className="text-[9px] tracking-[0.28em] uppercase mt-1.5"
-                                style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.85 }}
-                            >
-                                ERP · System of Records
-                            </div>
-                        </div>
-                    </Link>
-                </div>
-
-                {/* Centre — emblem + tagline */}
-                <div className="relative z-10 my-10 lg:my-0 flex flex-col items-start max-w-md">
-                    <div
-                        className="w-24 h-24 rounded-full p-3 mb-7"
-                        style={{
-                            backgroundColor: DL.paper,
-                            boxShadow: `0 22px 40px -18px rgba(0,0,0,0.55), inset 0 0 0 1px ${DL.gold}`,
-                        }}
-                    >
-                        <MpcaLogoMark className="w-full h-full object-contain" />
-                    </div>
-                    <h2
-                        className="text-3xl md:text-4xl leading-tight"
-                        style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper, letterSpacing: "-0.01em" }}
-                    >
-                        The cricketing office of <span style={{ color: DL.gold }}>Madhya Pradesh</span>, online.
-                    </h2>
-                    <p className="mt-5 text-sm leading-relaxed" style={{ color: "rgba(251,248,241,0.72)" }}>
-                        Sign in to the unified register — members, claims, tournaments, bank, and the
-                        constitutional record — scoped to your office in the BCCI → MPCA → Division →
-                        District hierarchy.
-                    </p>
-                    <div className="mt-7 flex items-center gap-3 text-[10px] tracking-[0.28em] uppercase" style={{ color: DL.gold, opacity: 0.75, fontFamily: DL.fontMono }}>
-                        <span className="w-6 h-px" style={{ backgroundColor: DL.gold, opacity: 0.5 }} />
-                        <span>khel bhavna se, rashtra sammaan se</span>
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div
-                    className="relative z-10 flex items-center justify-between text-xs mt-10"
-                    style={{ color: "rgba(251,248,241,0.55)", fontFamily: DL.fontMono }}
                 >
-                    <div>BCCI Affiliated · Est. 1957</div>
-                    <div>v4.2.0</div>
-                </div>
+                    <MpcaEmblem className="w-6 h-7" style={{ color: DL.gold }} />
+                    <div>
+                        <div className="text-[13px] leading-none" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}>MPCA</div>
+                        <div className="text-[8px] tracking-[0.24em] uppercase mt-1" style={{ fontFamily: DL.fontMono, color: DL.gold }}>ERP · v4.2.0</div>
+                    </div>
+                </Link>
             </aside>
 
             {/* ───── RIGHT · Login form ───── */}
             <main
-                className="lg:w-3/5 flex items-center justify-center px-6 sm:px-10 md:px-14 py-12 lg:py-16"
+                className="lg:w-[42%] flex items-center justify-center px-6 sm:px-10 md:px-14 py-12 lg:py-16"
                 style={{ backgroundColor: DL.ivory }}
             >
                 <div className="w-full max-w-md">

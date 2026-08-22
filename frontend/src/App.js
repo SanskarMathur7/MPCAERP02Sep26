@@ -129,7 +129,8 @@ function App() {
                     <Suspense fallback={<PageLoader />}>
                         <Routes>
                             {/* Public routes */}
-                            <Route path="/" element={<Landing />} />
+                            <Route path="/" element={<Navigate to="/login" replace />} />
+                            <Route path="/landing" element={<Landing />} />
                             <Route path="/login" element={<Login />} />
                             <Route path="/disclosures-public" element={<Disclosures publicView />} />
                             <Route path="/showcase" element={<MPCAShowcase />} />

@@ -176,16 +176,13 @@ export const ScopeChip = ({ label }) => (
 );
 
 /* ---------- WarmPageHeader ------------------------------------------- */
+// Iter 114 · The user requested every dashboard tab drop its big header.
+// We keep the component API stable (so all callers still compile) but render
+// only a slim eyebrow row + the right-side chips.  Titles + kickers are omitted.
 export const WarmPageHeader = ({ eyebrow, title, kicker, right }) => (
-    <div className="flex flex-wrap items-end justify-between gap-4 mb-5 pb-4" style={{ borderBottom: `1px dashed ${DL.rule}` }}>
-        <div>
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
-                <PulseDot tone="emerald" /> {eyebrow}
-            </div>
-            <h2 className="mt-2 text-[28px] md:text-[32px] leading-tight tracking-tight" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink }}>
-                {title}
-            </h2>
-            {kicker && <p className="mt-2 text-[12.5px] max-w-2xl" style={{ color: DL.muted, fontWeight: 500 }}>{kicker}</p>}
+    <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
+        <div className="text-[11px] font-bold uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.emerald }}>
+            ● {eyebrow || title}
         </div>
         {right}
     </div>

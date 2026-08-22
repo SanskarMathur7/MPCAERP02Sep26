@@ -114,12 +114,12 @@ export default function WarmBudgetHealth() {
 
     return (
         <div>
-            <WarmPageHeader
-                eyebrow="Fiscal · 2026-27"
-                title="Budget Health"
-                kicker="Season-wide deployment. Treemap surfaces where money is going; gauge & bars surface how fast."
-                right={<div className="flex items-center gap-2"><ScopeChip label={scopeLabel(persona)} /><SampleChip /></div>}
-            />
+            <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
+                <div className="text-[11px] font-bold uppercase tracking-[0.22em]" style={{ fontFamily: DL.fontMono, color: DL.emerald }}>
+                    ● Fiscal · 2026-27
+                </div>
+                <div className="flex items-center gap-2"><ScopeChip label={scopeLabel(persona)} /><SampleChip /></div>
+            </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 <WarmKpiHero label="Approved Budget" value={(30.8 * share).toFixed(1)} suffix="Cr" accent="emerald" testid="warm-kpi-budget-approved" />

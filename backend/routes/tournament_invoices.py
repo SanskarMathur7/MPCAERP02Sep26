@@ -186,15 +186,18 @@ async def create_invoice(payload: TournamentInvoiceCreate):
     cycle = t.get("fiscal_cycle") or "2025-26"
     body = payload.model_dump()
 
-    # Sprint T-RIM · validate multi-head allocations sum to invoice total (₹1 tolerance)
+    # Sprint T-RIM · validate multi-head allocations sum to the pre-GST base.
+    # Iter 123u · Budget heads are tracked ex-tax (Ranji/BCCI accounting); GST
+    # is a reclaimable ITC. Allocation sum must equal `amount_inr` (pre-GST),
+    # not `total_inr` (post-GST).
     allocs = body.get("allocations") or []
     if allocs:
-        total = round(float(body.get("total_inr") or 0), 2)
+        pre_gst = round(float(body.get("amount_inr") or 0), 2)
         alloc_sum = round(sum(float(a.get("amount_inr") or 0) for a in allocs), 2)
-        if abs(alloc_sum - total) > 1.0:
+        if abs(alloc_sum - pre_gst) > 1.0:
             raise HTTPException(
                 422,
-                f"Sum of head allocations (₹{alloc_sum:,.2f}) must equal the invoice total (₹{total:,.2f}).",
+                f"Sum of head allocations (₹{alloc_sum:,.2f}) must equal the pre-GST amount (₹{pre_gst:,.2f}). GST is booked separately as reclaimable ITC.",
             )
         # Convenience: keep legacy budget_head_code = first allocation's code
         if not body.get("budget_head_code"):

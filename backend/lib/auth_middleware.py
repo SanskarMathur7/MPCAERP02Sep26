@@ -24,11 +24,18 @@ from starlette.responses import JSONResponse
 from core.infra import db, logger
 from lib.authz import principal_from_user
 
-# Paths that MUST work without authentication (login, health, CORS pre-flight)
+# Paths that MUST work without authentication (login, health, CORS pre-flight,
+# and truly public token-guarded endpoints like player self-registration and
+# member/verify pages that anonymous browsers hit).
 _PUBLIC_PREFIXES = (
     "/api/auth/login",
     "/api/auth/logout",
     "/api/health",
+    # Iter 123v · Anonymous player-registration + submission flow. The token
+    # in the URL is the only auth needed — Divisions share these links via
+    # WhatsApp / SMS with players who have no MPCA login.
+    "/api/public/",
+    "/api/verify/",       # member / player verification cards
 )
 _PUBLIC_EXACT = {"/api/", "/api"}
 
@@ -39,7 +46,13 @@ def _is_public(path: str, method: str) -> bool:
     if path in _PUBLIC_EXACT:
         return True
     for p in _PUBLIC_PREFIXES:
-        if path == p or path.startswith(p + "?"):
+        # Iter 123v · Prefix entries ending in "/" match any deeper path
+        # (e.g. "/api/public/" allows "/api/public/player-registration/token/xyz").
+        # Exact entries still match themselves + query-string form.
+        if p.endswith("/"):
+            if path.startswith(p):
+                return True
+        elif path == p or path.startswith(p + "?"):
             return True
     # Anything outside /api/ is served by the frontend — middleware ignores it
     if not path.startswith("/api"):

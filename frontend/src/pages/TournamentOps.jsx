@@ -449,7 +449,17 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
         finally { setAiExtracting(false); if (inputRef.current) inputRef.current.value = ""; }
     };
 
-    // Derived totals for the allocations block
+    // Derived totals for the allocations block.
+    // Iter 123u · Compare allocations against the PRE-GST amount, not the
+    // GST-inclusive total. Tournament budget heads are always tracked ex-tax
+    // (as per Ranji/BCCI accounting convention) — the invoice's GST portion
+    // is a reclaimable ITC and should never eat into a head's remaining
+    // balance. Showing "Short by ₹X" when allocations already equal the
+    // pre-GST base was misleading users into inflating the allocation.
+    const preGstBase = useMemo(
+        () => parseFloat(form.amount_inr) || 0,
+        [form.amount_inr]
+    );
     const invoiceTotal = useMemo(
         () => parseFloat(form.total_inr) || (parseFloat(form.amount_inr) + parseFloat(form.gst_inr)) || 0,
         [form.total_inr, form.amount_inr, form.gst_inr]
@@ -458,7 +468,7 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
         () => (form.allocations || []).reduce((s, a) => s + (parseFloat(a.amount_inr) || 0), 0),
         [form.allocations]
     );
-    const allocDelta = round2(invoiceTotal - allocSum);
+    const allocDelta = round2(preGstBase - allocSum);
     const allocMismatch = Math.abs(allocDelta) > 0.5;
     const allHeadsPicked = (form.allocations || []).every((a) => a.head_code);
 
@@ -545,8 +555,10 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                 }));
             if (!cleanedAllocs.length) throw new Error("Pick at least one budget head.");
             const sum = round2(cleanedAllocs.reduce((s, a) => s + a.amount_inr, 0));
-            if (Math.abs(sum - total) > 0.5)
-                throw new Error(`Sum of head allocations (₹${sum.toLocaleString("en-IN")}) must equal total (₹${total.toLocaleString("en-IN")}).`);
+            // Iter 123u · Compare against pre-GST base.
+            const preGst = round2(parseFloat(form.amount_inr) || 0);
+            if (Math.abs(sum - preGst) > 0.5)
+                throw new Error(`Sum of head allocations (₹${sum.toLocaleString("en-IN")}) must equal the pre-GST amount (₹${preGst.toLocaleString("en-IN")}).`);
             await updateTournamentInvoice(editing.id, {
                 vendor_name: form.vendor_name, invoice_no: form.invoice_no, invoice_date: form.invoice_date,
                 amount_inr: parseFloat(form.amount_inr) || 0, gst_inr: parseFloat(form.gst_inr) || 0,
@@ -562,6 +574,7 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
         setBusy(true); setError(null);
         try {
             const total = round2(invoiceTotal);
+            const preGst = round2(preGstBase);
             const cleanedAllocs = (form.allocations || [])
                 .filter((a) => a.head_code)
                 .map((a) => ({
@@ -571,8 +584,9 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                 }));
             if (!cleanedAllocs.length) throw new Error("Pick at least one budget head to set off this invoice against.");
             const sum = round2(cleanedAllocs.reduce((s, a) => s + a.amount_inr, 0));
-            if (Math.abs(sum - total) > 0.5)
-                throw new Error(`Sum of head allocations (₹${sum.toLocaleString("en-IN")}) must equal invoice total (₹${total.toLocaleString("en-IN")}).`);
+            // Iter 123u · Compare against pre-GST base, not total.
+            if (Math.abs(sum - preGst) > 0.5)
+                throw new Error(`Sum of head allocations (₹${sum.toLocaleString("en-IN")}) must equal the pre-GST amount (₹${preGst.toLocaleString("en-IN")}).`);
 
             await createTournamentInvoice({
                 tournament_id: tournament.id,
@@ -838,7 +852,7 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                     <div>
                                         <div className="overline">Budget Head Set-Off</div>
                                         <div className="text-[11px] text-mpca-gray-dark mt-0.5">
-                                            Split this invoice across the tournament&apos;s approved budget heads. The sum of allocations must equal the invoice total.
+                                            Split this invoice across the tournament&apos;s approved budget heads. The sum of allocations must equal the <b>pre-GST amount</b> (GST is treated as reclaimable ITC and stays outside the budget heads).
                                         </div>
                                     </div>
                                     <button
@@ -916,7 +930,7 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
 
                                 {budgetHeads.length > 0 && (
                                     <div className={"text-[11px] flex items-center justify-between mt-1 pt-2 border-t border-mpca-brass/30 " + (allocMismatch ? "text-mpca-oxblood font-semibold" : "text-mpca-green-dark")} data-testid="inv-alloc-summary">
-                                        <span>Allocated: <span className="font-mono">{fmtINR(allocSum)}</span> · Invoice total: <span className="font-mono">{fmtINR(invoiceTotal)}</span></span>
+                                        <span>Allocated: <span className="font-mono">{fmtINR(allocSum)}</span> · Pre-GST amount: <span className="font-mono">{fmtINR(preGstBase)}</span> <span className="text-mpca-gray-dark italic">(total {fmtINR(invoiceTotal)} incl. GST)</span></span>
                                         <span>
                                             {allocMismatch ? (
                                                 allocDelta > 0

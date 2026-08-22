@@ -94,7 +94,6 @@ const NAV_DOMAINS = [
             { to: "/tournament-master", label: "Tournament Registry", icon: BookOpen },
             { to: "/tournament-wiring", label: "Tournament Wiring", icon: BookOpen },
             { to: "/rate-cards", label: "Rate Cards", icon: BookOpen },
-            { to: "/rulebook", label: "Rulebook", icon: BookOpen },
         ],
     },
 ];

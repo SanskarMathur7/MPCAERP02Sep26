@@ -4,7 +4,7 @@
 // Any MPCA-scope persona can edit cells; changes bump a version counter.
 
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import {
@@ -218,9 +218,9 @@ export default function TournamentWiringConsole() {
         setLoad(true);
         try {
             const [r, a, s] = await Promise.all([
-                axios.get(`${API}/tournament-wiring`),
-                axios.get(`${API}/tournament-wiring/audit?limit=200`).catch(() => ({ data: { rows: [] } })),
-                axios.get(`${API}/tournament-wiring/snapshots`).catch(() => ({ data: { rows: [] } })),
+                api.get(`${API}/tournament-wiring`),
+                api.get(`${API}/tournament-wiring/audit?limit=200`).catch(() => ({ data: { rows: [] } })),
+                api.get(`${API}/tournament-wiring/snapshots`).catch(() => ({ data: { rows: [] } })),
             ]);
             setDoc(r.data);
             setAudit(a.data.rows || []);
@@ -238,9 +238,9 @@ export default function TournamentWiringConsole() {
         if (!cycle) return;
         setFreezing(true);
         try {
-            const r = await axios.post(`${API}/tournament-wiring/freeze-season/${encodeURIComponent(cycle)}`);
+            const r = await api.post(`${API}/tournament-wiring/freeze-season/${encodeURIComponent(cycle)}`);
             toast.success(`Snapshot revision ${r.data.snapshot.revision} · ${cycle} frozen`);
-            const s = await axios.get(`${API}/tournament-wiring/snapshots`);
+            const s = await api.get(`${API}/tournament-wiring/snapshots`);
             setSnaps(s.data.rows || []);
             setTab("snapshots");
         } catch (e) {
@@ -252,7 +252,7 @@ export default function TournamentWiringConsole() {
 
     const saveCell = async (draft) => {
         try {
-            const r = await axios.patch(`${API}/tournament-wiring/cell`, {
+            const r = await api.patch(`${API}/tournament-wiring/cell`, {
                 type_id:  editing.type_id,
                 step_key: editing.step_key,
                 ...draft,
@@ -272,7 +272,7 @@ export default function TournamentWiringConsole() {
                 },
             }));
             // Refresh audit log so the new row appears without a page reload
-            axios.get(`${API}/tournament-wiring/audit?limit=200`)
+            api.get(`${API}/tournament-wiring/audit?limit=200`)
                 .then(a => setAudit(a.data.rows || []))
                 .catch(() => {});
         } catch (e) {
@@ -284,7 +284,7 @@ export default function TournamentWiringConsole() {
     const resetAll = async () => {
         if (!window.confirm("Reset every cell to the seeded defaults? Any manual edits will be lost.")) return;
         try {
-            await axios.post(`${API}/tournament-wiring/reset`);
+            await api.post(`${API}/tournament-wiring/reset`);
             toast.success("Matrix reset to defaults");
             load();
         } catch (e) {
@@ -294,7 +294,7 @@ export default function TournamentWiringConsole() {
 
     const exportJson = async () => {
         try {
-            const r = await axios.get(`${API}/tournament-wiring/export`);
+            const r = await api.get(`${API}/tournament-wiring/export`);
             const blob = new Blob([JSON.stringify(r.data, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");

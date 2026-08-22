@@ -100,10 +100,10 @@ const GaugeMini = ({ label, used, cap }) => {
     const pct = Math.round((used / cap) * 100);
     const tone = pct >= 90 ? WARM_COLORS.oxblood : pct >= 70 ? WARM_COLORS.gold : WARM_COLORS.emerald;
     return (
-        <div className="flex flex-col items-center text-center px-2" data-testid={`warm-quota-${label.toLowerCase().replace(/\s+/g,"-")}`}>
-            <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-2" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
-            <div className="relative w-24 h-24">
-                <svg viewBox="0 0 100 100" width="96" height="96">
+        <div className="flex flex-col items-center text-center px-1 min-w-0" data-testid={`warm-quota-${label.toLowerCase().replace(/\s+/g,"-")}`}>
+            <div className="text-[11px] uppercase tracking-[0.18em] font-bold mb-3 whitespace-nowrap" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>{label}</div>
+            <div className="relative" style={{ width: 108, height: 108 }}>
+                <svg viewBox="0 0 100 100" width="108" height="108">
                     <circle cx="50" cy="50" r="42" fill="none" stroke={DL.rule} strokeWidth="9" />
                     <circle
                         cx="50" cy="50" r="42" fill="none" stroke={tone} strokeWidth="9"
@@ -113,8 +113,8 @@ const GaugeMini = ({ label, used, cap }) => {
                     />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="text-[22px] leading-none" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: tone }}>{pct}%</div>
-                    <div className="text-[9.5px] mt-0.5" style={{ fontFamily: DL.fontMono, color: DL.muted }}>{used}/{cap}</div>
+                    <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: tone, fontSize: 22, lineHeight: 1 }}>{pct}%</div>
+                    <div style={{ fontFamily: DL.fontMono, color: DL.muted, fontSize: 11, marginTop: 3 }}>{used}/{cap}</div>
                 </div>
             </div>
         </div>

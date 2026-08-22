@@ -458,7 +458,14 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                                         data-testid="bulk-pool-select"
                                     >
                                         <option value="">— none —</option>
-                                        {poolOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                                        {poolOptions.map((p) => {
+                                            // Pool entries are objects: {id, name, division_codes/district_codes}.
+                                            // Fall back through common id / name keys and coerce anything else to
+                                            // a string so React never tries to render an object as a child.
+                                            const val = typeof p === "string" ? p : (p?.id || p?.pool_id || p?.name || "");
+                                            const lbl = typeof p === "string" ? p : (p?.name || p?.id || p?.pool_id || "?");
+                                            return val ? <option key={val} value={val}>{lbl}</option> : null;
+                                        })}
                                     </select>
                                     <button
                                         onClick={bulkAssignPool}

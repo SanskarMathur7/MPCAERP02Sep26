@@ -117,20 +117,38 @@ export default function GrantClaimSummaryPDF() {
                                 <th className="text-left py-1 pr-2 w-6">#</th>
                                 <th className="text-left py-1 pr-2">Required Document</th>
                                 <th className="text-left py-1 pr-2">Filename</th>
+                                <th className="text-left py-1 pr-2 w-20">Signed</th>
                                 <th className="text-left py-1 pr-2 w-24">AI Verified</th>
                                 <th className="text-right py-1 pr-2 w-14">Conf%</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {docs.map((d, i) => (
-                                <tr key={d.id || i} className="border-b border-gray-300">
-                                    <td className="py-1 pr-2">{i + 1}</td>
-                                    <td className="py-1 pr-2"><b>{d.required_label || d.label || d.doc_key || "—"}</b></td>
-                                    <td className="py-1 pr-2 text-gray-700">{d.filename || "—"}</td>
-                                    <td className="py-1 pr-2">{d.ai_verified ? "Yes" : "—"}</td>
-                                    <td className="py-1 pr-2 text-right font-mono">{d.ai_confidence != null ? `${Math.round(Number(d.ai_confidence) * 100)}%` : "—"}</td>
-                                </tr>
-                            ))}
+                            {docs.map((d, i) => {
+                                // Iter 123m · "Signed" column tells MPCA whether the AI
+                                // detected a signature and/or an official stamp on the doc.
+                                // sig = any signature; stamp = any seal.
+                                const sig = d.signature_detected;
+                                const stamp = d.stamp_detected;
+                                let signedCell = "—";
+                                if (sig && stamp) signedCell = "Signed + Stamped";
+                                else if (sig) signedCell = "Signed";
+                                else if (stamp) signedCell = "Stamped only";
+                                else if (d.ai_verified === true && sig === undefined) signedCell = "n/a";
+                                else if (sig === false && stamp === false) signedCell = "Not signed";
+                                return (
+                                    <tr key={d.id || i} className="border-b border-gray-300">
+                                        <td className="py-1 pr-2">{i + 1}</td>
+                                        <td className="py-1 pr-2"><b>{d.required_label || d.label || d.doc_key || "—"}</b></td>
+                                        <td className="py-1 pr-2 text-gray-700">{d.filename || "—"}</td>
+                                        <td className="py-1 pr-2 text-[10.5px]">
+                                            {signedCell}
+                                            {d.signed_by && <div className="text-[9px] text-gray-500 italic mt-0.5">by {d.signed_by}</div>}
+                                        </td>
+                                        <td className="py-1 pr-2">{d.ai_verified ? "Yes" : "—"}</td>
+                                        <td className="py-1 pr-2 text-right font-mono">{d.ai_confidence != null ? `${Math.round(Number(d.ai_confidence) * 100)}%` : "—"}</td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </>

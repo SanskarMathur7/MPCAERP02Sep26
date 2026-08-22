@@ -15,6 +15,7 @@ import {
     createSquad,
     addPlayerToSquad,
     removePlayerFromSquad,
+    openAuthedFile,
 } from "@/lib/api";
 
 const ROLE_LABEL = { Batter: "Batter", Bowler: "Bowler", All_Rounder: "All-Rounder", Wicket_Keeper: "WK" };
@@ -193,6 +194,25 @@ const SquadDetail = () => {
     };
 
     useEffect(() => { bootstrap(); }, [bootstrap]);
+
+    // Iter 123m · Auto-fire the AI cross-check when MPCA opens a squad that
+    // has a signed copy but hasn't been verified yet. Fires exactly once per
+    // squad id (avoids retriggering on every setSquad). Silent on error so
+    // the manual "Verify with AI" button still works as a fallback.
+    const [autoVerifiedFor, setAutoVerifiedFor] = useState(null);
+    useEffect(() => {
+        const isMPCAReviewer = persona?.body_type === "State";
+        if (!squad || !isMPCAReviewer) return;
+        if (!squad.signed_copy_url || squad.pdf_verification) return;
+        if (autoVerifiedFor === squad.id) return;
+        setAutoVerifiedFor(squad.id);
+        (async () => {
+            try {
+                const { data } = await api.post(`/squads/${squad.id}/verify-signed-copy`);
+                setSquad((s) => ({ ...(s || {}), pdf_verification: data }));
+            } catch { /* leave the manual button visible */ }
+        })();
+    }, [squad, persona, autoVerifiedFor]);
 
     const refresh = async () => {
         if (!tournament || !squad) return;
@@ -447,16 +467,15 @@ const SquadDetail = () => {
                     <div className="flex flex-wrap items-center gap-2" data-testid="squad-actions">
                         {/* M38d · Signed nomination link — visible to EVERYONE (MPCA reviewers included) */}
                         {squad.signed_copy_url && (
-                            <a
-                                href={squad.signed_copy_url}
-                                target="_blank"
-                                rel="noreferrer"
+                            <button
+                                type="button"
+                                onClick={() => openAuthedFile(squad.signed_copy_url)}
                                 className="text-[10px] uppercase tracking-widest bg-mpca-green-dark text-mpca-ivory px-3 py-2 flex items-center gap-1 hover:bg-mpca-green transition-colors"
                                 data-testid="squad-view-signed-link"
                                 title={squad.signed_copy_uploaded_at ? `Uploaded ${new Date(squad.signed_copy_uploaded_at).toLocaleString("en-IN")}${squad.signed_copy_uploaded_by ? ` by ${squad.signed_copy_uploaded_by}` : ""}` : "View signed nomination copy"}
                             >
                                 <FileCheck size={12} /> View Signed Copy
-                            </a>
+                            </button>
                         )}
                         {canSubmit && !isMPCA && (members.length >= 11 && captain || wiringSquadMode?.mode === "Manual_PDF") && (
                             <>

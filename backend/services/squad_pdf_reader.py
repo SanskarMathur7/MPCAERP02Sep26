@@ -57,9 +57,26 @@ Rules:
 
 
 async def _fetch_bytes(url: str) -> bytes:
-    """Fetch a URL (local /api/uploads/… or absolute http[s]://…) as bytes."""
+    """Fetch bytes for a signed-copy URL.
+    For local `/api/uploads/{id}` URLs we read the file straight off disk
+    via the `uploads` collection (looking up the persisted `_path`). This
+    sidesteps the JWT-gated HTTP route entirely — Iter 123m — which was
+    returning 401 to the internal httpx call and failing every "Verify with
+    AI" attempt with `Not authenticated`. Absolute `http(s)://` URLs still
+    go through httpx for backwards-compat with external doc stores."""
+    if url.startswith("/api/uploads/"):
+        from pathlib import Path
+        from core.infra import db as _db
+        file_id = url.rsplit("/", 1)[-1].split("?", 1)[0]
+        rec = await _db.uploads.find_one({"id": file_id})
+        if not rec:
+            raise RuntimeError(f"Upload record {file_id} not found in the database.")
+        path = rec.get("_path")
+        if not path or not Path(path).exists():
+            raise RuntimeError(f"Upload {file_id} exists in DB but file is missing on disk.")
+        return Path(path).read_bytes()
     if url.startswith("/"):
-        # Resolve /api/uploads/... against the local backend
+        # Non-upload local paths — fall back to internal HTTP (rare)
         backend = os.environ.get("BACKEND_INTERNAL_URL", "http://localhost:8001")
         url = f"{backend}{url}"
     async with httpx.AsyncClient(timeout=30) as c:
@@ -122,7 +139,7 @@ async def parse_squad_pdf(url: str) -> dict:
             api_key=key,
             session_id=f"squad-pdf-{os.path.basename(tmp_path)}",
             system_message="You extract cricket squad rosters from signed team-list PDFs.",
-        ).with_model("gemini", "gemini-2.0-flash")
+        ).with_model("gemini", "gemini-3.6-flash")
         msg = UserMessage(
             text=PROMPT,
             file_contents=[FileContentWithMimeType(file_path=tmp_path, mime_type=mime)],

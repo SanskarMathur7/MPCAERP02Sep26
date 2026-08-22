@@ -244,7 +244,7 @@ async def _ai_verify_document(doc: dict) -> dict:
 
         chat = LlmChat(api_key=key, session_id=f"doc-verify-{doc['doc_id']}",
                        system_message="You are an MPCA compliance document verifier. Respond in strict JSON only.")
-        chat = chat.with_model("gemini", "gemini-2.5-flash")
+        chat = chat.with_model("gemini", "gemini-3.6-flash")
         prompt = f"""Verify if the attached document matches the EXPECTED DOCUMENT TYPE.
 
 EXPECTED: {doc['required_label']}
@@ -255,9 +255,14 @@ Return ONLY a JSON object (no prose, no code fences) with keys:
   "confidence": 0.0-1.0,
   "document_type_detected": "...",
   "key_details": {{"date": "...", "amount": "...", "party": "...", "any_other_signal": "..."}},
+  "signature_detected": true/false,
+  "stamp_detected": true/false,
+  "signed_by": "name and designation of the signatory if visible, else empty string",
   "issues": ["issue1", "issue2"],
   "verdict_note": "one line summary"
-}}"""
+}}
+Note: `signature_detected` means a handwritten or scanned signature is visible on the page.
+`stamp_detected` means an official rubber stamp / seal is visible."""
         file_content = FileContentWithMimeType(file_path=local_path, mime_type=mime)
         resp = await asyncio.wait_for(  # H4 · timeout guard
             chat.send_message(UserMessage(text=prompt, file_contents=[file_content])), timeout=45)
@@ -272,6 +277,9 @@ Return ONLY a JSON object (no prose, no code fences) with keys:
             "ai_verified": bool(data.get("matches")),
             "ai_confidence": float(data.get("confidence") or 0),
             "ai_notes": data.get("verdict_note") or "",
+            "signature_detected": bool(data.get("signature_detected")),
+            "stamp_detected": bool(data.get("stamp_detected")),
+            "signed_by": (data.get("signed_by") or "").strip() or None,
             "ai_extracted": {
                 "document_type_detected": data.get("document_type_detected"),
                 "key_details": data.get("key_details") or {},
@@ -1115,7 +1123,7 @@ Rules:
 5. When you mention required documents, be specific."""
 
         chat = LlmChat(api_key=key, session_id=payload.session_id, system_message=system_msg)
-        chat = chat.with_model("gemini", "gemini-2.5-flash")
+        chat = chat.with_model("gemini", "gemini-3.6-flash")
         resp = await asyncio.wait_for(  # H4 · timeout guard
             chat.send_message(UserMessage(text=payload.message)), timeout=45)
         return {"reply": str(resp), "session_id": payload.session_id, "body_id": body_id}

@@ -332,14 +332,14 @@ SELECTED SQUAD (top 5 by score): {[{'name': r['full_name'], 'role': r['role'], '
 RECOMMENDED XV (top 5): {[{'name': r['full_name'], 'role': r['role'], 'score': r['score']} for r in verdict['recommended'][:5]]}
 """
         chat = LlmChat(api_key=key, session_id=f"squad-review-{sid}", system_message="You are a concise MPCA cricket selection expert.")
-        chat = chat.with_model("gemini", "gemini-2.5-flash")
+        chat = chat.with_model("gemini", "gemini-3.6-flash")
         resp = await asyncio.wait_for(chat.send_message(UserMessage(text=prompt)), timeout=45)  # H4
         verdict["ai_second_opinion"] = {
             "text": str(resp),
-            "model": "gemini-2.5-flash",
+            "model": "gemini-3.6-flash",
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
-        verdict["algorithm"] = "deterministic_v1 + gemini-2.5-flash"
+        verdict["algorithm"] = "deterministic_v1 + gemini-3.6-flash"
     except Exception as e:
         verdict["ai_second_opinion"] = {"error": str(e)}
     return verdict

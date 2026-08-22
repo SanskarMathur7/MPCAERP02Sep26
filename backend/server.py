@@ -25,7 +25,7 @@ from routes import (  # noqa: F401
     tournament_workspace, rbac, tournament_participations, body_documents, player_registrations,
     discussions, events, finance_console, tournament_master, rate_cards, unified_budget,
     tournament_wiring, tournament_wiring_status, camp_finance, ux_audit,
-    tournament_eligibility, auth, squad_pdf_verify,
+    tournament_eligibility, auth, squad_pdf_verify, mc, mc_admin,
 )
 from seed import seed_data
 
@@ -112,6 +112,19 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             import logging
             logging.getLogger("mpca").warning("User seeding failed: %s", e)
+        # Feb 2026 · Iter 109 · Dynamic Maker-Checker workflow templates
+        try:
+            from scripts.seed_mc_workflows import seed_mc_workflows
+            from core.infra import db as _db
+            rr = await seed_mc_workflows(_db)
+            import logging
+            logging.getLogger("mpca").info(
+                "M&C workflows seeded — created=%s kept=%s",
+                len(rr["created"]), len(rr["kept"]),
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger("mpca").warning("M&C workflow seeding failed: %s", e)
     yield
     # ---- shutdown ----
     client.close()

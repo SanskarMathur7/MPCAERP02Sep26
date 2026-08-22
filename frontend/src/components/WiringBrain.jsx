@@ -239,60 +239,45 @@ export default function WiringBrain() {
                 <path d="M0 18 L18 18 M18 0 L18 18" stroke={DL.gold} strokeWidth="1.25" fill="none" />
             </svg>
 
-            {/* ── Brand lockup · logo + wordmark + eyebrow + title ── */}
+            {/* ── Brand lockup · logo + wordmark ── */}
             <div style={{
                 position: "absolute", top: 44, left: 40, zIndex: 3,
-                display: "flex", alignItems: "center", gap: 12,
+                display: "flex", alignItems: "center", gap: 16,
             }} data-testid="brain-brand-lockup">
                 <img
                     src="/brand/mpca-logo.png"
                     alt="MPCA emblem"
                     style={{
-                        width: 42, height: 42, objectFit: "contain",
+                        width: 72, height: 72, objectFit: "contain",
                         filter: "brightness(0) saturate(100%) invert(72%) sepia(56%) saturate(388%) hue-rotate(2deg) brightness(94%) contrast(90%)",
                     }}
                 />
                 <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
                     <span style={{
                         color: DL.gold, opacity: 0.9,
-                        fontFamily: DL.fontMono, fontSize: 9.5, fontWeight: 800,
+                        fontFamily: DL.fontMono, fontSize: 10.5, fontWeight: 800,
                         letterSpacing: "0.24em", textTransform: "uppercase",
                     }}>
                         Madhya Pradesh
                     </span>
                     <span style={{
-                        color: DL.paper, marginTop: 3,
-                        fontFamily: DL.fontMono, fontSize: 9.5, fontWeight: 700,
-                        letterSpacing: "0.24em", textTransform: "uppercase", opacity: 0.7,
+                        color: DL.paper, marginTop: 4,
+                        fontFamily: DL.fontMono, fontSize: 10.5, fontWeight: 700,
+                        letterSpacing: "0.24em", textTransform: "uppercase", opacity: 0.75,
                     }}>
                         Cricket Association
                     </span>
                 </div>
             </div>
 
+            {/* Eyebrow · left-bottom of brand block */}
             <div style={{
-                position: "absolute", top: 108, left: 40, zIndex: 3,
+                position: "absolute", top: 138, left: 40, zIndex: 3,
                 color: DL.gold, opacity: 0.85,
-                fontFamily: DL.fontMono, fontSize: 10, fontWeight: 700,
+                fontFamily: DL.fontMono, fontSize: 11, fontWeight: 700,
                 letterSpacing: "0.24em", textTransform: "uppercase",
             }} data-testid="brain-eyebrow">
                 / wired cricket decisions
-            </div>
-            <div style={{
-                position: "absolute", top: 132, left: 40, zIndex: 3, color: DL.paper,
-                fontFamily: DL.fontDisplay, fontSize: 28, fontWeight: 800, letterSpacing: "-0.015em",
-                maxWidth: 460, lineHeight: 1.05,
-            }}>
-                MPCA&apos;s AI-Based ERP
-                <span style={{ color: DL.gold }}>.</span>
-            </div>
-            <div style={{
-                position: "absolute", top: 172, left: 40, zIndex: 3,
-                color: DL.paper, opacity: 0.55,
-                fontFamily: DL.fontBody, fontSize: 12, fontWeight: 500,
-                maxWidth: 380, lineHeight: 1.5,
-            }}>
-                One wired system for every trophy, camp, and match-day decision.
             </div>
 
             {/* Control pills — top-right of brain panel */}
@@ -344,7 +329,7 @@ export default function WiringBrain() {
             <svg
                 viewBox="0 0 860 780"
                 preserveAspectRatio="xMidYMid meet"
-                style={{ position: "absolute", inset: 0, top: 220, width: "100%", height: "calc(100% - 260px)", zIndex: 1 }}
+                style={{ position: "absolute", inset: 0, top: 180, width: "100%", height: "calc(100% - 220px)", zIndex: 1 }}
                 aria-label="MPCA Governance wiring brain"
                 onMouseLeave={() => { setHoveredType(null); setHoveredStep(null); }}
             >

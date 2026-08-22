@@ -170,7 +170,8 @@ class RequestPrincipal:
     body_code: str        # "MPCA" | "DIV-IND" | "DIST-INDO-IND" | ""
     body_name: str
     post: str
-    raw_user: dict        # full user doc for consumers that still need it
+    post_title: str = ""  # Iter 109 · normalized post title (e.g. "President", "Hon. Secretary")
+    raw_user: dict = None  # full user doc for consumers that still need it
 
     @property
     def is_state(self) -> bool:    return self.body_type.lower() == "state"
@@ -199,6 +200,7 @@ def principal_from_user(user: dict) -> RequestPrincipal:
         body_code=user.get("body_code", "") or "",
         body_name=user.get("body_name", "") or "",
         post=user.get("post", "") or "",
+        post_title=user.get("post_title", "") or "",
         raw_user=user,
     )
 

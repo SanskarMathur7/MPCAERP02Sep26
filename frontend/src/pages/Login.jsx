@@ -76,15 +76,19 @@ const Login = () => {
                 <div className="w-full max-w-md">
                     {/* Header */}
                     <div className="mb-10" data-testid="login-form-header">
+                        <div
+                            className="text-[10.5px] uppercase tracking-[0.28em] font-bold mb-3"
+                            style={{ fontFamily: DL.fontMono, color: DL.gold }}
+                            data-testid="login-eyebrow-mpca"
+                        >
+                            MPCA&apos;s AI-Based ERP
+                        </div>
                         <h1
                             className="text-4xl md:text-5xl leading-[1.05]"
                             style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink, letterSpacing: "-0.02em" }}
                         >
                             Welcome<span style={{ color: DL.emerald }}>.</span>
                         </h1>
-                        <p className="text-[13px] mt-3 leading-relaxed" style={{ color: DL.muted, fontWeight: 500 }}>
-                            Sign in with your MPCA registrar credentials.
-                        </p>
                     </div>
 
                     {/* Form */}

@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import NeedsReworkBell from "@/components/NeedsReworkBell";
 import {
     LayoutDashboard,
     Users,
@@ -86,6 +87,7 @@ const NAV_DOMAINS = [
         rbac_admin_only: true,
         items: [
             { to: "/access-control", label: "Access Control (RBAC)", icon: Shield },
+            { to: "/mc-admin", label: "Maker-Checker Console", icon: ShieldCheck },
         ],
     },
 ];
@@ -456,6 +458,7 @@ const AppLayout = ({ children }) => {
             {/* Main */}
             <main className="flex-1 overflow-y-auto" data-testid="app-main">
                 <div className="sticky top-0 z-30 bg-mpca-cream/95 backdrop-blur-sm border-b border-mpca-brass/20 px-6 py-2 flex items-center justify-end gap-3" data-testid="app-topbar">
+                    <NeedsReworkBell />
                     <SeasonSwitcher />
                 </div>
                 {/* M39m · Consistent page gutter — every page inherits a comfortable

@@ -20,11 +20,11 @@ _DIVISION_ROLES = {
     # Legacy aliases
     "division-secretary", "district-secretary", "secretary",
 }
-# Iter 123g · Real RBAC role_ids from `scripts/seed_users.py` — legacy names
-# (`secretary`) kept for backwards-compat with older seeded users. Vice
-# President deputises for the President per MPCA-119, so they carry the same
-# selection-console powers.
-_MPCA_APPROVER_ROLES = {"hon_secretary", "secretary", "president", "vice_president"}
+# Iter 123g · `principal_role_id` returns Title-Case strings from
+# `_LEGACY_ROLE_MAP` (e.g. "Secretary", "President") — NOT lowercase.
+# The original lowercase set was broken and never matched anyone.
+# Vice President deputises for the President per MPCA-119.
+_MPCA_APPROVER_ROLES = {"Secretary", "President"}
 
 
 async def heal_legacy_stuck_squads() -> dict:

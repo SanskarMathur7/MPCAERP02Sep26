@@ -936,7 +936,16 @@ const SquadDetail = () => {
                                     <div className="text-[10px] text-mpca-brass font-mono w-5">#{idx + 1}</div>
                                     <div className="flex-1 min-w-0">
                                         <div className="font-serif text-sm text-mpca-green-dark flex items-center gap-1.5 truncate">
-                                            {m.full_name}
+                                            <a
+                                                href={`/players/${m.player_id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="hover:underline hover:text-mpca-oxblood transition-colors truncate"
+                                                title="Open player profile in a new tab"
+                                                data-testid={`squad-member-name-link-${m.player_id}`}
+                                            >
+                                                {m.full_name}
+                                            </a>
                                             {m.is_captain && <span title="Captain"><Crown size={12} className="text-mpca-oxblood" /></span>}
                                             {m.is_keeper && <span title="Wicket-keeper"><BadgeCheck size={12} className="text-mpca-gold" /></span>}
                                         </div>

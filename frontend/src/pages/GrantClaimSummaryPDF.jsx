@@ -115,7 +115,7 @@ export default function GrantClaimSummaryPDF() {
                         <thead>
                             <tr className="border-b border-black">
                                 <th className="text-left py-1 pr-2 w-6">#</th>
-                                <th className="text-left py-1 pr-2">Document</th>
+                                <th className="text-left py-1 pr-2">Required Document</th>
                                 <th className="text-left py-1 pr-2">Filename</th>
                                 <th className="text-left py-1 pr-2 w-24">AI Verified</th>
                                 <th className="text-right py-1 pr-2 w-14">Conf%</th>
@@ -125,7 +125,7 @@ export default function GrantClaimSummaryPDF() {
                             {docs.map((d, i) => (
                                 <tr key={d.id || i} className="border-b border-gray-300">
                                     <td className="py-1 pr-2">{i + 1}</td>
-                                    <td className="py-1 pr-2"><b>{d.label || d.doc_key}</b></td>
+                                    <td className="py-1 pr-2"><b>{d.required_label || d.label || d.doc_key || "—"}</b></td>
                                     <td className="py-1 pr-2 text-gray-700">{d.filename || "—"}</td>
                                     <td className="py-1 pr-2">{d.ai_verified ? "Yes" : "—"}</td>
                                     <td className="py-1 pr-2 text-right font-mono">{d.ai_confidence != null ? `${Math.round(Number(d.ai_confidence) * 100)}%` : "—"}</td>
@@ -136,24 +136,15 @@ export default function GrantClaimSummaryPDF() {
                 </>
             )}
 
-            {/* 4. AI Summary */}
-            {claim.ai_summary && (
-                <>
-                    <h3 className="text-lg border-b border-black mb-2 mt-6">4. AI Cross-Document Verification</h3>
-                    <table className="w-full text-[11px] border-collapse mb-4">
-                        <tbody>
-                            <tr className="border-b border-gray-300"><td className="py-1 pr-2 w-1/3">Overall Verdict</td><td className="py-1 pr-2"><b>{claim.ai_summary.overall_verdict}</b></td></tr>
-                            {claim.ai_summary.amount_reconciliation != null && <tr className="border-b border-gray-300"><td className="py-1 pr-2">Amount Reconciliation</td><td className="py-1 pr-2">{claim.ai_summary.amount_reconciliation}</td></tr>}
-                            {claim.ai_summary.notes && <tr className="border-b border-gray-300"><td className="py-1 pr-2">Notes</td><td className="py-1 pr-2 whitespace-pre-wrap">{claim.ai_summary.notes}</td></tr>}
-                        </tbody>
-                    </table>
-                </>
-            )}
+            {/* Iter 123h · Section 4 (AI Cross-Document Verification) removed — the
+                AI verdict is already visible per-row in the "AI Verified / Conf%"
+                columns in section 3, and users found the standalone AI section
+                added no additional signal to the printed submission packet. */}
 
-            {/* 5. Approval / Rejection (approval variant only) */}
+            {/* 4. Approval / Rejection (approval variant only) */}
             {isApproval && (
                 <>
-                    <h3 className="text-lg border-b border-black mb-2 mt-6">5. MPCA Decision</h3>
+                    <h3 className="text-lg border-b border-black mb-2 mt-6">4. MPCA Decision</h3>
                     <p className="text-[11px] leading-relaxed mb-4">
                         This claim is approved for <b>{INR(claim.approved_amount_inr ?? claim.claimed_amount_inr)}</b> against scheme <b>{claim.scheme_code}</b> ({schemeName}) for fiscal cycle <b>{claim.fiscal_cycle}</b>.
                         {claim.approval_notes && <> <br /><br />{claim.approval_notes}</>}

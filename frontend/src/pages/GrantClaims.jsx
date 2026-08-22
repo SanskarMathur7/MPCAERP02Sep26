@@ -512,10 +512,10 @@ const GrantClaims = () => {
                         <div className="text-center py-12 font-semibold" style={{ color: DL.ink2 }}>Select a claim to view details</div>
                     ) : (
                         <>
-                            <div className="flex justify-between items-start mb-4">
-                                <div>
+                            <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 mb-4">
+                                <div className="min-w-0 flex-1">
                                     <div className="text-[11px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>Scheme {selected.scheme_code} · {selected.claim_ref}</div>
-                                    <h2 className="text-[26px] mt-1 leading-tight" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>{selected.scheme_name}</h2>
+                                    <h2 className="text-[22px] mt-1 leading-tight break-words" style={{ fontFamily: DL.fontDisplay, color: DL.ink, fontWeight: 800 }}>{selected.scheme_name}</h2>
                                     <div className="text-[13px] mt-1.5 font-semibold" style={{ color: DL.ink2 }}>
                                         {selected.body_name} · Claimed{" "}
                                         {amountEditable ? (
@@ -545,7 +545,7 @@ const GrantClaims = () => {
                                         {selected.approved_amount_inr != null && <> · Approved <span style={{ fontFamily: DL.fontMono, color: DL.emerald, fontWeight: 700 }}>{fmt(selected.approved_amount_inr)}</span></>}
                                     </div>
                                 </div>
-                                <div className="flex gap-2 flex-wrap">
+                                <div className="flex gap-2 flex-wrap md:flex-shrink-0 md:justify-end md:max-w-[320px]">
                                     <button
                                         className="text-[10px] uppercase tracking-widest px-3 py-1.5 border border-mpca-brass text-mpca-brass flex items-center gap-1 hover:bg-mpca-brass/10 disabled:opacity-40"
                                         onClick={runAiReview}

@@ -188,15 +188,16 @@ export default function WiringBrain() {
                 opacity: 0.6,
             }} />
 
-            {/* corner labels */}
             <div style={{
-                position: "absolute", top: 88, left: 32, zIndex: 3, color: DL.gold,
-                fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.28em", textTransform: "uppercase", fontWeight: 700,
-            }}>
-                / The Wiring Brain
+                position: "absolute", top: 60, left: 32, zIndex: 3,
+                color: DL.gold, opacity: 0.85,
+                fontFamily: DL.fontMono, fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.24em", textTransform: "uppercase",
+            }} data-testid="brain-eyebrow">
+                / wired cricket decisions
             </div>
             <div style={{
-                position: "absolute", top: 106, left: 32, zIndex: 3, color: DL.paper,
+                position: "absolute", top: 88, left: 32, zIndex: 3, color: DL.paper,
                 fontFamily: DL.fontDisplay, fontSize: 26, fontWeight: 800, letterSpacing: "-0.01em",
                 maxWidth: 420, lineHeight: 1.1,
             }}>

@@ -76,12 +76,6 @@ const Login = () => {
                 <div className="w-full max-w-md">
                     {/* Header */}
                     <div className="mb-10" data-testid="login-form-header">
-                        <div
-                            className="text-[10px] tracking-[0.28em] uppercase mb-3"
-                            style={{ fontFamily: DL.fontMono, color: DL.gold, fontWeight: 700 }}
-                        >
-                            / Authentication
-                        </div>
                         <h1
                             className="text-4xl md:text-5xl leading-[1.05]"
                             style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink, letterSpacing: "-0.02em" }}

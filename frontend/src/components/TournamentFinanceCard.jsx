@@ -63,7 +63,7 @@ const deriveAction = (matrix, persona, tournament) => {
             if (s === "Sent_To_Division") {
                 return { icon: Check, tone: "oxblood",
                     title: `Accept your budget · ${fmt(myRow.budget_total_inr)}`,
-                    detail: `${organiserLabel} has sent you a budget. Review, then Accept or Request Revision.`,
+                    detail: `${organiserLabel} has sent you a budget. Review, then Accept & Sanction. File any additional spend via the Extras tab.`,
                     cta: "Review & Respond" };
             }
             if (s === "Accepted_By_Division") {
@@ -134,7 +134,7 @@ const deriveAction = (matrix, persona, tournament) => {
         if (sent > 0) {
             return { icon: Clock, tone: "gray",
                 title: `Waiting on ${sent} participant${sent > 1 ? "s" : ""} to respond`,
-                detail: "Budgets sent — participants will Accept or Request Revision.",
+                detail: "Budgets sent — participants will Accept & Sanction, then file extras (if any) via the Extras tab.",
                 cta: "View Status" };
         }
         const claimsInReview = rows.filter((r) => ["Submitted", "Under_Review"].includes(r.claim_status)).length;

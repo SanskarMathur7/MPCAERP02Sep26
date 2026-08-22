@@ -84,10 +84,7 @@ export const MatrixRow = ({ r, isMPCA, myBody, onSend, onSanction, onAccept, onR
                             data-testid={`fc-accept-${r.body_code}`}>
                             <Check size={10} className="inline mr-1" />Accept &amp; Sanction
                         </button>
-                        <button onClick={onRevise} disabled={busy} className="text-[10px] uppercase tracking-widest px-2 py-1 bg-mpca-oxblood/10 text-mpca-oxblood border border-mpca-oxblood/40 hover:bg-mpca-oxblood/20"
-                            data-testid={`fc-revise-${r.body_code}`}>
-                            <RotateCcw size={10} className="inline mr-1" />Revise
-                        </button>
+                        {/* Iter 123r · Revise removed — Division uses the Extras tab for any additional spend. */}
                     </>
                 )}
                 {r.budget_id && (

@@ -1,12 +1,17 @@
-import { Check, RotateCcw, PackageOpen, CheckCircle2 } from "lucide-react";
+import { Check, PackageOpen, CheckCircle2 } from "lucide-react";
 import { fmt, StatusPill } from "./financeShared";
 
 /** M39z.f · DivisionBudgetCard — the self-view Divisions see for their own
  *  budget row (extracted from TournamentFinanceConsole). Handles the four
  *  possible states: no-budget · sent-awaiting-accept · legacy-transitional ·
  *  sanctioned. Accept-and-Sanction wire-up is done by the console.
+ *
+ *  Iter 123r · Removed the Division-side "Request Revision" button per the
+ *  finance-regime decision: MPCA authors the budget, Division reviews and
+ *  Accepts. Any additional spend must go via the Extras route — Divisions no
+ *  longer bounce the whole budget back to MPCA.
  */
-export const DivisionBudgetCard = ({ row, onAccept, onRequestRevision, busy }) => {
+export const DivisionBudgetCard = ({ row, onAccept, busy }) => {
     if (!row.budget_id) {
         return (
             <div className="bulletin-card p-6 mb-6 border-l-4 border-mpca-gray/40" data-testid="fc-div-nobudget">
@@ -43,13 +48,9 @@ export const DivisionBudgetCard = ({ row, onAccept, onRequestRevision, busy }) =
                                 className="btn-heritage flex items-center gap-2" data-testid="fc-div-accept-btn">
                                 <Check size={14} /> Accept &amp; Sanction
                             </button>
-                            <button onClick={onRequestRevision} disabled={busy}
-                                className="btn-heritage-secondary flex items-center gap-2 !border-mpca-oxblood !text-mpca-oxblood"
-                                data-testid="fc-div-revise-btn">
-                                <RotateCcw size={14} /> Request Revision
-                            </button>
-                            <div className="text-[10px] text-mpca-gray-dark max-w-[220px] text-right leading-tight italic">
-                                MPCA authored this budget — accepting sanctions it immediately and unlocks spending.
+                            <div className="text-[10px] text-mpca-gray-dark max-w-[240px] text-right leading-tight italic">
+                                MPCA authored this budget — accepting sanctions it and unlocks spending.
+                                Need something extra? File it via the <b>Extras</b> tab.
                             </div>
                         </>
                     )}

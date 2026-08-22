@@ -369,7 +369,7 @@ const TournamentFinanceConsole = () => {
             "Accept this budget?\n\n"
             + "Since MPCA prepared this budget for you, accepting will sanction "
             + "it immediately — invoices and DA/TA claims will unlock right away.\n\n"
-            + "If any figure looks wrong, tap Request Revision instead."
+            + "Need something not in this budget? File it via the Extras tab after accepting."
         )) return;
         setBusy(true);
         try {
@@ -383,21 +383,10 @@ const TournamentFinanceConsole = () => {
         finally { setBusy(false); }
     };
 
-    const divisionRequestRevision = async (budget_id) => {
-        const reason = window.prompt("Reason for revision request (required):");
-        if (!reason || reason.trim().length < 3) return;
-        setBusy(true);
-        try {
-            await api.post(`/tournament-budgets/${budget_id}/request-revision`, {
-                actor_name: persona?.name || persona?.id,
-                actor_post: persona?.id,
-                actor_body_id: persona?.body_code,
-                reason: reason.trim(),
-            });
-            await load();
-        } catch (e) { alert(e?.response?.data?.detail || e.message); }
-        finally { setBusy(false); }
-    };
+    // Iter 123r · Division "Request Revision" flow retired. The regime is:
+    // MPCA authors → Division reviews & Accepts → Extras route handles
+    // additional spend. Endpoint kept in the backend for legacy claim
+    // reconciliation but no longer exposed in the UI.
 
     return (
         <div className="page-enter px-6 md:px-10 py-8 max-w-7xl mx-auto" data-testid="finance-console-page">
@@ -519,7 +508,6 @@ const TournamentFinanceConsole = () => {
                             <DivisionBudgetCard
                                 row={r}
                                 onAccept={() => divisionAccept(r.budget_id)}
-                                onRequestRevision={() => divisionRequestRevision(r.budget_id)}
                                 busy={busy}
                             />
                         </div>
@@ -663,7 +651,7 @@ const TournamentFinanceConsole = () => {
                                             onSend={(bid) => sendOne(bid)}
                                             onSanction={(bid) => sanctionOne(bid)}
                                             onAccept={(bid) => divisionAccept(bid)}
-                                            onRevise={(bid) => divisionRequestRevision(bid)}
+                                            onRevise={undefined}
                                             busy={busy}
                                         />
                                     );
@@ -674,14 +662,14 @@ const TournamentFinanceConsole = () => {
                                         onSend={() => sendOne(hostRow.budget_id)}
                                         onSanction={() => sanctionOne(hostRow.budget_id)}
                                         onAccept={() => divisionAccept(hostRow.budget_id)}
-                                        onRevise={() => divisionRequestRevision(hostRow.budget_id)}
+                                        onRevise={undefined}
                                         busy={busy} />}
                                     {visitorRows.map((r) => (
                                         <MatrixRow key={r.body_code} r={r} isMPCA={isMPCA} myBody={myBody}
                                             onSend={() => sendOne(r.budget_id)}
                                             onSanction={() => sanctionOne(r.budget_id)}
                                             onAccept={() => divisionAccept(r.budget_id)}
-                                            onRevise={() => divisionRequestRevision(r.budget_id)}
+                                            onRevise={undefined}
                                             busy={busy} />
                                     ))}
                                 </>

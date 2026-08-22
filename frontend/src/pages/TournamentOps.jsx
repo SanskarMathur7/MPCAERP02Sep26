@@ -16,7 +16,7 @@ import {
     approveExtraExpenseRequest, rejectExtraExpenseRequest, requestInfoOnExtraExpense,
     fetchTournamentExpenseEvents,
 } from "@/lib/api";
-import { api } from "@/lib/api";
+import { api, openAuthedFile } from "@/lib/api";
 import {
     ClipboardList, IndianRupee, FileText, Users, Save, Send, CheckCircle2, X,
     Sparkles, Upload, AlertTriangle, Loader2, ArrowUpRight, RotateCcw,
@@ -749,7 +749,7 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
                                                         <button onClick={async () => { const r = window.prompt("Rejection reason:"); if (r) { await rejectTournamentInvoice(i.id, r); await load(); } }} className="text-[9px] uppercase text-mpca-oxblood underline">reject</button>
                                                     </div>
                                                 )}
-                                                {i.file_url && <a href={`${API}${i.file_url}`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-mpca-brass underline block mt-1">view file</a>}
+                                                {i.file_url && <button type="button" onClick={() => openAuthedFile(i.file_url)} className="text-[9px] text-mpca-brass underline block mt-1 hover:text-mpca-oxblood text-left" data-testid={`inv-view-file-${i.id}`}>view file</button>}
                                             </td>
                                         </tr>
                                     );

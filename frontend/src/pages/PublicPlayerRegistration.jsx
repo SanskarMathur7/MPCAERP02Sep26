@@ -119,7 +119,10 @@ const PublicPlayerRegistration = () => {
             const fd = new FormData();
             fd.append("file", file);
             fd.append("related_type", "player_registration");
-            const { data } = await public_api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+            // Iter 123x · Public endpoint that doesn't require JWT — the
+            // registration token itself gates access.
+            fd.append("registration_token", token);
+            const { data } = await public_api.post("/public/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
             setField(key, data.url);
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
         finally { setUploadingKey(null); }
@@ -386,7 +389,7 @@ const PublicPlayerRegistration = () => {
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 {[
-                                    ["photo_url", "Passport photo *"],
+                                    ["photo_url", "Passport Size Photo *"],
                                     ["aadhaar_url", "Aadhaar (Unmasked) *"],
                                     ["aadhaar_history_url", "Aadhaar update history"],
                                     ["pan_url", "PAN Card (required if 18+)"],
@@ -460,8 +463,8 @@ const PublicPlayerRegistration = () => {
                                         setUploadingKey("__other__");
                                         try {
                                             const fd = new FormData();
-                                            fd.append("file", file); fd.append("related_type", "player_registration_public"); fd.append("body_id", env.body_code); fd.append("uploaded_by", form.full_name || "public");
-                                            const { data } = await public_api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+                                            fd.append("file", file); fd.append("related_type", "player_registration_public"); fd.append("registration_token", token); fd.append("body_id", env.body_code); fd.append("uploaded_by", form.full_name || "public");
+                                            const { data } = await public_api.post("/public/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
                                             setField("other_docs", [...(form.other_docs || []), { label, url: data.url }]);
                                         } catch (err) { alert(err?.response?.data?.detail || err.message); }
                                         finally { setUploadingKey(""); }

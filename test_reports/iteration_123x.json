@@ -1,0 +1,22 @@
+{
+  "summary": "Iter 123x — validated all three fixes end-to-end. (1) POST /api/public/uploads works with valid token + player_registration scope (200 + UploadRecord.url=/api/uploads/{id}); rejects invalid token (404), wrong scope (400), missing token (400). Protected /api/uploads still requires Bearer (401 — no security regression). (2) Public form /register/player/FK4KROD9kjFb5EGB attaches a PNG to the Passport Size Photo slot without any 'Not authenticated' alert; network shows POST to /api/public/uploads (200). Label reads 'Passport Size Photo' (rendered uppercase via CSS `.uppercase` label styling — source text is correct). (3) Tournament Ops → Madhavrao Scindia Trophy → Finance Console → Invoices tab: 6 buttons with data-testid=inv-view-file-{id} present, tagName=BUTTON. Clicking triggers authenticated GET /api/uploads/{id} → 200, then window.open with a blob: URL (openAuthedFile helper works). No 401.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter123x_public_uploads.py",
+    "/app/test_reports/pytest/iter123x.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/uploads.py: /public/uploads and /uploads share ~80% of the streaming/persistence logic. Consider extracting a common `_write_upload_stream(...)` helper to avoid drift when limits/mime rules change.",
+    "The extra `public_registration_token` stored on the doc is good for audit; consider indexing db.uploads.public_registration_token if bulk-lookup by campaign is ever needed."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (3/3 flows verified)"},
+  "test_credentials": "sysadmin@mpca.in / mpca@2026 (login lands directly on /dashboard, no force-reset)",
+  "seed_data_creation": "None. Used existing campaign token FK4KROD9kjFb5EGB and existing tournament 99a96938-06cc-4c2a-8ab0-9413f62dc7ed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All three Iter 123x fixes are in and verified. The Passport label reads uppercase due to CSS (`className` on Field label applies .uppercase) — the source string was correctly renamed to 'Passport Size Photo'. openAuthedFile helper on TournamentOps invoices works: axios GET with Bearer → response.blob() → window.open(URL.createObjectURL(blob)). Invoice list for Madhavrao Scindia Trophy has 6 invoices with file_url; INV-2026-27-0006 is one of them.",
+  "rca of the issue": "Not applicable — this iteration was verification of fixes, no new bug found."
+}

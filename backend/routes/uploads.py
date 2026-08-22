@@ -100,6 +100,63 @@ async def upload_file(
     return record
 
 
+# ─── Iter 123x · Public upload for anonymous player registration ────────
+# The public form has no JWT — players fill it directly via the token URL.
+# Mirror the /uploads logic but scope tightly: only allowed when related_type
+# starts with `player_registration` so this can't become a free upload sink.
+@api_router.post("/public/uploads", response_model=UploadRecord)
+async def public_upload_file(
+    file: UploadFile = File(...),
+    body_id: Optional[str] = Form(None),
+    uploaded_by: Optional[str] = Form(None),
+    related_type: Optional[str] = Form(None),
+    related_id: Optional[str] = Form(None),
+    registration_token: Optional[str] = Form(None),
+):
+    if not (related_type or "").startswith("player_registration"):
+        raise HTTPException(400, "public/uploads is only for player-registration flows.")
+    if not registration_token:
+        raise HTTPException(400, "registration_token is required.")
+    # Validate token exists (campaign or invited player) before accepting the file.
+    campaign = await db.player_registration_campaigns.find_one({"public_token": registration_token})
+    invited  = None
+    if not campaign:
+        invited = await db.player_registrations.find_one({"invite_token": registration_token})
+    if not (campaign or invited):
+        raise HTTPException(404, "Invalid registration token.")
+    if file.content_type not in ALLOWED_MIMES:
+        raise HTTPException(400, f"Unsupported file type {file.content_type}.")
+    ext = EXT_BY_MIME.get(file.content_type, "")
+    file_id = str(uuid.uuid4())
+    yyyymm = datetime.now(timezone.utc).strftime("%Y-%m")
+    target_dir = UPLOAD_ROOT / yyyymm
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / f"{file_id}{ext}"
+    total = 0
+    chunk_size = 1024 * 1024
+    with open(target_path, "wb") as out:
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_UPLOAD_BYTES:
+                out.close(); target_path.unlink(missing_ok=True)
+                raise HTTPException(413, f"File exceeds {MAX_UPLOAD_BYTES // 1024 // 1024} MB cap.")
+            out.write(chunk)
+    record = UploadRecord(
+        id=file_id, original_name=file.filename or f"upload{ext}", size_bytes=total,
+        mime_type=file.content_type, body_id=body_id or (campaign or {}).get("body_id") or (invited or {}).get("body_id"),
+        uploaded_by=uploaded_by, related_type=related_type, related_id=related_id,
+        url=f"/api/uploads/{file_id}",
+    )
+    rec_doc = record.model_dump()
+    rec_doc["_path"] = str(target_path)
+    rec_doc["public_registration_token"] = registration_token
+    await db.uploads.insert_one(rec_doc)
+    return record
+
+
 @api_router.get("/uploads/{file_id}")
 async def serve_upload(file_id: str):
     doc = await db.uploads.find_one({"id": file_id})

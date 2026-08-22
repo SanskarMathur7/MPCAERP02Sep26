@@ -1,12 +1,21 @@
-"""tests/test_mc_engine.py — Iter 109 · Maker-Checker engine sanity."""
+"""tests/test_mc_engine.py — Iter 109 (updated Iter 121) · M&C engine sanity.
+
+Refreshed for Feb 2026 real MPCA roster:
+  · Maker (submit) = Chief Accounts Officer (panditrdpandit@gmail.com)
+  · Checker (approve/return/reject) = Hon. Secretary (secretary@mpcaonline.com)
+  · Two-person rule enforced on approve/reject
+"""
 import os
 import httpx
 import pytest
 
-API = f"{os.environ.get('BACKEND_URL', 'http://localhost:8001')}/api"
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", os.environ.get("BACKEND_URL", "http://localhost:8001")).rstrip("/")
+API = f"{BASE_URL}/api"
+
+PW = "mpca@2026"
 
 
-def _login(email: str, password: str = "mpca@2026") -> str:
+def _login(email: str, password: str = PW) -> str:
     r = httpx.post(f"{API}/auth/login", json={"email": email, "password": password}, timeout=10)
     assert r.status_code == 200, r.text
     return r.json()["access_token"]
@@ -17,9 +26,9 @@ def _auth(tok):
 
 
 def test_mc_admin_lists_17_workflows():
-    tok = _login("secretary@mpca.in")
+    tok = _login("sysadmin@mpca.in")
     r = httpx.get(f"{API}/mc-admin/workflows", headers=_auth(tok), timeout=10)
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     keys = [w["key"] for w in r.json()["workflows"]]
     assert "tournament_create" in keys
     assert "player_registration_approve" in keys
@@ -28,7 +37,7 @@ def test_mc_admin_lists_17_workflows():
 
 
 def test_mc_admin_posts_catalog_has_new_posts():
-    tok = _login("secretary@mpca.in")
+    tok = _login("sysadmin@mpca.in")
     r = httpx.get(f"{API}/mc-admin/posts", headers=_auth(tok), timeout=10)
     assert r.status_code == 200
     titles = [p["post_title"] for p in r.json()["posts"]]
@@ -38,14 +47,14 @@ def test_mc_admin_posts_catalog_has_new_posts():
 
 
 def test_mc_admin_requires_rbac_manage_permission():
-    tok = _login("indore.secretary@mpca.in")
+    # A division-honorary secretary should NOT have rbac.manage
+    tok = _login("ind.hs@mpcaonline.com")
     r = httpx.get(f"{API}/mc-admin/workflows", headers=_auth(tok), timeout=10)
     assert r.status_code == 403
 
 
 def test_mc_runtime_state_shape():
-    """A logged-in user can query state of any tournament (get 200 with the standard shape)."""
-    tok = _login("secretary@mpca.in")
+    tok = _login("secretary@mpcaonline.com")
     ts = httpx.get(f"{API}/tournaments?limit=1", headers=_auth(tok), timeout=10).json()
     rows = ts if isinstance(ts, list) else ts.get("items") or ts.get("tournaments") or []
     assert rows, "seed a tournament first"
@@ -58,58 +67,52 @@ def test_mc_runtime_state_shape():
 
 
 def test_mc_rework_inbox_endpoint():
-    tok = _login("cricket.manager@mpca.in")
+    tok = _login("panditrdpandit@gmail.com")  # CAO is the maker
     r = httpx.get(f"{API}/mc/inbox/needs-rework", headers=_auth(tok), timeout=10)
     assert r.status_code == 200
     assert set(r.json().keys()) >= {"count", "buckets"}
 
 
 def test_mc_two_person_rule_end_to_end():
-    """Cricket Mgr submits → Secretary approves (partial) → Secretary can't sign twice → President approves → status flips to Approved.
+    """CAO submits via tournament CREATE → Sec approves → status flips to Approved.
+    CAO can't self-approve (two-person)."""
+    cao = _login("panditrdpandit@gmail.com")
+    sec = _login("secretary@mpcaonline.com")
 
-    Requires the tournament_create workflow to be pre-configured (done via curl earlier).
-    """
-    cm = _login("cricket.manager@mpca.in")
-    sec = _login("secretary@mpca.in")
-    pres = _login("president@mpca.in")
-    # Fetch a fresh tournament — reset its mc_status to Draft first
-    ts = httpx.get(f"{API}/tournaments?limit=10", headers=_auth(sec), timeout=10).json()
-    rows = ts if isinstance(ts, list) else ts.get("items") or ts.get("tournaments") or []
-    assert len(rows) >= 1
-    # Pick the last one
-    tid = rows[-1]["id"]
-    # Direct DB reset via patching mc_status is not exposed; instead we just
-    # verify the API returns something sensible on state calls
-    state = httpx.get(f"{API}/mc/tournament_create/{tid}/state", headers=_auth(cm), timeout=10)
-    assert state.status_code == 200
+    payload = {
+        "name": "TEST_mc_engine_e2e",
+        "tournament_type": "MPCA_InterDivisional",
+        "tournament_type_code": "mpca_inter_divisional",
+        "type_key": "mpca_inter_divisional",
+        "scope": "Inter_Divisional",
+        "format": "OneDay_Senior",
+        "category": "MPCA_INTER_DIV",
+        "level": "Senior",
+        "gender": "Male",
+        "start_date": "2026-11-01",
+        "end_date": "2026-11-15",
+        "host_body_id": "MPCA",
+        "created_by_body_code": "MPCA",
+        "fiscal_cycle": "2026-27",
+    }
+    cr = httpx.post(f"{API}/tournaments", json=payload, headers=_auth(cao), timeout=20)
+    assert cr.status_code == 200, cr.text
+    tid = cr.json()["id"]
 
-    # If already Approved by prior tests, skip transitions
-    if state.json()["status"] in ("Approved", "Rejected"):
-        pytest.skip("this doc already terminal — engine transitions verified in other tests")
+    # State should be PendingReview after inline submit
+    st = httpx.get(f"{API}/mc/tournament_create/{tid}/state", headers=_auth(cao), timeout=10).json()
+    assert st["status"] == "PendingReview", st
 
-    # Submit
-    r = httpx.post(f"{API}/mc/tournament_create/{tid}/transition", headers=_auth(cm),
-                   json={"action": "submit"}, timeout=10)
-    if r.status_code == 400 and "No transition" in r.text:
-        pytest.skip("wrong starting status — earlier tests moved this doc")
-    assert r.status_code == 200, r.text
-    assert r.json()["doc"]["mc_status"] == "PendingReview"
+    # CAO cannot approve own submission
+    bad = httpx.post(f"{API}/mc/tournament_create/{tid}/transition",
+                     headers=_auth(cao), json={"action": "approve"}, timeout=10)
+    assert bad.status_code in (400, 403), bad.text
 
-    # Secretary partial approve
-    r = httpx.post(f"{API}/mc/tournament_create/{tid}/transition", headers=_auth(sec),
-                   json={"action": "approve"}, timeout=10)
-    assert r.status_code == 200, r.text
-    assert r.json()["doc"]["mc_status"] == "PendingReview"  # still pending
-    assert len(r.json()["doc"]["mc_approvals"]) >= 1
+    # Sec approves → Approved
+    ok = httpx.post(f"{API}/mc/tournament_create/{tid}/transition",
+                    headers=_auth(sec), json={"action": "approve"}, timeout=10)
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["doc"]["mc_status"] == "Approved"
 
-    # Two-person rule enforced
-    r = httpx.post(f"{API}/mc/tournament_create/{tid}/transition", headers=_auth(sec),
-                   json={"action": "approve"}, timeout=10)
-    assert r.status_code == 403
-    assert "Two-person" in r.text
-
-    # President finalises
-    r = httpx.post(f"{API}/mc/tournament_create/{tid}/transition", headers=_auth(pres),
-                   json={"action": "approve"}, timeout=10)
-    assert r.status_code == 200
-    assert r.json()["doc"]["mc_status"] == "Approved"
+    # Cleanup
+    httpx.delete(f"{API}/tournaments/{tid}", headers=_auth(cao), timeout=10)

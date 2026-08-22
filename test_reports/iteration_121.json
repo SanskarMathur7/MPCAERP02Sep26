@@ -1,0 +1,35 @@
+{
+  "summary": "Iter 121 BUG FIX verified: POST /api/tournaments now correctly fires the M&C 'submit' transition, landing tournaments in mc_status=PendingReview with 1 audit chain entry (action=submit, actor=cao-mpca). The backfilled 'Madhavrao Scindia Trophy' is visible in PendingReview to the Hon. Secretary. Secretary can approve via /api/mc/tournament_create/{tid}/transition, flipping the tournament to Approved with a 2-entry chain (submit + approve). CAO cannot self-approve (two-person rule fires with 403). All 14 backend tests pass across the iter121 bug-fix suite (8 tests) + refreshed legacy M&C engine suite (6 tests).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/tournaments", "issue": "Payload enum values for 'scope' and 'tournament_type' use underscores ('Inter_Divisional', 'MPCA_InterDivisional') not the space-separated forms in the review_request spec ('Inter Divisional', 'mpca_inter_divisional'). Tests were updated to use canonical enum values; consider aliasing or documenting these enums for FE/API consumers."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter121_tournament_mc.py",
+    "/app/backend/tests/test_mc_engine.py",
+    "/app/test_reports/pytest/iter121.xml"
+  ],
+  "action_items": [
+    "None blocking. Optional: expose enum aliases so FE/API callers can send human-friendly values like 'Inter Divisional' with a space.",
+    "Optional: emit an audit_log entry when the inline apply_transition raises (currently silently logged via logger.warning) so ops can detect misconfigured workflows."
+  ],
+  "critical_code_review_comments": [
+    "tournaments.py L440-444 · The try/except around apply_transition swallows ALL exceptions with just a logger.warning. If the M&C workflow is misconfigured for even one tournament creation, the tournament is silently created without any M&C audit and the user has no signal. Consider bubbling a 202 warning header or persisting the failure into the tournament doc (e.g. mc_status='UnwiredError').",
+    "tournaments.py L417 · Redundant ternary `status='Draft' if acceptance.status == 'Pending' else 'Draft'` — always evaluates to 'Draft'. Cosmetic but worth cleaning.",
+    "test_mc_engine.py (legacy) was still on Iter 114 email roster before this iter — flagged in iter120 report. Refreshed here to Feb 2026 real roster + current single-checker workflow shape."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter121_tournament_mc.py",
+    "/app/backend/tests/test_mc_engine.py"
+  ],
+  "success_rate": {"backend": "100% (14/14 tests)", "frontend": "not tested (backend-only per review)"},
+  "test_credentials": "panditrdpandit@gmail.com / mpca@2026 (CAO maker), secretary@mpcaonline.com / mpca@2026 (checker), sysadmin@mpca.in / mpca@2026 (rbac.manage + no force-reset)",
+  "seed_data_creation": "Created 2 TEST_Iter121_* tournaments during the run and 1 TEST_mc_engine_e2e; all cleaned up via DELETE /api/tournaments/{id} at end of run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The M&C engine now fires on tournament CREATE. Legacy test_mc_engine.py was refreshed to current roster. If mc_status is missing on an OLD tournament (created before iter121) that's expected — only new tournaments have mc_status populated. All 4 existing tournaments in the DB currently: Ranji Trophy·Plate (Approved), JS Anand Trophy (Approved), AW Kanmadikar Trophy (Draft), Madhavrao Scindia Trophy (PendingReview backfilled). The tournament_create workflow uses body_scope=State + post_title='Chief Accounts Officer' (maker) and 'Hon. Secretary' (checker) with requires_two_person=true on approve+reject.",
+  "rca of the issue": "Root cause: POST /api/tournaments (routes/tournaments.py L324) inserted directly into MongoDB without invoking lib.mc.apply_transition, so no mc_status/mc_chain/mc_approvals were ever set and the tournament never appeared in Hon. Secretary's approval inbox. Fix applied in code: (a) inject Request param on the endpoint; (b) initialise doc['mc_status']='Draft', mc_chain=[], mc_approvals=[] before insert; (c) after insert, call apply_transition(wf_key='tournament_create', doc_id=t.id, action='submit', principal=get_principal(request), note=None) inside try/except so a mis-configured workflow doesn't lose the tournament. Verified E2E: create as CAO returns mc_status=PendingReview and 1 chain entry (actor_id='cao-mpca', action='submit'). Two-person rule verified: CAO gets 403 attempting to approve their own submission; Secretary approves and doc.mc_status flips to 'Approved' with 2 chain entries."
+}

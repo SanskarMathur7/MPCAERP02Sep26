@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="6" time="5.946" timestamp="2026-08-22T18:18:08.637047+00:00" hostname="agent-env-4c7b8162-96d0-4f81-acb9-11f831a40275"><testcase classname="tests.test_mc_engine" name="test_mc_admin_lists_17_workflows" time="4.114"><failure message="AssertionError: {&quot;detail&quot;:&quot;M&amp;C admin requires rbac.manage permission&quot;}&#10;assert 403 == 200&#10; +  where 403 = &lt;Response [403 Forbidden]&gt;.status_code">tests/test_mc_engine.py:31: in test_mc_admin_lists_17_workflows
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"M&amp;C admin requires rbac.manage permission"}
+E   assert 403 == 200
+E    +  where 403 = &lt;Response [403 Forbidden]&gt;.status_code</failure></testcase><testcase classname="tests.test_mc_engine" name="test_mc_admin_posts_catalog_has_new_posts" time="0.271"><failure message="assert 403 == 200&#10; +  where 403 = &lt;Response [403 Forbidden]&gt;.status_code">tests/test_mc_engine.py:42: in test_mc_admin_posts_catalog_has_new_posts
+    assert r.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = &lt;Response [403 Forbidden]&gt;.status_code</failure></testcase><testcase classname="tests.test_mc_engine" name="test_mc_admin_requires_rbac_manage_permission" time="0.271" /><testcase classname="tests.test_mc_engine" name="test_mc_runtime_state_shape" time="0.295" /><testcase classname="tests.test_mc_engine" name="test_mc_rework_inbox_endpoint" time="0.273" /><testcase classname="tests.test_mc_engine" name="test_mc_two_person_rule_end_to_end" time="0.626" /></testsuite></testsuites>

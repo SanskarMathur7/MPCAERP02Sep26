@@ -142,26 +142,24 @@ const TournamentProgressionRibbon = ({ tournamentId, refreshKey = 0 }) => {
                                     : <div className={`flex-1 h-0.5 ${DOT_STYLE[steps[idx + 1]?.status]?.line || style.line}`} />
                                 }
                             </div>
-                            {/* Label + flag + note */}
-                            <div className="mt-2 text-center px-1">
-                                <div className={`text-[10px] font-serif leading-tight ${style.label}`}>{s.label}</div>
-                                <div className="mt-0.5 flex items-center justify-center gap-1 flex-wrap">
-                                    {s.flag && (
+                            {/* Label + flag chip · Iter 121 simplified: dropped
+                                the truncated note under each step (still shown
+                                on hover via the button's title). Labels now
+                                bigger for readability. */}
+                            <div className="mt-2.5 text-center px-1">
+                                <div className={`text-[12px] font-serif font-semibold leading-tight ${style.label}`}>{s.label}</div>
+                                {s.flag && s.flag !== "NA" && (
+                                    <div className="mt-1 inline-flex items-center gap-1">
                                         <span className={
-                                            "text-[8px] font-mono px-1 border " +
+                                            "text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-sm border " +
                                             (s.flag === "M"    ? "bg-mpca-oxblood/10 border-mpca-oxblood/40 text-mpca-oxblood" :
                                              s.flag === "O"    ? "bg-mpca-brass/15 border-mpca-brass/40 text-mpca-brass" :
                                              s.flag === "INFO" ? "bg-mpca-brass/10 border-mpca-brass/30 text-mpca-brass" :
                                                                  "border-mpca-gray/30 text-mpca-gray")
                                         }>{s.flag}</span>
-                                    )}
-                                    {s.owner && s.flag !== "NA" && (
-                                        <span className="text-[8px] font-mono text-mpca-gray-dark">{s.owner}</span>
-                                    )}
-                                </div>
-                                {s.note && (
-                                    <div className="mt-0.5 text-[9px] text-mpca-gray-dark leading-tight truncate max-w-[110px] mx-auto" title={s.note}>
-                                        {s.note}
+                                        {s.owner && (
+                                            <span className="text-[9px] font-mono text-mpca-gray-dark">{s.owner}</span>
+                                        )}
                                     </div>
                                 )}
                             </div>

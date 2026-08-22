@@ -324,6 +324,7 @@ def _auto_scheme_for(tournament_type, scope, type_code):
 @api_router.post("/tournaments", response_model=Tournament)
 async def create_tournament(
     payload: TournamentCreate,
+    request: Request,
     x_body_type: Optional[str] = Depends(principal_body_type),
     x_body_code: Optional[str] = Depends(principal_body_code),
 ):
@@ -416,7 +417,31 @@ async def create_tournament(
         status="Draft" if acceptance.status == "Pending" else "Draft",
         **data,
     )
-    await db.tournaments.insert_one(t.model_dump())
+    doc = t.model_dump()
+    # Iter 121 — Fire M&C submit inline so the tournament lands in
+    # `PendingReview` state and shows up in Hon. Secretary's approval
+    # inbox. Bypass errors (e.g. missing workflow config) — the tournament
+    # is still saved even if the M&C step degrades.
+    doc["mc_status"] = "Draft"
+    doc["mc_chain"] = []
+    doc["mc_approvals"] = []
+    await db.tournaments.insert_one(doc)
+    try:
+        from lib.mc import apply_transition
+        from lib.authz import get_principal
+        principal = get_principal(request)
+        await apply_transition(
+            wf_key="tournament_create",
+            doc_id=t.id,
+            action="submit",
+            principal=principal,
+            note=None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        # Log but don't fail the create — better to have the tournament
+        # than to lose it because the M&C engine is misconfigured.
+        import logging
+        logging.getLogger("mpca").warning(f"M&C submit failed for {t.id}: {exc}")
     # MPCA-133+ · Ping MPCA secretary that this new tournament needs match
     # officials posted centrally. Non-fatal on any error.
     try:

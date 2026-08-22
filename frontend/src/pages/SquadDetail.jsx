@@ -404,7 +404,7 @@ const SquadDetail = () => {
     const captain = members.find((m) => m.is_captain);
     const keepers = members.filter((m) => m.is_keeper);
     const maxSize = tournament.max_squad_size || 18;
-    const isDraftT = tournament.status === "Draft";
+    // Iter 108c · isDraftT removed with the manual status banner.
 
     const warnings = [];
     if (members.length < 11) warnings.push(`Need at least 11 players (have ${members.length}).`);
@@ -527,15 +527,11 @@ const SquadDetail = () => {
                 </div>
             </div>
 
-            {/* ─── Workflow guidance banner ─── */}
-            {isDraftT && (
-                <div className="mb-4 border border-mpca-brass/40 bg-mpca-brass/10 text-mpca-brass px-4 py-2 text-[11px] flex items-start gap-2" data-testid="squad-draft-hint">
-                    <Info size={12} className="mt-0.5 shrink-0" />
-                    <div>
-                        This tournament is still in <b>Draft</b>. You can build the squad now — once MPCA moves the tournament to <b>Upcoming</b>, the roster will be locked to changes until squad selection formally opens.
-                    </div>
-                </div>
-            )}
+            {/* Iter 108c · The "still in Draft" banner is retired.  Tournament status
+                is now auto-derived from the calendar (see TournamentDetail.jsx ·
+                effectiveStatus) so a squad manager never has to wait for MPCA
+                to flip a field manually — the roster stays editable until the
+                tournament is Cancelled or Completed. */}
 
             {/* MPCA-235 · Ship 6 · Wiring-driven squad-mode banner (advisory) */}
             {/* Feb 2026 · Eligibility Engine banner — DOB/gender/medical rules from tournament_master */}

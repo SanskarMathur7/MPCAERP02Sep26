@@ -285,12 +285,36 @@ const TournamentDetail = () => {
     // They're allocated to officiate — not to modify the schedule or pool composition.
     const isMatchOfficial = persona?.id === "match-official" || persona?.body_type === "Match_Official";
     const canEditSetup = canEdit && !isMatchOfficial;
-    const canEditSquad = (t.status === "Upcoming" || t.status === "Squad_Selection");
+    // Iter 108c · Squad selection opens automatically 30 days before start.
+    // We compute effectiveStatus below; here we use the raw status only for
+    // the terminal cases (Cancelled / Completed), which time cannot infer.
+    const canEditSquad = !["Cancelled", "Completed"].includes(t.status);
     const divisions = bodies.filter((b) => b.body_type === "Division");
     const districts = bodies.filter((b) => b.body_type === "District");
     const ageLabel = t.age_cap_years ? "U-" + t.age_cap_years : (t.age_floor_years ? t.age_floor_years + "+" : "Senior");
 
     // Feb 2026 · Days-until pill and quick stats for the reorganised layout.
+    // Iter 108c · The single derived "effectiveStatus" replaces the manually
+    // managed t.status field for DISPLAY purposes.  MPCA no longer has to
+    // flip Draft → Upcoming → Squad_Selection → In_Progress → Completed by
+    // hand; the calendar drives the label and squad/wiring gates read from
+    // this derived value.  The underlying t.status is still stored (used by
+    // cancellation flow) but never displayed on its own.
+    const effectiveStatus = (() => {
+        if (t.status === "Cancelled") return "Cancelled";
+        if (t.status === "Completed") return "Completed";
+        if (!t.start_date || !t.end_date) return "Upcoming";
+        const now = new Date();
+        const sd = new Date(t.start_date);
+        const ed = new Date(t.end_date);
+        const dayMs = 86400000;
+        if (now > ed) return "Completed";
+        if (now >= sd) return "In Progress";
+        const daysToStart = Math.ceil((sd - now) / dayMs);
+        // Selection window: 30 days out to start → open for squads
+        if (daysToStart <= 30) return "Squad Selection";
+        return "Upcoming";
+    })();
     const daysUntilInfo = (() => {
         if (!t.start_date || !t.end_date) return null;
         const now = new Date();
@@ -460,16 +484,17 @@ const TournamentDetail = () => {
                     </div>
                     <div>
                         <div className="text-[10px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>Status · Guest Players</div>
-                        <div className="text-[15px] font-semibold mt-1" style={{ color: "rgba(251,248,241,0.95)" }}>{t.status.replace(/_/g, " ")} · {t.allows_guests ? "permitted" : "not permitted"}</div>
+                        <div className="text-[15px] font-semibold mt-1" style={{ color: "rgba(251,248,241,0.95)" }}>{effectiveStatus} · {t.allows_guests ? "permitted" : "not permitted"}</div>
                     </div>
                 </div>
 
-                {canEdit && (
+                {canEdit && t.status !== "Cancelled" && t.status !== "Completed" && (
                     <div className="mt-7 flex flex-wrap gap-3" data-testid="trn-status-actions">
-                        {t.status === "Upcoming" && <button onClick={() => handleStatus("Squad_Selection")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: DL.gold, color: DL.ink, fontFamily: DL.fontMono, boxShadow: "0 12px 24px -12px rgba(184,131,40,0.7)" }} data-testid="trn-open-selection">Open Squad Selection</button>}
-                        {t.status === "Squad_Selection" && <button onClick={() => handleStatus("In_Progress")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: DL.gold, color: DL.ink, fontFamily: DL.fontMono, boxShadow: "0 12px 24px -12px rgba(184,131,40,0.7)" }} data-testid="trn-start">Start Tournament</button>}
-                        {t.status === "In_Progress" && <button onClick={() => handleStatus("Completed")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: DL.gold, color: DL.ink, fontFamily: DL.fontMono, boxShadow: "0 12px 24px -12px rgba(184,131,40,0.7)" }} data-testid="trn-complete">Mark Completed</button>}
-                        {t.status !== "Cancelled" && t.status !== "Completed" && <button onClick={() => handleStatus("Cancelled")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: "transparent", color: DL.paper, border: `1.5px solid rgba(251,248,241,0.4)`, fontFamily: DL.fontMono }} data-testid="trn-cancel">Cancel</button>}
+                        {/* Iter 108c · Status is now auto-derived from dates.  The only
+                            manual actions retained are Complete-early and Cancel — both
+                            terminal transitions that the calendar can't infer. */}
+                        <button onClick={() => handleStatus("Completed")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: DL.gold, color: DL.ink, fontFamily: DL.fontMono, boxShadow: "0 12px 24px -12px rgba(184,131,40,0.7)" }} data-testid="trn-complete">Mark Completed</button>
+                        <button onClick={() => handleStatus("Cancelled")} className="px-5 py-2.5 rounded-full text-[12px] uppercase tracking-[0.18em] font-bold transition-colors" style={{ backgroundColor: "transparent", color: DL.paper, border: `1.5px solid rgba(251,248,241,0.4)`, fontFamily: DL.fontMono }} data-testid="trn-cancel">Cancel</button>
                     </div>
                 )}
             </div>

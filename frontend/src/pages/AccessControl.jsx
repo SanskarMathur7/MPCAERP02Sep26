@@ -195,17 +195,30 @@ const RolesTab = ({ roles, catalog, onRefresh, persona }) => {
 
 const UsersTab = ({ users, roles, onRefresh, persona }) => {
     const [creating, setCreating] = useState(false);
-    const [form, setForm] = useState({ display_name: "", honorific: "Shri", email: "", phone: "", role_id: "", body_code: "MPCA", body_type: "State", is_active: true });
+    const emptyForm = {
+        display_name: "", honorific: "Shri", email: "", phone: "",
+        role_id: "", body_code: "MPCA", body_type: "State", is_active: true,
+        initial_password: "", force_password_reset: true,
+    };
+    const [form, setForm] = useState(emptyForm);
     const [editingId, setEditingId] = useState(null);
     const [busy, setBusy] = useState(false);
 
     const submitCreate = async () => {
         if (!form.display_name || !form.role_id) return alert("Name and role are required.");
+        // If admin is provisioning login credentials, both email + a valid password are needed.
+        if (form.initial_password) {
+            if (!form.email || !form.email.trim()) return alert("Email is required when setting an initial password.");
+            if (form.initial_password.length < 8) return alert("Initial password must be at least 8 characters.");
+        }
         setBusy(true);
         try {
-            await api.post("/rbac/users", form);
+            const payload = { ...form, email: form.email.trim().toLowerCase() || null };
+            // Strip an empty initial_password so the backend keeps the user login-less.
+            if (!payload.initial_password) { delete payload.initial_password; delete payload.force_password_reset; }
+            await api.post("/rbac/users", payload);
             setCreating(false);
-            setForm({ display_name: "", honorific: "Shri", email: "", phone: "", role_id: "", body_code: "MPCA", body_type: "State", is_active: true });
+            setForm(emptyForm);
             onRefresh();
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
         finally { setBusy(false); }
@@ -246,7 +259,7 @@ const UsersTab = ({ users, roles, onRefresh, persona }) => {
                     <div className="overline text-[9px] mb-2">Add User</div>
                     <div className="grid grid-cols-4 gap-2">
                         <input placeholder="Full name" className={inputCls} value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} data-testid="rbac-user-name" />
-                        <input placeholder="Email" className={inputCls} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="rbac-user-email" />
+                        <input placeholder="Email" type="email" className={inputCls} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="rbac-user-email" />
                         <input placeholder="Phone" className={inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
                         <select className={inputCls} value={form.role_id} onChange={(e) => {
                             const r = roles.find((x) => x.id === e.target.value);
@@ -263,8 +276,37 @@ const UsersTab = ({ users, roles, onRefresh, persona }) => {
                             <option>Any</option>
                         </select>
                     </div>
+
+                    {/* Iter 114 — Optional sign-in credentials block */}
+                    <div className="mt-4 pt-3 border-t border-mpca-brass/30">
+                        <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-mpca-green-dark font-bold mb-2" data-testid="rbac-user-login-block-title">
+                            Sign-in Credentials <span className="text-mpca-brass font-normal normal-case tracking-normal">· Optional — leave blank for a directory-only entry</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 items-center">
+                            <input
+                                type="text"
+                                placeholder="Initial password (min 8 chars)"
+                                className={inputCls}
+                                value={form.initial_password}
+                                onChange={(e) => setForm({ ...form, initial_password: e.target.value })}
+                                autoComplete="new-password"
+                                data-testid="rbac-user-initial-password"
+                            />
+                            <label className="flex items-center gap-2 text-[11px] text-mpca-green-dark col-span-3" data-testid="rbac-user-force-reset-label">
+                                <input
+                                    type="checkbox"
+                                    checked={form.force_password_reset}
+                                    onChange={(e) => setForm({ ...form, force_password_reset: e.target.checked })}
+                                    disabled={!form.initial_password}
+                                    data-testid="rbac-user-force-reset"
+                                />
+                                Force this user to change the password on first sign-in
+                            </label>
+                        </div>
+                    </div>
+
                     <div className="flex justify-end gap-2 mt-3">
-                        <button onClick={() => setCreating(false)} className="text-[10px] uppercase tracking-widest text-mpca-gray-dark px-3 py-1.5"><X size={11} className="inline mr-1" /> Cancel</button>
+                        <button onClick={() => { setCreating(false); setForm(emptyForm); }} className="text-[10px] uppercase tracking-widest text-mpca-gray-dark px-3 py-1.5" data-testid="rbac-user-cancel-btn"><X size={11} className="inline mr-1" /> Cancel</button>
                         <button onClick={submitCreate} disabled={busy} className="text-[10px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 disabled:opacity-40" data-testid="rbac-user-save-btn">
                             {busy ? <Loader2 size={11} className="inline animate-spin mr-1" /> : <Save size={11} className="inline mr-1" />} Save User
                         </button>

@@ -137,3 +137,39 @@ async def me(request: Request):
 async def logout():
     # Stateless JWT — client discards the token. Kept for API symmetry.
     return {"ok": True}
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@api_router.post("/auth/change-password")
+async def change_password(body: ChangePasswordRequest, request: Request):
+    """Self-service password change. Verifies the current password, hashes the
+    new one (min 8 chars, must differ), and clears `force_password_reset`.
+    Used by the /change-password landing page after a force-reset login.
+    """
+    import bcrypt as _bcrypt
+    user = await get_current_user(request)  # 401s if not authenticated
+    if not user.get("email"):
+        raise HTTPException(400, "User has no email — contact admin")
+    # Re-fetch with the hash (get_current_user strips it)
+    stored = await db.users.find_one({"id": user["id"]}, {"password_hash": 1})
+    if not stored or not verify_password(body.current_password, stored.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    new_pw = body.new_password.strip()
+    if len(new_pw) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    if new_pw == body.current_password:
+        raise HTTPException(status_code=400, detail="New password must differ from the current one")
+    pw_hash = _bcrypt.hashpw(new_pw.encode("utf-8"), _bcrypt.gensalt(rounds=12)).decode("utf-8")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "password_hash": pw_hash,
+            "force_password_reset": False,
+            "password_changed_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    return {"ok": True, "force_password_reset": False}

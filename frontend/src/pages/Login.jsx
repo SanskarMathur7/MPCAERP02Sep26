@@ -47,7 +47,11 @@ const Login = () => {
                 password,
             });
             loginWithCredentials(data.access_token, data.user);
-            navigate("/dashboard");
+            if (data.user?.force_password_reset) {
+                navigate("/change-password", { replace: true });
+            } else {
+                navigate("/dashboard");
+            }
         } catch (err) {
             setError(formatErr(err?.response?.data?.detail) || err.message);
             setSubmitting(false);

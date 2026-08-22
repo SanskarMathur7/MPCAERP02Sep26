@@ -1,0 +1,29 @@
+{
+  "summary": "Iter 114 end-to-end verification — Real MPCA roster (17) + SysAdmin seeded, legacy dummy accounts purged, force-reset landing page + change-password endpoint + RBAC create-user modal with initial_password + force_password_reset all working. 38/38 backend pytest cases passed and 6/6 Playwright UI flows passed (sysadmin bypass, RBAC modal fields, RBAC create user, force-reset redirect, client-side validation, happy-path change + no re-bounce on reload).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AccessControl · Add User modal (users tab)", "issues": ["React hydration warning: role <select> renders <option> containing a <span> wrapper (dev-time introspection wrapper) — <span> is not a valid child of <option>. This is likely coming from the Emergent visual-editor instrumentation but shows up in console as an error. Consider verifying the role select renders plain text children, not wrapped spans, in production build."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter114_real_roster.py",
+    "/app/test_reports/pytest/iter114.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "seed_users_from_personas() purge deletes any row not in the canonical list — safe because RBAC-created rows use uuid.hex ids which are NOT in _ALLOWED_USER_IDS, so admin-created users would be wiped on next backend restart. Consider adding a persistence flag (e.g. `manual: true`) or skipping purge for rows that have a `role_id` but no matching persona.",
+    "auth.py change_password compares plaintext body.new_password to body.current_password (line 164) — correct. Fine.",
+    "rbac.py create_user stores email lowercased only when initial_password is provided (line 584); rows created without a password keep the email as-typed (mixed-case). Login is lower-cased everywhere, so this is harmless today but inconsistent — normalise email at model level."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (38/38)", "frontend": "100% (6/6)"},
+  "test_credentials": "sysadmin@mpca.in / mpca@2026 (no force-reset); secretary@mpcaonline.com / mpca@2026 (force-reset). Also verified all 17 real emails + sysadmin.",
+  "seed_data_creation": "Two throwaway RBAC users created via the API during backend tests were deleted at teardown. One frontend-created 'QA Test User' (qa.ui.<ts>@mpca.in) exists in DB with a rotated password 'newpass1234'; will be purged on next backend restart because its uuid id isn't in _ALLOWED_USER_IDS.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter 114 fully green. If you re-test the change-password happy path via the frontend, use a fresh RBAC-created throwaway user or reset via /api/rbac/users/{uid}/reset-password. secretary@mpcaonline.com password is still mpca@2026 (only backend fixture logged in with it, never changed). Note the seed purge wipes RBAC-created rows on restart — main agent may want to guard that.",
+  "rca of the issue": "N/A — no failures."
+}

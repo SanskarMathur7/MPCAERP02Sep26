@@ -1,12 +1,13 @@
 import "@/App.css";
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { SeasonProvider } from "@/context/SeasonContext";
 import AppLayout from "@/components/AppLayout";
 // Kept eager: shell + first-paint public routes (avoids a loading flash on entry).
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
+import ChangePassword from "@/pages/ChangePassword";
 
 // M9 · route-level code-splitting. Each page is fetched on demand instead of
 // bundling all ~60 pages into the initial download, cutting first-load size.
@@ -113,14 +114,28 @@ const LegacyFinanceRedirect = () => {
 };
 
 const ProtectedShell = ({ children }) => {
-    const { isAuthed } = useAuth();
+    const { isAuthed, persona } = useAuth();
+    const location = useLocation();
     if (!isAuthed) return <Navigate to="/login" replace />;
+    // Iter 114 — Force-reset gate: users flagged with `force_password_reset`
+    // are held on /change-password until they set their own password.
+    if (persona?.force_password_reset && location.pathname !== "/change-password") {
+        return <Navigate to="/change-password" replace />;
+    }
     return <AppLayout>{children}</AppLayout>;
 };
 
 const Protected = ({ children }) => (
     <ProtectedShell>{children}</ProtectedShell>
 );
+
+// Change-password gate — must be logged in, but bypasses the force-reset guard
+// (because this is where force-reset users need to go). Unauthed → /login.
+const ChangePasswordGate = () => {
+    const { isAuthed } = useAuth();
+    if (!isAuthed) return <Navigate to="/login" replace />;
+    return <ChangePassword />;
+};
 
 function App() {
     return (
@@ -134,6 +149,7 @@ function App() {
                             <Route path="/" element={<Navigate to="/login" replace />} />
                             <Route path="/landing" element={<Landing />} />
                             <Route path="/login" element={<Login />} />
+                            <Route path="/change-password" element={<ChangePasswordGate />} />
                             <Route path="/disclosures-public" element={<Disclosures publicView />} />
                             <Route path="/showcase" element={<MPCAShowcase />} />
                             <Route path="/storyline" element={<Storyline />} />

@@ -420,26 +420,35 @@ async def seed_roles_and_permissions() -> None:
             role = Role(id=role_id, **spec)
             await db.roles.insert_one(role.model_dump())
 
-    # 2) bootstrap users from personas (idempotent)
-    bootstrap_users = [
-        {"id": "president", "persona_id": "president", "display_name": "Mahanaryaman Scindia", "honorific": "Shri",
-         "role_id": "president", "body_code": "MPCA", "body_type": "State"},
-        {"id": "secretary", "persona_id": "secretary", "display_name": "Sanjeev Dua", "honorific": "Shri",
-         "role_id": "hon_secretary", "body_code": "MPCA", "body_type": "State"},
-        {"id": "treasurer", "persona_id": "treasurer", "display_name": "Naveen Mittal", "honorific": "Shri",
-         "role_id": "hon_treasurer", "body_code": "MPCA", "body_type": "State"},
-        {"id": "division-secretary", "persona_id": "division-secretary", "display_name": "Devashish Nilosey",
-         "honorific": "Shri", "role_id": "division_secretary", "body_code": "DIV-IND", "body_type": "Division"},
-        {"id": "district-secretary", "persona_id": "district-secretary", "display_name": "Rajesh Kulkarni",
-         "honorific": "Shri", "role_id": "district_secretary", "body_code": "DIST-INDO-IND", "body_type": "District"},
-        {"id": "match-official", "persona_id": "match-official", "display_name": "Chandrakant Pandit",
-         "honorific": "Shri", "role_id": "match_official", "body_code": "MPCA", "body_type": "Any"},
+    # 2) bootstrap users from personas (idempotent).
+    #    Iter 114 — Real MPCA roster is seeded by `scripts/seed_users.py`.
+    #    We only need to backfill `role_id` on those rows so the RBAC console
+    #    sees them with a proper role chip.
+    #    President/VP/Sec/JS/Treasurer/CAO/Auditor + 10 Division Secretaries.
+    bootstrap_roles = [
+        ("president",           "president"),
+        ("vice-president",      "president"),           # deputises president
+        ("secretary",           "hon_secretary"),
+        ("joint-secretary",     "hon_secretary"),
+        ("treasurer",           "hon_treasurer"),
+        ("cao-mpca",            "hon_treasurer"),        # accounts custodian
+        ("internal-auditor",    "hon_treasurer"),        # read-only auditor
+        ("div-sec-indore",      "division_secretary"),
+        ("div-sec-jabalpur",    "division_secretary"),
+        ("div-sec-shahdol",     "division_secretary"),
+        ("div-sec-narmadapuram","division_secretary"),
+        ("div-sec-sagar",       "division_secretary"),
+        ("div-sec-gwalior",     "division_secretary"),
+        ("div-sec-chambal",     "division_secretary"),
+        ("div-sec-rewa",        "division_secretary"),
+        ("div-sec-bhopal",      "division_secretary"),
+        ("div-sec-ujjain",      "division_secretary"),
     ]
-    for u in bootstrap_users:
-        existing = await db.users.find_one({"id": u["id"]})
-        if not existing:
-            user = RBACUser(**u)
-            await db.users.insert_one(user.model_dump())
+    for uid, role_id in bootstrap_roles:
+        await db.users.update_one(
+            {"id": uid, "$or": [{"role_id": {"$exists": False}}, {"role_id": None}, {"role_id": ""}]},
+            {"$set": {"role_id": role_id, "persona_id": uid}},
+        )
 
 
 # ─────────────────────────── ROUTES ───────────────────────────

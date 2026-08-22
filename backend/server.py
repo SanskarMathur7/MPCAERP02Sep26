@@ -24,7 +24,7 @@ from routes import (  # noqa: F401
     tournament_workspace, rbac, tournament_participations, body_documents, player_registrations,
     discussions, events, finance_console, tournament_master, rate_cards, unified_budget,
     tournament_wiring, tournament_wiring_status, camp_finance, ux_audit,
-    tournament_eligibility,
+    tournament_eligibility, auth,
 )
 from seed import seed_data
 
@@ -98,6 +98,19 @@ async def lifespan(app: FastAPI):
         except Exception as e:  # never let migration crash startup
             import logging
             logging.getLogger("mpca").warning("Camp promotion migration failed: %s", e)
+        # Feb 2026 · JWT auth — seed 7 office-bearer accounts from personas
+        try:
+            from scripts.seed_users import seed_users_from_personas
+            from core.infra import db as _db
+            r = await seed_users_from_personas(_db)
+            import logging
+            logging.getLogger("mpca").info(
+                "Auth users seeded — created=%s refreshed=%s kept=%s",
+                len(r["created"]), len(r["refreshed"]), len(r["kept"]),
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger("mpca").warning("User seeding failed: %s", e)
     yield
     # ---- shutdown ----
     client.close()

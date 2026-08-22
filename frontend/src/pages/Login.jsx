@@ -1,154 +1,92 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { PERSONAS, useAuth } from "@/context/AuthContext";
-import {
-    ChevronRight, ShieldCheck, Building2, MapPin, Landmark,
-    Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle,
-} from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
 import { MpcaEmblem, MpcaLogoMark } from "@/components/MpcaEmblem";
-import CricketLoader from "@/components/CricketLoader";
+import { DL } from "@/lib/designSystem";
+import { api } from "@/lib/api";
 
-const TIER_ICONS = {
-    State: Landmark,
-    Division: Building2,
-    District: MapPin,
-    Public: ShieldCheck,
+/**
+ * Feb 2026 · Single JWT-based Login
+ * ─────────────────────────────────
+ * Redesigned from a persona-chip demo to a clean email + password form
+ * backed by the /api/auth/login endpoint. Institutional Warm palette,
+ * split-hero layout, no extra fields, no clutter.
+ */
+
+const formatErr = (detail) => {
+    if (!detail) return "Something went wrong. Please try again.";
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) return detail.map((e) => e?.msg || JSON.stringify(e)).join(" ");
+    if (detail && typeof detail.msg === "string") return detail.msg;
+    return String(detail);
 };
 
-// Compact persona chip — used in the quick-demo row underneath the form
-const PersonaChip = ({ persona, onSelect, active }) => {
-    const TierIcon = TIER_ICONS[persona.body_type] || ShieldCheck;
-    const initials = persona.name
-        .split(" ")
-        .map((w) => w[0])
-        .slice(0, 2)
-        .join("");
-    return (
-        <button
-            type="button"
-            onClick={() => onSelect(persona)}
-            data-testid={`persona-chip-${persona.id}`}
-            className={[
-                "group relative flex items-center gap-3 w-full px-3.5 py-3 text-left",
-                "border transition-all duration-200",
-                "hover:border-mpca-oxblood hover:bg-mpca-parchment/60",
-                "focus:outline-none focus:ring-2 focus:ring-mpca-oxblood/40",
-                active
-                    ? "border-mpca-oxblood bg-mpca-parchment/80 shadow-sm"
-                    : "border-mpca-brass/40 bg-mpca-ivory",
-            ].join(" ")}
-        >
-            <div
-                className={[
-                    "w-9 h-9 flex-shrink-0 flex items-center justify-center font-serif text-sm",
-                    "border",
-                    active
-                        ? "bg-mpca-oxblood text-mpca-ivory border-mpca-oxblood"
-                        : "bg-mpca-green-dark text-mpca-gold-light border-mpca-brass/40",
-                ].join(" ")}
-            >
-                {initials}
-            </div>
-            <div className="flex-1 min-w-0">
-                <div className="font-serif text-sm text-mpca-green-dark leading-tight truncate">
-                    {persona.name}
-                </div>
-                <div className="text-[10px] tracking-wider uppercase text-mpca-gray-dark mt-0.5 flex items-center gap-1">
-                    <TierIcon size={9} strokeWidth={2} />
-                    <span className="truncate">{persona.title}</span>
-                </div>
-            </div>
-            <ChevronRight
-                size={14}
-                strokeWidth={1.5}
-                className={`flex-shrink-0 transition-colors ${
-                    active ? "text-mpca-oxblood" : "text-mpca-gray/50 group-hover:text-mpca-oxblood"
-                }`}
-            />
-        </button>
-    );
-};
 
 const Login = () => {
-    const { login } = useAuth();
+    const { loginWithCredentials } = useAuth();
     const navigate = useNavigate();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
-    const [selectedPersona, setSelectedPersona] = useState(PERSONAS[0]);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
 
-    const proceedWith = (persona) => {
-        setSubmitting(true);
-        // Mimic a real sign-in handshake — gives the coin a beat to settle.
-        setTimeout(() => {
-            login(persona);
-            if (persona.id === "public") {
-                navigate("/disclosures");
-            } else {
-                navigate("/dashboard");
-            }
-        }, 1400);
-    };
-
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
-        if (!email.trim() || !password.trim()) {
-            setError("Please enter both your email and password to sign in.");
+        if (!email.trim() || !password) {
+            setError("Enter both your email and password to sign in.");
             return;
         }
-        if (!selectedPersona) {
-            setError("Please select a role before signing in.");
-            return;
+        setSubmitting(true);
+        try {
+            const { data } = await api.post("/auth/login", {
+                email: email.trim().toLowerCase(),
+                password,
+            });
+            loginWithCredentials(data.access_token, data.user);
+            navigate("/dashboard");
+        } catch (err) {
+            setError(formatErr(err?.response?.data?.detail) || err.message);
+            setSubmitting(false);
         }
-        proceedWith(selectedPersona);
     };
-
-    const handleQuickAccess = (persona) => {
-        setSelectedPersona(persona);
-        // Auto-fill the form to make the demo flow obvious
-        if (persona.id !== "public") {
-            const slug = persona.name.toLowerCase().replace(/[^a-z]+/g, ".").replace(/^\.|\.$/g, "");
-            setEmail(`${slug}@mpcaonline.com`);
-            setPassword("••••••••");
-        } else {
-            setEmail("guest@public");
-            setPassword("•••••");
-        }
-        setError("");
-    };
-
-    if (submitting) {
-        return (
-            <div className="min-h-screen cricket-pitch-bg text-mpca-ivory flex items-center justify-center" data-testid="login-loading">
-                <div className="text-center max-w-md px-6">
-                    <CricketLoader
-                        size="lg"
-                        onDark
-                        mode="toss"
-                        label={`Signing you in as ${selectedPersona.honorific} ${selectedPersona.name}…`}
-                        sublabel="Verifying with the MPCA registrar"
-                        testId="login-coin-loader"
-                    />
-                </div>
-            </div>
-        );
-    }
 
     return (
-        <div className="min-h-screen flex flex-col lg:flex-row bg-mpca-ivory" data-testid="login-page">
-            {/* ───────── LEFT: Brand pane (navy + emblem + motto) ───────── */}
-            <aside className="cricket-pitch-bg text-mpca-ivory lg:w-2/5 px-8 md:px-14 py-10 lg:py-16 flex flex-col justify-between relative">
-                {/* Top — wordmark */}
+        <div
+            className="min-h-screen flex flex-col lg:flex-row"
+            style={{ backgroundColor: DL.ivory, fontFamily: DL.fontBody, color: DL.ink }}
+            data-testid="login-page"
+        >
+            {/* ───── LEFT · Brand pane ───── */}
+            <aside
+                className="relative lg:w-2/5 px-8 md:px-14 py-10 lg:py-16 flex flex-col justify-between overflow-hidden"
+                style={{
+                    background: `linear-gradient(160deg, ${DL.emerald} 0%, ${DL.ink} 60%, ${DL.ink2} 100%)`,
+                    color: DL.paper,
+                }}
+            >
+                {/* subtle field-lines overlay */}
+                <div
+                    aria-hidden
+                    className="absolute inset-0 opacity-[0.06] pointer-events-none"
+                    style={{
+                        backgroundImage: "repeating-linear-gradient(115deg, rgba(255,255,255,0.4) 0 1px, transparent 1px 42px)",
+                    }}
+                />
+
+                {/* Top wordmark */}
                 <div className="relative z-10">
-                    <Link to="/" className="inline-flex items-center gap-3 group">
-                        <MpcaEmblem className="w-10 h-12 text-mpca-gold-light" />
+                    <Link to="/" className="inline-flex items-center gap-3">
+                        <MpcaEmblem className="w-10 h-12" style={{ color: DL.gold }} />
                         <div>
-                            <div className="font-serif text-xl text-mpca-ivory leading-none">MPCA</div>
-                            <div className="overline text-[9px] mt-1.5 !text-mpca-gold-light/70">
+                            <div className="text-xl leading-none" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}>MPCA</div>
+                            <div
+                                className="text-[9px] tracking-[0.28em] uppercase mt-1.5"
+                                style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.85 }}
+                            >
                                 ERP · System of Records
                             </div>
                         </div>
@@ -157,91 +95,116 @@ const Login = () => {
 
                 {/* Centre — emblem + tagline */}
                 <div className="relative z-10 my-10 lg:my-0 flex flex-col items-start max-w-md">
-                    <div className="w-24 h-24 bg-mpca-ivory rounded-full p-3 mb-7 shadow-xl ring-1 ring-mpca-brass/30">
+                    <div
+                        className="w-24 h-24 rounded-full p-3 mb-7"
+                        style={{
+                            backgroundColor: DL.paper,
+                            boxShadow: `0 22px 40px -18px rgba(0,0,0,0.55), inset 0 0 0 1px ${DL.gold}`,
+                        }}
+                    >
                         <MpcaLogoMark className="w-full h-full object-contain" />
                     </div>
-                    <h2 className="font-serif text-3xl md:text-4xl leading-tight text-mpca-ivory">
-                        The cricketing office of <em className="text-mpca-gold-light not-italic">Madhya Pradesh</em>, online.
+                    <h2
+                        className="text-3xl md:text-4xl leading-tight"
+                        style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper, letterSpacing: "-0.01em" }}
+                    >
+                        The cricketing office of <span style={{ color: DL.gold }}>Madhya Pradesh</span>, online.
                     </h2>
-                    <p className="mt-5 text-sm text-mpca-ivory/70 leading-relaxed">
-                        Sign in to access the unified register — members, claims, tournaments,
-                        bank, and the constitutional record — scoped to your office in the
-                        BCCI → MPCA → Division → District hierarchy.
+                    <p className="mt-5 text-sm leading-relaxed" style={{ color: "rgba(251,248,241,0.72)" }}>
+                        Sign in to the unified register — members, claims, tournaments, bank, and the
+                        constitutional record — scoped to your office in the BCCI → MPCA → Division →
+                        District hierarchy.
                     </p>
-                    <div className="mt-7 flex items-center gap-2 text-[10px] tracking-[0.25em] uppercase text-mpca-gold-light/70">
-                        <span className="w-6 h-px bg-mpca-gold-light/40" />
-                        <span>"खेल भावना से, राष्ट्र सम्मान से"</span>
+                    <div className="mt-7 flex items-center gap-3 text-[10px] tracking-[0.28em] uppercase" style={{ color: DL.gold, opacity: 0.75, fontFamily: DL.fontMono }}>
+                        <span className="w-6 h-px" style={{ backgroundColor: DL.gold, opacity: 0.5 }} />
+                        <span>khel bhavna se, rashtra sammaan se</span>
                     </div>
                 </div>
 
-                {/* Footer — affiliations */}
-                <div className="relative z-10 flex items-center justify-between text-xs text-mpca-ivory/55 mt-10">
+                {/* Footer */}
+                <div
+                    className="relative z-10 flex items-center justify-between text-xs mt-10"
+                    style={{ color: "rgba(251,248,241,0.55)", fontFamily: DL.fontMono }}
+                >
                     <div>BCCI Affiliated · Est. 1957</div>
-                    <div className="font-mono">v4.1.0</div>
+                    <div>v4.2.0</div>
                 </div>
             </aside>
 
-            {/* ───────── RIGHT: Login form ───────── */}
-            <main className="lg:w-3/5 flex items-center justify-center px-6 sm:px-10 md:px-14 py-10 lg:py-12 bg-mpca-ivory">
-                <div className="w-full max-w-xl">
-                    {/* Form header */}
-                    <div className="mb-8" data-testid="login-form-header">
-                        <div className="overline">Authentication</div>
-                        <h1 className="font-serif text-3xl md:text-4xl text-mpca-green-dark mt-2 leading-tight">
-                            Welcome back.
+            {/* ───── RIGHT · Login form ───── */}
+            <main
+                className="lg:w-3/5 flex items-center justify-center px-6 sm:px-10 md:px-14 py-12 lg:py-16"
+                style={{ backgroundColor: DL.ivory }}
+            >
+                <div className="w-full max-w-md">
+                    {/* Header */}
+                    <div className="mb-10" data-testid="login-form-header">
+                        <div
+                            className="text-[10px] tracking-[0.28em] uppercase mb-3"
+                            style={{ fontFamily: DL.fontMono, color: DL.gold, fontWeight: 700 }}
+                        >
+                            / Authentication
+                        </div>
+                        <h1
+                            className="text-4xl md:text-5xl leading-[1.05]"
+                            style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink, letterSpacing: "-0.02em" }}
+                        >
+                            Welcome<span style={{ color: DL.emerald }}>.</span>
                         </h1>
-                        <p className="text-sm text-mpca-gray-dark mt-2">
-                            Sign in to your registrar account or use a demo persona to explore the system.
+                        <p className="text-[13px] mt-3 leading-relaxed" style={{ color: DL.muted, fontWeight: 500 }}>
+                            Sign in with your MPCA registrar credentials.
                         </p>
                     </div>
 
                     {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-5" data-testid="login-form">
+                    <form onSubmit={handleSubmit} className="space-y-5" data-testid="login-form" noValidate>
                         {/* Email */}
                         <div>
-                            <label htmlFor="email" className="block text-[11px] tracking-[0.18em] uppercase text-mpca-gray-dark mb-2">
-                                Registrar Email
+                            <label
+                                htmlFor="email"
+                                className="block text-[10px] tracking-[0.22em] uppercase mb-2"
+                                style={{ fontFamily: DL.fontMono, color: DL.ink2, fontWeight: 700 }}
+                            >
+                                Email
                             </label>
                             <div className="relative">
-                                <Mail
-                                    size={16}
-                                    strokeWidth={1.5}
-                                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-mpca-gray pointer-events-none"
-                                />
+                                <Mail size={16} strokeWidth={2} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: DL.muted }} />
                                 <input
                                     id="email"
                                     type="email"
+                                    autoFocus
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="you@mpcaonline.com"
+                                    placeholder="you@mpca.in"
                                     autoComplete="email"
+                                    disabled={submitting}
                                     data-testid="login-email-input"
-                                    className="w-full pl-10 pr-4 py-3 bg-mpca-ivory border border-mpca-brass/50 text-mpca-charcoal placeholder:text-mpca-gray/70 focus:outline-none focus:border-mpca-oxblood focus:ring-2 focus:ring-mpca-oxblood/20 transition-all font-sans"
+                                    className="w-full pl-11 pr-4 py-3.5 text-[14px] outline-none transition-all rounded-md"
+                                    style={{
+                                        backgroundColor: DL.paper,
+                                        border: `1.5px solid ${DL.ruleStrong}`,
+                                        color: DL.ink,
+                                        fontFamily: DL.fontBody,
+                                        fontWeight: 600,
+                                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+                                    }}
+                                    onFocus={(e) => { e.currentTarget.style.borderColor = DL.emerald; e.currentTarget.style.boxShadow = `inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 3px ${DL.emeraldSoft}`; }}
+                                    onBlur={(e) => { e.currentTarget.style.borderColor = DL.ruleStrong; e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.75)"; }}
                                 />
                             </div>
                         </div>
 
                         {/* Password */}
                         <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <label htmlFor="password" className="block text-[11px] tracking-[0.18em] uppercase text-mpca-gray-dark">
-                                    Password
-                                </label>
-                                <button
-                                    type="button"
-                                    className="text-[11px] text-mpca-oxblood hover:underline tracking-wide"
-                                    onClick={() => setError("Password recovery is not enabled in demo mode — use a quick-access persona below.")}
-                                    data-testid="login-forgot-link"
-                                >
-                                    Forgot?
-                                </button>
-                            </div>
+                            <label
+                                htmlFor="password"
+                                className="block text-[10px] tracking-[0.22em] uppercase mb-2"
+                                style={{ fontFamily: DL.fontMono, color: DL.ink2, fontWeight: 700 }}
+                            >
+                                Password
+                            </label>
                             <div className="relative">
-                                <Lock
-                                    size={16}
-                                    strokeWidth={1.5}
-                                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-mpca-gray pointer-events-none"
-                                />
+                                <Lock size={16} strokeWidth={2} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: DL.muted }} />
                                 <input
                                     id="password"
                                     type={showPassword ? "text" : "password"}
@@ -249,86 +212,74 @@ const Login = () => {
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="Enter your password"
                                     autoComplete="current-password"
+                                    disabled={submitting}
                                     data-testid="login-password-input"
-                                    className="w-full pl-10 pr-11 py-3 bg-mpca-ivory border border-mpca-brass/50 text-mpca-charcoal placeholder:text-mpca-gray/70 focus:outline-none focus:border-mpca-oxblood focus:ring-2 focus:ring-mpca-oxblood/20 transition-all font-sans"
+                                    className="w-full pl-11 pr-12 py-3.5 text-[14px] outline-none transition-all rounded-md"
+                                    style={{
+                                        backgroundColor: DL.paper,
+                                        border: `1.5px solid ${DL.ruleStrong}`,
+                                        color: DL.ink,
+                                        fontFamily: DL.fontBody,
+                                        fontWeight: 600,
+                                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+                                    }}
+                                    onFocus={(e) => { e.currentTarget.style.borderColor = DL.emerald; e.currentTarget.style.boxShadow = `inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 3px ${DL.emeraldSoft}`; }}
+                                    onBlur={(e) => { e.currentTarget.style.borderColor = DL.ruleStrong; e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.75)"; }}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword((v) => !v)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-mpca-gray hover:text-mpca-green-dark"
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
+                                    style={{ color: DL.muted }}
                                     aria-label={showPassword ? "Hide password" : "Show password"}
                                     data-testid="login-password-toggle"
                                 >
-                                    {showPassword ? <EyeOff size={16} strokeWidth={1.5} /> : <Eye size={16} strokeWidth={1.5} />}
+                                    {showPassword ? <EyeOff size={16} strokeWidth={2} /> : <Eye size={16} strokeWidth={2} />}
                                 </button>
-                            </div>
-                        </div>
-
-                        {/* Selected role indicator */}
-                        <div className="flex items-center justify-between bg-mpca-parchment/60 border border-mpca-brass/40 px-4 py-3">
-                            <div>
-                                <div className="text-[10px] tracking-[0.2em] uppercase text-mpca-gray-dark">
-                                    Signing in as
-                                </div>
-                                <div className="font-serif text-mpca-green-dark mt-0.5" data-testid="login-selected-persona">
-                                    {selectedPersona.honorific} {selectedPersona.name}
-                                    <span className="text-mpca-gray-dark text-sm">
-                                        {" · "}{selectedPersona.title}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="overline text-mpca-oxblood">
-                                {selectedPersona.body_type === "Public" ? "Public" : selectedPersona.body_type}
                             </div>
                         </div>
 
                         {/* Error */}
                         {error && (
                             <div
-                                className="flex items-start gap-2.5 text-sm text-mpca-burgundy-dark bg-mpca-burgundy-dark/5 border-l-2 border-mpca-burgundy-dark px-3 py-2.5"
+                                className="flex items-start gap-2.5 text-[13px] px-4 py-3 rounded-md"
+                                style={{ backgroundColor: "rgba(139,31,31,0.06)", border: `1px solid ${DL.danger}`, color: DL.danger }}
                                 data-testid="login-error"
                             >
-                                <AlertCircle size={15} strokeWidth={1.75} className="flex-shrink-0 mt-0.5" />
-                                <span>{error}</span>
+                                <AlertCircle size={15} strokeWidth={2.25} className="flex-shrink-0 mt-0.5" />
+                                <span style={{ fontWeight: 600 }}>{error}</span>
                             </div>
                         )}
 
                         {/* Submit */}
                         <button
                             type="submit"
+                            disabled={submitting}
                             data-testid="login-submit-btn"
-                            className="w-full bg-mpca-green-dark hover:bg-mpca-green-light text-mpca-ivory font-serif text-base tracking-wide py-3.5 flex items-center justify-center gap-2 transition-colors border-2 border-mpca-green-dark hover:border-mpca-oxblood group"
+                            className="group w-full flex items-center justify-center gap-2.5 py-4 text-[14px] tracking-wide transition-all rounded-md"
+                            style={{
+                                backgroundColor: submitting ? DL.ink2 : DL.emerald,
+                                color: DL.paper,
+                                fontFamily: DL.fontDisplay,
+                                fontWeight: 800,
+                                letterSpacing: "0.03em",
+                                boxShadow: submitting ? "none" : `0 14px 28px -14px ${DL.emerald}, inset 0 1px 0 rgba(255,255,255,0.15)`,
+                                cursor: submitting ? "wait" : "pointer",
+                            }}
+                            onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.backgroundColor = DL.ink; }}
+                            onMouseLeave={(e) => { if (!submitting) e.currentTarget.style.backgroundColor = DL.emerald; }}
                         >
-                            <span>Sign in to the Registrar</span>
-                            <ArrowRight size={16} strokeWidth={1.75} className="transition-transform group-hover:translate-x-1" />
+                            <span>{submitting ? "Signing in…" : "Sign in"}</span>
+                            {!submitting && <ArrowRight size={16} strokeWidth={2.5} className="transition-transform group-hover:translate-x-1" />}
                         </button>
                     </form>
 
-                    {/* Divider */}
-                    <div className="flex items-center gap-4 my-8" data-testid="login-divider">
-                        <div className="flex-1 h-px bg-mpca-brass/40" />
-                        <div className="text-[10px] tracking-[0.25em] uppercase text-mpca-gray font-sans">
-                            Or use a demo persona
-                        </div>
-                        <div className="flex-1 h-px bg-mpca-brass/40" />
-                    </div>
-
-                    {/* Persona quick-access grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" data-testid="persona-quick-grid">
-                        {PERSONAS.filter((p) => !p._disabled).map((p) => (
-                            <PersonaChip
-                                key={p.id}
-                                persona={p}
-                                onSelect={handleQuickAccess}
-                                active={selectedPersona.id === p.id}
-                            />
-                        ))}
-                    </div>
-
                     {/* Footnote */}
-                    <div className="mt-8 text-center text-[11px] text-mpca-gray italic font-serif">
-                        Selecting a demo persona auto-fills the form. Click <strong>Sign In</strong> to enter the registrar.
-                        Production will replace this with MPCA-issued credentials & MFA.
+                    <div
+                        className="mt-10 text-center text-[11px] leading-relaxed"
+                        style={{ color: DL.muted, fontFamily: DL.fontMono, letterSpacing: "0.05em" }}
+                    >
+                        Access is restricted to authorised MPCA office bearers.
                     </div>
                 </div>
             </main>

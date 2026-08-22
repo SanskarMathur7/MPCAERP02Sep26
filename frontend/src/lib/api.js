@@ -10,9 +10,16 @@ export const api = axios.create({
 });
 
 // Attach persona (role) + optional email + selected season to every request so
-// backend RBAC + season scoping work.
+// backend RBAC + season scoping work. Also attach the JWT bearer token when
+// present so /api/auth/me and protected endpoints authorise properly (Feb 2026).
 api.interceptors.request.use((config) => {
     try {
+        // Feb 2026 · JWT bearer token
+        const token = typeof window !== "undefined" && window.localStorage.getItem("mpca_token");
+        if (token) {
+            config.headers = config.headers || {};
+            config.headers["Authorization"] = `Bearer ${token}`;
+        }
         const raw = typeof window !== "undefined" && window.localStorage.getItem("mpca_persona");
         if (raw) {
             const p = JSON.parse(raw);
@@ -50,12 +57,24 @@ api.interceptors.request.use((config) => {
 
 // M10 · retry idempotent GETs on transient failures (network error / timeout /
 // 5xx) with a short backoff, so a blip doesn't surface as a hard error.
+// Feb 2026 · On 401 to a non-auth endpoint, purge the JWT + persona and bounce
+// the user to /login so an expired session never sticks around silently.
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const config = error.config || {};
-        const isGet = (config.method || "get").toLowerCase() === "get";
         const status = error.response?.status;
+        // Auto-logout on 401 (except on the login endpoint itself)
+        if (status === 401 && typeof window !== "undefined" && !(config.url || "").includes("/auth/login")) {
+            try {
+                window.localStorage.removeItem("mpca_token");
+                window.localStorage.removeItem("mpca_persona");
+            } catch (_) { /* noop */ }
+            if (!window.location.pathname.startsWith("/login")) {
+                window.location.assign("/login");
+            }
+        }
+        const isGet = (config.method || "get").toLowerCase() === "get";
         const transient = !error.response || status >= 500 || error.code === "ECONNABORTED";
         config.__retryCount = config.__retryCount || 0;
         if (isGet && transient && config.__retryCount < 2) {

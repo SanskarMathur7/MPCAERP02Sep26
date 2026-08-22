@@ -1,9 +1,10 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 const AuthContext = createContext(null);
 
-// Personas now carry body-scope info: body_type (State/Division/District),
-// body_code (MPCA / IND / UJN-MN etc.), and accent for visual differentiation.
+// PERSONAS remains exported for backwards-compat with older screens that read
+// the seed list (e.g. member roster demos). Auth no longer keys off this — the
+// live user comes from `/api/auth/login` and `/api/auth/me`.
 export const PERSONAS = [
     {
         id: "president",
@@ -115,9 +116,9 @@ export const PERSONAS = [
 ];
 
 export const AuthProvider = ({ children }) => {
-    // Initialise from localStorage SYNCHRONOUSLY so the first render of any
-    // ProtectedShell already sees a hydrated `persona`. Avoids the race where
-    // a hard reload on a protected route flashes a redirect to /login.
+    // Feb 2026 · JWT-based auth. `mpca_persona` still holds the user object
+    // (identical shape to the old PERSONAS entries) so downstream pages don't
+    // change. `mpca_token` holds the JWT sent as `Authorization: Bearer <...>`.
     const [persona, setPersona] = useState(() => {
         try {
             const stored = typeof window !== "undefined" && window.localStorage.getItem("mpca_persona");
@@ -127,12 +128,43 @@ export const AuthProvider = ({ children }) => {
         }
     });
 
+    // On mount, if a token exists but no persona in memory (e.g. legacy
+    // localStorage), hydrate from /api/auth/me. Failures log the user out.
+    useEffect(() => {
+        const token = typeof window !== "undefined" && window.localStorage.getItem("mpca_token");
+        if (token && !persona) {
+            // Late import avoids a circular dep with api.js
+            import("@/lib/api").then(({ api }) => {
+                api.get("/auth/me")
+                    .then(({ data }) => {
+                        localStorage.setItem("mpca_persona", JSON.stringify(data));
+                        setPersona(data);
+                    })
+                    .catch(() => {
+                        localStorage.removeItem("mpca_token");
+                        localStorage.removeItem("mpca_persona");
+                    });
+            });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // New JWT-based login — used by the redesigned Login page.
+    const loginWithCredentials = (accessToken, user) => {
+        localStorage.setItem("mpca_token", accessToken);
+        localStorage.setItem("mpca_persona", JSON.stringify(user));
+        setPersona(user);
+    };
+
+    // Legacy demo login kept as a no-op stub so older callers (e.g. tests
+    // that call `login(persona)` directly) don't crash. Prefer loginWithCredentials.
     const login = (personaObj) => {
         localStorage.setItem("mpca_persona", JSON.stringify(personaObj));
         setPersona(personaObj);
     };
 
     const logout = () => {
+        localStorage.removeItem("mpca_token");
         localStorage.removeItem("mpca_persona");
         setPersona(null);
     };
@@ -141,6 +173,7 @@ export const AuthProvider = ({ children }) => {
         <AuthContext.Provider value={{
             persona,
             login,
+            loginWithCredentials,
             logout,
             isAuthed: !!persona,
             isOfficeBearer: !!persona && ["president", "secretary", "treasurer", "division-secretary", "division-secretary-gwl"].includes(persona.id),

@@ -1,0 +1,25 @@
+{
+  "summary": "Iter 98 · Comprehensive test of the new JWT-based single email+password login that replaced the persona-chip demo. Backend: 16/16 pytest cases green (all 7 seeded accounts log in, wrong password / unknown email both return generic 401 with identical detail, /auth/me handles valid/missing/malformed/expired tokens correctly, bcrypt $2b$ hash + unique email index verified in Mongo, stateless /auth/logout works, protected /api/members still accepts Bearer + persona headers together). Frontend: 7/7 flows green (login page structure with only 4 interactive elements & zero persona chips, wrong-password error UX, password toggle, successful login → /dashboard with eyJ token + secretary persona in localStorage, hard-reload persistence via /auth/me, 401 interceptor bounce to /login after token wipe, axios sends both Authorization: Bearer and X-Body-Code/X-Persona-Post on protected calls).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter98_jwt_auth.py",
+    "/app/test_reports/pytest/iter98_jwt.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AuthContext hydration only runs on mount for the case (token exists && !persona). If a stale token is present alongside a stale persona (from a rotated user), stale persona is trusted until next 401. Consider unconditionally calling /auth/me on mount when a token exists to refresh the persona.",
+    "PERSONAS list in AuthContext.jsx still contains the full seed with 'match-official' incorrectly excluded from isOfficeBearer (only 5 ids allowlisted). If office-bearer semantics should include match-official/district-secretary, verify the whitelist matches business intent.",
+    "seed_users.py stores a legacy 'match-official' but is_active/role checks are absent — acceptable since login endpoint honours is_active. LGTM overall.",
+    "Password reset / forgot-password flow is not implemented — acceptable for MVP but worth flagging for future scope.",
+    "No rate-limiting / brute-force lockout on /api/auth/login. For an ERP with only 7 accounts this is a real concern; consider adding a simple failed-attempt counter or fail2ban-style throttle."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter98_jwt_auth.py"],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% (7/7)"},
+  "test_credentials": "Any of the 7 accounts from /app/memory/test_credentials.md; primary: secretary@mpca.in / mpca@2026. All 7 verified logging in.",
+  "seed_data_creation": "None. Used existing seeded office-bearer users (idempotent boot-time seeder).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "JWT auth (login/me/logout) is working end-to-end. api.js interceptor injects both Bearer and legacy persona headers so existing header-based RBAC continues to work. localStorage keys: mpca_token (JWT) + mpca_persona (user JSON). 401 on any non-auth endpoint auto-logs-out and redirects to /login. Test file at /app/backend/tests/test_iter98_jwt_auth.py can be re-run as a regression.",
+  "rca of the issue": "No issue — all requested backend and frontend scenarios passed on first execution."
+}

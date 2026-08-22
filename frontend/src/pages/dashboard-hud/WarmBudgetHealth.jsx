@@ -7,27 +7,25 @@ import { DL } from "@/lib/designSystem";
 import { WarmPanel, WarmChart, WarmKpiHero, WarmPageHeader, WARM_COLORS, SampleChip } from "./_warm";
 
 export default function WarmBudgetHealth() {
-    const warmTreePalette = [
+    const warmParentPalette = [
         WARM_COLORS.emerald, WARM_COLORS.gold, WARM_COLORS.terracotta,
         WARM_COLORS.oxblood, WARM_COLORS.goldSoft, WARM_COLORS.olive,
     ];
-
-    const treemapOption = {
-        tooltip: { formatter: (p) => `<b>${p.name}</b><br/>₹${p.value} Cr` },
-        series: [{
-            type: "treemap", roam: false, nodeClick: false, breadcrumb: { show: false },
-            visibleMin: 0.1,
-            data: BUDGET_TREE.children,
-            upperLabel: { show: true, color: DL.paper, fontFamily: "Nunito", fontWeight: 700, fontSize: 11, height: 22 },
-            itemStyle: { borderColor: DL.paper, borderWidth: 2, gapWidth: 2 },
-            label: { color: DL.paper, fontFamily: "Nunito", fontSize: 10, fontWeight: 600 },
-            levels: [
-                { itemStyle: { borderColor: DL.paper, borderWidth: 3, gapWidth: 3 }, upperLabel: { show: true, backgroundColor: DL.ink, padding: [4, 6] } },
-                { colorSaturation: [0.35, 0.65], itemStyle: { borderColorSaturation: 0.7, gapWidth: 1, borderWidth: 1 } },
-            ],
-            color: warmTreePalette,
-        }],
-    };
+    // Flatten the budget tree into leaf rows and sort by ₹ desc. Rendered as a
+    // pure-CSS horizontal bar list — instantly readable, no chart-library quirks,
+    // and every value + name is guaranteed legible at any width.
+    const parentIndex = Object.fromEntries(BUDGET_TREE.children.map((p, i) => [p.name, i]));
+    const leafRows = BUDGET_TREE.children
+        .flatMap((p) => (p.children || []).map((c) => ({
+            name: c.name, parent: p.name, value: c.value,
+            color: warmParentPalette[parentIndex[p.name] % warmParentPalette.length],
+        })))
+        .sort((a, b) => b.value - a.value);
+    const parentRows = [...BUDGET_TREE.children]
+        .map((p, i) => ({ name: p.name, value: p.value, count: (p.children || []).length, color: warmParentPalette[i % warmParentPalette.length] }))
+        .sort((a, b) => b.value - a.value);
+    const maxLeaf = Math.max(...leafRows.map((r) => r.value), 1);
+    const maxParent = Math.max(...parentRows.map((r) => r.value), 1);
 
     const gaugeOption = {
         series: [{
@@ -48,7 +46,7 @@ export default function WarmBudgetHealth() {
             axisTick: { length: 4, distance: -14, lineStyle: { color: WARM_COLORS.axis } },
             axisLabel: { color: WARM_COLORS.text3, fontSize: 9, distance: -34 },
             detail: {
-                valueAnimation: true, formatter: "{value}%",
+                valueAnimation: false, formatter: "{value}%",
                 color: WARM_COLORS.emerald, fontSize: 32, fontFamily: "Fraunces, Nunito", fontWeight: 800,
                 offsetCenter: [0, "70%"],
             },
@@ -128,8 +126,61 @@ export default function WarmBudgetHealth() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <WarmPanel title="Budget Head · Treemap" className="lg:col-span-2 lg:row-span-2" testid="warm-treemap-panel">
-                    <WarmChart option={treemapOption} height={500} testid="warm-treemap-chart" />
+                <WarmPanel
+                    title="Budget Head · Where the Money Sits"
+                    subtitle="6 buckets sorted by ₹ · every line item listed below"
+                    className="lg:col-span-2"
+                    testid="warm-treemap-panel"
+                >
+                    {/* Parent totals — big bars, executive read */}
+                    <div className="space-y-3" data-testid="warm-parent-totals-list">
+                        {parentRows.map((p) => {
+                            const pct = (p.value / maxParent) * 100;
+                            return (
+                                <div key={p.name} className="flex items-center gap-4" data-testid={`warm-parent-row-${p.name.toLowerCase().replace(/\s+/g,"-")}`}>
+                                    <div className="w-40 shrink-0 text-[12.5px] font-bold leading-tight" style={{ color: DL.ink }}>
+                                        {p.name}
+                                        <div className="text-[10px] mt-0.5 font-normal" style={{ color: DL.muted, fontFamily: DL.fontMono }}>
+                                            {p.count} heads
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 h-6 relative rounded-sm overflow-hidden" style={{ background: DL.ivory, border: `1px solid ${DL.rule}` }}>
+                                        <div className="h-full rounded-sm" style={{ width: `${pct}%`, background: p.color, transition: "width 500ms ease" }} />
+                                    </div>
+                                    <div className="w-20 text-right text-[15px] tracking-tight" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: p.color }}>
+                                        ₹{p.value}
+                                        <span className="text-[10px] ml-0.5" style={{ color: DL.muted, fontWeight: 500 }}>Cr</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Line items — sorted flat list */}
+                    <div className="mt-6 pt-5" style={{ borderTop: `1px dashed ${DL.rule}` }}>
+                        <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold mb-3" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
+                            Every Line Item · Sorted by ₹
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2" data-testid="warm-line-items-list">
+                            {leafRows.map((r) => {
+                                const pct = (r.value / maxLeaf) * 100;
+                                return (
+                                    <div key={`${r.parent}-${r.name}`} className="flex items-center gap-3">
+                                        <div className="w-28 shrink-0 min-w-0">
+                                            <div className="text-[12px] font-semibold truncate" style={{ color: DL.ink }} title={r.name}>{r.name}</div>
+                                            <div className="text-[9.5px] truncate" style={{ color: DL.muted, fontFamily: DL.fontMono }} title={r.parent}>{r.parent}</div>
+                                        </div>
+                                        <div className="flex-1 h-3 relative rounded-sm overflow-hidden" style={{ background: DL.ivory, border: `1px solid ${DL.rule}` }}>
+                                            <div className="h-full" style={{ width: `${pct}%`, background: r.color, transition: "width 500ms ease" }} />
+                                        </div>
+                                        <div className="w-14 text-right text-[11.5px] font-bold" style={{ fontFamily: DL.fontMono, color: r.color }}>
+                                            ₹{r.value}Cr
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </WarmPanel>
 
                 <WarmPanel title="Utilisation Gauge" testid="warm-gauge-panel">

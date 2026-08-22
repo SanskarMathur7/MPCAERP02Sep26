@@ -22,6 +22,7 @@ import { DL } from "@/lib/designSystem";
 import {
     ArrowRight, ArrowLeft, X, Play, Eye, ExternalLink,
     FileCheck2, ShieldCheck, HandCoins, Users, GitBranch, ScrollText,
+    Trophy, Landmark,
 } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -84,37 +85,46 @@ const SLIDES = [
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // HOW · Seven AI features — the ERP we built
+    // HOW · Bucket 1 — PLAYERS
     // ═══════════════════════════════════════════════════════════════
     {
-        kind: "how_intro",
-        eyebrow: "HOW · What we built",
-        title: "The MPCA ERP. Seven AI features solving seven problems.",
-        subtitle: "Every problem on the last slide, resolved by one AI feature in the ERP. Same product, same code, running live in production today. The next seven slides walk you through each one — the problem, the AI verb, the metric, and a live look at the actual page.",
-        stats: [
-            { label: "AI features live in production", value: "7" },
-            { label: "Manual routines replaced",       value: "16" },
-            { label: "Staff-hours saved per season",   value: "1,700+" },
-            { label: "State boards that could adopt",   value: "38" },
+        kind: "bucket_intro",
+        bucketId: "players",
+        bucketLabel: "Bucket 01 · Players",
+        eyebrow: "HOW · Players",
+        icon: Users,
+        title: "The player pipeline was manual from Aadhaar to Ranji.",
+        subtitle: "Every one of MPCA's 3,000+ registered players is a paperwork chain: Aadhaar, DOB proof, school certificate, medical, KYC, and a dozen eligibility checks. All of it, until now, done by hand — often at midnight, always under BCCI deadline pressure.",
+        pains: [
+            "Player-registration officer opens every Aadhaar / DOB proof individually and copies fields by hand",
+            "Name spellings reconciled across form, Aadhaar and school certificate — mismatches missed under time pressure",
+            "DOB checked line-by-line against 34 BCCI age brackets on a shared spreadsheet",
+            "Medical clearance and gender criteria tracked in separate files — some players slip through",
+            "One typo in a DOB = an entire squad disqualified post-fact after a rival's protest",
+            "KYC completeness (bank / PAN / photo) surfaces only at squad-lock — forcing drop-outs",
         ],
+        aiCount: 2,
+        aiPreview: "Two AI features close this gap: AI Vision extracts every document in 30 seconds; the AI Eligibility Engine tags each player with every tournament they qualify for the instant they register.",
     },
     {
         kind: "feature",
+        bucketId: "players",
         icon: FileCheck2,
-        eyebrow: "AI · 01 / 07",
-        featureName: "Gemini Vision · Player Document Verifier",
+        eyebrow: "Players · AI 01 / 02",
+        featureName: "AI Vision · Player Document Verifier",
         problem: "Verifying 1,200 player documents a year — Aadhaar, DOB proofs, school records — at midnight, by hand.",
         aiVerb: "EXTRACTS",
-        aiDescription: "Gemini Vision reads every document, extracts DOB / name / issuing authority, and flags mismatches inside 30 seconds per player.",
+        aiDescription: "AI Vision reads every document, extracts DOB / name / issuing authority, and flags mismatches inside 30 seconds per player.",
         metric: { before: "15-30 min", after: "30 sec", label: "per player · verification time" },
         seasonSave: "≈ 450 staff-hours saved per season",
         dividend: "= 45 extra district coaching visits or 15 talent-scouting camps",
-        livePage: { label: "Player Registrations", path: "/player-registrations", shot: "/ux-audit/president/player-registrations.png" },
+        livePage: { label: "Player Registrations", path: "/player-registrations" },
     },
     {
         kind: "feature",
+        bucketId: "players",
         icon: ShieldCheck,
-        eyebrow: "AI · 02 / 07",
+        eyebrow: "Players · AI 02 / 02",
         featureName: "AI Eligibility Engine",
         problem: "Cross-checking each player's DOB / gender / medical against 34 BCCI tournament brackets under deadline pressure.",
         aiVerb: "TAGS",
@@ -122,25 +132,36 @@ const SLIDES = [
         metric: { before: "2 hrs/tournament", after: "Instant", label: "eligibility resolution" },
         seasonSave: "≈ 80 staff-hours saved · Zero post-hoc disqualifications",
         dividend: "= Ranji / U-19 / U-16 selectors focus on cricket, not spreadsheets",
-        livePage: { label: "Player Register", path: "/players", shot: "/ux-audit/president/players.png" },
+        livePage: { label: "Player Register", path: "/players" },
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // HOW · Bucket 2 — TOURNAMENTS
+    // ═══════════════════════════════════════════════════════════════
+    {
+        kind: "bucket_intro",
+        bucketId: "tournaments",
+        bucketLabel: "Bucket 02 · Tournaments",
+        eyebrow: "HOW · Tournaments",
+        icon: Trophy,
+        title: "40 tournaments a year. Every squad decided by memory.",
+        subtitle: "A single tournament touches selection meetings, signed squad PDFs, umpire postings, ground bookings and fixture releases. Multiply by 40. Squads were argued from memory in 6-hour rooms; the signed PDF then floated across three inboxes as slightly-different versions.",
+        pains: [
+            "Selection committee sits with paper stat sheets — names debated from memory, not data",
+            "6+ hours per selection meeting × 15 meetings a year gone to spreadsheet crunching",
+            "Player KYC gaps surface AT squad-lock — last-minute drop-outs shake the squad",
+            "Signed squad PDF is emailed around; each recipient re-types names into their own sheet",
+            "Three slightly-different versions of the squad float across MPCA, Divisions and Managers",
+            "Jersey numbers, kit sizes and travel plans misalign on day one because the source list drifted",
+        ],
+        aiCount: 2,
+        aiPreview: "Two AI features close this gap: AI recommends the squad with a pre-audited KYC list, and the Squad PDF Verifier parses the signed PDF straight back into the ERP — version drift becomes impossible.",
     },
     {
         kind: "feature",
-        icon: HandCoins,
-        eyebrow: "AI · 03 / 07",
-        featureName: "AI Reimbursement Claim Verifier",
-        problem: "Accounts team spends 1-2 working days per claim — matching each invoice against rate cards, scheme heads and budget ceilings by hand.",
-        aiVerb: "VERIFIES",
-        aiDescription: "Gemini 3 Flash OCRs every invoice, extracts vendor / amount / GST / date, matches against the applicable rate card, and flags duplicates + inflation.",
-        metric: { before: "1-2 days", after: "90 seconds", label: "per claim · verification time" },
-        seasonSave: "≈ 600 staff-hours + 2-4% leakage recovered",
-        dividend: "= Reinvested into pitch covers, sight-screens, roller repairs across districts",
-        livePage: { label: "Reimbursement Claims", path: "/reimbursement-claims", shot: "/ux-audit/president/reimbursement-claims.png" },
-    },
-    {
-        kind: "feature",
+        bucketId: "tournaments",
         icon: Users,
-        eyebrow: "AI · 04 / 07",
+        eyebrow: "Tournaments · AI 01 / 02",
         featureName: "AI Squad Recommendation + KYC Audit",
         problem: "Selection meetings argue names from memory. KYC gaps surface at squad-lock — sometimes AFTER announcement — forcing last-minute drop-outs.",
         aiVerb: "RECOMMENDS",
@@ -148,12 +169,13 @@ const SLIDES = [
         metric: { before: "6 hrs/meeting", after: "20 min", label: "squad-finalisation cycle" },
         seasonSave: "≈ 90 staff-hours · Zero KYC-triggered drop-outs",
         dividend: "= Selectors debate strategy and bench balance, not paperwork",
-        livePage: { label: "Selection Console", path: "/selection-console", shot: "/ux-audit/president/selection-console.png" },
+        livePage: { label: "Selection Console", path: "/selection-console" },
     },
     {
         kind: "feature",
+        bucketId: "tournaments",
         icon: FileCheck2,
-        eyebrow: "AI · 05 / 07",
+        eyebrow: "Tournaments · AI 02 / 02",
         featureName: "AI Squad PDF Verifier",
         problem: "Post-selection, the signed squad PDF is emailed around. Every recipient re-types names into their local sheet — three slightly-different versions float around.",
         aiVerb: "PARSES",
@@ -161,25 +183,74 @@ const SLIDES = [
         metric: { before: "45 min/squad", after: "5 sec", label: "PDF-to-ERP sync" },
         seasonSave: "≈ 22 staff-hours · Zero version-drift incidents",
         dividend: "= Kit, travel, and jersey numbers align on the first attempt",
-        livePage: { label: "Tournaments · Squads", path: "/tournaments", shot: "/ux-audit/president/tournaments.png" },
+        livePage: { label: "Tournaments · Squads", path: "/tournaments" },
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // HOW · Bucket 3 — GRANTS
+    // ═══════════════════════════════════════════════════════════════
+    {
+        kind: "bucket_intro",
+        bucketId: "grants",
+        bucketLabel: "Bucket 03 · Grants",
+        eyebrow: "HOW · Grants",
+        icon: HandCoins,
+        title: "Every scheme rupee — traced from MPCA to the boundary rope.",
+        subtitle: "MPCA disburses grants to 10 Divisions under 20+ schemes — Grounds, U-16 camps, Vacation camps, Coaching allowances, BCCI-linked reimbursements. Divisions submit stacks of scanned invoices; Accounts spends 1-2 working days per claim matching each line against the rate card. Small padding across many invoices compounds to lakhs of leaked spend annually.",
+        pains: [
+            "Divisions submit scanned invoices in bulk — often 40-60 per tournament",
+            "Accounts opens each one, keys it into a ledger, cross-checks against rate cards line-by-line",
+            "Applicable scheme head and budget-head mapping is a mental exercise — errors slip through",
+            "10 Divisions × 40 tournaments = permanent claim backlog at the MPCA Accounts desk",
+            "Duplicate invoices across tournaments discovered only if a sharp eye happens to spot them",
+            "Inflated per-diem, mileage or accommodation rates paid quietly — 2-4% leakage / year",
+            "Divisions wait 2+ months for payment — DA officers front the money from their own pockets",
+        ],
+        aiCount: 1,
+        aiPreview: "One AI feature closes the entire gap: an AI Claim Engine OCRs every invoice, extracts vendor / amount / GST, matches against the applicable rate card and scheme head, and flags duplicates + inflation in 90 seconds.",
     },
     {
         kind: "feature",
-        icon: ScrollText,
-        eyebrow: "AI · 06 / 07",
-        featureName: "AI Signed-Document Reviewer",
-        problem: "Every signed contract / MoU / resolution is filed manually. Legal review is line-by-line — non-standard clauses slip through when deadlines are tight.",
-        aiVerb: "REVIEWS",
-        aiDescription: "AI scans each uploaded signed document, checks for missing signatures / dates / stamps, flags non-standard clauses against MPCA's template library.",
-        metric: { before: "30-60 min/doc", after: "20 sec", label: "compliance sweep" },
-        seasonSave: "≈ 150 staff-hours · Every clause traceable",
-        dividend: "= Faster sponsor deals, faster kit contracts, faster prize disbursals",
-        livePage: { label: "Document Management", path: "/dms", shot: "/ux-audit/president/dms.png" },
+        bucketId: "grants",
+        icon: HandCoins,
+        eyebrow: "Grants · AI 01 / 01",
+        featureName: "AI Reimbursement Claim Verifier",
+        problem: "Accounts team spends 1-2 working days per claim — matching each invoice against rate cards, scheme heads and budget ceilings by hand.",
+        aiVerb: "VERIFIES",
+        aiDescription: "The AI Claim Engine OCRs every invoice, extracts vendor / amount / GST / date, matches against the applicable rate card, and flags duplicates + inflation.",
+        metric: { before: "1-2 days", after: "90 seconds", label: "per claim · verification time" },
+        seasonSave: "≈ 600 staff-hours + 2-4% leakage recovered",
+        dividend: "= Reinvested into pitch covers, sight-screens, roller repairs across districts",
+        livePage: { label: "Reimbursement Claims", path: "/reimbursement-claims" },
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // HOW · Bucket 4 — GOVERNANCE & COMPLIANCE
+    // ═══════════════════════════════════════════════════════════════
+    {
+        kind: "bucket_intro",
+        bucketId: "governance",
+        bucketLabel: "Bucket 04 · Governance & Compliance",
+        eyebrow: "HOW · Governance & Compliance",
+        icon: Landmark,
+        title: "The approval matrix lived in a Word doc. Everyone remembered it differently.",
+        subtitle: "MPCA's approval chains — who signs, in what order, for what amount — were folk knowledge. Signed contracts and MoUs sat in a cupboard, reviewed line-by-line when there was time. Compliance was a hope; the audit trail was an email thread.",
+        pains: [
+            "Approval matrix maintained as a Word document — copies drift, versions diverge",
+            "Requests get sent to the wrong person, rebound, delay, or die in an inbox",
+            "Nobody remembers whether the Cricket Manager or the Manager approves ₹40,000 extras",
+            "Every signed contract / MoU / resolution is filed manually — legal review is line-by-line",
+            "Non-standard clauses slip through when a lawyer runs out of time before signing week",
+            "When BCCI or a district asks 'who approved this?' — the answer is buried in emails",
+        ],
+        aiCount: 2,
+        aiPreview: "Two AI features close this gap: the Dynamic Wiring Engine encodes every approval chain as data and routes each request in the right order; the Signed-Doc Reviewer scans every contract for missing signatures and non-standard clauses.",
     },
     {
         kind: "feature",
+        bucketId: "governance",
         icon: GitBranch,
-        eyebrow: "AI · 07 / 07",
+        eyebrow: "Governance · AI 01 / 02",
         featureName: "Dynamic Wiring Engine — Workflow Orchestrator",
         problem: "MPCA's approval matrix lived in a Word doc. Everyone remembered it differently. Approvals rebounded, delayed, or got lost.",
         aiVerb: "ROUTES",
@@ -187,7 +258,21 @@ const SLIDES = [
         metric: { before: "3-5 days", after: "Same day", label: "per approval cycle" },
         seasonSave: "≈ 500 staff-hours · 100% audit trail",
         dividend: "= Governance stops being policy and becomes architecture",
-        livePage: { label: "Tournament Wiring", path: "/tournament-wiring", shot: "/ux-audit/president/tournament-wiring.png" },
+        livePage: { label: "Tournament Wiring", path: "/tournament-wiring" },
+    },
+    {
+        kind: "feature",
+        bucketId: "governance",
+        icon: ScrollText,
+        eyebrow: "Governance · AI 02 / 02",
+        featureName: "AI Signed-Document Reviewer",
+        problem: "Every signed contract / MoU / resolution is filed manually. Legal review is line-by-line — non-standard clauses slip through when deadlines are tight.",
+        aiVerb: "REVIEWS",
+        aiDescription: "AI scans each uploaded signed document, checks for missing signatures / dates / stamps, flags non-standard clauses against MPCA's template library.",
+        metric: { before: "30-60 min/doc", after: "20 sec", label: "compliance sweep" },
+        seasonSave: "≈ 150 staff-hours · Every clause traceable",
+        dividend: "= Faster sponsor deals, faster kit contracts, faster prize disbursals",
+        livePage: { label: "Document Management", path: "/dms" },
     },
     // ── Consolidated impact ────────────────────────────────────────
     {
@@ -324,12 +409,12 @@ export default function Storyline() {
                 style={{ overflowY: "auto" }}
                 data-testid={`storyline-slide-${slide}`}
             >
-                {current.kind === "what"       && <WhatSlide     data={current} />}
-                {current.kind === "why"        && <WhySlide      data={current} />}
-                {current.kind === "how_intro"  && <HowIntroSlide data={current} />}
-                {current.kind === "feature"    && <FeatureSlide  data={current} onLive={setPreview} />}
-                {current.kind === "impact"     && <ImpactSlide   data={current} />}
-                {current.kind === "cta"        && <CtaSlide      data={current} />}
+                {current.kind === "what"          && <WhatSlide        data={current} />}
+                {current.kind === "why"           && <WhySlide         data={current} />}
+                {current.kind === "bucket_intro"  && <BucketIntroSlide data={current} />}
+                {current.kind === "feature"       && <FeatureSlide     data={current} onLive={setPreview} />}
+                {current.kind === "impact"        && <ImpactSlide      data={current} />}
+                {current.kind === "cta"           && <CtaSlide         data={current} />}
             </div>
 
             {/* Bottom controls */}
@@ -501,41 +586,89 @@ const WhySlide = ({ data }) => (
 );
 
 // ═══════════════════════════════════════════════════════════════════
-// Slide 3 · HOW · Intro to the product
+// Bucket-intro slide · 3 total (Players · Tournaments · Money & Compliance)
+// Establishes the sub-domain context before its 2-3 feature slides fire.
 // ═══════════════════════════════════════════════════════════════════
-const HowIntroSlide = ({ data }) => (
-    <div className="max-w-[1120px] w-full text-center">
-        <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-5" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
-            {data.eyebrow}
-        </div>
-        <h1
-            className="text-[46px] md:text-[68px] leading-[1.05] tracking-tight mb-7"
-            style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
-            data-testid="how-intro-title"
-        >
-            {data.title}
-        </h1>
-        <p className="text-[17px] md:text-[19px] leading-[1.6] max-w-[880px] mx-auto mb-12" style={{ color: "rgba(245,239,230,0.78)" }}>
-            {data.subtitle}
-        </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-[900px] mx-auto">
-            {data.stats.map((s) => (
+const BucketIntroSlide = ({ data }) => {
+    const Icon = data.icon;
+    return (
+        <div className="max-w-[1200px] w-full">
+            {/* Bucket badge */}
+            <div className="flex items-center justify-center mb-8">
                 <div
-                    key={s.label}
-                    className="p-5 rounded-md"
-                    style={{ background: "rgba(184,131,40,0.10)", border: "1px solid rgba(184,131,40,0.4)" }}
+                    className="inline-flex items-center gap-3 px-5 py-3 rounded-full"
+                    style={{ background: "rgba(184,131,40,0.14)", border: `1.5px solid ${DL.gold}` }}
                 >
-                    <div className="text-[38px] leading-none" style={{ fontFamily: DL.fontDisplay, color: DL.gold, fontWeight: 800 }}>
-                        {s.value}
+                    <Icon size={22} strokeWidth={2.25} style={{ color: DL.gold }} />
+                    <span className="text-[13px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                        {data.bucketLabel}
+                    </span>
+                </div>
+            </div>
+
+            <div className="text-center mb-10">
+                <div className="text-[10.5px] uppercase tracking-[0.28em] font-bold mb-4" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.55)" }}>
+                    {data.eyebrow}
+                </div>
+                <h1
+                    className="text-[42px] md:text-[58px] leading-[1.05] tracking-tight mb-6"
+                    style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
+                    data-testid="bucket-title"
+                >
+                    {data.title}
+                </h1>
+                <p className="text-[16px] md:text-[18px] leading-[1.6] max-w-[900px] mx-auto" style={{ color: "rgba(245,239,230,0.78)" }}>
+                    {data.subtitle}
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-4 items-stretch">
+                {/* LEFT — pain callouts */}
+                <div
+                    className="p-6 rounded-md"
+                    style={{ background: "rgba(139,31,31,0.10)", border: "1px solid rgba(139,31,31,0.42)", borderLeft: "3px solid #C24F4F" }}
+                >
+                    <div className="text-[10.5px] uppercase tracking-[0.24em] font-bold mb-4" style={{ fontFamily: DL.fontMono, color: "#E88787" }}>
+                        The manual pain
                     </div>
-                    <div className="text-[11px] uppercase tracking-[0.18em] font-bold mt-2.5" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.72)" }}>
-                        {s.label}
+                    <ul className="space-y-3">
+                        {data.pains.map((p) => (
+                            <li key={p} className="flex items-start gap-2.5 text-[14px] leading-[1.5] font-semibold" style={{ color: DL.paper }}>
+                                <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: "#E88787" }} />
+                                <span>{p}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* RIGHT — AI answer preview */}
+                <div
+                    className="p-6 rounded-md flex flex-col"
+                    style={{ background: "rgba(13,59,46,0.30)", border: "1px solid rgba(43,110,89,0.6)", borderLeft: `3px solid ${DL.gold}` }}
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="text-[10.5px] uppercase tracking-[0.24em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                            AI&apos;s answer
+                        </div>
+                        <div
+                            className="inline-flex items-baseline gap-1.5 px-3 py-1 rounded-full"
+                            style={{ background: DL.gold, color: DL.ink, fontFamily: DL.fontMono }}
+                        >
+                            <span className="text-[15px] font-bold leading-none">{data.aiCount}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em]">AI features</span>
+                        </div>
+                    </div>
+                    <p className="text-[14px] leading-[1.6] font-semibold flex-1" style={{ color: DL.paper }}>
+                        {data.aiPreview}
+                    </p>
+                    <div className="mt-4 text-[10.5px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.55)" }}>
+                        ↓ Next: watch each one in action
                     </div>
                 </div>
-            ))}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // Slide 2-8 · AI Feature slide

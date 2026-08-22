@@ -197,16 +197,10 @@ export default function WiringBrain() {
             </div>
             <div style={{
                 position: "absolute", top: 106, left: 32, zIndex: 3, color: DL.paper,
-                fontFamily: DL.fontDisplay, fontSize: 22, fontWeight: 800, letterSpacing: "-0.01em",
-                maxWidth: 420, lineHeight: 1.15,
+                fontFamily: DL.fontDisplay, fontSize: 26, fontWeight: 800, letterSpacing: "-0.01em",
+                maxWidth: 420, lineHeight: 1.1,
             }}>
-                MPCA&apos;s governance controller
-            </div>
-            <div style={{
-                position: "absolute", top: 142, left: 32, right: 32, zIndex: 3, color: "rgba(251,248,241,0.65)",
-                fontFamily: DL.fontBody, fontSize: 11.5, lineHeight: 1.55, maxWidth: 420, fontWeight: 500,
-            }}>
-                Every tournament action routes through this decision layer — the association edits the rules, not the software.
+                MPCA&apos;s AI-Based ERP
             </div>
 
             {/* Control pills — top-right of brain panel */}

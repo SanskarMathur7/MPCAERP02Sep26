@@ -22,6 +22,31 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
     // Iter 123d · CSV dry-run preview — parsed rows are shown in a modal
     // so the user can eyeball everything BEFORE anything hits the DB.
     const [previewRows, setPreviewRows] = useState(null);
+    // Iter 123f · Multi-select + bulk delete
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+    const toggleSelected = (mid) => setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(mid)) next.delete(mid); else next.add(mid);
+        return next;
+    });
+    const clearSelection = () => setSelectedIds(new Set());
+    const selectAllVisible = () => setSelectedIds(new Set(matches.map((m) => m.id)));
+    const bulkDelete = async () => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) return;
+        if (!window.confirm(`Delete ${ids.length} match${ids.length === 1 ? "" : "es"}? This cannot be undone.`)) return;
+        setBulkDeleting(true);
+        let ok = 0, failed = 0;
+        for (const mid of ids) {
+            try { await api.delete(`/tournaments/${tournament.id}/matches/${mid}`); ok++; }
+            catch { failed++; }
+        }
+        setBulkDeleting(false);
+        clearSelection();
+        await load(); onChange?.();
+        if (failed) alert(`Deleted ${ok} · ${failed} failed`);
+    };
     const fileRef = useRef(null);
     // MPCA-243 · Ship 2 · Read the wiring step for advisory copy. When
     // `match_calendar.mode == "Manual_PDF"` (BCCI/School/Club/etc.), the
@@ -375,6 +400,50 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                 </div>
             )}
 
+            {/* Iter 123f · Bulk-select toolbar (only when canEdit & !locked & at least one selection) */}
+            {canEdit && !locked && matches.length > 0 && (
+                <div className="mb-3 flex items-center justify-between gap-2 px-3 py-1.5 border border-mpca-brass/40 bg-mpca-parchment/60" data-testid="bulk-select-toolbar">
+                    <div className="flex items-center gap-3 text-[11px] text-mpca-gray-dark">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none" data-testid="bulk-select-all-label">
+                            <input
+                                type="checkbox"
+                                className="accent-mpca-green-dark"
+                                checked={selectedIds.size === matches.length && matches.length > 0}
+                                onChange={(e) => e.target.checked ? selectAllVisible() : clearSelection()}
+                                data-testid="bulk-select-all-checkbox"
+                            />
+                            <span className="uppercase tracking-widest text-[9px] font-mono">Select all</span>
+                        </label>
+                        {selectedIds.size > 0 && (
+                            <span className="font-mono text-mpca-green-dark font-semibold" data-testid="bulk-selected-count">
+                                {selectedIds.size} of {matches.length} selected
+                            </span>
+                        )}
+                    </div>
+                    {selectedIds.size > 0 && (
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={clearSelection}
+                                disabled={bulkDeleting}
+                                className="text-[10px] uppercase tracking-widest px-2 py-1 border border-mpca-brass/40 text-mpca-gray-dark hover:bg-mpca-brass/10"
+                                data-testid="bulk-clear-btn"
+                            >
+                                Clear
+                            </button>
+                            <button
+                                onClick={bulkDelete}
+                                disabled={bulkDeleting}
+                                className="text-[10px] uppercase tracking-widest px-2 py-1 bg-mpca-oxblood text-mpca-ivory disabled:opacity-40 flex items-center gap-1"
+                                data-testid="bulk-delete-btn"
+                            >
+                                {bulkDeleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                                {bulkDeleting ? "Deleting…" : `Delete ${selectedIds.size}`}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {loading ? (
                 <div className="py-6 text-center text-[11px] text-mpca-gray-dark"><Loader2 size={14} className="inline animate-spin mr-1" /> Loading matches…</div>
             ) : matches.length === 0 && !creating ? (
@@ -401,20 +470,34 @@ const MatchCalendarPanel = ({ tournament, canEdit, onChange }) => {
                         />
                     )}
                     {matches.map((m, idx) => (
-                        <MatchFixtureCard
-                            key={m.id}
-                            match={m}
-                            idx={idx + 1}
-                            canEdit={canEdit && !locked}
-                            tournament={tournament}
-                            teamOptions={teamOptions}
-                            poolOptions={poolOptions}
-                            groundOptions={groundOptions}
-                            officialsByRole={officialsByRole}
-                            manualTeamNames={calStep?.mode === "Manual_PDF"}
-                            onSaved={async () => { await load(); onChange?.(); }}
-                            onDeleted={async () => { await load(); onChange?.(); }}
-                        />
+                        <div key={m.id} className="flex items-start gap-2" data-testid={`match-row-${m.id}`}>
+                            {canEdit && !locked && (
+                                <label className="pt-4 pl-1 cursor-pointer select-none" title="Select for bulk actions">
+                                    <input
+                                        type="checkbox"
+                                        className="accent-mpca-green-dark w-4 h-4"
+                                        checked={selectedIds.has(m.id)}
+                                        onChange={() => toggleSelected(m.id)}
+                                        data-testid={`match-select-${m.id}`}
+                                    />
+                                </label>
+                            )}
+                            <div className={`flex-1 ${selectedIds.has(m.id) ? "ring-2 ring-mpca-oxblood/40" : ""}`}>
+                                <MatchFixtureCard
+                                    match={m}
+                                    idx={idx + 1}
+                                    canEdit={canEdit && !locked}
+                                    tournament={tournament}
+                                    teamOptions={teamOptions}
+                                    poolOptions={poolOptions}
+                                    groundOptions={groundOptions}
+                                    officialsByRole={officialsByRole}
+                                    manualTeamNames={calStep?.mode === "Manual_PDF"}
+                                    onSaved={async () => { await load(); onChange?.(); }}
+                                    onDeleted={async () => { await load(); onChange?.(); }}
+                                />
+                            </div>
+                        </div>
                     ))}
                 </div>
             )}

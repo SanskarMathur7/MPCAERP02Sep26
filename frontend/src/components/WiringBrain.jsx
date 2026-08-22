@@ -95,37 +95,74 @@ const easeInOut = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 let pulseSeq = 0;
 
 export default function WiringBrain() {
-    // Each pulse carries its own startTime — the RAF loop below drives their
-    // positions frame-by-frame so new pulses added mid-cycle animate correctly
-    // (SMIL `begin="0s"` is document-relative and would treat late-mount pulses
-    // as already-completed, which broke continuous flow).
+    // Pulses are React state (added on fire, removed on sweep) — but their
+    // per-frame position/opacity is written directly to the SVG circles via
+    // refs. This keeps the whole diagram (edges, nodes, labels) out of the
+    // React reconciler at 60fps; only pulse add/remove and hover trigger a
+    // re-render.
     const [pulses, setPulses] = useState([]);
-    const [now, setNow] = useState(() => performance.now());
     const [autoFire, setAutoFire] = useState(true);
     const [hoveredType, setHoveredType] = useState(null);
     const [hoveredStep, setHoveredStep] = useState(null);
     const pulsesRef = useRef(pulses);
     pulsesRef.current = pulses;
+    // Map<pulseKey, SVGCircleElement>
+    const pulseElsRef = useRef(new Map());
 
-    // RAF loop — one setNow per frame drives smooth interpolation of every
-    // active pulse. Runs continuously (cheap: only 3 max concurrent pulses).
+    // RAF loop — writes cx/cy/opacity directly to each pulse's <circle>.
+    // No setState, so React does not reconcile per frame.
     useEffect(() => {
         let raf;
         const loop = () => {
-            setNow(performance.now());
+            const t = performance.now();
+            for (const p of pulsesRef.current) {
+                const el = pulseElsRef.current.get(p.key);
+                if (!el) continue;
+                const tNode = typeById(p.t), sNode = stepById(p.s), oNode = outById(p.o);
+                if (!tNode || !sNode || !oNode) continue;
+                const age = t - p.startTime;
+                if (age < 0 || age > PULSE_TOTAL_MS) continue;
+
+                let x1, y1, x2, y2, hopProgress;
+                if (age < PULSE_HOP_MS) {
+                    hopProgress = age / PULSE_HOP_MS;
+                    x1 = TYPE_X + 18; y1 = tNode.y;
+                    x2 = STEP_X - 18; y2 = sNode.y;
+                } else {
+                    hopProgress = (age - PULSE_HOP_MS) / PULSE_HOP_MS;
+                    x1 = STEP_X + 18; y1 = sNode.y;
+                    x2 = OUT_X - 18;  y2 = oNode.y;
+                }
+                const eased = easeInOut(hopProgress);
+                const cx = x1 + (x2 - x1) * eased;
+                const cy = y1 + (y2 - y1) * eased;
+                let op = 0.9;
+                if (hopProgress < 0.15) op = (hopProgress / 0.15) * 0.9;
+                else if (hopProgress > 0.85) op = ((1 - hopProgress) / 0.15) * 0.9;
+
+                el.setAttribute("cx", cx);
+                el.setAttribute("cy", cy);
+                el.setAttribute("opacity", op);
+            }
             raf = requestAnimationFrame(loop);
         };
         raf = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(raf);
     }, []);
 
-    // Sweeper — drops finished pulses from state every 400ms
+    // Sweeper — drops finished pulses from state every 400ms and releases refs
     useEffect(() => {
         const iv = setInterval(() => {
             const t = performance.now();
             setPulses(prev => {
                 const kept = prev.filter(p => t - p.startTime <= PULSE_TOTAL_MS + 100);
-                return kept.length === prev.length ? prev : kept;
+                if (kept.length === prev.length) return prev;
+                // Release refs for dropped pulses
+                const keptKeys = new Set(kept.map(p => p.key));
+                for (const key of pulseElsRef.current.keys()) {
+                    if (!keptKeys.has(key)) pulseElsRef.current.delete(key);
+                }
+                return kept;
             });
         }, 400);
         return () => clearInterval(iv);
@@ -402,39 +439,23 @@ export default function WiringBrain() {
                     })}
                 </g>
 
-                {/* All active pulses — positions computed each RAF frame */}
+                {/* All active pulses — refs let the RAF loop mutate cx/cy/opacity
+                    directly, so this <circle> array is stable between renders. */}
                 {pulses.map(p => {
-                    const tNode = typeById(p.t), sNode = stepById(p.s), oNode = outById(p.o);
-                    if (!tNode || !sNode || !oNode) return null;
-                    const age = now - p.startTime;
-                    if (age < 0 || age > PULSE_TOTAL_MS) return null;
-
-                    let x1, y1, x2, y2, hopProgress;
-                    if (age < PULSE_HOP_MS) {
-                        hopProgress = age / PULSE_HOP_MS;
-                        x1 = TYPE_X + 18; y1 = tNode.y;
-                        x2 = STEP_X - 18; y2 = sNode.y;
-                    } else {
-                        hopProgress = (age - PULSE_HOP_MS) / PULSE_HOP_MS;
-                        x1 = STEP_X + 18; y1 = sNode.y;
-                        x2 = OUT_X - 18;  y2 = oNode.y;
-                    }
-                    const eased = easeInOut(hopProgress);
-                    const cx = x1 + (x2 - x1) * eased;
-                    const cy = y1 + (y2 - y1) * eased;
-                    // Opacity envelope: fade-in over first 15%, hold, fade-out over last 15%
-                    let op = 0.9;
-                    if (hopProgress < 0.15) op = (hopProgress / 0.15) * 0.9;
-                    else if (hopProgress > 0.85) op = ((1 - hopProgress) / 0.15) * 0.9;
-
+                    const tNode = typeById(p.t);
+                    if (!tNode) return null;
                     return (
                         <circle
                             key={p.key}
-                            cx={cx}
-                            cy={cy}
+                            ref={el => {
+                                if (el) pulseElsRef.current.set(p.key, el);
+                                else pulseElsRef.current.delete(p.key);
+                            }}
+                            cx={TYPE_X + 18}
+                            cy={tNode.y}
                             r={3.5}
                             fill={DL.gold}
-                            opacity={op}
+                            opacity={0}
                             style={{ filter: `drop-shadow(0 0 6px ${DL.gold})` }}
                         />
                     );

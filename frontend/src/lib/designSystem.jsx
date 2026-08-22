@@ -59,17 +59,13 @@ export const PageShell = ({ children, testid = "ds-page-shell" }) => (
     </div>
 );
 
-export const PageEyebrow = ({ title, meta, rightAction, links = [] }) => (
-    <div className="mb-8 flex items-center justify-between gap-6 flex-wrap">
-        <div className="flex items-baseline gap-4 flex-wrap">
-            <span className="text-[19px] uppercase tracking-[0.18em] font-black" style={{ fontFamily: DL.fontMono, color: DL.ink }}>
-                / {title}
-            </span>
-            {meta && (
-                <span className="text-[14px] uppercase tracking-[0.22em] font-semibold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>
-                    {meta}
-                </span>
-            )}
+export const PageEyebrow = ({ title, meta, rightAction, links = [] }) => {
+    // Iter 114 · User requested the '/ Title · Meta' pattern be dropped platform-wide;
+    // greeting + live-clock live in the AppLayout topbar now, so this component
+    // renders only the rightAction (if any) and any inline nav links.
+    if (!rightAction && (!links || links.length === 0)) return null;
+    return (
+        <div className="mb-6 flex items-center justify-end gap-4 flex-wrap">
             {links.map((l) => (
                 <a
                     key={l.href}
@@ -81,10 +77,10 @@ export const PageEyebrow = ({ title, meta, rightAction, links = [] }) => (
                     {l.label} →
                 </a>
             ))}
+            {rightAction}
         </div>
-        {rightAction}
-    </div>
-);
+    );
+};
 
 export const PrimaryButton = ({ children, onClick, testid, icon: Icon }) => (
     <button

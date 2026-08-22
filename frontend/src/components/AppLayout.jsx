@@ -2,6 +2,49 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import NeedsReworkBell from "@/components/NeedsReworkBell";
+
+// Iter 114 · greeting + live clock live in the topbar so every page has them
+const DL_INK = "#0E1F1B", DL_INK2 = "#1E332C", DL_GOLD = "#B88328", DL_MUTED = "#4C5750", DL_EMERALD = "#0D3B2E", DL_PAPER = "#FAF4E5", DL_RULE = "rgba(14,31,27,0.12)";
+const TopbarGreeting = ({ persona }) => {
+    if (!persona) return <div />;
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    const firstName = persona?.name?.split(" ").slice(-1)[0] || persona?.name || "";
+    return (
+        <div data-testid="topbar-greeting" className="inline-flex items-center gap-2 px-4 h-[38px] rounded-full"
+            style={{ background: DL_PAPER, border: `1.5px solid rgba(184,131,40,0.35)` }}>
+            <Sparkles size={15} strokeWidth={2.5} style={{ color: DL_GOLD }} />
+            <span style={{ color: DL_INK2, fontWeight: 700, fontSize: 14 }}>{greeting},</span>
+            <span style={{ color: DL_INK, fontWeight: 800, fontSize: 14, fontFamily: "'Playfair Display', Georgia, serif" }}>
+                {persona?.honorific || ""} {firstName}
+            </span>
+        </div>
+    );
+};
+const TopbarClock = () => {
+    const [now, setNow] = useState(new Date());
+    useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
+    return (
+        <div data-testid="topbar-clock" className="inline-flex items-center gap-3 px-4 h-[38px] rounded-md"
+            style={{ background: DL_PAPER, border: `1.5px solid rgba(184,131,40,0.35)` }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.1 }}>
+                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: "0.18em", color: DL_MUTED, textTransform: "uppercase", fontWeight: 700 }}>
+                    {now.toLocaleDateString("en-IN", { weekday: "short" })}
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: DL_INK, fontFamily: "'Playfair Display', Georgia, serif" }}>
+                    {now.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                </span>
+            </div>
+            <div style={{ width: 1, height: 24, background: DL_RULE }} />
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.1 }}>
+                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: "0.18em", color: DL_EMERALD, textTransform: "uppercase", fontWeight: 700 }}>● Live</span>
+                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 14, fontWeight: 700, color: DL_INK, letterSpacing: "0.06em" }}>
+                    {now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+                </span>
+            </div>
+        </div>
+    );
+};
 import {
     LayoutDashboard,
     Users,
@@ -214,7 +257,12 @@ const AppLayout = ({ children }) => {
                 {/* Brand + collapse toggle */}
                 {collapsed ? (
                     <div className="px-2 pt-4 pb-4 border-b-2 border-mpca-oxblood flex flex-col items-center gap-2">
-                        <MPCACrest className="w-8 h-8 text-mpca-brass shrink-0" />
+                        <img
+                            src="/brand/mpca-logo.png"
+                            alt="MPCA"
+                            className="w-9 h-9 object-contain shrink-0"
+                            style={{ filter: "brightness(0) saturate(100%) invert(72%) sepia(56%) saturate(388%) hue-rotate(2deg) brightness(94%) contrast(90%)" }}
+                        />
                         <button
                             onClick={() => setCollapsed(false)}
                             data-testid="sidebar-collapse-btn"
@@ -225,14 +273,16 @@ const AppLayout = ({ children }) => {
                         </button>
                     </div>
                 ) : (
-                    <div className="px-4 pt-6 pb-6 border-b-2 border-mpca-oxblood flex items-center gap-2">
-                        <MPCACrest className="w-11 h-11 ml-2 text-mpca-brass shrink-0" />
+                    <div className="px-4 pt-6 pb-6 border-b-2 border-mpca-oxblood flex items-center gap-3">
+                        <img
+                            src="/brand/mpca-logo.png"
+                            alt="MPCA"
+                            className="w-12 h-12 object-contain ml-1 shrink-0"
+                            style={{ filter: "brightness(0) saturate(100%) invert(72%) sepia(56%) saturate(388%) hue-rotate(2deg) brightness(94%) contrast(90%)" }}
+                        />
                         <div className="flex-1 min-w-0">
-                            <div className="font-serif text-xl text-mpca-ivory leading-none">
+                            <div className="font-serif text-[22px] text-mpca-ivory leading-none">
                                 MPCA · ERP
-                            </div>
-                            <div className="overline text-[9px] mt-1.5 !text-mpca-gold-light/80">
-                                BCCI Affiliated · Est. 1957
                             </div>
                         </div>
                         <button
@@ -249,11 +299,8 @@ const AppLayout = ({ children }) => {
                 {/* Persona / Tenant card — hidden when collapsed */}
                 {persona && !collapsed && (
                     <div className="px-6 py-5 border-b border-mpca-brass/20 bg-black/30">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="overline text-[14px] !text-mpca-gold-light/80 mb-2 font-bold tracking-widest">
-                                Signed In As
-                            </div>
-                            <NotificationBell />
+                        <div className="overline text-[14px] !text-mpca-gold-light/80 mb-2 font-bold tracking-widest">
+                            Signed In As
                         </div>
                         <div className="font-serif text-[22px] text-mpca-ivory leading-tight mt-1">
                             {/* Defensive: strip a leading honorific from name so we never render 'Shri Shri …' */}
@@ -385,9 +432,13 @@ const AppLayout = ({ children }) => {
 
             {/* Main */}
             <main className="flex-1 overflow-y-auto" data-testid="app-main">
-                <div className="sticky top-0 z-30 bg-mpca-cream/95 backdrop-blur-sm border-b border-mpca-brass/20 px-6 py-2 flex items-center justify-end gap-3" data-testid="app-topbar">
-                    <NeedsReworkBell />
-                    <SeasonSwitcher />
+                <div className="sticky top-0 z-30 bg-mpca-cream/95 backdrop-blur-sm border-b border-mpca-brass/20 px-6 py-3 flex items-center justify-between gap-3" data-testid="app-topbar">
+                    <TopbarGreeting persona={persona} />
+                    <div className="flex items-center gap-3">
+                        <TopbarClock />
+                        <NeedsReworkBell />
+                        <SeasonSwitcher />
+                    </div>
                 </div>
                 {/* M39m · Consistent page gutter — every page inherits a comfortable
                     left/right margin so content is never flush against the sidebar. */}

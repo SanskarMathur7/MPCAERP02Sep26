@@ -6,7 +6,7 @@
  * the Budget tab; Division Secretaries see all four tabs but the numbers
  * inside are auto-scoped by the backend to their DIV-* code.
  */
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Activity, HandCoins, IndianRupee, Users, Sparkles, ShieldCheck } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
@@ -91,6 +91,12 @@ const Dashboard = () => {
     const role = useMemo(() => roleOf(persona), [persona]);
     const TABS = useMemo(() => ALL_TABS.filter((t) => can(role, t.perm)), [role]);
     const [activeTab, setActiveTab] = useState(TABS[0]?.id || "season");
+    // Iter 114 · live clock, refreshed every second — declared BEFORE any early-return so React hook order is stable
+    const [clock, setClock] = useState(new Date());
+    useEffect(() => {
+        const t = setInterval(() => setClock(new Date()), 1000);
+        return () => clearInterval(t);
+    }, []);
     const { rootLabel, post } = personaMeta(persona);
     const Active = TABS.find((t) => t.id === activeTab)?.Component || TABS[0]?.Component;
 
@@ -108,7 +114,6 @@ const Dashboard = () => {
     if (TABS.length === 0 || !Active) {
         return (
             <PageShell testid="dashboard-page-empty">
-                <PageEyebrow title="Command Centre" meta="No dashboards available for your role" />
                 <div className="p-8 text-center" style={{ color: DL.muted }}>
                     Ask your MPCA administrator to grant you dashboard access.
                 </div>
@@ -118,34 +123,7 @@ const Dashboard = () => {
 
     return (
         <PageShell testid="dashboard-page">
-            <PageEyebrow
-                title="Command Centre"
-                rightAction={
-                    <div className="flex items-center gap-4 flex-wrap">
-                        <div
-                            className="inline-flex items-center gap-2 px-5 h-[42px] rounded-full"
-                            style={{
-                                background: `linear-gradient(180deg, ${DL.paper} 0%, ${DL.paperEdge} 100%)`,
-                                border: `1.5px solid ${DL.ruleStrong}`,
-                                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.85), 0 6px 14px -8px rgba(14,31,27,0.25)",
-                            }}
-                            data-testid="dashboard-greeting-chip"
-                        >
-                            <Sparkles size={16} strokeWidth={2.5} style={{ color: DL.gold }} />
-                            <span style={{ color: DL.ink2, fontWeight: 700, fontSize: 15 }}>{greeting},</span>
-                            <span style={{ color: DL.ink, fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: 15 }}>
-                                {persona?.honorific || ""} {firstName}
-                            </span>
-                        </div>
-                        <div className="text-right">
-                            <div className="text-[12px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>As On</div>
-                            <div className="text-[18px] font-bold mt-1" style={{ color: DL.ink }}>
-                                {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
-                            </div>
-                        </div>
-                    </div>
-                }
-            />
+
 
             {/* Tab strip · permission-filtered */}
             <div

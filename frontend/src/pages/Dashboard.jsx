@@ -132,8 +132,8 @@ const Dashboard = () => {
                             data-testid="dashboard-greeting-chip"
                         >
                             <Sparkles size={16} strokeWidth={2.5} style={{ color: DL.gold }} />
-                            <span className="text-[15px] font-bold" style={{ color: DL.ink2 }}>{greeting},</span>
-                            <span className="text-[15px] font-bold" style={{ color: DL.ink, fontFamily: DL.fontDisplay }}>
+                            <span style={{ color: DL.ink2, fontWeight: 700, fontSize: 15 }}>{greeting},</span>
+                            <span style={{ color: DL.ink, fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: 15 }}>
                                 {persona?.honorific || ""} {firstName}
                             </span>
                         </div>

@@ -1,0 +1,80 @@
+{
+  "summary": "Iter 112 UI-consistency font audit. Signed in as sysadmin (and president for /match-officials), captured screenshots at 1920x1000 across 23 routes + dashboard sub-tabs + sysadmin/analytics tabs, and measured getComputedStyle().fontSize on titles/tabs/KPIs/panel-titles/table-headers/rows/chips/buttons. Dashboard baseline is met: dashboard tabs 13px/700, sysadmin analytics tabs 13px/700, KPI hero visually 40px. However, MANY pages still ship a 36-48px h1 page title, oversized (16px) row/card text on list pages, and a few 9-10px chips/table headers that fall below the 11px chip floor. Report below itemises each anomaly with route + selector + measured px + suggested target.",
+
+  "backend_issues": {"critical": [], "minor": []},
+
+  "frontend_issues": {
+    "ui_bugs": [
+      { "component": "/action-center h1", "issue": "'Pending With MPCA' page title is 36px fw800 h1; dashboard uses 19px eyebrow. Convert to PageEyebrow (/ ACTION CENTER + meta).", "selector": "h1 (no data-testid) on /action-center", "priority": "P1" },
+      { "component": "/discussions h1", "issue": "'Discussions' page title is 36px h1 fw800 vs 19px dashboard eyebrow.", "selector": "h1 on /discussions", "priority": "P1" },
+      { "component": "/tournament-calendar h1", "issue": "'Tournament Calendar' title is 48px h1 fw800 — largest on any page; must move to 19px eyebrow.", "selector": "h1 on /tournament-calendar", "priority": "P1" },
+      { "component": "/tournament-calendar cal-title", "issue": "'August 2026' month label is 24px fw800; inconsistent with panel-title 10.5px / KPI 40px scale. Suggest 15-17px semibold.", "selector": "[data-testid=cal-title]", "priority": "P2" },
+      { "component": "/venues h1", "issue": "'Grounds' title 36px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /venues", "priority": "P1" },
+      { "component": "/venues tabs", "issue": "Grounds / Ground Expenses tabs are 14px fw600 — dashboard-tab scale is 13px fw700. Bring to 13px.", "selector": "[data-testid=tab-grounds], [data-testid=tab-expenses]", "priority": "P2" },
+      { "component": "/da-review h1", "issue": "'DA Review Inbox' 36px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /da-review", "priority": "P1" },
+      { "component": "/da-review filters", "issue": "da-review-filter-* chips at 10px fw500 — under 11px chip floor. Raise to 11px fw600.", "selector": "[data-testid^=da-review-filter-]", "priority": "P2" },
+      { "component": "/schemes h1", "issue": "'MPCA Schemes Register' is 48px h1 fw800 — largest scale; move to 19px eyebrow + 14px meta.", "selector": "h1 on /schemes", "priority": "P1" },
+      { "component": "/schemes rows", "issue": "scheme-row-* buttons render at 16px fw500 body — spec is 13-14px. Reduce to 13-14px.", "selector": "[data-testid^=scheme-row-]", "priority": "P1" },
+      { "component": "/schemes buttons", "issue": "'DEACTIVATE' button 10px — under-scale; button band should be 12-14px.", "selector": "[data-testid=reset-activation-btn]", "priority": "P2" },
+      { "component": "/players rows", "issue": "player-row-* body 16px fw500 — spec 13-14px for list rows.", "selector": "[data-testid^=player-row-]", "priority": "P1" },
+      { "component": "/players 'Register a Player'", "issue": "Primary CTA at 15px fw700 (OK) but sits next to filter chips at 11px and status chips at 10px — chip floor should be 11px per Dashboard scope-chip.", "selector": "[data-testid^=row-status-], [data-testid^=row-cat-]", "priority": "P2" },
+      { "component": "/player-registrations h1", "issue": "'Player Registrations' 36px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /player-registrations", "priority": "P1" },
+      { "component": "/player-registrations tabs", "issue": "pr-tab-campaigns / pr-tab-inbox at 11px fw500 — dashboard tab band is 13px fw700. Under-scale.", "selector": "[data-testid=pr-tab-campaigns], [data-testid=pr-tab-inbox]", "priority": "P1" },
+      { "component": "/org h1", "issue": "'Organisational Structure' 48px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /org", "priority": "P1" },
+      { "component": "/org rows", "issue": "org-toggle-* rows 16px fw500 — spec 13-14px body.", "selector": "[data-testid^=org-toggle-]", "priority": "P1" },
+      { "component": "/members", "issue": "No PageEyebrow captured (page shows only sidebar+filters visible in header). Verify Members page uses eyebrow. 'Enrol Member' CTA at 15px OK; filter chips at 12px fw700 borderline (spec 11px chip / 13px tab).", "selector": "/members header, [data-testid^=filter-type-]", "priority": "P2" },
+      { "component": "/meetings h1", "issue": "'AGM & Committee Meetings' 48px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /meetings", "priority": "P1" },
+      { "component": "/events h1", "issue": "'Event Calendar' 48px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /events", "priority": "P1" },
+      { "component": "/events day-cell", "issue": "Day-cell number 16px fw500 — bigger than a KPI-label (11px) yet smaller than KPI-number (40px). Ok visually but inconsistent with dashboard-scale numbers.", "selector": "[data-testid^=day-cell-]", "priority": "P2" },
+      { "component": "/disclosures h1", "issue": "'The Public Bulletin' 48px h1 fw800 vs 19px eyebrow. Subtitle body also large (h1 has multi-line lead).", "selector": "h1 on /disclosures", "priority": "P1" },
+      { "component": "/disclosures filters", "issue": "disc-filter-* chips 11px fw500 (borderline OK but 500 weight vs dashboard 700).", "selector": "[data-testid^=disc-filter-]", "priority": "P2" },
+      { "component": "/access-control h1", "issue": "'Role-Based Access Control' 48px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /access-control", "priority": "P1" },
+      { "component": "/access-control tabs", "issue": "rbac-tab-* at 11px fw600 — dashboard tab band is 13px/700. Under-scale.", "selector": "[data-testid^=rbac-tab-]", "priority": "P1" },
+      { "component": "/mc-admin", "issue": "Screenshot rendered only sidebar+chrome; audit script found no h1/tabs/rows on the main page (either loading state or empty shell for sysadmin). Cannot confirm workflow-card / step-editor / save-button sizes. Main agent to verify visually — expected band 13-15px.", "selector": "/mc-admin main content", "priority": "P1-recheck" },
+      { "component": "/sysadmin/analytics", "issue": "Overview/Usage/Journeys/Health tabs are 13px fw700 — MATCHES dashboard baseline. GOOD. Sub-tab click automation could not enumerate them within nav; visually screenshot confirms consistency. KPI dial numbers not enumerated (custom SVG) — main agent to confirm ~40px.", "selector": "[data-testid^=sa-tab-]", "priority": "OK" },
+      { "component": "/tournament-master h1", "issue": "'Tournament Registry' 36px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /tournament-master", "priority": "P1" },
+      { "component": "/tournament-master registry-tabs", "issue": "registry-tab-BCCI / Inter_Divisional / Pre_Tournament_Camp / Inter_District at 16px fw500 — should be 13px fw700 dashboard tab band.", "selector": "[data-testid^=registry-tab-]", "priority": "P1" },
+      { "component": "/tournament-master table th", "issue": "Table headers at 10px fw700 — 1px under 11px chip floor. Raise to 11px fw700.", "selector": "table th on /tournament-master", "priority": "P2" },
+      { "component": "/tournament-wiring h1", "issue": "'Tournament Progression Wiring' 28px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /tournament-wiring", "priority": "P1" },
+      { "component": "/tournament-wiring tabs", "issue": "wiring-tab-* at 14px fw700 — 1px above 13px dashboard tab. Minor.", "selector": "[data-testid^=wiring-tab-]", "priority": "P2" },
+      { "component": "/rate-cards h1", "issue": "'Master Rate Card' 30px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /rate-cards", "priority": "P1" },
+      { "component": "/rate-cards table th", "issue": "Column headers 9px fw700 — noticeably below 11px chip floor. Raise to 11px.", "selector": "table th on /rate-cards", "priority": "P1" },
+      { "component": "/rate-cards buttons", "issue": "'Add Line Item' 10px fw500, 'RESET TO DEFAULTS' & 'SAVE RATE CARD' 11px fw500 — button band should be 13-14px per dashboard.", "selector": "[data-testid=rc-add-line-item-btn], [data-testid=rc-reset-btn], [data-testid=rc-save-btn]", "priority": "P1" },
+      { "component": "/match-officials h1 (president)", "issue": "'Match Officials' 48px h1 fw800 vs 19px eyebrow.", "selector": "h1 on /match-officials", "priority": "P1" },
+      { "component": "/match-officials rows", "issue": "off-row-* body 16px fw500 — spec 13-14px for list rows.", "selector": "[data-testid^=off-row-]", "priority": "P1" },
+      { "component": "/match-officials filters", "issue": "off-filter-* at 11px fw500 — chip floor OK but weight 500 vs dashboard tab 700; minor.", "selector": "[data-testid^=off-filter-]", "priority": "P2" },
+      { "component": "/tournaments rows", "issue": "trn-row-* body 16px fw500 — spec 13-14px for list rows.", "selector": "[data-testid^=trn-row-]", "priority": "P1" },
+      { "component": "Dashboard greeting chip", "issue": "dashboard-greeting-chip at 16px — spec says 15px in 42px pill. 1px over.", "selector": "[data-testid=dashboard-greeting-chip]", "priority": "P2" },
+      { "component": "Dashboard warm chips", "issue": "warm-scope-chip 9.5px fw700 and warm-sample-chip 9px fw700 — under 11px chip floor set by spec.", "selector": "[data-testid=warm-scope-chip], [data-testid=warm-sample-chip]", "priority": "P2" }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      { "screen": "Global list pages", "issues": ["Every list page (Tournaments, Schemes, Players, Match Officials, Org toggles) uses 16px body for rows — inconsistent with dashboard 13-14px. Suggest a shared .row-body-md utility."] },
+      { "screen": "Page headers", "issues": ["16 of the 22 audited routes still render a 28-48px <h1> title where the dashboard uses a 19px eyebrow + 14px meta. Consolidating them behind PageEyebrow will eliminate the biggest visual inconsistency."] },
+      { "screen": "Chip floor violations", "issues": ["Chip/badge/th floors drop to 9-10px on /rate-cards th, /tournament-master th, /players row-status/row-cat, /schemes DEACTIVATE, /da-review & /action-center filters, dashboard warm-scope/sample chips. Raise to 11px per spec."] }
+    ]
+  },
+
+  "test_report_links": ["/tmp/audit/measurements.json"],
+  "action_items": [
+    "Replace 28-48px <h1> on 16 pages with the shared PageEyebrow (19px black title + 14px meta) — routes: /action-center, /discussions, /tournament-calendar, /venues, /da-review, /schemes, /player-registrations, /org, /meetings, /events, /disclosures, /access-control, /tournament-master, /tournament-wiring, /rate-cards, /match-officials.",
+    "Bring list-page row text to 13-14px on /tournaments (trn-row), /schemes (scheme-row), /players (player-row), /org (org-toggle), /match-officials (off-row), /tournament-master (registry-row).",
+    "Normalise tab-strip fontSize to 13px/fw700 on: /player-registrations (pr-tab), /access-control (rbac-tab), /tournament-master (registry-tab 16px→13px), /venues (tab 14px→13px), /tournament-wiring (14px→13px).",
+    "Raise table th and chip floors to 11px: /rate-cards th (9→11), /tournament-master th (10→11), dashboard warm-scope-chip/warm-sample-chip (9-9.5→11), /players row-status/row-cat chips (10→11), /da-review & /action-center filter chips (10→11), /schemes DEACTIVATE (10→12).",
+    "Raise action-button band to 13-14px on /rate-cards (rc-add-line-item 10, rc-reset 11, rc-save 11).",
+    "Dashboard-greeting-chip is 16px vs spec 15px — trim by 1px.",
+    "Confirm /mc-admin main pane renders (audit found no measurable content beyond sidebar) and re-check workflow-card/step-editor/save-button once visible."
+  ],
+  "critical_code_review_comments": [
+    "Multiple pages hard-code <h1 className='text-4xl/5xl font-extrabold'> instead of importing PageEyebrow from /app/frontend/src/lib/designSystem.jsx — this is the root cause of the 36-48px inconsistency; refactoring to one shared header component prevents future drift.",
+    "List rows across pages use their own text-lg/text-base classes — extract a shared `<ListRow />` (or Tailwind utility) sized to 13-14px so /tournaments, /schemes, /players, /match-officials, /org, /tournament-master all inherit the same scale.",
+    "The 11px chip floor is violated in ≥8 places (9-10px). A single `Chip` primitive would enforce it."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only audit)", "frontend": "audit complete — ~16/22 routes have P1 title inconsistency, ~7 routes have P1 row/tab inconsistency"},
+  "seed_data_creation": "None (read-only audit).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Measurements captured in /tmp/audit/measurements.json. Screenshots were taken via browser_automation output_dir per navigation (audit_<route-slug>.png). The dashboard baseline (tabs 13/700, greeting 16, KPI 40 visually, chips 9-9.5 in warm) is confirmed. After main agent applies the PageEyebrow refactor + list-row + tab normalisation + chip floor bumps, re-run this same script (routes list at top of script inside the audit browser call) to diff — expect all page-title categories to show 19px fw700-800 uppercase 'eyebrow' text and no h1 above 20px, all list rows in the 13-14px band, and no chip/th below 11px. President login is required only for /match-officials.",
+  "rca of the issue": "Root cause is duplicated header markup across pages — each page hand-rolls its own <h1 class='text-4xl/5xl font-extrabold'> block rather than using PageEyebrow from /app/frontend/src/lib/designSystem.jsx. The dashboard-scale refresh only touched Dashboard.jsx and its warm sub-panels, so every other page continued to render its legacy title/tab/row sizes. Reproduction: log in as sysadmin, visit any route in action_items list — the h1 renders at 28-48px (verified via getComputedStyle) while /dashboard renders '/ COMMAND CENTRE' at 19px. Mitigation: (1) refactor each listed page to import PageEyebrow, passing eyebrow + meta strings; (2) extract a `<ListRow />` / `.row-body` utility for the 13-14px body scale and apply on tournaments/schemes/players/match-officials/org rows; (3) enforce chip primitive with min 11px so warm-scope/sample, row-status, filter chips, and small th cells cannot drop under floor."
+}

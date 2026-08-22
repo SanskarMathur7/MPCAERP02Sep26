@@ -533,3 +533,38 @@
 .sidebar-scroll::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, #E5B428 0%, #C89430 100%) !important;
 }
+
+/* ═════ Iter 112 · Cross-page font consistency ═════════════════════════
+ * Many legacy pages use `<h1 className="font-serif text-4xl md:text-5xl">`
+ * which now renders MUCH bigger than the new Dashboard scale.  We normalise
+ * globally so every page speaks the same language, without touching 20+ files.
+ * ─────────────────────────────────────────────────────────────────────── */
+h1.font-serif.text-4xl,
+h1.font-serif.text-5xl,
+h1.font-serif.md\:text-5xl {
+    font-size: 22px !important;
+    line-height: 1.15 !important;
+    letter-spacing: -0.01em;
+}
+h1.font-serif.text-3xl { font-size: 20px !important; }
+h2.font-serif.text-3xl,
+h3.font-serif.text-3xl { font-size: 18px !important; }
+
+/* Big KPI-style numbers used as `<div class="font-serif text-3xl">42,000</div>` */
+div.font-serif.text-3xl,
+span.font-serif.text-3xl,
+p.font-serif.text-3xl { font-size: 24px !important; line-height: 1.05 !important; }
+div.font-serif.text-4xl,
+span.font-serif.text-4xl { font-size: 28px !important; line-height: 1.05 !important; }
+
+/* Chip / label floor — never go below 11px (older 9-10px chips fail arm's-length readability) */
+.text-\[9px\]  { font-size: 11px !important; letter-spacing: 0.18em; }
+.text-\[9\.5px\] { font-size: 11px !important; }
+.text-\[10px\] { font-size: 11px !important; }
+
+/* Table headers and small stats — floor at 12px */
+table thead th { font-size: 12px !important; }
+
+/* Small link/button labels — floor at 13px so they match the dashboard tabs */
+button.text-\[10px\], a.text-\[10px\],
+button.text-\[10\.5px\], a.text-\[10\.5px\] { font-size: 12px !important; }

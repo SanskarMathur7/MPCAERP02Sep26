@@ -95,12 +95,9 @@ const DocSlot = ({ slot, existing, playerId, persona, locked, onChanged }) => {
             fd.append("related_id", playerId);
             if (persona?.body_code) fd.append("body_id", persona.body_code);
             if (persona?.display_name) fd.append("uploaded_by", persona.display_name);
-            const res = await fetch(`${API}/api/uploads`, { method: "POST", body: fd });
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({}));
-                throw new Error(body.detail || `Upload failed (${res.status})`);
-            }
-            const record = await res.json();
+            const { data: record } = await api.post("/uploads", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
             const updated = await addPlayerDocument(playerId, slot.key, record.url, record.original_name);
             onChanged(updated);
             // Sprint M16 · Auto-run AI KYC validation after upload
@@ -829,12 +826,9 @@ const AddOtherDoc = ({ playerId, persona, onChanged }) => {
             fd.append("related_id", playerId);
             if (persona?.body_code) fd.append("body_id", persona.body_code);
             if (persona?.display_name) fd.append("uploaded_by", persona.display_name);
-            const res = await fetch(`${API}/api/uploads`, { method: "POST", body: fd });
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({}));
-                throw new Error(body.detail || `Upload failed (${res.status})`);
-            }
-            const record = await res.json();
+            const { data: record } = await api.post("/uploads", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
             const doc_type = `other:${label.trim()}`;
             const updated = await addPlayerDocument(playerId, doc_type, record.url, record.original_name);
             onChanged(updated);

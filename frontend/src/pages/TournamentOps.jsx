@@ -418,9 +418,9 @@ export const InvoicesTab = ({ tournament, persona, onChanged }) => {
             fd.append("file", file);
             fd.append("related_type", "tournament_invoice");
             fd.append("related_id", tournament.id);
-            const res = await fetch(`${API}/api/uploads`, { method: "POST", body: fd });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `Upload failed`);
-            const rec = await res.json();
+            const { data: rec } = await api.post("/uploads", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
             const preview = await aiExtractInvoice(rec.url);
             setAiPreview(preview.ai_extraction);
             const aiHeadCode = preview.prefill.budget_head_code || "";

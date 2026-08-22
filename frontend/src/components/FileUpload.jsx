@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { Upload, FileText, X, Loader2, CheckCircle2 } from "lucide-react";
-
-const API = process.env.REACT_APP_BACKEND_URL;
+import { api } from "@/lib/api";
 
 const ALLOWED_HINT = "PDF, JPEG, PNG, WebP, DOCX, XLSX · max 20 MB";
 
@@ -52,15 +51,10 @@ export const FileUpload = ({
                 if (metadata.uploaded_by) fd.append("uploaded_by", metadata.uploaded_by);
                 if (metadata.related_type) fd.append("related_type", metadata.related_type);
                 if (metadata.related_id) fd.append("related_id", metadata.related_id);
-                const res = await fetch(`${API}/api/uploads`, {
-                    method: "POST",
-                    body: fd,
+                const res = await api.post("/uploads", fd, {
+                    headers: { "Content-Type": "multipart/form-data" },
                 });
-                if (!res.ok) {
-                    const body = await res.json().catch(() => ({}));
-                    throw new Error(body.detail || `Upload failed (${res.status})`);
-                }
-                uploaded.push(await res.json());
+                uploaded.push(res.data);
             }
             onChange([...value, ...uploaded]);
         } catch (e) {

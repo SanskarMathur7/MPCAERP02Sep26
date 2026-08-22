@@ -182,9 +182,9 @@ const MpcaLineItemReviewPanel = ({ claim, invoices, persona, onChange }) => {
             fd.append("file", file);
             fd.append("related_type", "reimbursement_claim_mpca_signed");
             fd.append("related_id", claim.id);
-            const upRes = await fetch(`${BACKEND_URL}/api/uploads`, { method: "POST", body: fd });
-            if (!upRes.ok) throw new Error("Upload failed");
-            const up = await upRes.json();
+            const { data: up } = await api.post("/uploads", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
             await api.post(`/reimbursement-claims/${claim.id}/mpca-signed-pdf`, {
                 signed_pdf_url: up.url,
                 uploaded_by: persona?.name,

@@ -491,13 +491,13 @@ const SquadDetail = () => {
                                     onClick={() => handleReview("approve")}
                                     disabled={busy || !allMembersDecided}
                                     title={!allMembersDecided ? `Decide every player first — ${undecidedCount} pending.` : "Approve the whole squad"}
-                                    className="text-[11px] uppercase tracking-widest bg-mpca-green-light text-mpca-green-dark px-3 py-2 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="text-[11px] uppercase tracking-widest bg-mpca-gold text-mpca-green-dark px-3 py-2 flex items-center gap-1 border border-mpca-gold hover:bg-mpca-gold-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
                                     data-testid="squad-approve-btn"
                                 >
                                     <CheckCircle2 size={12} /> Approve Whole List
                                     {!allMembersDecided && <span className="text-[9px] font-mono ml-1">({decidedCount}/{members.length})</span>}
                                 </button>
-                                <button onClick={() => handleReview("reject")} disabled={busy} className="text-[11px] uppercase tracking-widest bg-mpca-brass/40 text-mpca-ivory px-3 py-2 flex items-center gap-1 disabled:opacity-40" data-testid="squad-reject-btn">
+                                <button onClick={() => handleReview("reject")} disabled={busy} className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-2 flex items-center gap-1 border border-mpca-oxblood hover:bg-mpca-oxblood/90 transition-colors disabled:opacity-50 font-semibold" data-testid="squad-reject-btn">
                                     <XCircle size={12} /> Reject Whole Squad
                                 </button>
                                 <a

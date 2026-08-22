@@ -11,7 +11,7 @@
  */
 import { useState, lazy, Suspense } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Activity, HandCoins, IndianRupee, Sparkles } from "lucide-react";
+import { Activity, HandCoins, IndianRupee, Users, Sparkles } from "lucide-react";
 import CricketLoader from "@/components/CricketLoader";
 import PendingWithMePanel from "@/components/PendingWithMePanel";
 import { DL, PageShell, PageEyebrow } from "@/lib/designSystem";
@@ -19,11 +19,13 @@ import { DL, PageShell, PageEyebrow } from "@/lib/designSystem";
 const WarmSeasonOverview = lazy(() => import("./dashboard-hud/WarmSeasonOverview"));
 const WarmGrantsBoard    = lazy(() => import("./dashboard-hud/WarmGrantsBoard"));
 const WarmBudgetHealth   = lazy(() => import("./dashboard-hud/WarmBudgetHealth"));
+const WarmPlayers        = lazy(() => import("./dashboard-hud/WarmPlayers"));
 
 const TABS = [
-    { id: "season", label: "Season Overview", icon: Activity,       Component: WarmSeasonOverview },
-    { id: "grants", label: "Grants Board",    icon: HandCoins,      Component: WarmGrantsBoard },
-    { id: "budget", label: "Budget Health",   icon: IndianRupee,    Component: WarmBudgetHealth },
+    { id: "season",  label: "Season Overview", icon: Activity,    Component: WarmSeasonOverview },
+    { id: "players", label: "Players",         icon: Users,       Component: WarmPlayers },
+    { id: "grants",  label: "Grants Board",    icon: HandCoins,   Component: WarmGrantsBoard },
+    { id: "budget",  label: "Budget Health",   icon: IndianRupee, Component: WarmBudgetHealth },
 ];
 
 const personaMeta = (persona) => {

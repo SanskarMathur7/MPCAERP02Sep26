@@ -305,7 +305,7 @@ const SLIDES = [
         eyebrow: "10 · The Standing Offer",
         title: "Every association runs the same four backlogs. MPCA just wrote the answer.",
         body: "One state. Ten divisions. One codebase. One audit trail. Rewritable per season, portable to any board.",
-        body2: "We are not asking for a mandate. We are offering a head start — for MPCA to lead, and for every association that wants to stop running cricket on paper.",
+        body2: null,
         stats: [
             { value: "10",   label: "MPCA divisions · unified under one framework" },
             { value: "4",    label: "Cognitive layers · Ingest · Structure · Reason · Judge" },
@@ -1163,12 +1163,14 @@ const CtaSlide = ({ data }) => (
         >
             {data.title}
         </h1>
-        <p className="text-[15px] md:text-[17px] leading-[1.6] max-w-[760px] mx-auto text-center mb-3" style={{ color: "rgba(245,239,230,0.78)" }}>
+        <p className={`text-[15px] md:text-[17px] leading-[1.6] max-w-[760px] mx-auto text-center ${data.body2 ? "mb-3" : "mb-10"}`} style={{ color: "rgba(245,239,230,0.78)" }}>
             {data.body}
         </p>
-        <p className="text-[15px] md:text-[17px] leading-[1.6] max-w-[760px] mx-auto text-center mb-10" style={{ color: "rgba(245,239,230,0.78)" }}>
-            {data.body2}
-        </p>
+        {data.body2 && (
+            <p className="text-[15px] md:text-[17px] leading-[1.6] max-w-[760px] mx-auto text-center mb-10" style={{ color: "rgba(245,239,230,0.78)" }}>
+                {data.body2}
+            </p>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10 max-w-[900px] w-full mx-auto">
             {data.stats.map((s) => (

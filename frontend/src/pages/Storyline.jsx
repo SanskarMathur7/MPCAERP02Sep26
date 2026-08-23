@@ -33,7 +33,7 @@ const SLIDES = [
         eyebrow: "01 · Opening",
         overline: "The story nobody tells about AI in cricket",
         title: "Everyone talks about AI on the field. Nobody talks about AI in the file room.",
-        subtitle: "Hawkeye, DRS, batter heatmaps — that is one percent of what AI can do for cricket. The other ninety-nine percent is the file room: grants, eligibility, tournament wiring, division books. That is where a talented U-16 from Rewa either gets to play or never gets seen. This is a story about applying AI to that half.",
+        subtitle: "1% lives on the field. 99% lives in the file room.",
         metaphor: "iceberg",
         pains: [
             { value: "3,000+", label: "Players. Every KYC verified by hand." },
@@ -51,7 +51,7 @@ const SLIDES = [
         eyebrow: "02 · The Reality",
         overline: "Where cricket administration actually lives today",
         title: "Four backlogs. All manual. All growing.",
-        subtitle: "Every state cricket association runs on the same four rails — Grants, Player Registration, Tournament Management, Division Administration. Each rail is a paper-and-memory pipeline that scales linearly with headcount. Hire a person, process one more file a day.",
+        subtitle: "Same four rails. Every association. Every year.",
         pains: [
             { value: "8 weeks", label: "Grants · one reimbursement claim, end-to-end" },
             { value: "24,000",  label: "Invoice line-items keyed by hand each year" },
@@ -69,33 +69,33 @@ const SLIDES = [
         kind: "why",
         eyebrow: "03 · The Insight",
         title: "\"AI in cricket\" ≠ analytics.",
-        subtitle: "The industry conflates AI in cricket with what happens on television — ball tracking, decision reviews, player heatmaps. That is one narrow application. Cricket's real cognitive burden is off the field — and it has been waiting for its turn.",
+        subtitle: "Two very different bodies of work.",
         columns: [
             {
                 heading: "What the world builds today",
                 accent: "gold",
                 items: [
-                    "Ball tracking and pitch maps",
-                    "Batter and bowler heatmaps",
-                    "Fantasy scoring and match predictions",
-                    "Broadcast-side highlight reels",
-                    "Wearable performance analytics",
+                    "Ball tracking",
+                    "Player heatmaps",
+                    "Fantasy predictions",
+                    "Highlight reels",
+                    "Wearable analytics",
                 ],
             },
             {
                 heading: "What still runs on paper",
                 accent: "emerald",
                 items: [
-                    "Player registration & KYC · Aadhaar, DOB, marksheets",
-                    "Eligibility · 7 canonical tags, 34 age brackets, medical",
-                    "Grant application → sanction → disbursal → claim",
-                    "Squad selection with KYC audit",
-                    "Approval chains · who signs first, then who, then who",
-                    "Immutable audit for every scheme rupee",
+                    "Player KYC · registration",
+                    "Eligibility · 34 age brackets",
+                    "Grants · sanction to claim",
+                    "Squad selection · audit",
+                    "Approval chains",
+                    "Rupee-level audit trail",
                 ],
             },
         ],
-        punch: "It is easier to build DRS than to build audit-grade approval workflows for a state cricket association. But only one of the two is a governance problem — and only one of them scales to every state in the country.",
+        punch: "One is a broadcast problem. The other is a governance problem.",
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -105,30 +105,30 @@ const SLIDES = [
         kind: "framework",
         eyebrow: "04 · The Framework",
         title: "We didn't automate cricket administration. We gave it a brain.",
-        subtitle: "Most digital transformation projects stop at Layer 1 — they scan documents and file them. We built up to Layer 4, where a human is no longer a data-entry clerk verifying documents, but a judge acting on a signed, evidenced recommendation.",
+        subtitle: "Four layers. Most stop at one.",
         layers: [
             {
                 n: 1, slug: "ingest", icon: Database, name: "Ingest",
-                what: "Vision AI reads every document — Aadhaar, birth cert, marksheet, invoice, signed PDF — and returns structured fields with confidence scores.",
-                example: "e.g. Birth Certificate → DOB 2008-08-04 · QR verified · confidence 0.95",
+                what: "Vision AI reads every KYC doc, invoice, signed PDF.",
+                example: "Birth Certificate → DOB 2008-08-04 · confidence 0.95",
             },
             {
                 n: 2, slug: "structure", icon: Layers, name: "Structure",
-                what: "The association's real rulebook is encoded as configurable data — 34 age brackets, 20+ grant schemes, 7 eligibility tags, per-scheme rate cards — editable by SysAdmin without a redeploy.",
-                example: "e.g. Local/Residence rule = residency ≥ 3 months · editable season-over-season",
+                what: "The rulebook, encoded as editable data.",
+                example: "34 age brackets · 20+ schemes · 7 tags · SysAdmin-editable",
             },
             {
                 n: 3, slug: "reason", icon: Brain, name: "Reason",
-                what: "For every case, the engine walks the rules, matches Layer 1 evidence, promotes AI-extracted values into missing form fields, and emits a recommendation with a full per-rule trail.",
-                example: "e.g. player recommended Local/Residence because Aadhaar 2016 → 129 months resident, Birth Cert corroborates DOB, Marksheet confirms Gwalior schooling",
+                what: "Walks the rules. Emits a signed recommendation.",
+                example: "Local/Residence · Aadhaar 2016 → 129 months · Marksheet confirms",
             },
             {
                 n: 4, slug: "judge", icon: Gavel, name: "Judge",
-                what: "The human sees the recommendation, the evidence, the confidence, the trail — and DECIDES. Every override is signed, dated, and audit-logged. The reviewer stops being a clerk and becomes a judge.",
-                example: "e.g. MPCA reviewer clicks Approve on 60 green-chip invoices in one action, and only debates the 4 amber ones",
+                what: "Human decides. Signed. Audit-logged.",
+                example: "Approve 60 greens in one click. Debate 4 ambers.",
             },
         ],
-        punch: "Everyone builds Layer 1. Most stop there. We built all four. That is the difference between digitising paperwork and giving the paperwork a brain.",
+        punch: "Everyone builds Layer 1. We built all four.",
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -141,17 +141,17 @@ const SLIDES = [
         eyebrow: "05 · Grants — the biggest backlog",
         icon: HandCoins,
         title: "Every scheme rupee — traced from headquarters to the boundary rope.",
-        subtitle: "An association disburses grants across 20+ schemes — Grounds, U-16 camps, Vacation camps, Coaching allowances, tournament reimbursements. Every rupee travels a six-step path: application, sanction, disbursal, spend, claim, reconciliation. Six chances for error. Six queues to sit in. When a Division fields 60 invoices for a single tournament, the association's Accounts desk becomes a permanent backlog.",
+        subtitle: "20+ schemes. Six-step pipeline. Zero traceability.",
         pains: [
-            "Divisions submit 40–60 scanned invoices per tournament in bulk",
-            "Accounts opens each, keys it into a ledger, cross-checks the rate card line-by-line",
-            "Applicable scheme head and budget-head mapping done mentally — errors slip through",
-            "Duplicates across tournaments spotted only if someone happens to notice",
-            "Inflated per-diem, mileage, accommodation rates paid quietly · 2–4% leakage / year",
-            "Divisions wait 2+ months for payment · officers front the money from their own pockets",
+            "40–60 scans per tournament",
+            "Rate card checked line-by-line",
+            "Budget head mapped from memory",
+            "Duplicates hidden across seasons",
+            "2–4% quiet leakage every year",
+            "Officers front cash for 2+ months",
         ],
         aiCount: 2,
-        aiPreview: "Two features close this gap: a per-invoice AI Diff chip that verifies each attachment against the typed fields at extraction time, and a one-click Tournament AI Audit that rolls up Approved / Needs-Review / Rejected + eligible reimbursement before the Division even submits.",
+        aiPreview: "AI Diff chips per invoice. One-click tournament audit.",
     },
     {
         kind: "feature",
@@ -159,9 +159,9 @@ const SLIDES = [
         icon: HandCoins,
         eyebrow: "Grants · Deep-Dive",
         featureName: "AI Diff · Per-invoice + Tournament AI Audit",
-        problem: "A 60-invoice claim used to consume two days of Accounts time before it even reached MPCA. Anything that slipped through the desk sat in an inbox chain for weeks.",
+        problem: "60 invoices. Two days of Accounts. Weeks in inbox chains.",
         aiVerb: "VERIFIES & ROLLS UP",
-        aiDescription: "Every uploaded invoice is auto-diffed against the typed vendor / date / amount fields. Green chip if the file matches; amber if it doesn't, with the mismatch spelled out. One button runs the tournament-wide audit that classifies all invoices into Approved / Needs-Review / Rejected + eligible reimbursement ₹, before the claim even leaves the Division. MPCA then approves the ambers — not the greens.",
+        aiDescription: "Every invoice auto-diffed against its PDF. One click rolls up the whole tournament. MPCA approves ambers, not greens.",
         metric: { before: "1–2 days", after: "≤ 90 seconds", label: "per claim · AI verification time" },
         seasonSave: "≈ 600 staff-hours · 2-4% leakage recoverable",
         dividend: "= reinvested into pitch covers, sight-screens, roller repairs across districts",
@@ -179,17 +179,17 @@ const SLIDES = [
         eyebrow: "06 · Player Registration — from guessing to certainty",
         icon: Users,
         title: "The player pipeline was manual from Aadhaar to Ranji.",
-        subtitle: "Every one of an association's registered players is a paperwork chain: Aadhaar, DOB proof, school marksheet, Samagra ID, medical, KYC completeness, and a dozen eligibility rules. Each of those signals lived in a different sheet. When a typo in a DOB got missed at registration, an entire squad could be disqualified post-fact after a rival's protest — three months later.",
+        subtitle: "One DOB typo · one disqualified squad · three months later.",
         pains: [
-            "Registration officer opens every Aadhaar / DOB proof individually and copies fields by hand",
-            "Name spellings reconciled across form, Aadhaar, birth cert, marksheets — mismatches missed under time pressure",
-            "DOB checked line-by-line against 34 BCCI age brackets on a shared spreadsheet",
-            "Residency, education, and prior-play thresholds interpreted differently by every reviewer",
-            "One typo in a DOB = an entire squad disqualified post-fact",
-            "KYC completeness surfaces only at squad-lock — forcing last-minute drop-outs",
+            "KYC fields copied by hand",
+            "Name mismatches missed under pressure",
+            "34 age brackets on a spreadsheet",
+            "Every reviewer reads the rules differently",
+            "One typo · one disqualified squad",
+            "KYC gaps surface at squad-lock",
         ],
         aiCount: 2,
-        aiPreview: "Vision AI extracts every uploaded document; the Eligibility Engine walks the association's rulebook, promotes AI-extracted values into missing form fields, and emits a per-rule verification trail. Every reviewer's screen shows the same signed reasoning.",
+        aiPreview: "AI reads the docs. The engine walks the rules. Every reviewer sees the same reasoning.",
     },
     {
         kind: "feature",
@@ -197,9 +197,9 @@ const SLIDES = [
         icon: ShieldCheck,
         eyebrow: "Players · Deep-Dive",
         featureName: "AI Eligibility Engine · Verification Trail",
-        problem: "Reviewers were guessing. Data fields on the form were often left empty, KYC docs weren't cross-referenced with the rulebook, and no two reviewers ever gave the same verdict on the same borderline case.",
+        problem: "Reviewers guessed. No two verdicts ever matched.",
         aiVerb: "REASONS & RECOMMENDS",
-        aiDescription: "The engine walks the association's sequential eligibility decision tree, one rule at a time. When a typed field is empty, it promotes the AI-extracted value from the corresponding KYC document — Aadhaar's enrolment year becomes residency proof, marksheet institute becomes education proof, birth certificate DOB corroborates identity. Every rule check emits a passed/failed verdict + the exact document that backed it. The reviewer sees the recommendation and every citation on one screen; overrides need a signed reason or an evidence document.",
+        aiDescription: "Missing form fields? The engine promotes AI-extracted values from KYC docs. Every rule cites the exact document that backed it.",
         metric: { before: "15–30 min/doc", after: "seconds", label: "per player · verification time" },
         seasonSave: "≈ 450 staff-hours · zero post-hoc disqualifications",
         dividend: "= selectors focus on cricket, reviewers focus on judgement",
@@ -217,16 +217,16 @@ const SLIDES = [
         eyebrow: "07 · Squad Selection — where the game is nearly lost",
         icon: Trophy,
         title: "40 tournaments a year. Every squad decided by memory.",
-        subtitle: "A single tournament touches selection meetings, signed squad PDFs, umpire postings, ground bookings and fixture releases. Multiply by 40. Squads were argued from memory in six-hour rooms. The signed PDF then floated across three inboxes as slightly-different versions. Kit, travel, jersey numbers misaligned on day one because the source list drifted.",
+        subtitle: "Six-hour rooms. Three versions of one squad list.",
         pains: [
-            "Selection committee sits with paper stat sheets · names debated from memory, not data",
-            "6+ hours per meeting × 15 meetings a year gone to spreadsheet crunching",
-            "Player KYC gaps surface AT squad-lock · last-minute drop-outs shake the squad",
-            "Signed squad PDF re-typed by every recipient into their own local sheet",
-            "Three slightly-different versions float across the association, Divisions and Managers",
+            "Names debated from memory",
+            "6 hrs/meeting × 15 meetings/year",
+            "KYC gaps at squad-lock",
+            "Signed PDF re-typed by every inbox",
+            "Three drifting versions circulate",
         ],
         aiCount: 2,
-        aiPreview: "AI recommends the shortlist with pre-audited KYC + eligibility, so selectors argue strategy, not paperwork. Post-selection, the signed squad PDF is parsed straight back into the ERP — version drift becomes impossible.",
+        aiPreview: "Pre-cleared shortlist. Signed PDF parsed back. Version drift impossible.",
     },
     {
         kind: "feature",
@@ -234,9 +234,9 @@ const SLIDES = [
         icon: Users,
         eyebrow: "Squads · Deep-Dive",
         featureName: "AI Squad Recommendation + KYC Audit",
-        problem: "Selection meetings argued names from memory. KYC gaps surfaced at squad-lock — sometimes AFTER announcement — forcing last-minute drop-outs and shaking the squad's confidence.",
+        problem: "Names from memory. KYC gaps after announcement.",
         aiVerb: "SHORTLISTS & CLEARS",
-        aiDescription: "The engine ranks every eligible player against role, recent form, and past appearances; in parallel it audits KYC (Aadhaar, PAN, medical, bank) and eligibility tag (Local / Guest / Ineligible). Selectors see a pre-cleared shortlist with a bias-analysis panel — the human then debates strategy and bench balance, not paperwork. Post-selection, the signed squad PDF is parsed on upload and cross-checked against the ERP's squad record; names, jersey numbers, roles, all locked to a single source of truth.",
+        aiDescription: "Ranks the pool. Audits KYC and eligibility. Selectors debate strategy, not paperwork.",
         metric: { before: "6 hrs/meeting", after: "20 min", label: "squad-finalisation cycle" },
         seasonSave: "≈ 90 staff-hours · zero KYC-triggered drop-outs · zero version drift",
         dividend: "= kit, travel and jersey numbers align on the first attempt",
@@ -251,32 +251,32 @@ const SLIDES = [
         kind: "why",
         eyebrow: "08 · The Operating Truth",
         title: "AI does the labour. Humans do the leadership.",
-        subtitle: "Every AI decision in this system is advisory. Reviewers see the recommendation, the evidence, the confidence, the trail — and then they choose. We didn't build an autonomous agent. We built a cognitive prosthetic for the reviewer.",
+        subtitle: "Every AI verdict is advisory. Humans always decide.",
         columns: [
             {
                 heading: "What the AI is NOT",
                 accent: "gold",
                 items: [
-                    "Not a judge · every verdict is a recommendation",
-                    "Not autonomous · nothing auto-approves without a human click",
-                    "Not opaque · every AI decision carries a trail + confidence",
-                    "Not immutable · thresholds are SysAdmin-editable per season",
-                    "Not replacing anyone · it removes drudgery, not seats",
+                    "Not a judge · advisory only",
+                    "Not autonomous · human click required",
+                    "Not opaque · full trail + confidence",
+                    "Not immutable · SysAdmin-editable",
+                    "Not replacing anyone · removes drudgery",
                 ],
             },
             {
                 heading: "What the human becomes",
                 accent: "emerald",
                 items: [
-                    "Reviews recommendations, not documents",
-                    "Debates borderline cases, not spellings",
-                    "Signs overrides that are audit-logged forever",
-                    "Focuses on strategy, mentorship, negotiation",
-                    "Stops being a clerk · starts being a decision-maker",
+                    "Reviews recommendations · not docs",
+                    "Debates cases · not spellings",
+                    "Signs overrides · audit-logged",
+                    "Focuses on strategy · mentorship",
+                    "Clerk → decision-maker",
                 ],
             },
         ],
-        punch: "The reviewer stops typing and starts thinking. That is the return on AI, measured in the only metric that ultimately counts for an association: the quality of the decisions its leadership actually gets to make.",
+        punch: "The reviewer stops typing. Starts thinking.",
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -310,15 +310,15 @@ const SLIDES = [
         kind: "cta",
         eyebrow: "10 · The Ask",
         title: "This is the first proof-of-work.",
-        body: "Every state cricket association in this country faces the same four backlogs — grants, player registration, tournament management, division administration. The rulebooks differ; the mechanics do not. Which means the same four-layer framework — Ingest, Structure, Reason, Judge — can be adapted to any of them, once we have shown it works at one.",
-        body2: "That is what this working demonstrator does. It gives MPCA the standing to say: the innovation the sport has been waiting for outside the boundary rope, we built here first. We would like the mandate to keep building — and to be the association that reinvests this into cricket, wherever the sport needs it next.",
+        body: "Same four backlogs. Same four-layer framework. Every association.",
+        body2: "MPCA built this first. Standing to reinvest it into the sport.",
         stats: [
             { value: "4",      label: "Cognitive layers, one framework" },
             { value: "3",      label: "Deep-dives shown today · Grants · Players · Squads" },
             { value: "1",      label: "Working demonstrator · six months old" },
             { value: "Every",  label: "Cricket association can be next" },
         ],
-        quote: "The industry thinks AI in cricket lives on the field. We chose to build the other ninety-nine percent — the file room, the rulebook, the audit trail — because that is where the sport actually decides who gets to play. MPCA would like to be the association that made that choice first.",
+        quote: "The industry chose the field. We chose the file room. That is where the sport actually decides who plays.",
     },
 ];
 
@@ -680,10 +680,10 @@ const FrameworkSlide = ({ data }) => (
                                 {L.name}
                             </div>
                         </div>
-                        <div className="text-[13.5px] leading-[1.45]" style={{ color: DL.paper }}>
+                        <div className="text-[13px] md:text-[14.5px] leading-[1.4] font-semibold" style={{ color: DL.paper }}>
                             {L.what}
                         </div>
-                        <div className="text-[12.5px] leading-[1.45] italic" style={{ color: "rgba(245,239,230,0.65)" }}>
+                        <div className="text-[11px] md:text-[12px] leading-[1.4] italic" style={{ color: "rgba(245,239,230,0.6)" }}>
                             {L.example}
                         </div>
                     </div>
@@ -1068,7 +1068,7 @@ const FeatureSlide = ({ data }) => {
                         >
                             {data.aiVerb}
                         </div>
-                        <p className="text-[13.5px] md:text-[14.5px] leading-[1.5] max-w-[540px]" style={{ color: "rgba(245,239,230,0.78)" }}>
+                        <p className="text-[12.5px] md:text-[13.5px] leading-[1.5] max-w-[500px]" style={{ color: "rgba(245,239,230,0.72)" }}>
                             {data.aiDescription}
                         </p>
                     </div>

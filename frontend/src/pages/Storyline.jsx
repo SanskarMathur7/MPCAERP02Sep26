@@ -34,13 +34,12 @@ const SLIDES = [
         overline: "The story nobody tells about AI in cricket",
         title: "Everyone talks about AI on the field. Nobody talks about AI in the file room.",
         subtitle: "Hawkeye, DRS, batter heatmaps — that is one percent of what AI can do for cricket. The other ninety-nine percent is the file room: grants, eligibility, tournament wiring, division books. That is where a talented U-16 from Rewa either gets to play or never gets seen. This is a story about applying AI to that half.",
+        metaphor: "iceberg",
         pains: [
-            { value: "1%",  label: "of AI-in-cricket lives on the field" },
-            { value: "99%", label: "lives in the file room · today, still manual" },
             { value: "3,000+", label: "Players. Every KYC verified by hand." },
-            { value: "40+",  label: "Tournaments a year · every squad, every rupee" },
-            { value: "10",   label: "Divisions × 20+ grant schemes = one permanent backlog" },
-            { value: "0",    label: "Machine-readable audit trail before this" },
+            { value: "40+",    label: "Tournaments a year · every squad, every rupee" },
+            { value: "10",     label: "Divisions × 20+ grant schemes = one permanent backlog" },
+            { value: "0",      label: "Machine-readable audit trail before this" },
         ],
     },
 
@@ -167,6 +166,7 @@ const SLIDES = [
         seasonSave: "≈ 600 staff-hours · 2-4% leakage recoverable",
         dividend: "= reinvested into pitch covers, sight-screens, roller repairs across districts",
         livePage: { label: "Reimbursement Claim Review", path: "/reimbursement-claims" },
+        mockup: "grants",
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -204,6 +204,7 @@ const SLIDES = [
         seasonSave: "≈ 450 staff-hours · zero post-hoc disqualifications",
         dividend: "= selectors focus on cricket, reviewers focus on judgement",
         livePage: { label: "Player Detail · Verification Trail", path: "/players" },
+        mockup: "player",
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -240,6 +241,7 @@ const SLIDES = [
         seasonSave: "≈ 90 staff-hours · zero KYC-triggered drop-outs · zero version drift",
         dividend: "= kit, travel and jersey numbers align on the first attempt",
         livePage: { label: "Selection Console", path: "/selection-console" },
+        mockup: "squad",
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -425,7 +427,7 @@ export default function Storyline() {
                 {current.kind === "why"           && <WhySlide         data={current} />}
                 {current.kind === "framework"     && <FrameworkSlide   data={current} />}
                 {current.kind === "bucket_intro"  && <BucketIntroSlide data={current} />}
-                {current.kind === "feature"       && <FeatureSlide     data={current} onLive={setPreview} />}
+                {current.kind === "feature"       && <FeatureSlide     data={current} />}
                 {current.kind === "impact"        && <ImpactSlide      data={current} />}
                 {current.kind === "cta"           && <CtaSlide         data={current} />}
                 </div>
@@ -487,6 +489,26 @@ const NavBtn = ({ children, onClick, disabled, testid, primary }) => (
 // ═══════════════════════════════════════════════════════════════════
 // Slide 1 · WHAT · The Problem
 // ═══════════════════════════════════════════════════════════════════
+const IcebergDiagram = () => (
+    <svg viewBox="0 0 700 340" style={{ width: "100%", maxWidth: 620, margin: "0 auto", display: "block" }} aria-hidden>
+        {/* Waterline */}
+        <line x1="0" y1="112" x2="700" y2="112" stroke="rgba(184,131,40,0.6)" strokeWidth="1" strokeDasharray="6 6" />
+        <text x="0" y="104" fontFamily={DL.fontMono} fontSize="10.5" fill={DL.gold} letterSpacing="2">WATERLINE · WHAT THE SPORT SEES</text>
+        {/* Above-water tip · 1% */}
+        <polygon points="330,20 400,110 260,110" fill="rgba(245,239,230,0.92)" stroke={DL.gold} strokeWidth="1.5" />
+        <text x="330" y="72" textAnchor="middle" fontFamily={DL.fontDisplay} fontWeight="800" fontSize="28" fill="#1A1F1D">1%</text>
+        <text x="330" y="92" textAnchor="middle" fontFamily={DL.fontMono} fontSize="9.5" letterSpacing="1.5" fill="#5C5A54">ON-FIELD ANALYTICS</text>
+        {/* Below-water bulk · 99% */}
+        <polygon points="260,110 400,110 500,300 160,300" fill="rgba(13,59,46,0.85)" stroke={DL.gold} strokeWidth="1.5" opacity="0.95" />
+        <text x="330" y="200" textAnchor="middle" fontFamily={DL.fontDisplay} fontWeight="800" fontSize="64" fill={DL.gold}>99%</text>
+        <text x="330" y="226" textAnchor="middle" fontFamily={DL.fontMono} fontSize="10.5" letterSpacing="2" fill="rgba(245,239,230,0.85)">CRICKET ADMINISTRATION</text>
+        <text x="330" y="250" textAnchor="middle" fontFamily={DL.fontBody} fontSize="12" fill="rgba(245,239,230,0.62)">Grants · Player Registration · Tournament wiring · Division books</text>
+        {/* Reflection ripples */}
+        <ellipse cx="330" cy="112" rx="220" ry="4" fill="none" stroke="rgba(184,131,40,0.28)" strokeWidth="0.6" />
+        <ellipse cx="330" cy="112" rx="140" ry="2.5" fill="none" stroke="rgba(184,131,40,0.4)" strokeWidth="0.6" />
+    </svg>
+);
+
 const WhatSlide = ({ data }) => (
     <div className="max-w-[1200px] w-full">
         <div className="text-center mb-9">
@@ -497,22 +519,24 @@ const WhatSlide = ({ data }) => (
                 {data.overline}
             </div>
             <h1
-                className="text-[48px] md:text-[68px] leading-[1.05] tracking-tight mb-6"
+                className="text-[42px] md:text-[58px] leading-[1.05] tracking-tight mb-6"
                 style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
                 data-testid="what-title"
             >
                 {data.title}
             </h1>
-            <p className="text-[17px] md:text-[19px] leading-[1.6] max-w-[860px] mx-auto" style={{ color: "rgba(245,239,230,0.78)" }}>
+            <p className="text-[15.5px] md:text-[17px] leading-[1.6] max-w-[860px] mx-auto" style={{ color: "rgba(245,239,230,0.78)" }}>
                 {data.subtitle}
             </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {data.metaphor === "iceberg" && <IcebergDiagram />}
+
+        <div className={"grid gap-3 " + (data.metaphor === "iceberg" ? "grid-cols-2 md:grid-cols-4 mt-6" : "grid-cols-2 md:grid-cols-3")}>
             {data.pains.map((p, i) => (
                 <div
                     key={p.label}
-                    className="p-5 rounded-md"
+                    className="p-4 rounded-md"
                     style={{
                         background: "rgba(139,31,31,0.10)",
                         border: "1px solid rgba(139,31,31,0.42)",
@@ -520,10 +544,10 @@ const WhatSlide = ({ data }) => (
                     }}
                     data-testid={`what-pain-${i}`}
                 >
-                    <div className="text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: "#E88787", fontWeight: 800 }}>
+                    <div className="text-[26px] md:text-[32px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: "#E88787", fontWeight: 800 }}>
                         {p.value}
                     </div>
-                    <div className="text-[12.5px] mt-2 leading-snug font-semibold" style={{ color: DL.paper }}>
+                    <div className="text-[11.5px] mt-2 leading-snug font-semibold" style={{ color: DL.paper }}>
                         {p.label}
                     </div>
                 </div>
@@ -770,58 +794,288 @@ const BucketIntroSlide = ({ data }) => {
 // ═══════════════════════════════════════════════════════════════════
 // Slide 2-8 · AI Feature slide
 // ═══════════════════════════════════════════════════════════════════
-const FeatureSlide = ({ data, onLive }) => {
-    const Icon = data.icon;
-    return (
-        <div className="max-w-[1280px] w-full grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-10 lg:gap-14 items-center">
-            {/* LEFT — problem + AI verb */}
-            <div>
-                <div className="flex items-center gap-3 mb-6">
-                    <div
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg"
-                        style={{ background: "rgba(184,131,40,0.16)", border: "1px solid rgba(184,131,40,0.4)" }}
-                    >
-                        <Icon size={20} strokeWidth={2.25} style={{ color: DL.gold }} />
-                    </div>
-                    <div className="text-[10.5px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
-                        {data.eyebrow} · {data.featureName}
-                    </div>
-                </div>
+// ═══════════════════════════════════════════════════════════════════
+// Product Mockups · rendered inline on each deep-dive slide.
+// Avoid live-URL demos (which need auth in a stakeholder meeting) —
+// these mockups are self-contained SVG/HTML replicas of the real
+// screens, guaranteed to render on any device without a login.
+// ═══════════════════════════════════════════════════════════════════
 
-                <div className="mb-8">
-                    <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold mb-3" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.55)" }}>
-                        The Problem · Today
-                    </div>
-                    <h2
-                        className="text-[30px] md:text-[38px] leading-[1.15] tracking-tight"
-                        style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
-                        data-testid="feature-problem"
-                    >
-                        {data.problem}
-                    </h2>
-                </div>
+const chipStyle = (kind) => {
+    const map = {
+        green:  { bg: "rgba(31,127,89,0.18)",  fg: "#3EBB88", bd: "rgba(62,187,136,0.55)" },
+        amber:  { bg: "rgba(184,131,40,0.20)", fg: "#F4C874", bd: "rgba(244,200,116,0.55)" },
+        red:    { bg: "rgba(197,86,86,0.18)",  fg: "#F1B4B4", bd: "rgba(241,180,180,0.55)" },
+        neutral:{ bg: "rgba(245,239,230,0.08)",fg: "rgba(245,239,230,0.65)", bd: "rgba(245,239,230,0.22)" },
+    };
+    const s = map[kind] || map.neutral;
+    return {
+        display: "inline-flex", alignItems: "center", gap: 4,
+        padding: "2px 8px", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+        background: s.bg, color: s.fg, border: `1px solid ${s.bd}`, borderRadius: 3,
+        fontFamily: DL.fontMono,
+    };
+};
 
+const mockupFrame = {
+    background: "#F5EFE6",
+    color: "#1A1F1D",
+    borderRadius: 6,
+    border: "1px solid rgba(184,131,40,0.4)",
+    overflow: "hidden",
+    boxShadow: "0 30px 60px -30px rgba(184,131,40,0.4)",
+};
+
+// ── Mockup 1 · Grants — AI Diff chips on invoice rows + AI Audit rollup ──
+const MockupGrants = () => (
+    <div style={mockupFrame} data-testid="mockup-grants">
+        {/* Browser-chrome header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid rgba(0,0,0,0.08)", background: "#EBE4D6", fontFamily: DL.fontMono, fontSize: 10, color: "#5C5A54" }}>
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#C55656" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#D5A93A" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#4A9E6C" }} />
+            <span style={{ marginLeft: 12, letterSpacing: "0.06em" }}>MPCA ERP · Tournament / Vinoo Mankad · Invoices</span>
+        </div>
+        {/* AI Audit rollup card */}
+        <div style={{ padding: "14px 18px", background: "#F0E9DC", borderBottom: "1px solid rgba(139,31,31,0.25)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div>
-                    <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold mb-3" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.85 }}>
-                        AI · Now
-                    </div>
-                    <div
-                        className="text-[64px] md:text-[88px] leading-[0.95] tracking-tight mb-4"
-                        style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.gold, letterSpacing: "-0.02em" }}
-                        data-testid="feature-verb"
-                    >
-                        {data.aiVerb}
-                    </div>
-                    <p className="text-[15.5px] md:text-[17px] leading-[1.55] max-w-[560px]" style={{ color: "rgba(245,239,230,0.78)" }}>
-                        {data.aiDescription}
-                    </p>
+                    <div style={{ fontFamily: DL.fontMono, fontSize: 9.5, letterSpacing: "0.24em", fontWeight: 700, color: "#8B1F1F" }}>AI · TOURNAMENT AUDIT</div>
+                    <div style={{ fontFamily: DL.fontDisplay, fontSize: 16, fontWeight: 800, color: "#0D3B2E" }}>60 invoices audited · one click</div>
+                </div>
+                <button style={{ padding: "6px 12px", background: "#8B1F1F", color: "#F5EFE6", fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.2em", fontWeight: 700, border: "none", borderRadius: 3 }}>▶ RUN AI AUDIT</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                <div style={{ padding: "10px 14px", background: "rgba(74,158,108,0.14)", border: "1px solid rgba(74,158,108,0.5)", borderRadius: 4 }}>
+                    <div style={{ fontSize: 26, fontFamily: DL.fontDisplay, fontWeight: 800, color: "#1F7F59" }}>52</div>
+                    <div style={{ fontSize: 9, fontFamily: DL.fontMono, letterSpacing: "0.2em", fontWeight: 700, color: "#1F7F59" }}>APPROVED · AI MATCH</div>
+                </div>
+                <div style={{ padding: "10px 14px", background: "rgba(213,169,58,0.14)", border: "1px solid rgba(213,169,58,0.5)", borderRadius: 4 }}>
+                    <div style={{ fontSize: 26, fontFamily: DL.fontDisplay, fontWeight: 800, color: "#B88328" }}>6</div>
+                    <div style={{ fontSize: 9, fontFamily: DL.fontMono, letterSpacing: "0.2em", fontWeight: 700, color: "#B88328" }}>NEEDS REVIEW</div>
+                </div>
+                <div style={{ padding: "10px 14px", background: "rgba(197,86,86,0.14)", border: "1px solid rgba(197,86,86,0.5)", borderRadius: 4 }}>
+                    <div style={{ fontSize: 26, fontFamily: DL.fontDisplay, fontWeight: 800, color: "#8B1F1F" }}>2</div>
+                    <div style={{ fontSize: 9, fontFamily: DL.fontMono, letterSpacing: "0.2em", fontWeight: 700, color: "#8B1F1F" }}>REJECTED</div>
+                </div>
+                <div style={{ padding: "10px 14px", background: "#F5EFE6", border: "1px solid rgba(31,127,89,0.4)", borderRadius: 4 }}>
+                    <div style={{ fontSize: 18, fontFamily: DL.fontMono, fontWeight: 800, color: "#1F7F59" }}>₹ 4,65,131</div>
+                    <div style={{ fontSize: 9, fontFamily: DL.fontMono, letterSpacing: "0.2em", fontWeight: 700, color: "#5C5A54" }}>ELIGIBLE REIMBURSEMENT</div>
                 </div>
             </div>
+        </div>
+        {/* Invoice table */}
+        <table style={{ width: "100%", fontFamily: DL.fontBody, fontSize: 12, borderCollapse: "collapse" }}>
+            <thead>
+                <tr style={{ background: "#EBE4D6", color: "#5C5A54" }}>
+                    <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>REF</th>
+                    <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>VENDOR</th>
+                    <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>DATE</th>
+                    <th style={{ padding: "8px 14px", textAlign: "right", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>AMOUNT</th>
+                    <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>AI DIFF</th>
+                </tr>
+            </thead>
+            <tbody>
+                {[
+                    { ref: "INV-2026-27-0007", vendor: "Sanskar Sports · Balls", date: "12 Aug 26",  amt: "₹ 42,000",  chip: "green",  chipText: "✓ AI MATCH" },
+                    { ref: "INV-2026-27-0008", vendor: "Hotel Sayaji · Boarding",date: "14 Aug 26",  amt: "₹ 1,18,500",chip: "green",  chipText: "✓ AI MATCH" },
+                    { ref: "INV-2026-27-0009", vendor: "MB Fuels",                date: "15 Aug 26",  amt: "₹ 8,750",   chip: "amber",  chipText: "⚠ AMOUNT MISMATCH" },
+                    { ref: "INV-2026-27-0010", vendor: "Ramesh Umpire Meals",     date: "16 Aug 26",  amt: "₹ 6,200",   chip: "green",  chipText: "✓ AI MATCH" },
+                    { ref: "INV-2026-27-0011", vendor: "Sight Screens · Pooja Fab",date:"17 Aug 26",  amt: "₹ 22,000",  chip: "amber",  chipText: "⚠ DATE OUTSIDE CYCLE" },
+                    { ref: "INV-2026-27-0012", vendor: "Municipality · Water Bill",date:"18 Aug 26",  amt: "₹ 4,340",   chip: "green",  chipText: "✓ AI MATCH" },
+                ].map((r) => (
+                    <tr key={r.ref} style={{ borderTop: "1px solid rgba(0,0,0,0.05)" }}>
+                        <td style={{ padding: "9px 14px", fontFamily: DL.fontMono, fontSize: 10.5, color: "#B88328" }}>{r.ref}</td>
+                        <td style={{ padding: "9px 14px", color: "#1A1F1D", fontWeight: 600 }}>{r.vendor}</td>
+                        <td style={{ padding: "9px 14px", color: "#5C5A54", fontFamily: DL.fontMono, fontSize: 11 }}>{r.date}</td>
+                        <td style={{ padding: "9px 14px", textAlign: "right", fontFamily: DL.fontMono, fontWeight: 700, color: "#1A1F1D" }}>{r.amt}</td>
+                        <td style={{ padding: "9px 14px" }}><span style={chipStyle(r.chip)}>{r.chipText}</span></td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
 
-            {/* RIGHT — headline metric + live preview */}
+// ── Mockup 2 · Player Registration · Verification Trail table ─────────────
+const MockupPlayerTrail = () => (
+    <div style={mockupFrame} data-testid="mockup-player">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid rgba(0,0,0,0.08)", background: "#EBE4D6", fontFamily: DL.fontMono, fontSize: 10, color: "#5C5A54" }}>
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#C55656" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#D5A93A" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#4A9E6C" }} />
+            <span style={{ marginLeft: 12, letterSpacing: "0.06em" }}>MPCA ERP · Player Detail · Bakshraj Singh</span>
+        </div>
+        {/* Verdict banner */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", background: "rgba(74,158,108,0.10)", borderBottom: "1px solid rgba(74,158,108,0.35)" }}>
             <div>
+                <div style={{ fontFamily: DL.fontMono, fontSize: 9.5, letterSpacing: "0.24em", fontWeight: 700, color: "#5C5A54" }}>MPCA ELIGIBILITY · SEASON 2026-27</div>
+                <div style={{ fontFamily: DL.fontDisplay, fontSize: 20, fontWeight: 800, color: "#1F7F59", marginTop: 2 }}>Local / Residence</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+                <div style={{ fontFamily: DL.fontMono, fontSize: 9.5, letterSpacing: "0.24em", fontWeight: 700, color: "#5C5A54" }}>AI CONFIDENCE</div>
+                <div style={{ fontFamily: DL.fontDisplay, fontSize: 22, fontWeight: 800, color: "#1F7F59" }}>0.95</div>
+            </div>
+        </div>
+        {/* Trail table */}
+        <div style={{ padding: "10px 18px 6px", fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", fontWeight: 700, color: "#8B1F1F" }}>
+            VERIFICATION TRAIL · 8 RULES CHECKED
+        </div>
+        <table style={{ width: "100%", fontFamily: DL.fontBody, fontSize: 11.5, borderCollapse: "collapse" }}>
+            <thead>
+                <tr style={{ background: "#EBE4D6", color: "#5C5A54" }}>
+                    <th style={{ padding: "6px 14px", textAlign: "left", width: 22 }}></th>
+                    <th style={{ padding: "6px 8px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>RULE</th>
+                    <th style={{ padding: "6px 8px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>VERDICT / REASON</th>
+                    <th style={{ padding: "6px 8px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>KYC EVIDENCE</th>
+                </tr>
+            </thead>
+            <tbody>
+                {[
+                    { icon: "✓", tag: "AI · Facts Promoted",     why: "education = 'SANSKAR ACADEMY / CBSE' (AI · Marksheet); residency_since = 2016-01-01 (Aadhaar)", evidence: "birth_cert · aadhar · samagra · marksheet_10", passed: true },
+                    { icon: "✗", tag: "Local/Birth",             why: "place_of_birth_division not on file — cannot verify birth", evidence: "Birth Certificate · AI DOB=2008-08-04 · QR verified", passed: false },
+                    { icon: "✓", tag: "Local/Residence",         why: "Resident in Division for 129.5 months (≥ 3 required).", evidence: "Aadhaar · AI enrolled 2016 · Samagra ID on file", passed: true },
+                    { icon: "✗", tag: "Local/Employment",        why: "Employment (self or parent) not on file", evidence: "Affidavit · not uploaded", passed: false },
+                    { icon: "✓", tag: "Local/Education",         why: "Studying at SANSKAR ACADEMY / CBSE (129.5 months in Division).", evidence: "Marksheet 10 · AI institute=SANSKAR ACADEMY · years 2022-23, 2024-25", passed: true },
+                ].map((r, i) => (
+                    <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.05)" }}>
+                        <td style={{ padding: "8px 14px", fontFamily: DL.fontMono, fontWeight: 800, color: r.passed ? "#1F7F59" : "#8B1F1F", fontSize: 15 }}>{r.icon}</td>
+                        <td style={{ padding: "8px 8px", fontFamily: DL.fontMono, fontSize: 10.5, color: "#B88328", fontWeight: 700 }}>{r.tag}</td>
+                        <td style={{ padding: "8px 8px", color: "#1A1F1D" }}>{r.why}</td>
+                        <td style={{ padding: "8px 8px", fontFamily: DL.fontMono, fontSize: 10, color: "#5C5A54" }}>{r.evidence}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
+
+// ── Mockup 3 · Squad Selection · Pre-cleared shortlist ────────────────────
+const MockupSquad = () => (
+    <div style={mockupFrame} data-testid="mockup-squad">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid rgba(0,0,0,0.08)", background: "#EBE4D6", fontFamily: DL.fontMono, fontSize: 10, color: "#5C5A54" }}>
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#C55656" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#D5A93A" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#4A9E6C" }} />
+            <span style={{ marginLeft: 12, letterSpacing: "0.06em" }}>MPCA ERP · Selection Console · MP U-19 · Cooch Behar</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, padding: 16 }}>
+            {/* LEFT · AI shortlist */}
+            <div>
+                <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", fontWeight: 700, color: "#8B1F1F", marginBottom: 8 }}>AI · PRE-CLEARED SHORTLIST · 15 OF 42</div>
+                {[
+                    { name: "Rishabh Malviya",   role: "Right-hand bat · slip",    tag: "Local/Birth",     kyc: "green" },
+                    { name: "Aarav Jhala",       role: "Off-spin all-rounder",     tag: "Local/Residence", kyc: "green" },
+                    { name: "Kabir Tiwari",      role: "Left-arm pace",            tag: "Guest/MP-Dom",    kyc: "amber" },
+                    { name: "Ishaan Pandey",     role: "Wicketkeeper-bat",         tag: "Local/Education", kyc: "green" },
+                    { name: "Devansh Bansal",    role: "Right-hand top-order",     tag: "Local/Residence", kyc: "green" },
+                    { name: "Yash Mishra",       role: "Right-arm pace",           tag: "Local/Employment",kyc: "green" },
+                ].map((p) => (
+                    <div key={p.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#F5EFE6", border: "1px solid rgba(0,0,0,0.08)", borderLeft: `3px solid ${p.kyc === "green" ? "#1F7F59" : "#B88328"}`, borderRadius: 3, marginBottom: 6 }}>
+                        <div>
+                            <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: 13, color: "#0D3B2E" }}>{p.name}</div>
+                            <div style={{ fontSize: 10.5, color: "#5C5A54", marginTop: 1 }}>{p.role}</div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                            <span style={chipStyle("neutral")}>{p.tag}</span>
+                            <span style={chipStyle(p.kyc)}>{p.kyc === "green" ? "KYC ✓" : "KYC · REVIEW"}</span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {/* RIGHT · KYC audit panel + bias meter */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ padding: 12, background: "rgba(74,158,108,0.08)", border: "1px solid rgba(74,158,108,0.35)", borderRadius: 4 }}>
+                    <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", fontWeight: 700, color: "#1F7F59", marginBottom: 8 }}>KYC · AI AUDIT</div>
+                    {[
+                        { label: "Aadhaar verified",   n: "42/42", chip: "green" },
+                        { label: "Birth Cert on file", n: "39/42", chip: "green" },
+                        { label: "Medical fitness",    n: "37/42", chip: "amber" },
+                        { label: "Bank details",       n: "42/42", chip: "green" },
+                    ].map((k) => (
+                        <div key={k.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                            <span style={{ fontSize: 12, color: "#1A1F1D" }}>{k.label}</span>
+                            <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <span style={{ fontFamily: DL.fontMono, fontSize: 11, fontWeight: 700, color: "#0D3B2E" }}>{k.n}</span>
+                                <span style={{ ...chipStyle(k.chip), padding: "1px 6px", fontSize: 9 }}>{k.chip === "green" ? "OK" : "⚠"}</span>
+                            </span>
+                        </div>
+                    ))}
+                </div>
+                <div style={{ padding: 12, background: "rgba(184,131,40,0.10)", border: "1px solid rgba(184,131,40,0.4)", borderRadius: 4 }}>
+                    <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", fontWeight: 700, color: "#B88328", marginBottom: 8 }}>AI · SELECTION BIAS ANALYSIS</div>
+                    <div style={{ fontSize: 12, color: "#1A1F1D", marginBottom: 4 }}>
+                        Divisional balance: <b>4 divisions represented</b> · Indore 5, Bhopal 4, Gwalior 3, Ujjain 3.
+                    </div>
+                    <div style={{ fontSize: 12, color: "#1A1F1D", marginBottom: 4 }}>
+                        Role balance: <b>7 bat · 4 bowl · 2 all-round · 2 keeper</b>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#5C5A54", fontStyle: "italic", marginTop: 6 }}>
+                        No selector-division skew detected. Proceed to committee sign-off.
+                    </div>
+                </div>
+                <div style={{ padding: "10px 12px", background: "#0D3B2E", color: "#F5EFE6", fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.2em", fontWeight: 700, borderRadius: 3, textAlign: "center" }}>
+                    ▶ COMMIT SHORTLIST TO COMMITTEE
+                </div>
+            </div>
+        </div>
+    </div>
+);
+
+const MOCKUPS = { grants: MockupGrants, player: MockupPlayerTrail, squad: MockupSquad };
+
+const FeatureSlide = ({ data }) => {
+    const Icon = data.icon;
+    const Mockup = data.mockup ? MOCKUPS[data.mockup] : null;
+    return (
+        <div className="max-w-[1320px] w-full">
+            {/* TOP · 2-col — problem + AI verb (LEFT), metric card (RIGHT) */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-8 lg:gap-12 items-start mb-8">
+                <div>
+                    <div className="flex items-center gap-3 mb-5">
+                        <div
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg"
+                            style={{ background: "rgba(184,131,40,0.16)", border: "1px solid rgba(184,131,40,0.4)" }}
+                        >
+                            <Icon size={18} strokeWidth={2.25} style={{ color: DL.gold }} />
+                        </div>
+                        <div className="text-[10px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                            {data.eyebrow} · {data.featureName}
+                        </div>
+                    </div>
+
+                    <div className="mb-6">
+                        <div className="text-[10px] uppercase tracking-[0.22em] font-bold mb-2" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.55)" }}>
+                            The Problem · Today
+                        </div>
+                        <h2
+                            className="text-[24px] md:text-[30px] leading-[1.2] tracking-tight"
+                            style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
+                            data-testid="feature-problem"
+                        >
+                            {data.problem}
+                        </h2>
+                    </div>
+
+                    <div>
+                        <div className="text-[10px] uppercase tracking-[0.22em] font-bold mb-2" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.85 }}>
+                            AI · Now
+                        </div>
+                        <div
+                            className="text-[44px] md:text-[60px] leading-[0.95] tracking-tight mb-3"
+                            style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.gold, letterSpacing: "-0.02em" }}
+                            data-testid="feature-verb"
+                        >
+                            {data.aiVerb}
+                        </div>
+                        <p className="text-[13.5px] md:text-[14.5px] leading-[1.5] max-w-[540px]" style={{ color: "rgba(245,239,230,0.78)" }}>
+                            {data.aiDescription}
+                        </p>
+                    </div>
+                </div>
+
                 <div
-                    className="p-8 md:p-10 rounded-md mb-5"
+                    className="p-6 md:p-7 rounded-md"
                     style={{
                         background: "linear-gradient(180deg, rgba(184,131,40,0.14) 0%, rgba(184,131,40,0.04) 100%)",
                         border: "1.5px solid rgba(184,131,40,0.44)",
@@ -829,55 +1083,47 @@ const FeatureSlide = ({ data, onLive }) => {
                     }}
                     data-testid="feature-metric-card"
                 >
-                    <div className="text-[10.5px] uppercase tracking-[0.24em] font-bold mb-6" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.9 }}>
+                    <div className="text-[10px] uppercase tracking-[0.24em] font-bold mb-4" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.9 }}>
                         Impact · Measured
                     </div>
 
-                    <div className="flex items-baseline gap-4 mb-6">
-                        <div className="text-[28px] md:text-[34px] line-through leading-none" style={{ fontFamily: DL.fontDisplay, color: "rgba(245,239,230,0.45)", fontWeight: 700 }}>
+                    <div className="flex items-baseline gap-3 mb-4">
+                        <div className="text-[22px] md:text-[26px] line-through leading-none" style={{ fontFamily: DL.fontDisplay, color: "rgba(245,239,230,0.45)", fontWeight: 700 }}>
                             {data.metric.before}
                         </div>
-                        <ArrowRight size={22} strokeWidth={2.5} style={{ color: DL.gold }} />
-                        <div className="text-[52px] md:text-[64px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.paper, fontWeight: 800 }} data-testid="feature-metric-after">
+                        <ArrowRight size={18} strokeWidth={2.5} style={{ color: DL.gold }} />
+                        <div className="text-[36px] md:text-[48px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.paper, fontWeight: 800 }} data-testid="feature-metric-after">
                             {data.metric.after}
                         </div>
                     </div>
-                    <div className="text-[13px] uppercase tracking-[0.2em] font-bold mb-8" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.62)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.2em] font-bold mb-5" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.62)" }}>
                         {data.metric.label}
                     </div>
 
-                    <div className="pt-6" style={{ borderTop: "1px dashed rgba(184,131,40,0.34)" }}>
-                        <div className="text-[15.5px] font-bold mb-2" style={{ color: DL.gold, fontFamily: DL.fontBody }}>
+                    <div className="pt-4" style={{ borderTop: "1px dashed rgba(184,131,40,0.34)" }}>
+                        <div className="text-[13.5px] font-bold mb-1.5" style={{ color: DL.gold, fontFamily: DL.fontBody }}>
                             {data.seasonSave}
                         </div>
-                        <div className="text-[13.5px] leading-[1.55] italic" style={{ color: "rgba(245,239,230,0.72)" }}>
+                        <div className="text-[12px] leading-[1.5] italic" style={{ color: "rgba(245,239,230,0.72)" }}>
                             {data.dividend}
                         </div>
                     </div>
                 </div>
-
-                {/* See it live */}
-                <button
-                    onClick={() => onLive(data.livePage)}
-                    data-testid="feature-see-live"
-                    className="w-full inline-flex items-center justify-between gap-2 px-6 py-4 rounded-md text-[13px] uppercase tracking-[0.22em] font-bold transition-all"
-                    style={{
-                        background: DL.paper,
-                        color: DL.emerald,
-                        border: "1.5px solid rgba(184,131,40,0.5)",
-                        fontFamily: DL.fontMono,
-                        boxShadow: "0 8px 22px -10px rgba(255,255,255,0.35)",
-                        cursor: "pointer",
-                    }}
-                >
-                    <span className="inline-flex items-center gap-2">
-                        <Play size={13} strokeWidth={2.5} /> See it live in the ERP
-                    </span>
-                    <span className="text-[11px] font-bold" style={{ color: DL.gold }}>
-                        {data.livePage.label} →
-                    </span>
-                </button>
             </div>
+
+            {/* BOTTOM · Full-width product mockup — replaces the fragile "See it
+                live" link so the deck runs offline in the meeting room. */}
+            {Mockup && (
+                <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="text-[9.5px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.55)" }}>
+                            The Screen · Product Reference
+                        </div>
+                        <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(184,131,40,0.5) 0%, transparent 100%)" }} />
+                    </div>
+                    <Mockup />
+                </div>
+            )}
         </div>
     );
 };

@@ -284,7 +284,7 @@ const TournamentDetail = () => {
     const canEdit = isState || isHostBody || isParentDivOfHostDist;
     // MPCA-234 · Match officials get READ-ONLY view of Tournament Basics + Match Calendar.
     // They're allocated to officiate — not to modify the schedule or pool composition.
-    const isMatchOfficial = persona?.id === "match-official" || persona?.body_type === "Match_Official";
+    const isMatchOfficial = persona?.role_id === "match_official" || persona?.id === "match-official" || persona?.body_type === "Match_Official";
     const canEditSetup = canEdit && !isMatchOfficial;
     // Iter 108c · Squad selection opens automatically 30 days before start.
     // We compute effectiveStatus below; here we use the raw status only for
@@ -607,7 +607,7 @@ const TournamentDetail = () => {
                                 </div>
                             )}
                     <SetupBox testId="box-basics" icon={ListChecks} label="Tournament Basics" note={t.setup_meta?.category ? `${t.setup_meta.category} · ${t.setup_meta.age_group}` : "Category, teams, grounds"} onClick={() => setOpenBox(openBox === "basics" ? null : "basics")} active={openBox === "basics"} flag={wiringFlags["box-basics"]} />
-                    {persona?.id === "match-official" ? (
+                    {(persona?.role_id === "match_official" || persona?.id === "match-official") ? (
                         <>
                             <SetupBox testId="box-calendar" icon={Calendar} label="Match Calendar" note={t.calendar_fixed ? "Locked · view fixtures" : "View fixtures"} onClick={() => setOpenBox(openBox === "calendar" ? null : "calendar")} active={openBox === "calendar"} flag={wiringFlags["box-calendar"]} />
                             <Link to={`/my-finance/${t.id}`} className="block" data-testid="box-my-finance-link">

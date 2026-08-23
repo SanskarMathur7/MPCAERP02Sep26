@@ -333,7 +333,7 @@ const AppLayout = ({ children }) => {
 
                 {/* Primary nav */}
                 <nav className={`sidebar-scroll flex-1 ${collapsed ? "px-2" : "px-4"} py-6 overflow-y-scroll`}>
-                    {(persona?.id === "match-official" ? OFFICIAL_NAV_DOMAINS : NAV_DOMAINS)
+                    {(persona?.role_id === "match_official" ? OFFICIAL_NAV_DOMAINS : NAV_DOMAINS)
                         .filter((group) => {
                             // Iter 110 · System Administration section only for sys-admin persona.
                             if (group.sys_admin_only) {
@@ -385,7 +385,7 @@ const AppLayout = ({ children }) => {
                     {/* MPCA-122 · "Coming Soon" section hidden — tabs
                         without functional routes clutter the nav. When
                         modules go live they are added to NAV_DOMAINS above. */}
-                    {false && persona?.id !== "match-official" && !collapsed && (
+                    {false && persona?.role_id !== "match_official" && !collapsed && (
                     <div className="border-t border-mpca-brass/15 pt-4">
                         <div className="overline text-[9px] !text-mpca-gold-light/70 mb-3 px-2">
                             Coming Soon

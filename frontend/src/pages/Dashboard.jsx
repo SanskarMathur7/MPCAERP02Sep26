@@ -63,19 +63,19 @@ const MatchOfficialMini = ({ persona }) => (
                 submit DA/TA claims, and review your season history.
             </p>
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <a href="/officials/me" className="p-4 transition-all hover:-translate-y-0.5"
+                <a href="/my-assignments" className="p-4 transition-all hover:-translate-y-0.5"
                    style={{ background: DL.ivory, border: `1px solid ${DL.ruleStrong}`, borderLeft: `4px solid ${DL.emerald}`, borderRadius: 4 }}
                    data-testid="official-jump-postings">
                     <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>My Postings</div>
                     <div className="mt-1 text-[15px]" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink }}>Upcoming assignments →</div>
                 </a>
-                <a href="/da-forms" className="p-4 transition-all hover:-translate-y-0.5"
+                <a href="/my-da-forms" className="p-4 transition-all hover:-translate-y-0.5"
                    style={{ background: DL.ivory, border: `1px solid ${DL.ruleStrong}`, borderLeft: `4px solid ${DL.gold}`, borderRadius: 4 }}
                    data-testid="official-jump-claims">
                     <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>DA / TA Claims</div>
                     <div className="mt-1 text-[15px]" style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.ink }}>Submit &amp; track →</div>
                 </a>
-                <a href="/officials/me?tab=history" className="p-4 transition-all hover:-translate-y-0.5"
+                <a href="/my-assignments?tab=history" className="p-4 transition-all hover:-translate-y-0.5"
                    style={{ background: DL.ivory, border: `1px solid ${DL.ruleStrong}`, borderLeft: `4px solid ${DL.muted}`, borderRadius: 4 }}
                    data-testid="official-jump-history">
                     <div className="text-[10.5px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.ink2 }}>Season History</div>

@@ -91,7 +91,10 @@ export const ROLE_MATRIX = Object.freeze({
 /* ---------- roleOf(user) ---------- */
 export function roleOf(user) {
     if (!user) return ROLES.ANON;
-    const explicit = (user.role || "").trim();
+    // Iter 127 · Prefer the RBAC role_id assigned via the users collection —
+    // that's the authoritative source. body_type-based inference is only a
+    // fallback for legacy accounts that haven't been migrated to role_id.
+    const explicit = (user.role_id || user.role || "").trim();
     if (explicit && Object.values(ROLES).includes(explicit)) return explicit;
 
     const bt = (user.body_type || "").toLowerCase();

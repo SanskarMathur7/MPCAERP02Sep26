@@ -111,7 +111,7 @@ const MatchOfficialDAPanel = ({ tournamentId, formId: formIdProp, readOnly = fal
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(null);
 
-    const isMatchOfficial = persona?.id === "match-official";
+    const isMatchOfficial = persona?.role_id === "match_official" || persona?.id === "match-official";
     const canEdit = !readOnly && isMatchOfficial && (form?.status === "Draft" || form?.status === "Rejected");
 
     // ── Load or self-create the DA form ──

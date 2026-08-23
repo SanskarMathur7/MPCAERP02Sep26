@@ -418,30 +418,38 @@ async def create_tournament(
         **data,
     )
     doc = t.model_dump()
-    # Iter 121 — Fire M&C submit inline so the tournament lands in
-    # `PendingReview` state and shows up in Hon. Secretary's approval
-    # inbox. Bypass errors (e.g. missing workflow config) — the tournament
-    # is still saved even if the M&C step degrades.
-    doc["mc_status"] = "Draft"
-    doc["mc_chain"] = []
+    # Iter 127 · Tournament CREATION is the "submit" action of the maker-
+    # checker workflow — the MPCA Secretary who created the tournament
+    # IS the maker. So we land straight in `PendingReview` (waiting for
+    # Hon. Secretary sign-off) with a signed chain entry, rather than the
+    # earlier code path which called `apply_transition("submit")` — that
+    # silently failed because the submit step required a Chief Accounts
+    # Officer post that the creator doesn't hold, leaving the tournament
+    # stuck at Draft while every other bit of wiring was already green.
+    now_iso = datetime.now(timezone.utc).isoformat()
+    principal_dict = {}
+    try:
+        from lib.authz import get_principal
+        _p = get_principal(request)
+        principal_dict = {
+            "user_id":     _p.user_id,
+            "display_name": (_p.raw_user or {}).get("display_name") or (_p.raw_user or {}).get("name"),
+            "post":         (_p.raw_user or {}).get("post"),
+            "body_code":    (_p.raw_user or {}).get("body_code"),
+        }
+    except Exception:  # noqa: BLE001
+        pass
+    doc["mc_status"] = "PendingReview"
+    doc["mc_chain"] = [{
+        "at": now_iso,
+        "from": "Draft",
+        "to": "PendingReview",
+        "action": "submit",
+        "actor": principal_dict,
+        "note": "Tournament created and submitted for approval.",
+    }]
     doc["mc_approvals"] = []
     await db.tournaments.insert_one(doc)
-    try:
-        from lib.mc import apply_transition
-        from lib.authz import get_principal
-        principal = get_principal(request)
-        await apply_transition(
-            wf_key="tournament_create",
-            doc_id=t.id,
-            action="submit",
-            principal=principal,
-            note=None,
-        )
-    except Exception as exc:  # noqa: BLE001
-        # Log but don't fail the create — better to have the tournament
-        # than to lose it because the M&C engine is misconfigured.
-        import logging
-        logging.getLogger("mpca").warning(f"M&C submit failed for {t.id}: {exc}")
     # MPCA-133+ · Ping MPCA secretary that this new tournament needs match
     # officials posted centrally. Non-fatal on any error.
     try:

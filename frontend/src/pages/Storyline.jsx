@@ -302,17 +302,17 @@ const SLIDES = [
     // ═══════════════════════════════════════════════════════════════
     {
         kind: "cta",
-        eyebrow: "10 · The Ask",
-        title: "This is the first proof-of-work.",
-        body: "Same four backlogs. Same four-layer framework. Every association.",
-        body2: "MPCA built this first. Standing to reinvest it into the sport.",
+        eyebrow: "10 · The Standing Offer",
+        title: "Every association runs the same four backlogs. MPCA just wrote the answer.",
+        body: "One state. Ten divisions. One codebase. One audit trail. Rewritable per season, portable to any board.",
+        body2: "We are not asking for a mandate. We are offering a head start — for MPCA to lead, and for every association that wants to stop running cricket on paper.",
         stats: [
-            { value: "4",      label: "Cognitive layers, one framework" },
-            { value: "3",      label: "Deep-dives shown today · Grants · Players · Squads" },
-            { value: "1",      label: "Working demonstrator · six months old" },
-            { value: "Every",  label: "Cricket association can be next" },
+            { value: "10",   label: "MPCA divisions · unified under one framework" },
+            { value: "4",    label: "Cognitive layers · Ingest · Structure · Reason · Judge" },
+            { value: "20+",  label: "Cricket associations · plug into the same code" },
+            { value: "0",    label: "Vendor lock-in · every line owned by MPCA" },
         ],
-        quote: "The industry chose the field. We chose behind the scenes. That is where the sport actually decides who plays.",
+        quote: "MPCA moved first. The rest of Indian cricket can now follow, or catch up.",
     },
 ];
 
@@ -1188,8 +1188,19 @@ const CtaSlide = ({ data }) => (
         </div>
 
         <blockquote
-            className="text-[16px] md:text-[19px] leading-[1.55] italic max-w-[760px] mx-auto text-center"
-            style={{ color: DL.paper, borderTop: `2px solid ${DL.gold}`, paddingTop: 16 }}
+            className="max-w-[900px] mx-auto text-center"
+            style={{
+                fontFamily: DL.fontDisplay,
+                fontWeight: 800,
+                color: DL.paper,
+                fontSize: "clamp(24px, 3vw, 34px)",
+                lineHeight: 1.2,
+                letterSpacing: "-0.01em",
+                borderTop: `2px solid ${DL.gold}`,
+                borderBottom: `2px solid ${DL.gold}`,
+                padding: "22px 8px",
+            }}
+            data-testid="cta-quote"
         >
             {data.quote}
         </blockquote>

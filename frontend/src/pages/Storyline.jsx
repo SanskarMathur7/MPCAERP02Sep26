@@ -32,8 +32,8 @@ const SLIDES = [
         kind: "what",
         eyebrow: "01 · Opening",
         overline: "The story nobody tells about AI in cricket",
-        title: "Everyone talks about AI on the field. Nobody talks about AI in the file room.",
-        subtitle: "1% lives on the field. 99% lives in the file room.",
+        title: "Everyone talks about AI on the field. Nobody talks about AI behind the scenes.",
+        subtitle: "1% lives on the field. 99% lives behind the scenes.",
         metaphor: "iceberg",
         pains: [
             { value: "3,000+", label: "Players. Every KYC verified by hand." },
@@ -318,7 +318,7 @@ const SLIDES = [
             { value: "1",      label: "Working demonstrator · six months old" },
             { value: "Every",  label: "Cricket association can be next" },
         ],
-        quote: "The industry chose the field. We chose the file room. That is where the sport actually decides who plays.",
+        quote: "The industry chose the field. We chose behind the scenes. That is where the sport actually decides who plays.",
     },
 ];
 
@@ -490,22 +490,24 @@ const NavBtn = ({ children, onClick, disabled, testid, primary }) => (
 // Slide 1 · WHAT · The Problem
 // ═══════════════════════════════════════════════════════════════════
 const IcebergDiagram = () => (
-    <svg viewBox="0 0 700 340" style={{ width: "100%", maxWidth: 620, margin: "0 auto", display: "block" }} aria-hidden>
-        {/* Waterline */}
-        <line x1="0" y1="112" x2="700" y2="112" stroke="rgba(184,131,40,0.6)" strokeWidth="1" strokeDasharray="6 6" />
-        <text x="0" y="104" fontFamily={DL.fontMono} fontSize="10.5" fill={DL.gold} letterSpacing="2">WATERLINE · WHAT THE SPORT SEES</text>
-        {/* Above-water tip · 1% */}
-        <polygon points="330,20 400,110 260,110" fill="rgba(245,239,230,0.92)" stroke={DL.gold} strokeWidth="1.5" />
-        <text x="330" y="72" textAnchor="middle" fontFamily={DL.fontDisplay} fontWeight="800" fontSize="28" fill="#1A1F1D">1%</text>
-        <text x="330" y="92" textAnchor="middle" fontFamily={DL.fontMono} fontSize="9.5" letterSpacing="1.5" fill="#5C5A54">ON-FIELD ANALYTICS</text>
+    <svg viewBox="0 0 720 380" style={{ width: "100%", maxWidth: 640, margin: "0 auto", display: "block" }} aria-hidden>
+        {/* Waterline label — pushed up ABOVE the iceberg so it never overlaps the tip */}
+        <text x="360" y="18" textAnchor="middle" fontFamily={DL.fontMono} fontSize="10" fill={DL.gold} letterSpacing="2.6">
+            WATERLINE · WHAT THE SPORT SEES
+        </text>
+        {/* Above-water tip · 1% · enlarged so text has room to breathe */}
+        <polygon points="360,40 460,160 260,160" fill="rgba(245,239,230,0.94)" stroke={DL.gold} strokeWidth="1.5" />
+        <text x="360" y="108" textAnchor="middle" fontFamily={DL.fontDisplay} fontWeight="800" fontSize="34" fill="#1A1F1D">1%</text>
+        <text x="360" y="134" textAnchor="middle" fontFamily={DL.fontMono} fontSize="9" letterSpacing="1.6" fill="#5C5A54">ON-FIELD ANALYTICS</text>
+        {/* Waterline · pushed down clear of the tip's base label */}
+        <line x1="40" y1="160" x2="680" y2="160" stroke="rgba(184,131,40,0.55)" strokeWidth="1" strokeDasharray="6 6" />
+        <ellipse cx="360" cy="160" rx="260" ry="4" fill="none" stroke="rgba(184,131,40,0.28)" strokeWidth="0.6" />
+        <ellipse cx="360" cy="160" rx="170" ry="2.5" fill="none" stroke="rgba(184,131,40,0.4)" strokeWidth="0.6" />
         {/* Below-water bulk · 99% */}
-        <polygon points="260,110 400,110 500,300 160,300" fill="rgba(13,59,46,0.85)" stroke={DL.gold} strokeWidth="1.5" opacity="0.95" />
-        <text x="330" y="200" textAnchor="middle" fontFamily={DL.fontDisplay} fontWeight="800" fontSize="64" fill={DL.gold}>99%</text>
-        <text x="330" y="226" textAnchor="middle" fontFamily={DL.fontMono} fontSize="10.5" letterSpacing="2" fill="rgba(245,239,230,0.85)">CRICKET ADMINISTRATION</text>
-        <text x="330" y="250" textAnchor="middle" fontFamily={DL.fontBody} fontSize="12" fill="rgba(245,239,230,0.62)">Grants · Player Registration · Tournament wiring · Division books</text>
-        {/* Reflection ripples */}
-        <ellipse cx="330" cy="112" rx="220" ry="4" fill="none" stroke="rgba(184,131,40,0.28)" strokeWidth="0.6" />
-        <ellipse cx="330" cy="112" rx="140" ry="2.5" fill="none" stroke="rgba(184,131,40,0.4)" strokeWidth="0.6" />
+        <polygon points="260,160 460,160 560,360 160,360" fill="rgba(13,59,46,0.85)" stroke={DL.gold} strokeWidth="1.5" opacity="0.95" />
+        <text x="360" y="252" textAnchor="middle" fontFamily={DL.fontDisplay} fontWeight="800" fontSize="72" fill={DL.gold}>99%</text>
+        <text x="360" y="280" textAnchor="middle" fontFamily={DL.fontMono} fontSize="10.5" letterSpacing="2.2" fill="rgba(245,239,230,0.88)">BEHIND THE SCENES</text>
+        <text x="360" y="308" textAnchor="middle" fontFamily={DL.fontBody} fontSize="12" fill="rgba(245,239,230,0.62)">Grants · Player Registration · Tournament wiring · Division books</text>
     </svg>
 );
 
@@ -532,11 +534,11 @@ const WhatSlide = ({ data }) => (
 
         {data.metaphor === "iceberg" && <IcebergDiagram />}
 
-        <div className={"grid gap-3 " + (data.metaphor === "iceberg" ? "grid-cols-2 md:grid-cols-4 mt-6" : "grid-cols-2 md:grid-cols-3")}>
+        <div className={"grid gap-3 " + (data.metaphor === "iceberg" ? "grid-cols-2 md:grid-cols-4 mt-6" : "grid-cols-1 md:grid-cols-2")}>
             {data.pains.map((p, i) => (
                 <div
                     key={p.label}
-                    className="p-4 rounded-md"
+                    className="p-5 rounded-md"
                     style={{
                         background: "rgba(139,31,31,0.10)",
                         border: "1px solid rgba(139,31,31,0.42)",
@@ -544,12 +546,22 @@ const WhatSlide = ({ data }) => (
                     }}
                     data-testid={`what-pain-${i}`}
                 >
-                    <div className="text-[26px] md:text-[32px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: "#E88787", fontWeight: 800 }}>
+                    {p.title && (
+                        <div className="text-[10.5px] uppercase tracking-[0.24em] font-bold mb-2" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                            {p.title}
+                        </div>
+                    )}
+                    <div className="text-[28px] md:text-[36px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: "#E88787", fontWeight: 800 }}>
                         {p.value}
                     </div>
-                    <div className="text-[11.5px] mt-2 leading-snug font-semibold" style={{ color: DL.paper }}>
+                    <div className="text-[12px] mt-2 leading-snug font-semibold" style={{ color: DL.paper }}>
                         {p.label}
                     </div>
+                    {p.sub && (
+                        <div className="text-[11px] mt-1.5 leading-snug italic" style={{ color: "rgba(245,239,230,0.6)" }}>
+                            {p.sub}
+                        </div>
+                    )}
                 </div>
             ))}
         </div>
@@ -631,59 +643,59 @@ const WhySlide = ({ data }) => (
 // ═══════════════════════════════════════════════════════════════════
 const FrameworkSlide = ({ data }) => (
     <div className="max-w-[1240px] w-full">
-        <div className="text-center mb-8">
-            <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-4" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+        <div className="text-center mb-6">
+            <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-3" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
                 {data.eyebrow}
             </div>
             <h1
-                className="text-[42px] md:text-[58px] leading-[1.05] tracking-tight mb-4"
+                className="text-[34px] md:text-[46px] leading-[1.05] tracking-tight mb-3"
                 style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
                 data-testid="framework-title"
             >
                 {data.title}
             </h1>
-            <p className="text-[15px] md:text-[17px] leading-[1.55] max-w-[880px] mx-auto" style={{ color: "rgba(245,239,230,0.75)" }}>
+            <p className="text-[13px] md:text-[15px] leading-[1.5] max-w-[760px] mx-auto" style={{ color: "rgba(245,239,230,0.75)" }}>
                 {data.subtitle}
             </p>
         </div>
 
         {/* Ladder — Layer 4 at the top, Layer 1 at the base */}
-        <div className="flex flex-col-reverse gap-3 mb-7 max-w-[1080px] mx-auto">
+        <div className="flex flex-col-reverse gap-2 mb-6 max-w-[1000px] mx-auto">
             {data.layers.map((L, i) => {
                 const Icon = L.icon;
                 const isTop = i === data.layers.length - 1;
                 return (
                     <div
                         key={L.name}
-                        className="grid grid-cols-[auto_120px_1fr_1fr] items-center gap-4 md:gap-6 p-5 rounded-md relative"
+                        className="grid grid-cols-[auto_100px_1fr_1fr] items-center gap-3 md:gap-5 p-3.5 rounded-md relative"
                         style={{
                             background: isTop ? "rgba(184,131,40,0.14)" : "rgba(13,59,46,0.35)",
                             border: `1px solid ${isTop ? DL.gold : "rgba(43,110,89,0.55)"}`,
-                            marginLeft: `${i * 22}px`,          // staircase inset for ladder feel
+                            marginLeft: `${i * 18}px`,          // staircase inset for ladder feel
                         }}
                         data-testid={`framework-layer-${L.slug}`}
                     >
                         <div
-                            className="w-10 h-10 rounded flex items-center justify-center shrink-0"
+                            className="w-9 h-9 rounded flex items-center justify-center shrink-0"
                             style={{
                                 background: isTop ? DL.gold : "rgba(43,110,89,0.5)",
                                 color: isTop ? DL.ink : DL.paper,
                             }}
                         >
-                            <Icon size={18} strokeWidth={1.8} />
+                            <Icon size={16} strokeWidth={1.8} />
                         </div>
                         <div>
-                            <div className="text-[9.5px] uppercase tracking-[0.24em] font-bold" style={{ fontFamily: DL.fontMono, color: isTop ? DL.gold : "#7EC49E" }}>
+                            <div className="text-[9px] uppercase tracking-[0.24em] font-bold" style={{ fontFamily: DL.fontMono, color: isTop ? DL.gold : "#7EC49E" }}>
                                 Layer {L.n}
                             </div>
-                            <div className="text-[18px] md:text-[20px] leading-tight font-bold" style={{ fontFamily: DL.fontDisplay, color: DL.paper }}>
+                            <div className="text-[16px] md:text-[18px] leading-tight font-bold" style={{ fontFamily: DL.fontDisplay, color: DL.paper }}>
                                 {L.name}
                             </div>
                         </div>
-                        <div className="text-[13px] md:text-[14.5px] leading-[1.4] font-semibold" style={{ color: DL.paper }}>
+                        <div className="text-[12px] md:text-[13px] leading-[1.4] font-semibold" style={{ color: DL.paper }}>
                             {L.what}
                         </div>
-                        <div className="text-[11px] md:text-[12px] leading-[1.4] italic" style={{ color: "rgba(245,239,230,0.6)" }}>
+                        <div className="text-[10.5px] md:text-[11.5px] leading-[1.4] italic" style={{ color: "rgba(245,239,230,0.6)" }}>
                             {L.example}
                         </div>
                     </div>
@@ -692,7 +704,7 @@ const FrameworkSlide = ({ data }) => (
         </div>
 
         <blockquote
-            className="text-[18px] md:text-[22px] leading-[1.5] italic max-w-[900px] mx-auto text-center px-6 py-5 rounded-md"
+            className="text-[15px] md:text-[18px] leading-[1.5] italic max-w-[640px] mx-auto text-center px-6 py-4 rounded-md"
             style={{
                 color: DL.paper,
                 background: "rgba(184,131,40,0.06)",
@@ -1028,95 +1040,77 @@ const FeatureSlide = ({ data }) => {
     const Icon = data.icon;
     const Mockup = data.mockup ? MOCKUPS[data.mockup] : null;
     return (
-        <div className="max-w-[1320px] w-full">
-            {/* TOP · 2-col — problem + AI verb (LEFT), metric card (RIGHT) */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-8 lg:gap-12 items-start mb-8">
+        <div className="max-w-[1280px] w-full pb-24">
+            {/* COMPACT TOP STRIP · eyebrow · problem · verb · metric — one row, small */}
+            <div className="flex flex-wrap items-center gap-3 mb-3">
+                <div
+                    className="inline-flex h-8 w-8 items-center justify-center rounded"
+                    style={{ background: "rgba(184,131,40,0.16)", border: "1px solid rgba(184,131,40,0.4)" }}
+                >
+                    <Icon size={15} strokeWidth={2.25} style={{ color: DL.gold }} />
+                </div>
+                <div className="text-[10px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                    {data.eyebrow} · {data.featureName}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr] gap-4 md:gap-6 mb-5">
+                {/* LEFT · problem headline + tight AI verb line */}
                 <div>
-                    <div className="flex items-center gap-3 mb-5">
-                        <div
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg"
-                            style={{ background: "rgba(184,131,40,0.16)", border: "1px solid rgba(184,131,40,0.4)" }}
-                        >
-                            <Icon size={18} strokeWidth={2.25} style={{ color: DL.gold }} />
-                        </div>
-                        <div className="text-[10px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
-                            {data.eyebrow} · {data.featureName}
-                        </div>
-                    </div>
-
-                    <div className="mb-6">
-                        <div className="text-[10px] uppercase tracking-[0.22em] font-bold mb-2" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.55)" }}>
-                            The Problem · Today
-                        </div>
-                        <h2
-                            className="text-[24px] md:text-[30px] leading-[1.2] tracking-tight"
-                            style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
-                            data-testid="feature-problem"
-                        >
-                            {data.problem}
-                        </h2>
-                    </div>
-
-                    <div>
-                        <div className="text-[10px] uppercase tracking-[0.22em] font-bold mb-2" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.85 }}>
-                            AI · Now
-                        </div>
-                        <div
-                            className="text-[44px] md:text-[60px] leading-[0.95] tracking-tight mb-3"
-                            style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.gold, letterSpacing: "-0.02em" }}
+                    <h2
+                        className="text-[19px] md:text-[24px] leading-[1.2] tracking-tight mb-2"
+                        style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
+                        data-testid="feature-problem"
+                    >
+                        {data.problem}
+                    </h2>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-[9px] uppercase tracking-[0.24em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.85 }}>AI · Now</span>
+                        <span
+                            className="text-[18px] md:text-[24px] leading-none tracking-tight"
+                            style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.gold, letterSpacing: "-0.01em" }}
                             data-testid="feature-verb"
                         >
                             {data.aiVerb}
-                        </div>
-                        <p className="text-[12.5px] md:text-[13.5px] leading-[1.5] max-w-[500px]" style={{ color: "rgba(245,239,230,0.72)" }}>
-                            {data.aiDescription}
-                        </p>
+                        </span>
                     </div>
+                    <p className="text-[11.5px] md:text-[12.5px] leading-[1.5] mt-2 max-w-[540px]" style={{ color: "rgba(245,239,230,0.72)" }}>
+                        {data.aiDescription}
+                    </p>
                 </div>
 
+                {/* RIGHT · compact metric strip */}
                 <div
-                    className="p-6 md:p-7 rounded-md"
+                    className="p-4 rounded-md flex flex-col justify-center"
                     style={{
-                        background: "linear-gradient(180deg, rgba(184,131,40,0.14) 0%, rgba(184,131,40,0.04) 100%)",
-                        border: "1.5px solid rgba(184,131,40,0.44)",
-                        boxShadow: "0 30px 60px -30px rgba(184,131,40,0.35)",
+                        background: "linear-gradient(180deg, rgba(184,131,40,0.12) 0%, rgba(184,131,40,0.04) 100%)",
+                        border: "1px solid rgba(184,131,40,0.44)",
                     }}
                     data-testid="feature-metric-card"
                 >
-                    <div className="text-[10px] uppercase tracking-[0.24em] font-bold mb-4" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.9 }}>
-                        Impact · Measured
-                    </div>
-
-                    <div className="flex items-baseline gap-3 mb-4">
-                        <div className="text-[22px] md:text-[26px] line-through leading-none" style={{ fontFamily: DL.fontDisplay, color: "rgba(245,239,230,0.45)", fontWeight: 700 }}>
+                    <div className="flex items-baseline gap-2 mb-1">
+                        <div className="text-[16px] line-through leading-none" style={{ fontFamily: DL.fontDisplay, color: "rgba(245,239,230,0.45)", fontWeight: 700 }}>
                             {data.metric.before}
                         </div>
-                        <ArrowRight size={18} strokeWidth={2.5} style={{ color: DL.gold }} />
-                        <div className="text-[36px] md:text-[48px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.paper, fontWeight: 800 }} data-testid="feature-metric-after">
+                        <ArrowRight size={13} strokeWidth={2.5} style={{ color: DL.gold }} />
+                        <div className="text-[24px] md:text-[30px] leading-none tracking-tight" style={{ fontFamily: DL.fontDisplay, color: DL.paper, fontWeight: 800 }} data-testid="feature-metric-after">
                             {data.metric.after}
                         </div>
                     </div>
-                    <div className="text-[11px] uppercase tracking-[0.2em] font-bold mb-5" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.62)" }}>
+                    <div className="text-[9.5px] uppercase tracking-[0.2em] font-bold" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.58)" }}>
                         {data.metric.label}
                     </div>
-
-                    <div className="pt-4" style={{ borderTop: "1px dashed rgba(184,131,40,0.34)" }}>
-                        <div className="text-[13.5px] font-bold mb-1.5" style={{ color: DL.gold, fontFamily: DL.fontBody }}>
-                            {data.seasonSave}
-                        </div>
-                        <div className="text-[12px] leading-[1.5] italic" style={{ color: "rgba(245,239,230,0.72)" }}>
-                            {data.dividend}
-                        </div>
+                    <div className="text-[11px] font-bold mt-2" style={{ color: DL.gold, fontFamily: DL.fontBody }}>
+                        {data.seasonSave}
                     </div>
                 </div>
             </div>
 
-            {/* BOTTOM · Full-width product mockup — replaces the fragile "See it
-                live" link so the deck runs offline in the meeting room. */}
+            {/* HERO · Product mockup */}
             {Mockup && (
                 <div>
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="text-[9.5px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.55)" }}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                        <div className="text-[9px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.5)" }}>
                             The Screen · Product Reference
                         </div>
                         <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(184,131,40,0.5) 0%, transparent 100%)" }} />

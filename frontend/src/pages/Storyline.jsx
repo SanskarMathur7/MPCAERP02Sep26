@@ -146,8 +146,6 @@ const SLIDES = [
             "40–60 scans per tournament",
             "Rate card checked line-by-line",
             "Budget head mapped from memory",
-            "Duplicates hidden across seasons",
-            "2–4% quiet leakage every year",
             "Officers front cash for 2+ months",
         ],
         aiCount: 2,
@@ -185,8 +183,6 @@ const SLIDES = [
             "Name mismatches missed under pressure",
             "34 age brackets on a spreadsheet",
             "Every reviewer reads the rules differently",
-            "One typo · one disqualified squad",
-            "KYC gaps surface at squad-lock",
         ],
         aiCount: 2,
         aiPreview: "AI reads the docs. The engine walks the rules. Every reviewer sees the same reasoning.",
@@ -222,8 +218,6 @@ const SLIDES = [
             "Names debated from memory",
             "6 hrs/meeting × 15 meetings/year",
             "KYC gaps at squad-lock",
-            "Signed PDF re-typed by every inbox",
-            "Three drifting versions circulate",
         ],
         aiCount: 2,
         aiPreview: "Pre-cleared shortlist. Signed PDF parsed back. Version drift impossible.",
@@ -402,15 +396,7 @@ export default function Storyline() {
                 </Link>
             </div>
 
-            {/* Top-left brand */}
-            <div style={{ position: "absolute", top: 28, left: 32, display: "flex", alignItems: "center", gap: 10, zIndex: 5 }}>
-                <span
-                    className="text-[11px] uppercase tracking-[0.28em] font-bold"
-                    style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.85 }}
-                >
-                    MPCA · AI Pitch
-                </span>
-            </div>
+            {/* Iter 128 · Running "MPCA · AI Pitch" header removed for decluttering — every slide now speaks for itself. */}
 
             {/* Slide surface — items-start so tall slides (e.g. Grants with 7 pain items)
                 don't push their content off the top of the viewport. Vertical
@@ -774,29 +760,17 @@ const BucketIntroSlide = ({ data }) => {
                     </ul>
                 </div>
 
-                {/* RIGHT — AI answer preview */}
+                {/* RIGHT — AI answer preview · one line, no fluff */}
                 <div
-                    className="p-6 rounded-md flex flex-col"
+                    className="p-5 rounded-md flex flex-col justify-center"
                     style={{ background: "rgba(13,59,46,0.30)", border: "1px solid rgba(43,110,89,0.6)", borderLeft: `3px solid ${DL.gold}` }}
                 >
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="text-[10.5px] uppercase tracking-[0.24em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
-                            AI&apos;s answer
-                        </div>
-                        <div
-                            className="inline-flex items-baseline gap-1.5 px-3 py-1 rounded-full"
-                            style={{ background: DL.gold, color: DL.ink, fontFamily: DL.fontMono }}
-                        >
-                            <span className="text-[15px] font-bold leading-none">{data.aiCount}</span>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.18em]">AI features</span>
-                        </div>
+                    <div className="text-[10px] uppercase tracking-[0.24em] font-bold mb-3" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
+                        AI · {data.aiCount} features
                     </div>
-                    <p className="text-[14px] leading-[1.6] font-semibold flex-1" style={{ color: DL.paper }}>
+                    <p className="text-[14px] leading-[1.55] font-semibold" style={{ color: DL.paper }}>
                         {data.aiPreview}
                     </p>
-                    <div className="mt-4 text-[10.5px] uppercase tracking-[0.22em] font-bold" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.55)" }}>
-                        ↓ Next: watch each one in action
-                    </div>
                 </div>
             </div>
         </div>
@@ -1050,7 +1024,7 @@ const FeatureSlide = ({ data }) => {
                     <Icon size={15} strokeWidth={2.25} style={{ color: DL.gold }} />
                 </div>
                 <div className="text-[10px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
-                    {data.eyebrow} · {data.featureName}
+                    {data.eyebrow}
                 </div>
             </div>
 
@@ -1074,9 +1048,6 @@ const FeatureSlide = ({ data }) => {
                             {data.aiVerb}
                         </span>
                     </div>
-                    <p className="text-[11.5px] md:text-[12.5px] leading-[1.5] mt-2 max-w-[540px]" style={{ color: "rgba(245,239,230,0.72)" }}>
-                        {data.aiDescription}
-                    </p>
                 </div>
 
                 {/* RIGHT · compact metric strip */}
@@ -1181,35 +1152,35 @@ const ImpactSlide = ({ data }) => (
 // Slide 10 · CTA
 // ═══════════════════════════════════════════════════════════════════
 const CtaSlide = ({ data }) => (
-    <div className="max-w-[1120px] w-full text-center">
+    <div className="max-w-[1120px] w-full mx-auto text-center flex flex-col items-center">
         <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-5" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.9 }}>
             {data.eyebrow}
         </div>
         <h1
-            className="text-[46px] md:text-[68px] leading-[1.05] tracking-tight mb-8"
+            className="text-[42px] md:text-[60px] leading-[1.05] tracking-tight mb-8 max-w-[900px] mx-auto text-center"
             style={{ fontFamily: DL.fontDisplay, fontWeight: 800, color: DL.paper }}
             data-testid="cta-title"
         >
             {data.title}
         </h1>
-        <p className="text-[17px] md:text-[19px] leading-[1.65] max-w-[860px] mx-auto mb-4" style={{ color: "rgba(245,239,230,0.78)" }}>
+        <p className="text-[15px] md:text-[17px] leading-[1.6] max-w-[760px] mx-auto text-center mb-3" style={{ color: "rgba(245,239,230,0.78)" }}>
             {data.body}
         </p>
-        <p className="text-[17px] md:text-[19px] leading-[1.65] max-w-[860px] mx-auto mb-10" style={{ color: "rgba(245,239,230,0.78)" }}>
+        <p className="text-[15px] md:text-[17px] leading-[1.6] max-w-[760px] mx-auto text-center mb-10" style={{ color: "rgba(245,239,230,0.78)" }}>
             {data.body2}
         </p>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10 max-w-[900px] mx-auto">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10 max-w-[900px] w-full mx-auto">
             {data.stats.map((s) => (
                 <div
                     key={s.label}
-                    className="p-5 rounded-md"
+                    className="p-5 rounded-md text-center"
                     style={{ background: "rgba(184,131,40,0.10)", border: "1px solid rgba(184,131,40,0.4)" }}
                 >
-                    <div className="text-[38px] leading-none" style={{ fontFamily: DL.fontDisplay, color: DL.gold, fontWeight: 800 }}>
+                    <div className="text-[36px] leading-none" style={{ fontFamily: DL.fontDisplay, color: DL.gold, fontWeight: 800 }}>
                         {s.value}
                     </div>
-                    <div className="text-[10.5px] uppercase tracking-[0.18em] font-bold mt-2" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.72)" }}>
+                    <div className="text-[10px] uppercase tracking-[0.18em] font-bold mt-2" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.72)" }}>
                         {s.label}
                     </div>
                 </div>
@@ -1217,8 +1188,8 @@ const CtaSlide = ({ data }) => (
         </div>
 
         <blockquote
-            className="text-[19px] md:text-[22px] leading-[1.55] italic max-w-[820px] mx-auto"
-            style={{ color: DL.paper, borderLeft: `2px solid ${DL.gold}`, paddingLeft: 20, textAlign: "left" }}
+            className="text-[16px] md:text-[19px] leading-[1.55] italic max-w-[760px] mx-auto text-center"
+            style={{ color: DL.paper, borderTop: `2px solid ${DL.gold}`, paddingTop: 16 }}
         >
             {data.quote}
         </blockquote>

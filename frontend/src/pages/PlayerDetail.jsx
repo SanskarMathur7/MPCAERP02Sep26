@@ -78,6 +78,15 @@ const Pill = ({ tone, label, testId }) => {
     return <span className={map[tone] || "pill pill-lapsed"} data-testid={testId}>{label}</span>;
 };
 
+/** Iter 129 · compact key/value cell used inside the player-profile header strip. */
+const HeaderKv = ({ k, v, testId }) => (
+    <div className="flex items-baseline gap-2 min-w-0" data-testid={testId}>
+        <span className="text-[9px] uppercase tracking-[0.22em] font-bold shrink-0" style={{ color: "rgba(184,131,40,0.75)" }}>{k}</span>
+        <span className="truncate font-semibold" style={{ color: "rgba(251,248,241,0.92)" }} title={String(v)}>{v}</span>
+    </div>
+);
+
+
 /** Single doc-slot uploader — picks file, POSTs to /uploads, then attaches via /players/{id}/documents. */
 const DocSlot = ({ slot, existing, playerId, persona, locked, onChanged }) => {
     const inputRef = useRef(null);
@@ -672,6 +681,28 @@ const AIReportCard = ({ player, onRerun, running }) => {
                 </button>
             </div>
 
+            {/* Iter 129 · QR signals from birth cert / any doc with a QR */}
+            {v.qr_signals && v.qr_signals.length > 0 && (
+                <div className="mt-4 border-t border-current/20 pt-3">
+                    <div className="overline mb-2 !text-current opacity-75">QR / Barcode Signals (server-verified)</div>
+                    <ul className="text-[11.5px] space-y-1" data-testid="ai-qr-signals">
+                        {v.qr_signals.map((s, i) => {
+                            const up = (s.upstream && s.upstream[0]) || null;
+                            const badge = s.qr_found
+                                ? (up ? (up.ok ? "✓ resolved" : `✗ unreachable (HTTP ${up.http_status || "—"})`) : "· payload not a URL")
+                                : "— no QR found";
+                            return (
+                                <li key={i}>
+                                    <span className="font-mono uppercase opacity-75">{(s.doc_type || "").replace(/_/g, " ")}</span>{" "}
+                                    <span className={s.qr_found && up?.ok ? "text-emerald-700" : (s.qr_found ? "text-mpca-oxblood" : "opacity-60")}>{badge}</span>
+                                    {up?.url && <span className="ml-2 text-[10px] font-mono opacity-60 break-all">{up.url}</span>}
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            )}
+
             {v.warnings && v.warnings.length > 0 && (
                 <div className="mt-4 border-t border-current/20 pt-3">
                     <div className="overline mb-2 !text-current opacity-75">Cross-Document Warnings</div>
@@ -691,8 +722,10 @@ const AIReportCard = ({ player, onRerun, running }) => {
                                     <th className="text-left py-2 pr-3">Document</th>
                                     <th className="text-left py-2 pr-3">Extracted Name</th>
                                     <th className="text-left py-2 pr-3">Extracted DOB</th>
+                                    <th className="text-left py-2 pr-3">Address Dist.</th>
                                     <th className="text-center py-2 pr-3">Name</th>
                                     <th className="text-center py-2 pr-3">DOB</th>
+                                    <th className="text-center py-2 pr-3">QR</th>
                                     <th className="text-right py-2">OCR</th>
                                 </tr>
                             </thead>
@@ -700,13 +733,17 @@ const AIReportCard = ({ player, onRerun, running }) => {
                                 {v.documents.map((d, i) => {
                                     const nm = MATCH_ICON[d.name_match] || MATCH_ICON.not_visible;
                                     const dm = MATCH_ICON[d.dob_match]  || MATCH_ICON.not_visible;
+                                    const qrMap = { resolved: { char: "✓", cls: "text-emerald-700" }, unreadable: { char: "?", cls: "text-mpca-brass" }, unreachable: { char: "!", cls: "text-mpca-oxblood" }, not_applicable: { char: "—", cls: "opacity-40" } };
+                                    const qm = qrMap[d.qr_verdict] || qrMap.not_applicable;
                                     return (
                                         <tr key={i} className="border-b border-current/10" data-testid={`ai-doc-row-${d.doc_type}`}>
                                             <td className="py-2 pr-3 font-serif">{(d.doc_type || "").replace(/_/g, " ")}</td>
                                             <td className="py-2 pr-3 font-mono text-[11px]">{d.extracted_name || "—"}</td>
                                             <td className="py-2 pr-3 font-mono text-[11px]">{d.extracted_dob || "—"}</td>
+                                            <td className="py-2 pr-3 font-mono text-[11px]">{d.extracted_address_district || "—"}</td>
                                             <td className={`py-2 pr-3 text-center font-bold ${nm.cls}`}>{nm.char}</td>
                                             <td className={`py-2 pr-3 text-center font-bold ${dm.cls}`}>{dm.char}</td>
+                                            <td className={`py-2 pr-3 text-center font-bold ${qm.cls}`} title={d.qr_verdict || "—"}>{qm.char}</td>
                                             <td className="py-2 text-right font-mono text-[11px]">{Math.round((d.ocr_confidence || 0) * 100)}%</td>
                                         </tr>
                                     );
@@ -1621,6 +1658,29 @@ const PlayerDetail = () => {
                             )}
                             <div className="text-[14px] mt-2 font-semibold" style={{ color: "rgba(251,248,241,0.85)" }}>
                                 {player.body_id} · {player.role?.replace(/_/g, " ")} · age {ageYears(player.date_of_birth)}
+                            </div>
+                            {/* Iter 129 · expanded meta strip — DOB / district / contact / BCCI */}
+                            <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-[11.5px]"
+                                 style={{ fontFamily: DL.fontMono, color: "rgba(251,248,241,0.7)" }}
+                                 data-testid="player-header-meta">
+                                {player.date_of_birth && (
+                                    <HeaderKv k="DOB" v={new Date(player.date_of_birth).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} testId="hdr-dob" />
+                                )}
+                                {player.guardian_name && (
+                                    <HeaderKv k="Guardian" v={player.guardian_name} testId="hdr-guardian" />
+                                )}
+                                {player.address_district && (
+                                    <HeaderKv k="District" v={player.address_district} testId="hdr-district" />
+                                )}
+                                {player.contact_phone && (
+                                    <HeaderKv k="Mobile" v={player.contact_phone} testId="hdr-mobile" />
+                                )}
+                                {player.contact_email && (
+                                    <HeaderKv k="Email" v={player.contact_email} testId="hdr-email" />
+                                )}
+                                {player.bcci_registered && (
+                                    <HeaderKv k="BCCI Reg." v={player.bcci_registration_year ? `Yes · ${player.bcci_registration_year}` : "Yes"} testId="hdr-bcci" />
+                                )}
                             </div>
                             <div className="mt-4 flex flex-wrap gap-2">
                                 <Pill tone={catMeta.tone} label={catMeta.label} testId={`hdr-cat-${player.category}`} />

@@ -488,7 +488,7 @@ export const verifyPlayerDocument = async (id, doc_type, action) => {
     return data;
 };
 export const aiValidatePlayerDocuments = async (id) => {
-    const { data } = await api.post(`/players/${id}/ai-validate-documents`);
+    const { data } = await api.post(`/players/${id}/ai-validate-documents`, null, { timeout: 180000 });
     return data;
 };
 export const disqualifyPlayer = async (id, flag) => {

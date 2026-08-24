@@ -272,6 +272,8 @@ Your job: read the KYC documents attached to a player registration and cross-ver
   2. Date-of-birth on Birth Certificate / Aadhaar / Marksheet matches the registered DOB.
   3. Father's name (where visible on Aadhaar or affidavit) matches registered father_name.
   4. Any obvious signs of tampering, cut-paste, mismatched fonts, or handwriting inconsistencies.
+  5. Iter 129 · Address-proof district cross-check — the address on Aadhaar / bank statement / affidavit MUST place the player inside the home division declared on the record. If the extracted district maps to a DIFFERENT division, flag it as a `district_division_mismatch` warning citing both the extracted district and the declared home division.
+  6. Iter 129 · QR-code signals — if the caller has supplied you a pre-computed QR verdict block below the prompt (upstream URLs already resolved), fold that into your reasoning. Treat `qr_found=true AND upstream.ok=true` as a strong authenticity signal for that document; treat `qr_found=true AND upstream.ok=false` as inconclusive (network problem, not a document defect); treat `qr_found=false` on birth certificate as a MINOR issue (some older certs have no QR).
 
 You NEVER approve or reject the player yourself. You only produce a structured verdict that human reviewers act on.
 
@@ -286,20 +288,22 @@ Respond with a SINGLE JSON object — no prose before or after, no code fences. 
       "extracted_name": "<name as read from doc or null>",
       "extracted_dob": "<YYYY-MM-DD or null>",
       "extracted_father_name": "<or null>",
+      "extracted_address_district": "<MP district read from address proof, or null>",
       "name_match": "match" | "partial" | "mismatch" | "not_visible",
       "dob_match": "match" | "mismatch" | "not_visible" | "not_applicable",
+      "qr_verdict": "resolved" | "unreadable" | "unreachable" | "not_applicable",
       "issues": ["<any specific issues found on this doc>"],
       "ocr_confidence": 0.0..1.0
     }
   ],
-  "warnings": ["<cross-document inconsistencies, tampering signals, missing required docs>"],
+  "warnings": ["<cross-document inconsistencies, tampering signals, missing required docs, district_division_mismatch>"],
   "confidence": 0.0..1.0
 }
 
 Decision guidance:
-- CLEAN: All documents match, no tampering signals, high OCR confidence.
-- MINOR_ISSUES: Small inconsistencies (partial name match, low OCR confidence on one doc) but nothing suspicious.
-- FLAGGED: Meaningful mismatch (DOB differs by > 30 days across docs, name mismatch on 1 primary doc, one required doc appears blurry/altered).
+- CLEAN: All documents match, no tampering signals, high OCR confidence, address district maps to the declared home division, QRs (where present) resolved.
+- MINOR_ISSUES: Small inconsistencies (partial name match, low OCR confidence on one doc, QR present but unreachable) but nothing suspicious.
+- FLAGGED: Meaningful mismatch (DOB differs by > 30 days across docs, name mismatch on 1 primary doc, address district belongs to a different division, one required doc appears blurry/altered).
 - SUSPECTED_FRAUD: Clear signals — e.g. tampered date fields, mismatched fonts, spliced photo, or DOB gap of years across primary docs.
 
 Be strict but explain your findings. Always cite the specific document type.
@@ -325,7 +329,26 @@ async def _collect_player_documents(player_doc: dict) -> list:
     return out
 
 
-def _build_player_ai_prompt(player_doc: dict) -> str:
+async def _collect_player_docs_with_paths(player_doc: dict) -> list:
+    """Iter 129 · like _collect_player_documents but also yields (doc_type, path)
+    tuples so the QR / signal helpers can operate on the raw file."""
+    out: list = []
+    for d in player_doc.get("documents", []) or []:
+        url = d.get("url") or ""
+        if "/api/uploads/" not in url:
+            continue
+        file_id = url.rsplit("/", 1)[-1]
+        rec = await db.uploads.find_one({"id": file_id})
+        if not rec:
+            continue
+        path = rec.get("_path")
+        if not path or not Path(path).exists():
+            continue
+        out.append((d.get("doc_type") or "unknown", path))
+    return out
+
+
+def _build_player_ai_prompt(player_doc: dict, qr_signals: Optional[list] = None) -> str:
     docs_list = "\n".join(
         f"  - {d.get('doc_type')} -> {d.get('filename') or d.get('url')}"
         for d in (player_doc.get("documents") or [])
@@ -333,6 +356,29 @@ def _build_player_ai_prompt(player_doc: dict) -> str:
     guest_bit = ""
     if player_doc.get("guest_subtype"):
         guest_bit = f" - {player_doc.get('guest_subtype')}"
+
+    # Iter 129 · Address / division context
+    from core.kyc_signals import build_district_map_hint, divisions_for_district
+    home_div = player_doc.get("body_id") or "(not set)"
+    declared_district = player_doc.get("address_district") or "(not on file)"
+    declared_div_from_district = divisions_for_district(player_doc.get("address_district")) or "(unmapped)"
+    district_map = build_district_map_hint()
+
+    qr_block = ""
+    if qr_signals:
+        lines = []
+        for s in qr_signals:
+            if not s.get("qr_found"):
+                lines.append(f"  - {s['doc_type']} ({s['file_name']}): NO QR detected")
+                continue
+            up = s.get("upstream") or []
+            up_txt = "; ".join(
+                f"{u.get('url','?')[:80]} -> http={u.get('http_status')} ok={u.get('ok')}"
+                for u in up
+            ) or "(no HTTP URLs in payload)"
+            lines.append(f"  - {s['doc_type']} ({s['file_name']}): QR payload(s) -> {up_txt}")
+        qr_block = "\nPRE-COMPUTED QR VERDICTS (server has already fetched these URLs):\n" + "\n".join(lines) + "\n"
+
     return f"""REGISTERED PLAYER RECORD (ground truth):
 
 - Player ID: {player_doc.get('player_display_id') or player_doc.get('player_id')}
@@ -342,12 +388,17 @@ def _build_player_ai_prompt(player_doc: dict) -> str:
 - Date of Birth: {player_doc.get('date_of_birth')}
 - Gender: {player_doc.get('gender')}
 - Category: {player_doc.get('category')}{guest_bit}
-- Registering Body: {player_doc.get('body_id')}
+- Home Division (body_id): {home_div}
+- Declared Address District: {declared_district}
+- Division that owns declared district (per MPCA mapping): {declared_div_from_district}
+
+MP DISTRICT → DIVISION MAPPING (compare with the district you extract from the address proof — if the extracted district maps to a division OTHER than "{home_div}", raise a `district_division_mismatch` warning):
+{district_map}
 
 UPLOADED DOCUMENTS (map doc_type -> filename, then check the attached files IN ORDER):
 {docs_list}
-
-Extract name/DOB/father from each attached document. Compare against the ground-truth values above. Return your verdict JSON.
+{qr_block}
+Extract name/DOB/father from each attached document. Extract the address district from any address proof. Compare against the ground-truth values above. Fold in the pre-computed QR verdicts if provided. Return your verdict JSON.
 """
 
 
@@ -383,6 +434,15 @@ async def _run_player_doc_validation(player_doc: dict) -> dict:
             "confidence": 0.0,
         }
 
+    # Iter 129 · pre-compute QR verdicts server-side. Best-effort — never fatal.
+    from core.kyc_signals import summarise_qr_signals
+    qr_signals: list = []
+    try:
+        typed_paths = await _collect_player_docs_with_paths(player_doc)
+        qr_signals = await summarise_qr_signals(typed_paths)
+    except Exception:  # noqa: BLE001
+        qr_signals = []
+
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=f"player-doc-{player_doc.get('id')}",
@@ -390,7 +450,7 @@ async def _run_player_doc_validation(player_doc: dict) -> dict:
     ).with_model(AI_MODEL_PROVIDER, AI_MODEL_NAME)
 
     msg = UserMessage(
-        text=_build_player_ai_prompt(player_doc),
+        text=_build_player_ai_prompt(player_doc, qr_signals=qr_signals),
         file_contents=attachments,
     )
 
@@ -413,5 +473,7 @@ async def _run_player_doc_validation(player_doc: dict) -> dict:
     parsed.setdefault("documents", [])
     parsed.setdefault("warnings", [])
     parsed.setdefault("confidence", 0.0)
+    # Iter 129 · surface QR signals to reviewers as a first-class field
+    parsed["qr_signals"] = qr_signals
     return parsed
 

@@ -1,5 +1,6 @@
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.5
+aiohttp-retry==2.9.1
 aiosignal==1.4.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
@@ -131,6 +132,7 @@ tokenizers==0.23.1
 tomli==2.4.1
 tomli_w==1.2.0
 tqdm==4.67.3
+twilio==9.11.0
 typer==0.25.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0

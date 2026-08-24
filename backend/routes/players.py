@@ -263,18 +263,83 @@ async def division_approve(pid: str, action: PlayerReviewAction):
 
 @api_router.post("/players/{pid}/approve", response_model=Player)
 async def approve_player(pid: str, action: Optional[PlayerReviewAction] = None):
-    """MPCA/Division-shortcut approves → Active. Accepts either Pending or Division_Approved."""
+    """MPCA/Division-shortcut approves → Active. Accepts either Pending or Division_Approved.
+
+    Iter 129b · If the AI validator raised a `district_division_mismatch` warning
+    (address proof puts the player in a division OTHER than their home division)
+    approval is blocked until a reviewer explicitly accepts the exception via
+    `/players/{pid}/accept-ai-mismatch`.
+    """
     doc = await db.players.find_one({"id": pid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Player not found")
     if doc["status"] not in ("Pending", "Under_Division_Review", "Division_Approved"):
         raise HTTPException(400, f"Cannot approve a player in status {doc['status']}")
+
+    # Iter 129b · Auto-hold on district_division_mismatch until accepted
+    ai_v = doc.get("ai_document_validation") or {}
+    mismatch = _has_district_division_mismatch(ai_v)
+    if mismatch and not (doc.get("ai_mismatch_override") or {}).get("accepted_by"):
+        raise HTTPException(
+            409,
+            "AI flagged a district / home-division mismatch on the address proof. "
+            "Review the KYC panel and click 'Accept Exception' before approving.",
+        )
+
     await db.players.update_one({"id": pid}, {"$set": {"status": "Active"}})
     await _append_audit(pid, PlayerAuditEvent(
         event="approved", actor_name=(action.actor_name if action else None),
         actor_body_id=(action.actor_body_id if action else None),
         actor_post=(action.actor_post if action else None),
         notes=(action.notes if action else "Approved by MPCA."),
+    ))
+    return await db.players.find_one({"id": pid}, {"_id": 0})
+
+
+def _has_district_division_mismatch(ai_v: dict) -> bool:
+    """Detect the district_division_mismatch signal the AI validator emits."""
+    if not ai_v:
+        return False
+    for w in ai_v.get("warnings") or []:
+        if isinstance(w, str) and "district_division_mismatch" in w.lower():
+            return True
+    return False
+
+
+class AiMismatchAccept(BaseModel):
+    actor_name: Optional[str] = None
+    actor_body_id: Optional[str] = None
+    actor_post: Optional[str] = None
+    note: str
+
+
+@api_router.post("/players/{pid}/accept-ai-mismatch", response_model=Player)
+async def accept_ai_mismatch(pid: str, payload: AiMismatchAccept):
+    """Iter 129b · Reviewer records a signed acceptance of the AI-flagged
+    district/division mismatch so the player can be MPCA-approved. The note is
+    persisted on the player record and copied into the audit log."""
+    doc = await db.players.find_one({"id": pid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Player not found")
+    if not _has_district_division_mismatch(doc.get("ai_document_validation") or {}):
+        raise HTTPException(400, "No district/division mismatch flag on this player.")
+    if not (payload.note or "").strip() or len((payload.note or "").strip()) < 8:
+        raise HTTPException(400, "A note (≥ 8 chars) explaining the acceptance is required.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    override = {
+        "accepted_by": payload.actor_name or payload.actor_body_id or "Reviewer",
+        "actor_body_id": payload.actor_body_id,
+        "actor_post": payload.actor_post,
+        "note": payload.note.strip(),
+        "accepted_at": now,
+    }
+    await db.players.update_one({"id": pid}, {"$set": {"ai_mismatch_override": override}})
+    await _append_audit(pid, PlayerAuditEvent(
+        event="ai_mismatch_accepted",
+        actor_name=payload.actor_name, actor_body_id=payload.actor_body_id,
+        actor_post=payload.actor_post,
+        notes=f"District/division mismatch exception accepted: {payload.note.strip()}",
     ))
     return await db.players.find_one({"id": pid}, {"_id": 0})
 

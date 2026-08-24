@@ -5,7 +5,7 @@ import {
     fetchPlayer, updatePlayer, addPlayerDocument, verifyPlayerDocument,
     startPlayerReview, raisePlayerDiscrepancy, divisionApprovePlayer,
     approvePlayer, reinstatePlayer, reopenPlayer, disqualifyPlayer,
-    aiValidatePlayerDocuments,
+    aiValidatePlayerDocuments, acceptAiMismatch,
 } from "@/lib/api";
 import {
     ArrowLeft, User, FileText, ShieldCheck, ClipboardList, Upload, X, CheckCircle2, AlertTriangle,
@@ -654,7 +654,90 @@ const MATCH_ICON = {
     not_applicable:{ char: "—", cls: "text-mpca-gray-dark" },
 };
 
-const AIReportCard = ({ player, onRerun, running }) => {
+/** Iter 129b · Inline block that appears under the AI cross-doc warnings when the
+ * validator raised a `district_division_mismatch`. Blocks MPCA final approval
+ * until a State/Division reviewer records a signed acceptance note. */
+const MismatchExceptionBlock = ({ player, persona, onChanged }) => {
+    const warnings = (player.ai_document_validation?.warnings || []);
+    const hasMismatch = warnings.some((w) => typeof w === "string" && w.toLowerCase().includes("district_division_mismatch"));
+    const override = player.ai_mismatch_override;
+    const [note, setNote] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+
+    if (!hasMismatch) return null;
+
+    const canAccept = persona && (persona.body_type === "State" || persona.body_type === "Division") && !override;
+
+    const submit = async () => {
+        if (note.trim().length < 8) { setError("Note must be at least 8 characters."); return; }
+        setBusy(true); setError("");
+        try {
+            const updated = await acceptAiMismatch(player.id, {
+                actor_name: persona?.name,
+                actor_body_id: persona?.body_id,
+                actor_post: persona?.role_id,
+                note: note.trim(),
+            });
+            onChanged?.(updated);
+            setNote("");
+        } catch (e) {
+            setError(e?.response?.data?.detail || e.message);
+        } finally { setBusy(false); }
+    };
+
+    if (override) {
+        return (
+            <div className="mt-3 border-l-4 border-mpca-green-dark bg-mpca-green-dark/5 p-3" data-testid="mismatch-accepted-badge">
+                <div className="text-[10px] uppercase tracking-widest font-bold text-mpca-green-dark">Exception Accepted</div>
+                <div className="text-[12px] mt-1 text-mpca-charcoal">
+                    <strong>{override.accepted_by}</strong> accepted the district/division mismatch on {new Date(override.accepted_at).toLocaleString("en-IN")}
+                </div>
+                <div className="text-[11.5px] italic mt-1 text-mpca-gray-dark">&ldquo;{override.note}&rdquo;</div>
+            </div>
+        );
+    }
+
+    if (!canAccept) {
+        return (
+            <div className="mt-3 border-l-4 border-mpca-oxblood bg-mpca-oxblood/5 p-3 text-[12px]" data-testid="mismatch-hold-notice">
+                <strong className="text-mpca-oxblood">MPCA final approval on hold.</strong>{" "}
+                <span className="text-mpca-charcoal">The AI flagged a district ↔ home-division mismatch. Only Division HS or MPCA can accept this exception.</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-3 border border-mpca-oxblood/40 bg-mpca-oxblood/5 p-3" data-testid="mismatch-exception-block">
+            <div className="text-[10px] uppercase tracking-widest font-bold text-mpca-oxblood mb-1">Approval Blocked · Accept Exception to Proceed</div>
+            <p className="text-[11.5px] text-mpca-charcoal mb-2">
+                Record why the address-proof mismatch is acceptable (e.g. player relocated last month, joint address with guardian in DIV-IND, etc.). This note is logged to the audit trail and unlocks MPCA final approval.
+            </p>
+            <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2}
+                placeholder="Why is this mismatch acceptable? (min 8 chars)"
+                className="w-full text-[12px] p-2 border border-mpca-oxblood/30 bg-white mb-2"
+                data-testid="mismatch-note-input"
+            />
+            <div className="flex items-center gap-3">
+                <button
+                    onClick={submit}
+                    disabled={busy || note.trim().length < 8}
+                    className="text-[11px] uppercase tracking-widest bg-mpca-oxblood text-mpca-ivory px-3 py-1.5 disabled:opacity-40"
+                    data-testid="mismatch-accept-btn"
+                >
+                    {busy ? "Saving…" : "Accept Exception & Unlock Approval"}
+                </button>
+                {error && <span className="text-[11px] text-mpca-oxblood">{error}</span>}
+            </div>
+        </div>
+    );
+};
+
+
+const AIReportCard = ({ player, onRerun, running, persona, onChanged }) => {
     const v = player.ai_document_validation;
     if (!v) return null;
     const meta = AI_DECISION_META[v.decision] || AI_DECISION_META.FLAGGED;
@@ -709,6 +792,7 @@ const AIReportCard = ({ player, onRerun, running }) => {
                     <ul className="text-xs list-disc list-inside space-y-1">
                         {v.warnings.map((w, i) => <li key={i}>{w}</li>)}
                     </ul>
+                    <MismatchExceptionBlock player={player} persona={persona} onChanged={onChanged} />
                 </div>
             )}
 
@@ -896,7 +980,7 @@ const DocumentsTab = ({ player, persona, onChanged }) => {
             )}
 
             {player.ai_document_validation && (
-                <AIReportCard player={player} onRerun={runAi} running={aiRunning} />
+                <AIReportCard player={player} onRerun={runAi} running={aiRunning} persona={persona} onChanged={onChanged} />
             )}
 
             {aiError && (

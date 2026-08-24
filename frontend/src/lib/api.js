@@ -491,6 +491,10 @@ export const aiValidatePlayerDocuments = async (id) => {
     const { data } = await api.post(`/players/${id}/ai-validate-documents`, null, { timeout: 180000 });
     return data;
 };
+export const acceptAiMismatch = async (id, payload) => {
+    const { data } = await api.post(`/players/${id}/accept-ai-mismatch`, payload);
+    return data;
+};
 export const disqualifyPlayer = async (id, flag) => {
     const { data } = await api.post(`/players/${id}/disqualify`, flag);
     return data;

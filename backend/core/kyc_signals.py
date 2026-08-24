@@ -28,23 +28,47 @@ except Exception:  # noqa: BLE001
 
 
 def decode_qr(file_path: str) -> List[str]:
-    """Return every distinct QR / barcode payload found in an image file."""
+    """Return every distinct QR / barcode payload found in an image or PDF file.
+
+    Iter 129b · PDFs are now supported: we render each page at 200 dpi via
+    pdf2image (poppler-utils backend) and run zbar over each page. Result set
+    is deduplicated so the caller sees one payload per unique code.
+    """
     if not HAVE_ZBAR:
         return []
     p = Path(file_path)
-    if not p.exists() or p.suffix.lower() in {".pdf"}:
-        return []  # PDF QR extraction is out of scope for now
+    if not p.exists():
+        return []
+
+    seen: List[str] = []
+
+    def _collect_from_image(img):
+        try:
+            for r in _zbar_decode(img):
+                try:
+                    data = r.data.decode("utf-8", errors="ignore").strip()
+                except Exception:  # noqa: BLE001
+                    continue
+                if data and data not in seen:
+                    seen.append(data)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("QR decode inner failure for %s · %s", p.name, exc)
+
     try:
-        img = Image.open(str(p))
-        found = _zbar_decode(img)
-        seen: List[str] = []
-        for r in found:
+        if p.suffix.lower() == ".pdf":
             try:
-                data = r.data.decode("utf-8", errors="ignore").strip()
-            except Exception:  # noqa: BLE001
-                continue
-            if data and data not in seen:
-                seen.append(data)
+                from pdf2image import convert_from_path
+            except ImportError:
+                return []
+            # 200 dpi is a good balance — fine enough to catch small QRs on
+            # Aadhaar / Birth Certificate PDFs without blowing memory on big
+            # multi-page documents.
+            pages = convert_from_path(str(p), dpi=200, first_page=1, last_page=5)
+            for page in pages:
+                _collect_from_image(page)
+        else:
+            img = Image.open(str(p))
+            _collect_from_image(img)
         return seen
     except Exception as exc:  # noqa: BLE001
         logger.debug("QR decode failed for %s · %s", p.name, exc)

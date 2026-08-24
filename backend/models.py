@@ -814,6 +814,8 @@ class Player(PlayerBase):
     audit_trail: List[PlayerAuditEvent] = []
     ai_document_validation: Optional[dict] = None    # last AI verdict (see core.ai_validator._run_player_doc_validation)
     ai_validated_at: Optional[str] = None
+    # Iter 129b · Reviewer-signed acceptance of a district_division_mismatch
+    ai_mismatch_override: Optional[dict] = None
     registered_on: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     eligibility_notes: List[str] = []             # human-readable validator output
     tw3_verified: bool = False                    # TW3 maturity check (for Guests)

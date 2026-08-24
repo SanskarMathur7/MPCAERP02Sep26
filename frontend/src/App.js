@@ -90,6 +90,7 @@ const Discussions = lazy(() => import("@/pages/Discussions"));
 const EventCalendar = lazy(() => import("@/pages/EventCalendar"));
 const PlayerRegistrations = lazy(() => import("@/pages/PlayerRegistrations"));
 const PublicPlayerRegistration = lazy(() => import("@/pages/PublicPlayerRegistration"));
+const PublicPlayerCorrection = lazy(() => import("@/pages/PublicPlayerCorrection"));
 const CampsPage = lazy(() => import("@/pages/Camps"));
 const CampDetail = lazy(() => import("@/pages/CampDetail"));
 const SchemesMaster = lazy(() => import("@/pages/SchemesMaster"));
@@ -161,6 +162,7 @@ function App() {
                             <Route path="/design-preview/*" element={<Navigate to="/showcase" replace />} />
                             <Route path="/verify/:uid" element={<Verify />} />
                             <Route path="/member-profile/:uid" element={<MemberProfile />} />
+                            <Route path="/register/player/correct/:token" element={<PublicPlayerCorrection />} />
                             <Route path="/register/player/:token" element={<PublicPlayerRegistration />} />
 
                             {/* Protected — Phase 1 */}

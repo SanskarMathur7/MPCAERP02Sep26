@@ -10,6 +10,7 @@ import { useSeason } from "@/context/SeasonContext";
 import { api } from "@/lib/api";
 import CricketLoader from "@/components/CricketLoader";
 import RegistrationAmendModal from "@/components/RegistrationAmendModal";
+import RegistrationCorrectionModal from "@/components/RegistrationCorrectionModal";
 import DocumentPreview from "@/components/DocumentPreview";
 import { REGISTRATION_DOC_SPEC, isDocApplicable } from "@/lib/registrationDocs";
 
@@ -19,6 +20,7 @@ const STATUS_TONE = {
     Approved: "bg-mpca-green-dark/15 text-mpca-green-dark border-mpca-green-dark/40",
     Rejected: "bg-mpca-oxblood/15 text-mpca-oxblood border-mpca-oxblood/40",
     Returned: "bg-amber-100 text-amber-800 border-amber-300",
+    Correction_Requested: "bg-amber-200 text-amber-900 border-amber-500",
 };
 
 const publicUrlFor = (token) => `${window.location.origin}/register/player/${token}`;
@@ -254,6 +256,7 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
     const [selected, setSelected] = useState(null);
     const [busy, setBusy] = useState(false);
     const [amendOpen, setAmendOpen] = useState(false);   // MPCA-153 · inline amend modal
+    const [correctionOpen, setCorrectionOpen] = useState(false);  // Iter 128 · correction modal
 
     const filtered = useMemo(() => filter === "all" ? regs : regs.filter((r) => r.status === filter), [regs, filter]);
 
@@ -277,6 +280,11 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
             setAmendOpen(true);
             return;
         }
+        // Iter 128 · Request correction opens the flag-picker modal
+        if (action === "request-correction") {
+            setCorrectionOpen(true);
+            return;
+        }
         setBusy(true);
         try {
             // M39n · Two-stage endpoints use `remark` field; legacy /reject uses `note`
@@ -295,7 +303,7 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
     return (
         <div>
             <div className="flex flex-wrap gap-2 mb-3">
-                {["Submitted", "Division_Approved", "Approved", "Returned", "Rejected", "all"].map((s) => (
+                {["Submitted", "Division_Approved", "Approved", "Returned", "Correction_Requested", "Rejected", "all"].map((s) => (
                     <button key={s} onClick={() => setFilter(s)} className={`text-[10px] uppercase tracking-widest px-3 py-1 border ${filter === s ? "bg-mpca-oxblood text-mpca-ivory border-mpca-oxblood" : "border-mpca-brass/40 text-mpca-brass"}`} data-testid={`pr-filter-${s}`}>
                         {s === "all" ? "All" : s.replace(/_/g, " ")} · {s === "all" ? regs.length : regs.filter((r) => r.status === s).length}
                     </button>
@@ -352,6 +360,20 @@ const RegistrationsInbox = ({ regs, campaigns, onChanged, persona }) => {
                     }}
                 />
             )}
+            {/* Iter 128 · Correction request modal */}
+            {correctionOpen && selected && (
+                <RegistrationCorrectionModal
+                    registration={selected}
+                    onClose={() => setCorrectionOpen(false)}
+                    onSent={async () => {
+                        try {
+                            const { data } = await api.get(`/player-registrations/${selected.id}`);
+                            setSelected(data);
+                        } catch { /* silent */ }
+                        onChanged?.({ silent: true });
+                    }}
+                />
+            )}
         </div>
     );
 };
@@ -365,10 +387,11 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
         persona.body_code === reg.body_code ||
         persona.body_code === pd?.preferred_division_code
     );
-    const canDivisionApprove = isHomeDiv && ["Submitted", "Returned"].includes(reg.status);
-    const canMPCAApprove = isMPCA && ["Submitted", "Returned", "Division_Approved"].includes(reg.status);
+    const canDivisionApprove = isHomeDiv && ["Submitted", "Returned", "Correction_Requested"].includes(reg.status);
+    const canMPCAApprove = isMPCA && ["Submitted", "Returned", "Correction_Requested", "Division_Approved"].includes(reg.status);
     const canReturn = (isHomeDiv || isMPCA) && !["Approved", "Rejected"].includes(reg.status);
     const canEdit = (isHomeDiv || isMPCA) && !["Approved", "Rejected"].includes(reg.status);
+    const canRequestCorrection = (isHomeDiv || isMPCA) && ["Submitted", "Returned", "Division_Approved", "Correction_Requested"].includes(reg.status);
     const ai = reg.ai_summary;
     const aiFull = reg.ai_full_report;                                  // M39p · Batch B/C report card
     const [aiBusy, setAiBusy] = useState(false);
@@ -583,8 +606,14 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                     <div className="text-[11px] text-mpca-charcoal italic">{reg.return_reason}</div>
                 </div>
             )}
+            {reg.status === "Correction_Requested" && (
+                <div className="px-5 py-3 border-t border-mpca-brass/20 bg-amber-100/60" data-testid="correction-pending-banner">
+                    <div className="overline mb-1 text-amber-900">Correction Requested from Player · awaiting resubmit</div>
+                    <div className="text-[11px] text-mpca-charcoal italic">A tokenised link has been sent to the player. This registration will re-enter Submitted state once the player resubmits.</div>
+                </div>
+            )}
 
-            {(canDivisionApprove || canMPCAApprove || canReturn || canEdit) && (
+            {(canDivisionApprove || canMPCAApprove || canReturn || canEdit || canRequestCorrection) && (
                 <div className="border-t border-mpca-brass/20 px-5 py-3 bg-mpca-parchment/50 flex flex-wrap gap-2 justify-end" data-testid="pr-detail-actions">
                     {canEdit && (
                         <button onClick={() => onAction(reg.id, "edit")} disabled={busy} className="text-[11px] uppercase tracking-widest border border-mpca-navy text-mpca-navy px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-edit-btn">
@@ -594,6 +623,11 @@ const RegistrationDetail = ({ reg, campaigns, onAction, busy }) => {
                     {canEdit && (
                         <button onClick={() => onAction(reg.id, "upload-doc")} disabled={busy} className="text-[11px] uppercase tracking-widest border border-mpca-brass text-mpca-brass px-3 py-1.5 flex items-center gap-1 disabled:opacity-40" data-testid="pr-upload-doc-btn">
                             <Upload size={11} /> Upload Doc on Behalf
+                        </button>
+                    )}
+                    {canRequestCorrection && (
+                        <button onClick={() => onAction(reg.id, "request-correction")} disabled={busy} className="text-[11px] uppercase tracking-widest border border-amber-600 bg-amber-50 text-amber-800 px-3 py-1.5 flex items-center gap-1 disabled:opacity-40 hover:bg-amber-100" data-testid="pr-request-correction-btn" title="Send this player a tokenised link asking them to fix specific fields / documents">
+                            <Mail size={11} /> Request Correction from Player
                         </button>
                     )}
                     {canDivisionApprove && (

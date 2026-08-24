@@ -117,12 +117,17 @@ async def public_upload_file(
         raise HTTPException(400, "public/uploads is only for player-registration flows.")
     if not registration_token:
         raise HTTPException(400, "registration_token is required.")
-    # Validate token exists (campaign or invited player) before accepting the file.
+    # Validate token exists (campaign or invited player OR active correction request)
+    # before accepting the file.
     campaign = await db.player_registration_campaigns.find_one({"public_token": registration_token})
     invited  = None
+    correction = None
     if not campaign:
         invited = await db.player_registrations.find_one({"invite_token": registration_token})
     if not (campaign or invited):
+        # Iter 128 · public correction flow — token lives in player_correction_requests
+        correction = await db.player_correction_requests.find_one({"token": registration_token, "status": "Pending"})
+    if not (campaign or invited or correction):
         raise HTTPException(404, "Invalid registration token.")
     if file.content_type not in ALLOWED_MIMES:
         raise HTTPException(400, f"Unsupported file type {file.content_type}.")

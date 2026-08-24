@@ -1,0 +1,32 @@
+{
+  "summary": "Iter 128 · Player Correction Request workflow verified end-to-end. Backend: 15/15 pytest pass in /app/backend/tests/test_iter128_correction.py — happy create, empty note 400, no flags 400, unknown key 400, approved 400, unauth 401/403, public GET (no reviewer identity leak), public submit rejects unflagged 400, valid submit 200, second submit 410, GET after resubmit returns already_resubmitted=True, bogus token 404, history endpoint strips token, cancel flow flips reg back to Submitted. Frontend: sysadmin login → /player-registrations → Inbox tab shows the 'Correction Requested' filter chip. Selecting the Submitted SANDHU row reveals pr-request-correction-btn in the action bar next to Amend/Approve/Reject/Send Back to Division/Upload Doc. Clicking opens the RegistrationCorrectionModal (data-testid correction-modal) with all 3 groups (Personal, Identity & Bank, Cricket), 44 field checkboxes, documents grid with 'on file' indicators, an 'Add' new-doc button, correction-note textarea, and correction-send-btn. Send button correctly stays disabled with (a) empty note, (b) 2-char note, (c) valid note but no flag; becomes enabled once one flag is checked. After Send, success dialog shows 'Correction Request Sent', 'Registration is now in Correction_Requested state.', Email · MOCKED, SMS · MOCKED, and the full correction link (https://…/register/player/correct/<token>). Filter chip count updates to 'Correction Requested · 1'. Selecting the Correction_Requested row shows correction-pending-banner (bg-amber-100/60, 'Correction Requested from Player · awaiting resubmit — A tokenised link has been sent to the player. This registration will re-enter Submitted state once the player resubmits.'). Public /register/player/correct/{valid_token} renders reviewer's note in amber card, flagged field with amber highlight, 'Previously submitted:' value, editable input, and 'Submit Corrections' button (data-testid correction-submit). After submit shows 'Thank you' success screen. Same token revisit shows 'Already Submitted' with dated confirmation. Bogus token shows 'Cannot open this link — This correction link is invalid.'",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/player-registrations/{rid}", "issue": "Field `latest_correction_id` is persisted in mongo on request-correction but stripped from the response by the PlayerRegistration Pydantic response_model (field not declared on the model). Reviewer UI cannot know which correction is active from the single-registration GET; must call /corrections. Add `latest_correction_id: Optional[str] = None` to PlayerRegistration to expose it (currently the UI relies on `status == 'Correction_Requested'` for the banner, which works)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter128_correction.py", "/app/test_reports/pytest/iter128.xml"],
+  "action_items": [
+    "Optional: add `latest_correction_id: Optional[str] = None` to the PlayerRegistration response model so it round-trips on the single-registration GET (currently silently dropped by response_model coercion — noted as minor since status alone drives UI)."
+  ],
+  "critical_code_review_comments": [
+    "Backend overall_note is only checked for non-empty (after .strip()), NOT for the >=5-char minimum that the frontend enforces via a disabled Send button. If any other client hits the API it can send a 1-char note. Consider hardening: `if len(note) < 5: raise HTTPException(400, 'Overall note must be at least 5 characters.')`.",
+    "Public POST allows re-submit only when the field's new value != current value; if patch key equals current value, endpoint returns 200 {status:'no_change'} without flipping the correction to Resubmitted. That means a player who opens the link and re-submits identical data will keep the request in Pending forever. Consider still transitioning to Resubmitted (or explicitly reject same-value patch).",
+    "`_KNOWN_DOC_KEYS` is computed but never used — dead code. Document flag key validation is not enforced against a known set (contrast with field flags which are validated via _KNOWN_FIELD_KEYS).",
+    "Legacy comment already flagged by main-agent context: line 24 duplicate ObjectId import and 481 `now if False else` fallback still present — untouched legacy, not blocking."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter128_correction.py"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100%"},
+  "test_credentials": "sysadmin@mpca.in / mpca@2026",
+  "seed_data_creation": "Registration c5c7897e36a04f6b983cdce48077a5d1 (SANDHU Bakshraj Singh) now has 3+ new PlayerCorrectionRequest rows from this run (one resubmitted, one cancelled, one pending). player_data.first_name was overwritten to '123456789099' during a public-correction test (I flagged 'First Name' and the aadhaar-shaped test value went into first_name). Aadhaar_no was overwritten to a timestamped value. Restore or leave as-is — this is a sandbox test rid.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Test rid c5c7897e36a04f6b983cdce48077a5d1 has multiple correction requests in history now. Its player_data.first_name was corrupted by the public correction submission test (see seed_data_creation). If the next iteration needs a clean player_data, restore from mongo or use a different rid. The `/register/player/correct/:token` route works before `/register/player/:token` — order in App.js is correct. Public endpoint returns 200 {already_resubmitted:true} on GET after resubmit (not 410), while POST after resubmit returns 410 — this asymmetry is intentional (GET is friendly, POST is defensive).",
+  "rca of the issue": "No blocking issues. Only a minor response_model omission (latest_correction_id) that doesn't affect current UI flow, plus a note on note-length validation asymmetry between frontend and backend."
+}

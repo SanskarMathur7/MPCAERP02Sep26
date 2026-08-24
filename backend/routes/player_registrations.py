@@ -1312,3 +1312,340 @@ async def return_registration(
     if doc.get("invite_id"):
         await db.player_registration_invites.update_one({"id": doc["invite_id"]}, {"$set": {"status": "Sent", "submission_id": None}})
     return await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Iter 128 · Player Correction Request workflow
+# ─────────────────────────────────────────────────────────────────────
+# Reviewer (Division or MPCA) flags specific fields / documents and asks
+# the player to fix them. Player receives an email + SMS with a unique
+# tokenised link. No login — the token IS the credential (same pattern
+# as `/register/player/{token}`). Player can only edit flagged keys.
+# Reviewer can send unlimited rounds. Token expires in 7 days.
+# ═════════════════════════════════════════════════════════════════════
+
+from core.sms_notifications import send_correction_sms  # noqa: E402
+
+CORRECTION_TOKEN_TTL_DAYS = 7
+
+_KNOWN_FIELD_KEYS = set(PlayerRegistrationData.model_fields.keys())
+_KNOWN_DOC_KEYS = {
+    k for k in _KNOWN_FIELD_KEYS if k.endswith("_url")
+}
+
+
+class CorrectionFieldFlag(BaseModel):
+    key: str                       # field name inside player_data (e.g. "aadhaar_no")
+    label: str                     # human label the reviewer typed
+    remark: str                    # per-field remark ("Number does not match aadhaar card")
+    model_config = ConfigDict(extra="ignore")
+
+
+class CorrectionDocumentFlag(BaseModel):
+    key: str                       # existing *_url key on player_data OR new slot
+    label: str                     # human label ("Birth Certificate")
+    remark: str
+    is_new: bool = False           # True when reviewer is asking for a fresh document not already collected
+    model_config = ConfigDict(extra="ignore")
+
+
+class CorrectionRequestCreate(BaseModel):
+    """Reviewer payload."""
+    actor_name: Optional[str] = None
+    overall_note: str
+    field_flags: List[CorrectionFieldFlag] = Field(default_factory=list)
+    document_flags: List[CorrectionDocumentFlag] = Field(default_factory=list)
+    origin: Optional[str] = None   # frontend base URL for building the player link
+    model_config = ConfigDict(extra="ignore")
+
+
+class PlayerCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    registration_id: str
+    campaign_id: str
+    body_code: str
+    token: str = Field(default_factory=lambda: secrets.token_urlsafe(24))
+    status: Literal["Pending", "Resubmitted", "Cancelled", "Expired"] = "Pending"
+    overall_note: str
+    field_flags: List[CorrectionFieldFlag] = Field(default_factory=list)
+    document_flags: List[CorrectionDocumentFlag] = Field(default_factory=list)
+    requested_by_name: Optional[str] = None
+    requested_by_body: Optional[str] = None
+    requested_by_role: Optional[str] = None
+    requested_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    expires_at: str = ""
+    resubmitted_at: Optional[str] = None
+    resubmit_diff: Optional[Dict[str, Any]] = None
+    notification_result: Optional[Dict[str, Any]] = None
+
+
+class PublicCorrectionSubmit(BaseModel):
+    patch: Dict[str, Any] = Field(default_factory=dict)
+    model_config = ConfigDict(extra="ignore")
+
+
+def _correction_link(origin: str | None, token: str) -> str:
+    base = (origin or "").rstrip("/")
+    return f"{base}/register/player/correct/{token}" if base else f"/register/player/correct/{token}"
+
+
+@api_router.post("/player-registrations/{rid}/request-correction")
+async def request_correction(
+    rid: str,
+    payload: CorrectionRequestCreate,
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+):
+    """Iter 128 · Division or MPCA flags specific fields/documents for the
+    player to fix. Fires email + SMS with a unique tokenised link."""
+    doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Registration not found")
+    if doc.get("status") == "Approved":
+        raise HTTPException(400, "Already approved — cannot request corrections.")
+    if not (_is_home_division(doc, x_user_body_code, x_role_id) or (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES)):
+        raise HTTPException(403, "Only the home Division or MPCA may request corrections.")
+
+    note = (payload.overall_note or "").strip()
+    if len(note) < 5:
+        raise HTTPException(400, "Overall note must be at least 5 characters.")
+    if not payload.field_flags and not payload.document_flags:
+        raise HTTPException(400, "At least one field or document flag is required.")
+
+    # Guard: field flags must reference known player_data keys.
+    for f in payload.field_flags:
+        if f.key not in _KNOWN_FIELD_KEYS:
+            raise HTTPException(400, f"Unknown field key: {f.key}")
+
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(days=CORRECTION_TOKEN_TTL_DAYS)).isoformat()
+
+    req = PlayerCorrectionRequest(
+        registration_id=rid,
+        campaign_id=doc["campaign_id"],
+        body_code=doc["body_code"],
+        overall_note=note,
+        field_flags=payload.field_flags,
+        document_flags=payload.document_flags,
+        requested_by_name=payload.actor_name,
+        requested_by_body=x_user_body_code,
+        requested_by_role=x_role_id,
+        requested_at=now.isoformat(),
+        expires_at=expires_at,
+    )
+    req_dict = req.model_dump()
+    await db.player_correction_requests.insert_one(req_dict)
+    req_dict.pop("_id", None)
+
+    # Flip registration into Correction_Requested + remember latest correction id
+    await db.player_registrations.update_one({"id": rid}, {"$set": {
+        "status": "Correction_Requested",
+        "latest_correction_id": req.id,
+        "updated_at": now.isoformat(),
+    }})
+    await _log_event(rid, "correction_requested",
+                     actor_name=payload.actor_name,
+                     actor_body_id=x_user_body_code, actor_role=x_role_id,
+                     note=note,
+                     diff={"field_count": [None, len(payload.field_flags)],
+                           "document_count": [None, len(payload.document_flags)]})
+
+    # Fire email + SMS (best-effort, non-fatal)
+    pd = doc.get("player_data") or {}
+    link = _correction_link(payload.origin, req.token)
+    email_result = None
+    sms_result = None
+    if pd.get("email"):
+        html = _build_correction_email_html(pd.get("full_name") or pd.get("first_name") or "Player",
+                                            note, payload.field_flags, payload.document_flags,
+                                            link, CORRECTION_TOKEN_TTL_DAYS)
+        try:
+            email_result = await send_email(
+                pd["email"],
+                "MPCA · Please correct your player registration",
+                html,
+            )
+        except Exception as exc:  # noqa: BLE001
+            email_result = {"status": "failed", "error": str(exc)}
+    if pd.get("mobile"):
+        try:
+            sms_result = await send_correction_sms(pd["mobile"], link)
+        except Exception as exc:  # noqa: BLE001
+            sms_result = {"status": "failed", "error": str(exc)}
+
+    notif = {"email": email_result, "sms": sms_result}
+    await db.player_correction_requests.update_one(
+        {"id": req.id}, {"$set": {"notification_result": notif}},
+    )
+    req_dict["notification_result"] = notif
+    return {"request": req_dict, "link": link}
+
+
+def _build_correction_email_html(name: str, note: str, field_flags, document_flags, link: str, days: int) -> str:
+    def _rows(flags):
+        return "".join(
+            f"<li style='margin:6px 0;'><strong>{f.label}</strong> — {f.remark}</li>"
+            for f in flags
+        ) or "<li style='color:#666'>(none)</li>"
+    return f"""
+    <div style="font-family:Arial,sans-serif;color:#232323;max-width:600px">
+        <h2 style="color:#0e3d2e">MPCA · Correction Required</h2>
+        <p>Dear {name},</p>
+        <p>Your registration has been reviewed and requires a few corrections before it can be approved.</p>
+        <p style="background:#fdf6e6;border-left:3px solid #b88328;padding:10px 12px;font-style:italic;">{note}</p>
+        <h3 style="margin-top:20px">Fields to update</h3>
+        <ul>{_rows(field_flags)}</ul>
+        <h3>Documents to re-upload / provide</h3>
+        <ul>{_rows(document_flags)}</ul>
+        <p style="margin-top:24px">
+            <a href="{link}" style="background:#0e3d2e;color:#f5efe6;padding:12px 22px;
+                text-decoration:none;border-radius:4px;font-weight:bold;letter-spacing:0.5px;">
+                Open Correction Form
+            </a>
+        </p>
+        <p style="color:#666;font-size:13px">This link is valid for {days} days. Do not share it.</p>
+        <p style="color:#666;font-size:12px;margin-top:32px">— Madhya Pradesh Cricket Association</p>
+    </div>
+    """
+
+
+@api_router.post("/player-registrations/{rid}/cancel-correction/{cid}")
+async def cancel_correction(
+    rid: str,
+    cid: str,
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+):
+    reg = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not reg:
+        raise HTTPException(404, "Registration not found")
+    if not (_is_home_division(reg, x_user_body_code, x_role_id) or (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES)):
+        raise HTTPException(403, "Not permitted.")
+    req = await db.player_correction_requests.find_one({"id": cid, "registration_id": rid}, {"_id": 0})
+    if not req:
+        raise HTTPException(404, "Correction request not found")
+    if req["status"] != "Pending":
+        raise HTTPException(400, f"Correction is {req['status']} — cannot cancel.")
+    await db.player_correction_requests.update_one({"id": cid}, {"$set": {"status": "Cancelled"}})
+    # If this was the active correction, roll registration back to Submitted
+    if reg.get("latest_correction_id") == cid and reg.get("status") == "Correction_Requested":
+        await db.player_registrations.update_one({"id": rid}, {"$set": {
+            "status": "Submitted",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }})
+    await _log_event(rid, "correction_cancelled", actor_body_id=x_user_body_code, actor_role=x_role_id)
+    return {"status": "ok"}
+
+
+@api_router.get("/player-registrations/{rid}/corrections")
+async def list_corrections(
+    rid: str,
+    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: Optional[str] = Depends(principal_role_id),
+):
+    reg = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
+    if not reg:
+        raise HTTPException(404, "Registration not found")
+    if not (_is_home_division(reg, x_user_body_code, x_role_id) or (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES)):
+        raise HTTPException(403, "Not permitted.")
+    cur = db.player_correction_requests.find(
+        {"registration_id": rid}, {"_id": 0, "token": 0},  # never leak token to reviewers list
+    ).sort("requested_at", -1)
+    items = await cur.to_list(50)
+    return items
+
+
+# ─────────────── PUBLIC (no-auth) correction endpoints ───────────────
+
+@api_router.get("/public/player-registrations/correction/{token}")
+async def public_get_correction(token: str):
+    """Player opens the emailed / SMS'd link — token IS the credential."""
+    req = await db.player_correction_requests.find_one({"token": token}, {"_id": 0})
+    if not req:
+        raise HTTPException(404, "This correction link is invalid.")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if req["status"] == "Cancelled":
+        raise HTTPException(410, "This correction request was withdrawn.")
+    if req["status"] == "Resubmitted":
+        return {"already_resubmitted": True, "resubmitted_at": req.get("resubmitted_at")}
+    if req.get("expires_at") and req["expires_at"] < now_iso:
+        if req["status"] == "Pending":
+            await db.player_correction_requests.update_one({"id": req["id"]}, {"$set": {"status": "Expired"}})
+        raise HTTPException(410, "This correction link has expired.")
+    reg = await db.player_registrations.find_one({"id": req["registration_id"]}, {"_id": 0})
+    if not reg:
+        raise HTTPException(404, "Registration missing.")
+    # Only return the player_data snapshot + flags — no reviewer identity, no internal audit
+    return {
+        "correction_id": req["id"],
+        "overall_note": req["overall_note"],
+        "field_flags": req["field_flags"],
+        "document_flags": req["document_flags"],
+        "expires_at": req["expires_at"],
+        "player_data": reg.get("player_data") or {},
+        "registration_id": reg["id"],
+    }
+
+
+@api_router.post("/public/player-registrations/correction/{token}/submit")
+async def public_submit_correction(token: str, payload: PublicCorrectionSubmit):
+    req = await db.player_correction_requests.find_one({"token": token}, {"_id": 0})
+    if not req:
+        raise HTTPException(404, "This correction link is invalid.")
+    now = datetime.now(timezone.utc)
+    if req["status"] != "Pending":
+        raise HTTPException(410, f"This correction request is {req['status'].lower()}.")
+    if req.get("expires_at") and req["expires_at"] < now.isoformat():
+        await db.player_correction_requests.update_one({"id": req["id"]}, {"$set": {"status": "Expired"}})
+        raise HTTPException(410, "This correction link has expired.")
+    reg = await db.player_registrations.find_one({"id": req["registration_id"]}, {"_id": 0})
+    if not reg:
+        raise HTTPException(404, "Registration missing.")
+
+    # Only allow patching keys that were flagged.
+    flagged = {f["key"] for f in req.get("field_flags", [])}
+    flagged |= {d["key"] for d in req.get("document_flags", [])}
+    if not payload.patch:
+        raise HTTPException(400, "Nothing to submit.")
+
+    current = reg.get("player_data") or {}
+    updates: Dict[str, Any] = {}
+    diff: Dict[str, Any] = {}
+    for k, v in payload.patch.items():
+        if k not in flagged:
+            raise HTTPException(400, f"Field '{k}' was not flagged for correction.")
+        if k not in _KNOWN_FIELD_KEYS:
+            raise HTTPException(400, f"Unknown key: {k}")
+        if current.get(k) != v:
+            diff[k] = [current.get(k), v]
+            updates[f"player_data.{k}"] = v
+
+    if not diff:
+        # Same value re-submitted — still transition so the reviewer sees closure.
+        await db.player_correction_requests.update_one({"id": req["id"]}, {"$set": {
+            "status": "Resubmitted",
+            "resubmitted_at": now.isoformat(),
+            "resubmit_diff": {},
+        }})
+        await db.player_registrations.update_one({"id": reg["id"]}, {"$set": {
+            "status": "Submitted",
+            "updated_at": now.isoformat(),
+        }})
+        return {"status": "no_change"}
+
+    updates.update({
+        "status": "Submitted",
+        "updated_at": now.isoformat(),
+    })
+    await db.player_registrations.update_one({"id": reg["id"]}, {"$set": updates})
+    await db.player_correction_requests.update_one({"id": req["id"]}, {"$set": {
+        "status": "Resubmitted",
+        "resubmitted_at": now.isoformat(),
+        "resubmit_diff": diff,
+    }})
+    await _log_event(reg["id"], "correction_resubmitted",
+                     note=f"{len(diff)} field(s) resubmitted by player",
+                     diff=diff)
+    return {"status": "ok", "changes": len(diff)}

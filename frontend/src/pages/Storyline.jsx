@@ -320,7 +320,7 @@ const SLIDES = [
 // Deck shell + slide renderers
 // ═══════════════════════════════════════════════════════════════════
 
-const emeraldBg = `radial-gradient(ellipse at 30% 20%, ${DL.emerald} 0%, ${DL.ink} 55%, #060d0c 100%)`;
+export const emeraldBg = `radial-gradient(ellipse at 30% 20%, ${DL.emerald} 0%, ${DL.ink} 55%, #060d0c 100%)`;
 
 export default function Storyline() {
     const [slide, setSlide] = useState(0);
@@ -452,7 +452,7 @@ export default function Storyline() {
 }
 
 // ── Nav button ────────────────────────────────────────────────────
-const NavBtn = ({ children, onClick, disabled, testid, primary }) => (
+export const NavBtn = ({ children, onClick, disabled, testid, primary }) => (
     <button
         onClick={onClick}
         disabled={disabled}
@@ -497,7 +497,7 @@ const IcebergDiagram = () => (
     </svg>
 );
 
-const WhatSlide = ({ data }) => (
+export const WhatSlide = ({ data }) => (
     <div className="max-w-[1200px] w-full">
         <div className="text-center mb-9">
             <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-4" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
@@ -557,7 +557,7 @@ const WhatSlide = ({ data }) => (
 // ═══════════════════════════════════════════════════════════════════
 // Slide 2 · WHY · AI is the answer
 // ═══════════════════════════════════════════════════════════════════
-const WhySlide = ({ data }) => (
+export const WhySlide = ({ data }) => (
     <div className="max-w-[1200px] w-full">
         <div className="text-center mb-10">
             <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-5" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
@@ -627,7 +627,7 @@ const WhySlide = ({ data }) => (
 // the deck — everything downstream (grants, players, squads) reads back
 // against these four layers.
 // ═══════════════════════════════════════════════════════════════════
-const FrameworkSlide = ({ data }) => (
+export const FrameworkSlide = ({ data }) => (
     <div className="max-w-[1240px] w-full">
         <div className="text-center mb-6">
             <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-3" style={{ fontFamily: DL.fontMono, color: DL.gold }}>
@@ -708,7 +708,7 @@ const FrameworkSlide = ({ data }) => (
 // Bucket-intro slide · 3 total (Players · Tournaments · Money & Compliance)
 // Establishes the sub-domain context before its 2-3 feature slides fire.
 // ═══════════════════════════════════════════════════════════════════
-const BucketIntroSlide = ({ data }) => {
+export const BucketIntroSlide = ({ data }) => {
     const Icon = data.icon;
     return (
         <div className="max-w-[1200px] w-full">
@@ -1010,7 +1010,7 @@ const MockupSquad = () => (
 
 const MOCKUPS = { grants: MockupGrants, player: MockupPlayerTrail, squad: MockupSquad };
 
-const FeatureSlide = ({ data }) => {
+export const FeatureSlide = ({ data }) => {
     const Icon = data.icon;
     const Mockup = data.mockup ? MOCKUPS[data.mockup] : null;
     return (
@@ -1096,7 +1096,7 @@ const FeatureSlide = ({ data }) => {
 // ═══════════════════════════════════════════════════════════════════
 // Slide 9 · Impact ledger
 // ═══════════════════════════════════════════════════════════════════
-const ImpactSlide = ({ data }) => (
+export const ImpactSlide = ({ data }) => (
     <div className="max-w-[1200px] w-full">
         <div className="text-center mb-10">
             <div className="text-[11px] uppercase tracking-[0.28em] font-bold mb-3" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.9 }}>
@@ -1151,7 +1151,7 @@ const ImpactSlide = ({ data }) => (
 // ═══════════════════════════════════════════════════════════════════
 // Slide 10 · CTA
 // ═══════════════════════════════════════════════════════════════════
-const CtaSlide = ({ data }) => (
+export const CtaSlide = ({ data }) => (
     <div className="max-w-[1120px] w-full mx-auto text-center flex flex-col items-center">
         <div className="text-[11px] uppercase tracking-[0.32em] font-bold mb-5" style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.9 }}>
             {data.eyebrow}
@@ -1214,7 +1214,7 @@ const CtaSlide = ({ data }) => (
 // stakeholder sees the current UI + real data if signed in). Fallback to
 // "Open in new tab" if the iframe fails to load.
 // ═══════════════════════════════════════════════════════════════════
-const LivePreview = ({ data, onClose }) => {
+export const LivePreview = ({ data, onClose }) => {
     // Iter 119 — same-origin iframe captures keyboard focus, so a window-
     // level keydown never fires. We (a) autofocus the overlay div in case
     // the user has not yet clicked into the iframe, AND (b) also attach the

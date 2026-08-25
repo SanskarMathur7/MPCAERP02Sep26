@@ -78,6 +78,7 @@ const MatchOfficialFinancePage = lazy(() => import("@/pages/MatchOfficialFinance
 const MPCAShowcase = lazy(() => import("@/pages/MPCAShowcase"));
 const UxAuditReview = lazy(() => import("@/pages/UxAuditReview"));
 const Storyline = lazy(() => import("@/pages/Storyline"));
+const LaunchPresentation = lazy(() => import("@/pages/LaunchPresentation"));
 const MyDAForms = lazy(() => import("@/pages/MyDAForms"));
 const SquadReview = lazy(() => import("@/pages/SquadReview"));
 const SquadDetail = lazy(() => import("@/pages/SquadDetail"));
@@ -155,6 +156,7 @@ function App() {
                             <Route path="/disclosures-public" element={<Disclosures publicView />} />
                             <Route path="/showcase" element={<MPCAShowcase />} />
                             <Route path="/storyline" element={<Storyline />} />
+                            <Route path="/launch-presentation" element={<LaunchPresentation />} />
                             <Route path="/audit-review" element={<UxAuditReview />} />
                             {/* Feb 2026 · /design-lab + /design-preview retired — HUDs now live under /showcase → Command Deck */}
                             <Route path="/design-lab" element={<Navigate to="/showcase" replace />} />

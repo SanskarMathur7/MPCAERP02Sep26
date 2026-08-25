@@ -73,21 +73,37 @@ const SLIDES = [
         aiCount: 2,
         aiPreview: "AI reads the docs. The engine walks the rules. Every reviewer sees the same reasoning.",
     },
-    // 03 · Player Registration — deep-dive
+    // 03 · Player Registration — AI Verification (deep-dive)
     {
         kind: "feature",
         bucketId: "players",
         icon: ShieldCheck,
-        eyebrow: "Players · Deep-Dive",
+        eyebrow: "Players · AI Verification",
         featureName: "AI Eligibility Engine · Verification Trail",
         problem: "Reviewers guessed. No two verdicts ever matched.",
         aiVerb: "REASONS & RECOMMENDS",
-        aiDescription: "Missing form fields? The engine promotes AI-extracted values from KYC docs. Every rule cites the exact document that backed it.",
+        aiDescription: "AI reads every KYC document. The engine walks 8+ eligibility rules against every uploaded scan. Missing form fields? AI-extracted values from Aadhaar / marksheet are promoted automatically. Every verdict cites the exact document that backed it — QR-verified, district-matched, DOB-cross-checked.",
         metric: { before: "15–30 min/doc", after: "seconds", label: "per player · verification time" },
         seasonSave: "≈ 450 staff-hours · zero post-hoc disqualifications",
         dividend: "= selectors focus on cricket, reviewers focus on judgement",
         livePage: { label: "Player Detail · Verification Trail", path: "/players" },
         mockup: "player",
+    },
+    // 04 · Player Registration — Correction Request Loop
+    {
+        kind: "feature",
+        bucketId: "players",
+        icon: FileCheck2,
+        eyebrow: "Players · Correction Loop",
+        featureName: "Correction Request · Tokenised Player Link",
+        problem: "Registration errors triggered phone calls, WhatsApp, resubmissions from scratch.",
+        aiVerb: "FLAGS & INVITES CORRECTION",
+        aiDescription: "Reviewer flags specific fields and documents · writes one note · Send. Player gets email + SMS with a single-use tokenised link (no login). Only flagged fields are editable. New documents can be requested inline. Player resubmits → reviewer sees the corrected data with a full diff.",
+        metric: { before: "3–5 days back-and-forth", after: "under 24 hours", label: "correction cycle" },
+        seasonSave: "≈ 200 staff-hours · zero misplaced follow-ups · full audit trail",
+        dividend: "= faster approvals · fewer disgruntled players · Secretariat freed from chasing corrections",
+        livePage: { label: "Registration Review · Request Correction", path: "/player-registrations" },
+        mockup: "correction",
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -324,7 +340,7 @@ const OverviewSlide = ({ data }) => (
                 THE PROMISE OF THIS DECK
             </div>
             <p style={{ fontFamily: DL.fontBody, fontSize: 15, lineHeight: 1.55, color: "rgba(245,239,230,0.85)" }}>
-                Next slides: <strong>players → grants → tournament claims → the operating truth.</strong> For each — the old pain, the new flow, the hours saved.
+                Next slides: <strong>players (AI + correction) → grants → tournament claims → the operating truth.</strong> For each — the old pain, the new flow, the hours saved.
             </p>
         </div>
     </div>

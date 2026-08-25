@@ -1115,7 +1115,111 @@ const MockupSchemes = () => {
 
 
 
-const MOCKUPS = { grants: MockupGrants, player: MockupPlayerTrail, squad: MockupSquad, schemes: MockupSchemes };
+
+// ── Mockup 5 · Correction Request Loop (Iter 130f) ────────────────────
+const MockupCorrection = () => (
+    <div style={mockupFrame} data-testid="mockup-correction">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid rgba(0,0,0,0.08)", background: "#EBE4D6", fontFamily: DL.fontMono, fontSize: 10, color: "#5C5A54" }}>
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#C55656" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#D5A93A" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#4A9E6C" }} />
+            <span style={{ marginLeft: 12, letterSpacing: "0.06em" }}>MPCA ERP · Player Registration · Correction Request Loop</span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0, minHeight: 320 }}>
+            {/* LEFT · Reviewer modal */}
+            <div style={{ borderRight: "1px solid rgba(0,0,0,0.10)", background: "#FDF9F1", padding: "10px 14px 12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#0D3B2E", color: "#F5EFE6", marginBottom: 10, borderRadius: 2 }}>
+                    <div style={{ fontFamily: DL.fontDisplay, fontSize: 12, fontWeight: 700 }}>Request Correction — Ravi Kumar</div>
+                    <div style={{ fontFamily: DL.fontMono, fontSize: 12, opacity: 0.7 }}>✕</div>
+                </div>
+
+                <div style={{ fontFamily: DL.fontMono, fontSize: 8.5, letterSpacing: "0.22em", color: "#B88328", fontWeight: 700, marginBottom: 4 }}>OVERALL NOTE</div>
+                <div style={{ background: "#F5EFE6", border: "1px solid rgba(0,0,0,0.08)", padding: "6px 8px", fontFamily: DL.fontBody, fontSize: 10.5, fontStyle: "italic", color: "#1A1F1D", marginBottom: 10, lineHeight: 1.4 }}>
+                    A few items need correction before we approve. Please review and resubmit.
+                </div>
+
+                <div style={{ fontFamily: DL.fontMono, fontSize: 8.5, letterSpacing: "0.22em", color: "#B88328", fontWeight: 700, marginBottom: 4 }}>FIELDS FLAGGED</div>
+                {[
+                    { k: "Aadhaar Number", r: "Number does not match uploaded card", on: true },
+                    { k: "Place of Birth", r: "Field left blank", on: true },
+                    { k: "Bank IFSC", r: "", on: false },
+                ].map((f, i) => (
+                    <div key={i} style={{
+                        display: "flex", alignItems: "flex-start", gap: 6,
+                        padding: "5px 8px", marginBottom: 3,
+                        background: f.on ? "#FDF3E0" : "#FDF9F1",
+                        borderLeft: f.on ? "2px solid #D5A93A" : "2px solid transparent",
+                    }}>
+                        <span style={{ marginTop: 1, fontSize: 10 }}>{f.on ? "▣" : "☐"}</span>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontFamily: DL.fontDisplay, fontSize: 10.5, fontWeight: 700, color: "#0D3B2E" }}>{f.k}</div>
+                            {f.on && f.r && <div style={{ fontFamily: DL.fontMono, fontSize: 9, color: "#8B1F1F", marginTop: 1 }}>{f.r}</div>}
+                        </div>
+                    </div>
+                ))}
+
+                <div style={{ marginTop: 10, fontFamily: DL.fontMono, fontSize: 8.5, letterSpacing: "0.22em", color: "#B88328", fontWeight: 700, marginBottom: 4 }}>DOCUMENTS FLAGGED</div>
+                <div style={{ padding: "5px 8px", background: "#FDF3E0", borderLeft: "2px solid #D5A93A", marginBottom: 3 }}>
+                    <div style={{ fontFamily: DL.fontDisplay, fontSize: 10.5, fontWeight: 700, color: "#0D3B2E" }}>Birth Certificate</div>
+                    <div style={{ fontFamily: DL.fontMono, fontSize: 9, color: "#8B1F1F", marginTop: 1 }}>Scan is blurry · re-upload clearer</div>
+                </div>
+                <div style={{ padding: "5px 8px", background: "#FDF3E0", borderLeft: "2px solid #D5A93A" }}>
+                    <div style={{ fontFamily: DL.fontDisplay, fontSize: 10.5, fontWeight: 700, color: "#0D3B2E" }}>School Character Certificate <span style={{ fontSize: 8, background: "#12336E", color: "#F5EFE6", padding: "1px 4px", marginLeft: 4, letterSpacing: "0.14em" }}>NEW</span></div>
+                    <div style={{ fontFamily: DL.fontMono, fontSize: 9, color: "#8B1F1F", marginTop: 1 }}>Additional per Rule 4.2</div>
+                </div>
+
+                <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                    <div style={{ padding: "6px 12px", background: "#8B1F1F", color: "#F5EFE6", fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.18em", fontWeight: 700, borderRadius: 2 }}>▷ SEND CORRECTION REQUEST</div>
+                </div>
+            </div>
+
+            {/* RIGHT · Email + Player page preview */}
+            <div style={{ background: "#F4EDE0", padding: "10px 14px" }}>
+                <div style={{ fontFamily: DL.fontMono, fontSize: 8.5, letterSpacing: "0.22em", color: "#B88328", fontWeight: 700, marginBottom: 5 }}>
+                    ▶ EMAIL + SMS · SENT TO RAVI
+                </div>
+
+                {/* Simulated email card */}
+                <div style={{ background: "#FDF9F1", border: "1px solid #C9A574", borderTop: "3px solid #0D3B2E", padding: "10px 12px", marginBottom: 10, boxShadow: "0 2px 6px rgba(0,0,0,0.05)" }}>
+                    <div style={{ fontFamily: DL.fontMono, fontSize: 8, letterSpacing: "0.24em", color: "#B88328", fontWeight: 700 }}>MPCA · MADHYA PRADESH CRICKET ASSOCIATION</div>
+                    <div style={{ fontFamily: DL.fontDisplay, fontSize: 15, fontWeight: 800, color: "#0D3B2E", marginTop: 3 }}>Correction Required</div>
+                    <div style={{ fontFamily: DL.fontBody, fontSize: 10, color: "#5C5A54", marginTop: 3, lineHeight: 1.4 }}>
+                        Dear Ravi, your registration needs a few updates before approval. Fields: <strong>Aadhaar Number</strong>, <strong>Place of Birth</strong>. Documents: <strong>Birth Certificate</strong>, <strong>School Character Certificate</strong>.
+                    </div>
+                    <div style={{ marginTop: 10, display: "inline-block", padding: "6px 14px", background: "#8B1F1F", color: "#F5EFE6", fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.18em", fontWeight: 700 }}>OPEN CORRECTION FORM →</div>
+                    <div style={{ marginTop: 8, fontFamily: DL.fontMono, fontSize: 7.5, color: "#8A867E" }}>Link valid 7 days · single-use · do not share</div>
+                </div>
+
+                <div style={{ fontFamily: DL.fontMono, fontSize: 8.5, letterSpacing: "0.22em", color: "#B88328", fontWeight: 700, marginBottom: 5 }}>
+                    ▶ RAVI OPENS THE LINK · NO LOGIN
+                </div>
+
+                {/* Player-facing page preview */}
+                <div style={{ background: "#FDF9F1", border: "1px solid rgba(0,0,0,0.08)", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
+                    <div style={{ background: "#0D3B2E", color: "#F5EFE6", padding: "6px 10px" }}>
+                        <div style={{ fontFamily: DL.fontMono, fontSize: 7.5, letterSpacing: "0.24em", color: "#C9A574" }}>MPCA</div>
+                        <div style={{ fontFamily: DL.fontDisplay, fontSize: 12, fontWeight: 800, marginTop: 1 }}>Please correct your registration</div>
+                    </div>
+                    <div style={{ padding: "8px 10px" }}>
+                        <div style={{ background: "#FDF3E0", borderLeft: "3px solid #D5A93A", padding: "5px 8px" }}>
+                            <div style={{ fontFamily: DL.fontDisplay, fontSize: 10, fontWeight: 700, color: "#0D3B2E" }}>Aadhaar Number</div>
+                            <div style={{ fontFamily: DL.fontMono, fontSize: 8.5, color: "#8B1F1F" }}>⚠ Number does not match uploaded card</div>
+                            <div style={{ fontFamily: DL.fontMono, fontSize: 8, color: "#5C5A54", marginTop: 2 }}>Previously: 1234-XXXX-5678</div>
+                            <div style={{ background: "#FDF9F1", border: "1px solid #D5A93A", padding: "3px 6px", marginTop: 3, fontFamily: DL.fontMono, fontSize: 9, color: "#1A1F1D" }}>_______________________</div>
+                        </div>
+                        <div style={{ marginTop: 8, textAlign: "right" }}>
+                            <span style={{ display: "inline-block", padding: "5px 12px", background: "#8B1F1F", color: "#F5EFE6", fontFamily: DL.fontMono, fontSize: 8.5, letterSpacing: "0.18em", fontWeight: 700 }}>✓ SUBMIT CORRECTIONS</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+);
+
+
+const MOCKUPS = { grants: MockupGrants, player: MockupPlayerTrail, squad: MockupSquad, schemes: MockupSchemes, correction: MockupCorrection };
 
 export const FeatureSlide = ({ data }) => {
     const Icon = data.icon;

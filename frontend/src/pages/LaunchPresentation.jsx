@@ -170,27 +170,31 @@ const SLIDES = [
     {
         kind: "why",
         eyebrow: "05 · The Operating Truth",
-        overline: "How the ERP is built to actually stick",
         title: "AI does the labour. Humans do the leadership.",
-        subtitle: "Every AI verdict is advisory. Humans always decide.",
-        pillars: [
+        subtitle: "Every AI verdict is advisory. Humans always decide. That is why the ERP actually gets used.",
+        columns: [
             {
-                title: "Ingest",
-                detail: "Every PDF, invoice, scan and signed sheet enters as structured data — not as a folder attachment. Nothing left in an inbox.",
+                heading: "What AI does — quietly, at scale",
+                accent: "gold",
+                items: [
+                    "Reads every KYC document, every invoice, every fixture attachment",
+                    "Walks eligibility rules and grant schemes against every record",
+                    "Diffs invoices against their PDFs · rolls up the tournament total",
+                    "Cites the exact document that backed each verdict",
+                ],
             },
             {
-                title: "Structure",
-                detail: "Eligibility rules, approval matrices and grant schemes live as data. Rewritable per season, without a code change.",
-            },
-            {
-                title: "Reason",
-                detail: "The engine walks every rule against every document. Reviewers see the exact citation that supports each verdict.",
-            },
-            {
-                title: "Judge",
-                detail: "Approvers always click. Maker-Checker on every state change. Every decision is signed, dated, immutable.",
+                heading: "What humans still do — the decisions that matter",
+                accent: "green",
+                items: [
+                    "Approve, reject, or send back — every state change is signed",
+                    "Accept AI-flagged exceptions with a note on the record",
+                    "Rewrite eligibility rules and schemes as the season demands",
+                    "Own the outcome · the AI is never accountable",
+                ],
             },
         ],
+        punch: "The ERP does not replace the Secretariat. It gives every reviewer the same evidence, at the same time, in the same shape.",
     },
 
     // ═══════════════════════════════════════════════════════════════

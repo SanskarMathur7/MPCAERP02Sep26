@@ -1008,7 +1008,89 @@ const MockupSquad = () => (
     </div>
 );
 
-const MOCKUPS = { grants: MockupGrants, player: MockupPlayerTrail, squad: MockupSquad };
+// ── Mockup 4 · MPCA Schemes Register (Iter 130c) ──────────────────────
+const MockupSchemes = () => {
+    const cats = [
+        { label: "ALL",          count: 33, active: true },
+        { label: "ANNUAL GRANT", count: 6 },
+        { label: "REIMBURSEMENT",count: 5 },
+        { label: "CAMP",         count: 3 },
+        { label: "AWARD",        count: 6 },
+        { label: "WELFARE",      count: 3 },
+        { label: "INFRA",        count: 3 },
+        { label: "REV. SHARE",   count: 2 },
+    ];
+    const rows = [
+        { code: "1-A", type: "Annual Grant",   name: "Annual Grants to Divisional / District Cricket Associations", freq: "Annual · Division/District" },
+        { code: "1-B", type: "Revenue Share",  name: "Share to Divisions out of Net Revenue from ODI / T20", freq: "Per Intl. Match · Division" },
+        { code: "2-A", type: "Reimbursement",  name: "Inter-School Tournament Reimbursement", freq: "Per Tournament · District" },
+        { code: "2-B", type: "Reimbursement",  name: "Inter-District Tournament Reimbursement", freq: "Per Tournament · District" },
+        { code: "3-A", type: "Camp",           name: "Rural Coaching Camp — MPCA Sponsored", freq: "Per Camp · Division" },
+        { code: "4-B", type: "Welfare",        name: "Ex-gratia to Deceased Player's Family", freq: "One-time · Family" },
+    ];
+    return (
+        <div style={mockupFrame} data-testid="mockup-schemes">
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid rgba(0,0,0,0.08)", background: "#EBE4D6", fontFamily: DL.fontMono, fontSize: 10, color: "#5C5A54" }}>
+                <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#C55656" }} />
+                <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#D5A93A" }} />
+                <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#4A9E6C" }} />
+                <span style={{ marginLeft: 12, letterSpacing: "0.06em" }}>MPCA ERP · Financial · MPCA Master Document</span>
+            </div>
+
+            {/* Activation banner */}
+            <div style={{ padding: "12px 18px", background: "#DFF0E3", borderBottom: "1px solid rgba(31,127,89,0.35)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ display: "inline-block", width: 22, height: 22, borderRadius: "50%", background: "#1F7F59", color: "#FDF9F1", textAlign: "center", lineHeight: "22px", fontSize: 13, fontWeight: 800 }}>✓</span>
+                    <div>
+                        <div style={{ fontFamily: DL.fontDisplay, fontSize: 14, fontWeight: 800, color: "#0D3B2E" }}>Schemes ACTIVATED · Season 2026-27</div>
+                        <div style={{ fontFamily: DL.fontBody, fontSize: 11, color: "#5C5A54" }}>Signed by <strong>Mahanaryaman Scindia</strong> · 20 Aug 2026</div>
+                    </div>
+                </div>
+                <button style={{ padding: "6px 12px", background: "#8B1F1F", color: "#F5EFE6", fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.2em", fontWeight: 700, border: "none", borderRadius: 3 }}>▲ RE-UPLOAD SIGNED</button>
+            </div>
+
+            {/* Category tabs */}
+            <div style={{ display: "flex", gap: 4, padding: "10px 14px", background: "#F5EFE6", borderBottom: "1px solid rgba(0,0,0,0.05)", overflow: "hidden" }}>
+                {cats.map((c) => (
+                    <div key={c.label} style={{
+                        padding: "5px 10px",
+                        background: c.active ? "#0D3B2E" : "transparent",
+                        color: c.active ? "#F5EFE6" : "#5C5A54",
+                        border: c.active ? "none" : "1px solid rgba(0,0,0,0.1)",
+                        fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.18em", fontWeight: 700,
+                        borderRadius: 2,
+                    }}>{c.label} <span style={{ opacity: 0.7 }}>({c.count})</span></div>
+                ))}
+            </div>
+
+            {/* Scheme rows */}
+            <table style={{ width: "100%", fontFamily: DL.fontBody, fontSize: 12, borderCollapse: "collapse" }}>
+                <thead>
+                    <tr style={{ background: "#EBE4D6", color: "#5C5A54" }}>
+                        <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>SCHEME</th>
+                        <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>TITLE</th>
+                        <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>APPLIES</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((r) => (
+                        <tr key={r.code} style={{ borderTop: "1px solid rgba(0,0,0,0.05)" }}>
+                            <td style={{ padding: "8px 14px", fontFamily: DL.fontMono, fontSize: 10.5, color: "#B88328", fontWeight: 700 }}>{r.code}</td>
+                            <td style={{ padding: "8px 14px", color: "#1A1F1D", fontWeight: 600 }}>{r.name}
+                                <div style={{ fontFamily: DL.fontMono, fontSize: 9, color: "#8B1F1F", letterSpacing: "0.12em", marginTop: 2 }}>{r.type.toUpperCase()}</div>
+                            </td>
+                            <td style={{ padding: "8px 14px", color: "#5C5A54", fontFamily: DL.fontMono, fontSize: 10.5 }}>{r.freq}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
+
+
+const MOCKUPS = { grants: MockupGrants, player: MockupPlayerTrail, squad: MockupSquad, schemes: MockupSchemes };
 
 export const FeatureSlide = ({ data }) => {
     const Icon = data.icon;

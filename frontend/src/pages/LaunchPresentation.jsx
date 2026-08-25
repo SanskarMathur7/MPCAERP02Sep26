@@ -91,40 +91,40 @@ const SLIDES = [
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 04 · Grants (non-tournament) — intro
+    // 04 · Grants — MPCA Schemes Register (non-tournament)
     // ═══════════════════════════════════════════════════════════════
     {
         kind: "bucket_intro",
         bucketId: "grants",
-        bucketLabel: "Module 02 · Grants (non-tournament)",
-        eyebrow: "03 · Grants — every scheme, one approval trail",
+        bucketLabel: "Module 02 · MPCA Schemes Register",
+        eyebrow: "03 · Grants — one signed master document, all 33 schemes",
         icon: HandCoins,
-        title: "20+ schemes running quietly outside the tournament calendar.",
-        subtitle: "Division grants · coaching camps · umpire honorarium · match-official DA · ex-gratia.",
+        title: "Every rupee MPCA spends has a scheme number.",
+        subtitle: "33 schemes across 7 categories — Annual Grants · Reimbursements · Camps · Awards · Welfare · Infrastructure · Revenue Share.",
         pains: [
-            "Division grants sit on Secretariat desks for weeks",
-            "Umpire honorarium chased quarter after quarter",
-            "Coaching-camp reimbursement can take 60 days",
-            "Every scheme has its own paperwork · no unified queue",
+            "Scheme policy lived across circulars, WhatsApp forwards, and last-year's PDF",
+            "Divisions guessed which scheme applied to their claim",
+            "Rate cards frozen in printouts — impossible to revise mid-season",
+            "No single source of truth for the season's grants regime",
         ],
         aiCount: 2,
-        aiPreview: "Every scheme reads from the same claim spine. Reviewers see one queue. Claimants see live status the moment it changes.",
+        aiPreview: "One Master Document. 33 schemes. Signed by the President. Every claim ties back to its scheme number, its rate card, its approval chain.",
     },
-    // 05 · Grants (non-tournament) — deep-dive
+    // 05 · Grants — deep-dive on the Schemes Register
     {
         kind: "feature",
         bucketId: "grants",
-        icon: FileCheck2,
-        eyebrow: "Grants · Deep-Dive",
-        featureName: "Unified Claim Spine · Every Scheme, One Approval Trail",
-        problem: "Every scheme had its own PDF, its own signoff, its own inbox.",
-        aiVerb: "STANDARDISES & APPROVES",
-        aiDescription: "Camps, umpire honorarium, DA, ex-gratia, division grants — all sit on the same claim spine. Same Maker-Checker. Same reviewer queue. Same audit trail. Claimants see one dashboard.",
+        icon: ScrollText,
+        eyebrow: "Schemes Register · Deep-Dive",
+        featureName: "MPCA Schemes Register · One-Click Season Activation",
+        problem: "Every season, scheme policy scattered across circulars and inbox chains.",
+        aiVerb: "STANDARDISES & ACTIVATES",
+        aiDescription: "One signed PDF activates the entire season's schemes for every division. Rates, eligibility, approval chains and audit trails all read from the same register. When a scheme changes mid-season — re-sign, re-activate, done.",
         metric: { before: "45–60 days", after: "5–7 days", label: "typical scheme-claim cycle" },
-        seasonSave: "≈ 400 staff-hours across MPCA + 10 divisions",
-        dividend: "= faster payouts to umpires, coaches, camp organisers — the people who actually run the sport",
-        livePage: { label: "Division Grants Console", path: "/division-grants" },
-        mockup: "grants",
+        seasonSave: "≈ 400 staff-hours across MPCA + 10 divisions · zero 'which scheme applies?' calls",
+        dividend: "= divisions apply the right scheme the first time; claimants know their entitlement in advance",
+        livePage: { label: "MPCA Schemes Register", path: "/schemes" },
+        mockup: "schemes",
     },
 
     // ═══════════════════════════════════════════════════════════════

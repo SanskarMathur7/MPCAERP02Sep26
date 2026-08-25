@@ -1484,31 +1484,99 @@ async def request_correction(
 
 
 def _build_correction_email_html(name: str, note: str, field_flags, document_flags, link: str, days: int) -> str:
+    """Iter 129d · Correction request email rebuilt to match the ERP's
+    Institutional Warm design system (cream parchment, oxblood accents,
+    brass overlines, forest-green display serifs). Fully table-based so
+    Gmail / Outlook / Apple Mail render it identically."""
+
     def _rows(flags):
-        return "".join(
-            f"<li style='margin:6px 0;'><strong>{f.label}</strong> — {f.remark}</li>"
-            for f in flags
-        ) or "<li style='color:#666'>(none)</li>"
-    return f"""
-    <div style="font-family:Arial,sans-serif;color:#232323;max-width:600px">
-        <h2 style="color:#0e3d2e">MPCA · Correction Required</h2>
-        <p>Dear {name},</p>
-        <p>Your registration has been reviewed and requires a few corrections before it can be approved.</p>
-        <p style="background:#fdf6e6;border-left:3px solid #b88328;padding:10px 12px;font-style:italic;">{note}</p>
-        <h3 style="margin-top:20px">Fields to update</h3>
-        <ul>{_rows(field_flags)}</ul>
-        <h3>Documents to re-upload / provide</h3>
-        <ul>{_rows(document_flags)}</ul>
-        <p style="margin-top:24px">
-            <a href="{link}" style="background:#0e3d2e;color:#f5efe6;padding:12px 22px;
-                text-decoration:none;border-radius:4px;font-weight:bold;letter-spacing:0.5px;">
-                Open Correction Form
-            </a>
-        </p>
-        <p style="color:#666;font-size:13px">This link is valid for {days} days. Do not share it.</p>
-        <p style="color:#666;font-size:12px;margin-top:32px">— Madhya Pradesh Cricket Association</p>
-    </div>
-    """
+        if not flags:
+            return "<tr><td style='padding:6px 0;color:#8A867E;font-style:italic;font-size:12px;'>(none)</td></tr>"
+        out = []
+        for f in flags:
+            out.append(
+                f"<tr>"
+                f"<td style='padding:8px 0;border-bottom:1px solid #E8DCC4;font-family:Georgia,serif;'>"
+                f"<div style='font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#B88328;font-weight:bold;margin-bottom:3px;'>{f.label}</div>"
+                f"<div style='color:#2F2A20;font-size:13px;line-height:1.5;'>{f.remark}</div>"
+                f"</td></tr>"
+            )
+        return "".join(out)
+
+    field_rows = _rows(field_flags)
+    doc_rows = _rows(document_flags)
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F4EDE0;font-family:Georgia,'Times New Roman',serif;color:#2F2A20;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4EDE0;padding:32px 12px;">
+    <tr><td align="center">
+
+        <table role="presentation" width="620" cellpadding="0" cellspacing="0" style="max-width:620px;background:#FDF9F1;border:1px solid #C9A574;border-top:6px solid #1B2E1E;box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+
+            <!-- Header -->
+            <tr><td style="padding:28px 36px 20px 36px;background:#1B2E1E;color:#F4EDE0;">
+                <div style="font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:#C9A574;font-weight:bold;">MPCA &middot; Madhya Pradesh Cricket Association</div>
+                <h1 style="margin:8px 0 0;font-family:Georgia,'Playfair Display',serif;font-weight:700;font-size:26px;line-height:1.2;color:#FDF9F1;">Correction Required</h1>
+                <div style="font-size:12px;color:rgba(253,249,241,0.7);margin-top:6px;">Your player registration needs a few updates before approval.</div>
+            </td></tr>
+
+            <!-- Greeting -->
+            <tr><td style="padding:24px 36px 8px 36px;">
+                <p style="margin:0 0 6px;font-size:14px;color:#2F2A20;">Dear {name},</p>
+                <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#2F2A20;">
+                    Your registration has been reviewed and requires the corrections listed below. Once you resubmit, your home Division will re-review and update your status.
+                </p>
+            </td></tr>
+
+            <!-- Reviewer note callout -->
+            <tr><td style="padding:0 36px 22px 36px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-left:3px solid #B88328;background:#FBF3E1;">
+                    <tr><td style="padding:14px 18px;">
+                        <div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#B88328;font-weight:bold;margin-bottom:6px;">Reviewer&apos;s Note</div>
+                        <div style="font-family:Georgia,serif;font-size:14px;font-style:italic;color:#2F2A20;line-height:1.55;">{note}</div>
+                    </td></tr>
+                </table>
+            </td></tr>
+
+            <!-- Fields to Update -->
+            <tr><td style="padding:0 36px 8px 36px;">
+                <div style="font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#7A1A1A;font-weight:bold;padding-bottom:8px;border-bottom:2px solid #7A1A1A;margin-bottom:6px;">Fields to Update</div>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">{field_rows}</table>
+            </td></tr>
+
+            <!-- Documents to Provide -->
+            <tr><td style="padding:22px 36px 8px 36px;">
+                <div style="font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#7A1A1A;font-weight:bold;padding-bottom:8px;border-bottom:2px solid #7A1A1A;margin-bottom:6px;">Documents to Provide</div>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">{doc_rows}</table>
+            </td></tr>
+
+            <!-- CTA button (isolated in its own row so no overlap) -->
+            <tr><td align="center" style="padding:32px 36px 12px 36px;">
+                <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#7A1A1A;">
+                    <a href="{link}" style="display:inline-block;padding:14px 34px;font-family:Georgia,serif;font-weight:bold;font-size:13px;letter-spacing:0.18em;text-transform:uppercase;color:#F4EDE0;text-decoration:none;">Open Correction Form</a>
+                </td></tr></table>
+            </td></tr>
+
+            <tr><td align="center" style="padding:0 36px 32px 36px;">
+                <div style="font-size:11px;color:#8A867E;font-family:Georgia,serif;">This link is valid for {days} days &middot; single-use &middot; do not share</div>
+            </td></tr>
+
+            <!-- Footer -->
+            <tr><td style="padding:16px 36px 22px;border-top:1px solid #E8DCC4;background:#F4EDE0;">
+                <div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#B88328;font-weight:bold;margin-bottom:4px;">MPCA Secretariat</div>
+                <div style="font-size:11px;color:#8A867E;line-height:1.55;">You received this because you submitted a player registration. If this looks unexpected, please contact your Division HS.</div>
+            </td></tr>
+
+        </table>
+
+        <div style="max-width:620px;margin:12px auto 0;font-size:10px;color:#B8B0A0;text-align:center;font-family:Georgia,serif;">
+            Madhya Pradesh Cricket Association &middot; Bhopal
+        </div>
+
+    </td></tr>
+</table>
+</body></html>"""
 
 
 @api_router.post("/player-registrations/{rid}/cancel-correction/{cid}")

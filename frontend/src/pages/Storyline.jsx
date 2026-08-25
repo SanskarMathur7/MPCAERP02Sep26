@@ -1464,11 +1464,15 @@ export const FeatureSlide = ({ data }) => {
                             src={imageSrc}
                             alt="MPCA ERP screenshot"
                             style={{
-                                width: "100%",
+                                width: "auto",
+                                maxWidth: "100%",
+                                maxHeight: "56vh",
+                                margin: "0 auto",
                                 borderRadius: 4,
                                 border: `1px solid ${DL.gold}55`,
                                 boxShadow: "0 20px 60px rgba(0,0,0,0.55), 0 6px 18px rgba(0,0,0,0.35)",
                                 display: "block",
+                                objectFit: "contain",
                             }}
                             data-testid="feature-live-screenshot"
                         />

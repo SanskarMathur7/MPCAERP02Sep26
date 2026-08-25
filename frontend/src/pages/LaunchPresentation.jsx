@@ -195,21 +195,21 @@ const SLIDES = [
         aiCount: 2,
         aiPreview: "Every invoice auto-diffed against its PDF. One click rolls up the whole tournament. MPCA approves ambers, not greens.",
     },
-    // 07 · Tournament Claims — deep-dive
+    // 07 · Tournament Claims — deep-dive (real tournament detail)
     {
         kind: "feature",
         bucketId: "tournament_claims",
-        icon: HandCoins,
+        icon: Trophy,
         eyebrow: "Tournament Claims · Deep-Dive",
-        featureName: "AI Diff · Per-invoice + Tournament AI Audit",
-        problem: "60 invoices. Two days of Accounts. Weeks in inbox chains.",
-        aiVerb: "VERIFIES & ROLLS UP",
-        aiDescription: "Every invoice auto-diffed against its PDF. One click rolls up the whole tournament. MPCA approves the ambers, waves through the greens, sends back the reds — with the citation attached.",
+        featureName: "One Tournament Page · Every Fact, Every Rupee",
+        problem: "40 tournaments a year, each a folder of PDFs and WhatsApp chats.",
+        aiVerb: "COALESCES · AI-AUDITS · ROLLS-UP",
+        aiDescription: "One page holds the entire tournament — dates, format, grounds, teams, fixtures, budget heads, invoices. AI diffs every invoice against its PDF, rolls the tournament total up, flags the ambers. MPCA approves the tournament's financial console with the same one-click flow.",
         metric: { before: "1–2 days", after: "≤ 90 seconds", label: "per claim · AI verification time" },
         seasonSave: "≈ 600 staff-hours · 2–4% leakage recoverable",
-        dividend: "= reinvested into pitch covers, sight-screens, roller repairs across districts",
-        livePage: { label: "Reimbursement Claim Review", path: "/reimbursement-claims" },
-        mockup: "grants",
+        dividend: "= reinvested into pitch covers, sight-screens, roller repairs",
+        livePage: { label: "Tournament Detail Page", path: "/tournaments" },
+        mockup: "image:/deck-screenshots/tournament_detail.png",
     },
 
     // ═══════════════════════════════════════════════════════════════

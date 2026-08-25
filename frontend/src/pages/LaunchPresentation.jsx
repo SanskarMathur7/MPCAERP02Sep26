@@ -156,7 +156,7 @@ const SLIDES = [
         seasonSave: "≈ 350 staff-hours · every claim reviewed the same way",
         dividend: "= reviewers open only the flagged files · greens sail through",
         livePage: { label: "Claim Detail · AI Review", path: "/claims" },
-        mockup: "grantAi",
+        mockup: "image:/deck-screenshots/claim_detail_0142.png",
     },
     // 08 · Grants — MPCA one-click approve
     {
@@ -172,7 +172,7 @@ const SLIDES = [
         seasonSave: "≈ 250 approver-hours · zero missed claims",
         dividend: "= claimants paid weeks earlier · Secretariat freed from data entry",
         livePage: { label: "MPCA Approver Console", path: "/claims?queue=mpca" },
-        mockup: "approverQueue",
+        mockup: "image:/deck-screenshots/claims_queue.png",
     },
 
     // ═══════════════════════════════════════════════════════════════

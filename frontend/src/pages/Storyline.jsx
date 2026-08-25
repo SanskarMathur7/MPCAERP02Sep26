@@ -1377,7 +1377,15 @@ const MOCKUPS = { grants: MockupGrants, player: MockupPlayerTrail, squad: Mockup
 
 export const FeatureSlide = ({ data }) => {
     const Icon = data.icon;
-    const Mockup = data.mockup ? MOCKUPS[data.mockup] : null;
+    // Iter 130h · mockup can be a component key OR an "image:<path>" reference
+    // that renders a real ERP screenshot in the same frame.
+    let Mockup = null;
+    let imageSrc = null;
+    if (typeof data.mockup === "string" && data.mockup.startsWith("image:")) {
+        imageSrc = data.mockup.slice("image:".length);
+    } else if (data.mockup) {
+        Mockup = MOCKUPS[data.mockup] || null;
+    }
     return (
         <div className="max-w-[1280px] w-full pb-24">
             {/* COMPACT TOP STRIP · eyebrow · problem · verb · metric — one row, small */}
@@ -1443,15 +1451,28 @@ export const FeatureSlide = ({ data }) => {
             </div>
 
             {/* HERO · Product mockup */}
-            {Mockup && (
+            {(Mockup || imageSrc) && (
                 <div>
                     <div className="flex items-center gap-2 mb-1.5">
                         <div className="text-[9px] uppercase tracking-[0.28em] font-bold" style={{ fontFamily: DL.fontMono, color: "rgba(245,239,230,0.5)" }}>
-                            The Screen · Product Reference
+                            The Screen · {imageSrc ? "Live ERP Screenshot" : "Product Reference"}
                         </div>
                         <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(184,131,40,0.5) 0%, transparent 100%)" }} />
                     </div>
-                    <Mockup />
+                    {Mockup ? <Mockup /> : (
+                        <img
+                            src={imageSrc}
+                            alt="MPCA ERP screenshot"
+                            style={{
+                                width: "100%",
+                                borderRadius: 4,
+                                border: `1px solid ${DL.gold}55`,
+                                boxShadow: "0 20px 60px rgba(0,0,0,0.55), 0 6px 18px rgba(0,0,0,0.35)",
+                                display: "block",
+                            }}
+                            data-testid="feature-live-screenshot"
+                        />
+                    )}
                 </div>
             )}
         </div>

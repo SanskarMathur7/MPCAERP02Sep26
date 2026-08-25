@@ -45,8 +45,8 @@ const SLIDES = [
         subtitle: "Built for operators. Owned by MPCA. Open to every association.",
         modules: [
             { icon: Users,        label: "Player Registration",  sub: "3,000+ players · KYC · eligibility" },
-            { icon: Trophy,       label: "Tournament Management", sub: "40+ tournaments · fixtures · reimbursements" },
             { icon: HandCoins,    label: "Grant Claims",         sub: "20+ schemes · claim → payment" },
+            { icon: Trophy,       label: "Tournament Claims",    sub: "40+ tournaments · invoices · reimbursement" },
             { icon: ClipboardList,label: "Squad Selection",       sub: "Selection console · signed PDFs" },
             { icon: Landmark,     label: "Governance",           sub: "Maker-Checker · meetings · minutes" },
             { icon: BarChart3,    label: "Reporting",            sub: "Finance · audit trail · exports" },
@@ -91,77 +91,77 @@ const SLIDES = [
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 04 · Grant Claims — intro
+    // 04 · Grants (non-tournament) — intro
     // ═══════════════════════════════════════════════════════════════
     {
         kind: "bucket_intro",
         bucketId: "grants",
-        bucketLabel: "Module 02 · Grant Claims",
-        eyebrow: "03 · Grant Claims — every rupee, traced end-to-end",
+        bucketLabel: "Module 02 · Grants (non-tournament)",
+        eyebrow: "03 · Grants — every scheme, one approval trail",
         icon: HandCoins,
-        title: "The biggest backlog wasn't the field. It was the file room.",
-        subtitle: "20+ schemes · six-step pipeline · every claim keyed by hand.",
+        title: "20+ schemes running quietly outside the tournament calendar.",
+        subtitle: "Division grants · coaching camps · umpire honorarium · match-official DA · ex-gratia.",
         pains: [
-            "60 invoices per tournament · every line-item keyed twice",
-            "Status opaque · claimants call the Secretariat for updates",
-            "Approvals lost in inbox chains · 8-week claim cycles",
-            "No rollup · every invoice audited in isolation",
+            "Division grants sit on Secretariat desks for weeks",
+            "Umpire honorarium chased quarter after quarter",
+            "Coaching-camp reimbursement can take 60 days",
+            "Every scheme has its own paperwork · no unified queue",
         ],
         aiCount: 2,
-        aiPreview: "Every invoice auto-diffed against the PDF. One click rolls up the whole tournament. MPCA approves ambers, not greens.",
+        aiPreview: "Every scheme reads from the same claim spine. Reviewers see one queue. Claimants see live status the moment it changes.",
     },
-    // 05 · Grants — deep-dive
+    // 05 · Grants (non-tournament) — deep-dive
     {
         kind: "feature",
         bucketId: "grants",
-        icon: HandCoins,
+        icon: FileCheck2,
         eyebrow: "Grants · Deep-Dive",
+        featureName: "Unified Claim Spine · Every Scheme, One Approval Trail",
+        problem: "Every scheme had its own PDF, its own signoff, its own inbox.",
+        aiVerb: "STANDARDISES & APPROVES",
+        aiDescription: "Camps, umpire honorarium, DA, ex-gratia, division grants — all sit on the same claim spine. Same Maker-Checker. Same reviewer queue. Same audit trail. Claimants see one dashboard.",
+        metric: { before: "45–60 days", after: "5–7 days", label: "typical scheme-claim cycle" },
+        seasonSave: "≈ 400 staff-hours across MPCA + 10 divisions",
+        dividend: "= faster payouts to umpires, coaches, camp organisers — the people who actually run the sport",
+        livePage: { label: "Division Grants Console", path: "/division-grants" },
+        mockup: "grants",
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 06 · Tournament Claims — intro
+    // ═══════════════════════════════════════════════════════════════
+    {
+        kind: "bucket_intro",
+        bucketId: "tournament_claims",
+        bucketLabel: "Module 03 · Tournament Claims",
+        eyebrow: "04 · Tournament Claims — 60 invoices, one verdict",
+        icon: Trophy,
+        title: "Every tournament ends with a wave of invoices.",
+        subtitle: "Line-items keyed twice · approvals lost in inbox chains · leakage hidden by volume.",
+        pains: [
+            "60 invoices per tournament · every line-item keyed by hand",
+            "Status opaque · claimants call the Secretariat for updates",
+            "Approvals lost in inbox chains · 8-week claim cycles",
+            "No tournament-level rollup · every invoice audited in isolation",
+        ],
+        aiCount: 2,
+        aiPreview: "Every invoice auto-diffed against its PDF. One click rolls up the whole tournament. MPCA approves ambers, not greens.",
+    },
+    // 07 · Tournament Claims — deep-dive
+    {
+        kind: "feature",
+        bucketId: "tournament_claims",
+        icon: HandCoins,
+        eyebrow: "Tournament Claims · Deep-Dive",
         featureName: "AI Diff · Per-invoice + Tournament AI Audit",
         problem: "60 invoices. Two days of Accounts. Weeks in inbox chains.",
         aiVerb: "VERIFIES & ROLLS UP",
-        aiDescription: "Every invoice auto-diffed against its PDF. One click rolls up the whole tournament. MPCA approves ambers, not greens. Claimants see live status the moment it changes.",
+        aiDescription: "Every invoice auto-diffed against its PDF. One click rolls up the whole tournament. MPCA approves the ambers, waves through the greens, sends back the reds — with the citation attached.",
         metric: { before: "1–2 days", after: "≤ 90 seconds", label: "per claim · AI verification time" },
         seasonSave: "≈ 600 staff-hours · 2–4% leakage recoverable",
         dividend: "= reinvested into pitch covers, sight-screens, roller repairs across districts",
         livePage: { label: "Reimbursement Claim Review", path: "/reimbursement-claims" },
         mockup: "grants",
-    },
-
-    // ═══════════════════════════════════════════════════════════════
-    // 06 · Tournament Management — bucket_intro
-    // ═══════════════════════════════════════════════════════════════
-    {
-        kind: "bucket_intro",
-        bucketId: "tournaments",
-        bucketLabel: "Module 03 · Tournament Management",
-        eyebrow: "04 · Tournaments — one shared canvas from fixture to final",
-        icon: Trophy,
-        title: "40 tournaments a year. Every year. Every one a paper trail.",
-        subtitle: "Draws, fixtures, grounds, officials, reimbursements — one console.",
-        pains: [
-            "Fixture drafts emailed as attachments · reconciled by memory",
-            "Ground double-bookings surface on match-day",
-            "Match officials, umpires, scorers · assigned by phone calls",
-            "Reimbursements chase the tournament by weeks",
-        ],
-        aiCount: 2,
-        aiPreview: "One tournament page holds every fact. Fixture calendar detects clashes. AI-audited invoices attach to their own tournament.",
-    },
-    // 07 · Squad Selection — deep-dive
-    {
-        kind: "feature",
-        bucketId: "squads",
-        icon: Users,
-        eyebrow: "Squads · Deep-Dive",
-        featureName: "AI Squad Recommendation + KYC Audit",
-        problem: "Names from memory. KYC gaps after announcement.",
-        aiVerb: "SHORTLISTS & CLEARS",
-        aiDescription: "Ranks the pool. Audits KYC and eligibility before the meeting. Selectors debate strategy, not paperwork. Signed PDF parses back into the ERP automatically.",
-        metric: { before: "6 hrs/meeting", after: "20 min", label: "squad-finalisation cycle" },
-        seasonSave: "≈ 90 staff-hours · zero KYC-triggered drop-outs · zero version drift",
-        dividend: "= kit, travel and jersey numbers align on the first attempt",
-        livePage: { label: "Selection Console", path: "/selection-console" },
-        mockup: "squad",
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -320,7 +320,7 @@ const OverviewSlide = ({ data }) => (
                 THE PROMISE OF THIS DECK
             </div>
             <p style={{ fontFamily: DL.fontBody, fontSize: 15, lineHeight: 1.55, color: "rgba(245,239,230,0.85)" }}>
-                Next slides: <strong>players → grants → tournaments → squads.</strong> For each — the old pain, the new flow, the hours saved.
+                Next slides: <strong>players → grants → tournament claims → the operating truth.</strong> For each — the old pain, the new flow, the hours saved.
             </p>
         </div>
     </div>

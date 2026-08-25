@@ -1116,7 +1116,161 @@ const MockupSchemes = () => {
 
 
 
-// ── Mockup 5 · Correction Request Loop (Iter 130f) ────────────────────
+// ── Mockup 6 · AI Review of a Grant Claim (Iter 130g) ──────────────────
+const MockupGrantAIReview = () => (
+    <div style={mockupFrame} data-testid="mockup-grant-ai">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid rgba(0,0,0,0.08)", background: "#EBE4D6", fontFamily: DL.fontMono, fontSize: 10, color: "#5C5A54" }}>
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#C55656" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#D5A93A" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#4A9E6C" }} />
+            <span style={{ marginLeft: 12, letterSpacing: "0.06em" }}>MPCA ERP · Grant Claim · CLM-2026-27-0142 · AI Review</span>
+        </div>
+
+        {/* Claim header + AI verdict */}
+        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 0 }}>
+            <div style={{ padding: "12px 16px", borderRight: "1px solid rgba(0,0,0,0.08)" }}>
+                <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.22em", color: "#B88328", fontWeight: 700 }}>SCHEME 3-A · CAMP</div>
+                <div style={{ fontFamily: DL.fontDisplay, fontSize: 15, fontWeight: 800, color: "#0D3B2E", marginTop: 2 }}>Rural Coaching Camp · Ashoknagar</div>
+                <div style={{ fontFamily: DL.fontBody, fontSize: 10.5, color: "#5C5A54", marginTop: 3 }}>
+                    Claimant: <strong>Divisional Cricket Association Gwalior</strong> · Filed 12 Aug 2026 · Camp period 20 Jun – 5 Jul 2026
+                </div>
+                <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
+                    <div>
+                        <div style={{ fontFamily: DL.fontMono, fontSize: 8.5, letterSpacing: "0.18em", color: "#8A867E" }}>CLAIM</div>
+                        <div style={{ fontFamily: DL.fontDisplay, fontSize: 14, fontWeight: 800, color: "#1A1F1D" }}>₹ 1,84,500</div>
+                    </div>
+                    <div>
+                        <div style={{ fontFamily: DL.fontMono, fontSize: 8.5, letterSpacing: "0.18em", color: "#8A867E" }}>SANCTIONED</div>
+                        <div style={{ fontFamily: DL.fontDisplay, fontSize: 14, fontWeight: 800, color: "#1F7F59" }}>₹ 1,80,000</div>
+                    </div>
+                    <div>
+                        <div style={{ fontFamily: DL.fontMono, fontSize: 8.5, letterSpacing: "0.18em", color: "#8A867E" }}>ATTACHED</div>
+                        <div style={{ fontFamily: DL.fontDisplay, fontSize: 14, fontWeight: 800, color: "#1A1F1D" }}>7 docs</div>
+                    </div>
+                </div>
+            </div>
+            <div style={{ padding: "12px 16px", background: "rgba(74,158,108,0.12)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", color: "#5C5A54", fontWeight: 700 }}>AI VERDICT · GEMINI 3.6</div>
+                <div style={{ fontFamily: DL.fontDisplay, fontSize: 20, fontWeight: 800, color: "#1F7F59", marginTop: 2 }}>APPROVED · Minor Variance</div>
+                <div style={{ fontFamily: DL.fontMono, fontSize: 10, color: "#5C5A54", marginTop: 4 }}>Confidence · <strong style={{ color: "#1F7F59", fontSize: 12 }}>0.92</strong> · 7/7 required docs on file</div>
+                <div style={{ fontFamily: DL.fontBody, fontSize: 10, color: "#1A1F1D", fontStyle: "italic", marginTop: 5, lineHeight: 1.4 }}>
+                    &ldquo;All required documents attached and legible. Claim total exceeds sanctioned rate card by ₹4,500 (2.4%). Recommend approve at rate-card ceiling.&rdquo;
+                </div>
+            </div>
+        </div>
+
+        {/* Per-document AI review table */}
+        <div style={{ padding: "10px 16px 6px", fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", fontWeight: 700, color: "#8B1F1F" }}>
+            PER-DOCUMENT AI REVIEW · 7 DOCS
+        </div>
+        <table style={{ width: "100%", fontFamily: DL.fontBody, fontSize: 11, borderCollapse: "collapse" }}>
+            <thead>
+                <tr style={{ background: "#EBE4D6", color: "#5C5A54" }}>
+                    <th style={{ padding: "5px 14px", width: 20 }}></th>
+                    <th style={{ padding: "5px 8px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>DOCUMENT</th>
+                    <th style={{ padding: "5px 8px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>AI COMMENT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {[
+                    { ok: true,  d: "District Committee Resolution", c: "Signed by DCA-GWL President · authorises camp · dated 15 May 2026." },
+                    { ok: true,  d: "Camp Attendance Register",       c: "42 rural players attended over 15 days · matches roster in ERP." },
+                    { ok: true,  d: "Coach Appointment Letters (3)", c: "All 3 coaches on MPCA panel · rate-card ₹2,000/day applies." },
+                    { ok: false, d: "Ground Booking Receipt",         c: "Amount ₹22,500 claimed; ground scheme ceiling is ₹18,000 · variance ₹4,500." },
+                    { ok: true,  d: "Refreshment Invoice",            c: "42 × 15 × ₹80 = ₹50,400 · matches rate card + attendance." },
+                    { ok: true,  d: "Divisional Secretary Report",    c: "Signed satisfactory report on file · describes learning outcomes." },
+                    { ok: true,  d: "GST Compliance Certificate",     c: "GSTIN active · claimant PAN + bank matches ERP record." },
+                ].map((r, i) => (
+                    <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.05)" }}>
+                        <td style={{ padding: "6px 14px", fontFamily: DL.fontMono, fontWeight: 800, color: r.ok ? "#1F7F59" : "#B88328", fontSize: 14 }}>{r.ok ? "✓" : "!"}</td>
+                        <td style={{ padding: "6px 8px", fontFamily: DL.fontDisplay, fontSize: 11, color: "#0D3B2E", fontWeight: 700 }}>{r.d}</td>
+                        <td style={{ padding: "6px 8px", color: "#1A1F1D", fontSize: 10.5 }}>{r.c}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
+
+// ── Mockup 7 · MPCA Approver Queue · one-click approve (Iter 130g) ─────
+const MockupApproverQueue = () => (
+    <div style={mockupFrame} data-testid="mockup-approver-queue">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid rgba(0,0,0,0.08)", background: "#EBE4D6", fontFamily: DL.fontMono, fontSize: 10, color: "#5C5A54" }}>
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#C55656" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#D5A93A" }} />
+            <span style={{ height: 9, width: 9, borderRadius: "50%", background: "#4A9E6C" }} />
+            <span style={{ marginLeft: 12, letterSpacing: "0.06em" }}>MPCA ERP · Financial · Grant Claims · Approver Console</span>
+        </div>
+
+        {/* Header + bulk approve */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "#FDF9F1", borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
+            <div>
+                <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.22em", color: "#B88328", fontWeight: 700 }}>MPCA APPROVER · SEASON 2026-27</div>
+                <div style={{ fontFamily: DL.fontDisplay, fontSize: 17, fontWeight: 800, color: "#0D3B2E", marginTop: 2 }}>Claim Approval Queue</div>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+                <div style={{ padding: "6px 12px", background: "#1F7F59", color: "#F5EFE6", fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.18em", fontWeight: 700, borderRadius: 2 }}>✓ APPROVE 8 AI-CLEARED</div>
+                <div style={{ padding: "6px 12px", background: "#FDF9F1", border: "1px solid rgba(0,0,0,0.15)", color: "#5C5A54", fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.18em", fontWeight: 700, borderRadius: 2 }}>REVIEW 3 AMBERS</div>
+            </div>
+        </div>
+
+        {/* Filter chips */}
+        <div style={{ display: "flex", gap: 4, padding: "8px 14px", background: "#F5EFE6", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
+            {[
+                { l: "ALL", n: 14 },
+                { l: "AI-CLEARED", n: 8, tone: "green", active: true },
+                { l: "AI-AMBER", n: 3, tone: "amber" },
+                { l: "AI-RED", n: 1, tone: "red" },
+                { l: "PENDING AI", n: 2 },
+            ].map((c) => {
+                const bg = c.active ? "#1F7F59" : "transparent";
+                const fg = c.active ? "#F5EFE6" : "#5C5A54";
+                return (
+                    <div key={c.l} style={{ padding: "4px 10px", background: bg, color: fg, border: c.active ? "none" : "1px solid rgba(0,0,0,0.1)", fontFamily: DL.fontMono, fontSize: 8.5, letterSpacing: "0.18em", fontWeight: 700, borderRadius: 2 }}>{c.l} · {c.n}</div>
+                );
+            })}
+        </div>
+
+        {/* Claim rows */}
+        <table style={{ width: "100%", fontFamily: DL.fontBody, fontSize: 11.5, borderCollapse: "collapse" }}>
+            <thead>
+                <tr style={{ background: "#EBE4D6", color: "#5C5A54" }}>
+                    <th style={{ padding: "6px 14px", textAlign: "left", width: 24 }}></th>
+                    <th style={{ padding: "6px 8px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>CLAIM · SCHEME</th>
+                    <th style={{ padding: "6px 8px", textAlign: "left", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>CLAIMANT</th>
+                    <th style={{ padding: "6px 8px", textAlign: "right", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>AMOUNT</th>
+                    <th style={{ padding: "6px 8px", textAlign: "center", fontSize: 9, letterSpacing: "0.22em", fontFamily: DL.fontMono, fontWeight: 700 }}>AI VERDICT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {[
+                    { code: "CLM-0142", scheme: "3-A · Camp",          who: "DCA Gwalior",   amt: "1,80,000", tone: "green", verdict: "APPROVE · rate-card" },
+                    { code: "CLM-0141", scheme: "1-A · Annual Grant",  who: "DCA Indore",    amt: "3,50,000", tone: "green", verdict: "APPROVE · matched" },
+                    { code: "CLM-0140", scheme: "4-A · Umpire Hon.",   who: "Umpire Panel",  amt: "42,600",   tone: "green", verdict: "APPROVE · 42 matches" },
+                    { code: "CLM-0139", scheme: "2-B · Reimburse.",    who: "DCA Bhopal",    amt: "1,12,400", tone: "amber", verdict: "REVIEW · variance 3.8%" },
+                    { code: "CLM-0138", scheme: "5-A · Infra",         who: "DCA Rewa",      amt: "88,000",   tone: "amber", verdict: "REVIEW · missing 1 doc" },
+                    { code: "CLM-0137", scheme: "1-B · Rev. Share",    who: "DCA Jabalpur",  amt: "1,25,000", tone: "green", verdict: "APPROVE · matched" },
+                ].map((r) => {
+                    const toneCol = r.tone === "green" ? "#1F7F59" : r.tone === "amber" ? "#B88328" : "#8B1F1F";
+                    const toneBg  = r.tone === "green" ? "rgba(31,127,89,0.10)" : r.tone === "amber" ? "rgba(184,131,40,0.12)" : "rgba(139,31,31,0.10)";
+                    return (
+                        <tr key={r.code} style={{ borderTop: "1px solid rgba(0,0,0,0.05)" }}>
+                            <td style={{ padding: "7px 14px", fontSize: 12 }}><span style={{ display: "inline-block", height: 10, width: 10, background: toneCol, borderRadius: "50%" }} /></td>
+                            <td style={{ padding: "7px 8px", fontFamily: DL.fontMono, fontSize: 10.5, color: "#B88328", fontWeight: 700 }}>{r.code} · {r.scheme}</td>
+                            <td style={{ padding: "7px 8px", color: "#1A1F1D" }}>{r.who}</td>
+                            <td style={{ padding: "7px 8px", textAlign: "right", fontFamily: DL.fontMono, color: "#1A1F1D", fontWeight: 700 }}>₹ {r.amt}</td>
+                            <td style={{ padding: "7px 8px", textAlign: "center" }}>
+                                <span style={{ display: "inline-block", padding: "2px 8px", background: toneBg, color: toneCol, fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.14em", fontWeight: 700, borderRadius: 2 }}>{r.verdict}</span>
+                            </td>
+                        </tr>
+                    );
+                })}
+            </tbody>
+        </table>
+    </div>
+);
+
+
 const MockupCorrection = () => (
     <div style={mockupFrame} data-testid="mockup-correction">
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid rgba(0,0,0,0.08)", background: "#EBE4D6", fontFamily: DL.fontMono, fontSize: 10, color: "#5C5A54" }}>
@@ -1219,7 +1373,7 @@ const MockupCorrection = () => (
 );
 
 
-const MOCKUPS = { grants: MockupGrants, player: MockupPlayerTrail, squad: MockupSquad, schemes: MockupSchemes, correction: MockupCorrection };
+const MOCKUPS = { grants: MockupGrants, player: MockupPlayerTrail, squad: MockupSquad, schemes: MockupSchemes, correction: MockupCorrection, grantAi: MockupGrantAIReview, approverQueue: MockupApproverQueue };
 
 export const FeatureSlide = ({ data }) => {
     const Icon = data.icon;

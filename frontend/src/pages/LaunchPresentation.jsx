@@ -142,6 +142,38 @@ const SLIDES = [
         livePage: { label: "MPCA Schemes Register", path: "/schemes" },
         mockup: "schemes",
     },
+    // 07 · Grants — AI reviews the claim
+    {
+        kind: "feature",
+        bucketId: "grants",
+        icon: ShieldCheck,
+        eyebrow: "Grants · AI Review",
+        featureName: "Every Claim · Auto-Verified Against Its Scheme",
+        problem: "Reviewers opened 7 documents, cross-checked 6 rates, wrote nothing down.",
+        aiVerb: "READS EVERY DOC · CITES EVERY LINE",
+        aiDescription: "Claim submitted → AI reads every attached document, extracts the values, compares against the scheme's rate card + eligibility conditions, writes a per-document comment. Amber flags surface variances (ground rate exceeded by ₹4,500) before any human opens the file.",
+        metric: { before: "45 min/claim", after: "≤ 45 seconds", label: "per claim · AI comment generation" },
+        seasonSave: "≈ 350 staff-hours · every claim reviewed the same way",
+        dividend: "= reviewers open only the flagged files · greens sail through",
+        livePage: { label: "Claim Detail · AI Review", path: "/claims" },
+        mockup: "grantAi",
+    },
+    // 08 · Grants — MPCA one-click approve
+    {
+        kind: "feature",
+        bucketId: "grants",
+        icon: FileCheck2,
+        eyebrow: "Grants · MPCA Approval",
+        featureName: "Approver Queue · Bulk Approve the Cleared, Review the Ambers",
+        problem: "MPCA opened every claim, one at a time — even the boring ones.",
+        aiVerb: "SORTS · RECOMMENDS · BULK-APPROVES",
+        aiDescription: "The approver queue groups claims by AI verdict — green (8 cleared), amber (3 variances), red (1 issue). One click bulk-approves the greens. Ambers open with the AI's specific citation. Every decision is signed, Maker-Checker logged, immutable.",
+        metric: { before: "3–4 days", after: "under 30 minutes", label: "MPCA daily approval batch" },
+        seasonSave: "≈ 250 approver-hours · zero missed claims",
+        dividend: "= claimants paid weeks earlier · Secretariat freed from data entry",
+        livePage: { label: "MPCA Approver Console", path: "/claims?queue=mpca" },
+        mockup: "approverQueue",
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // 06 · Tournament Claims — intro

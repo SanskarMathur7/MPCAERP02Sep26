@@ -211,6 +211,22 @@ const SLIDES = [
         livePage: { label: "Tournament Detail Page", path: "/tournaments" },
         mockup: "image:/deck-screenshots/tournament_detail.png",
     },
+    // 08 · Tournament AI Audit — real screenshot with AI remarks
+    {
+        kind: "feature",
+        bucketId: "tournament_claims",
+        icon: ShieldCheck,
+        eyebrow: "Tournament Claims · AI Audit",
+        featureName: "Tournament AI Audit · Every Invoice, Verified",
+        problem: "60 invoices reviewed one at a time. Variance found after payment.",
+        aiVerb: "AUDITS EVERY INVOICE · FLAGS THE VARIANCES",
+        aiDescription: "One click audits every invoice on the tournament. Gemini extracts vendor/date/amount from each PDF and diffs against the entered values. Ambers surface with the exact reason — variance amount, date-outside-window, vendor mismatch. MPCA reviews only the flagged 4 out of 12, not all 12.",
+        metric: { before: "days per tournament", after: "≤ 60 seconds", label: "full audit · 12 invoices" },
+        seasonSave: "≈ 600 staff-hours · 2–4% leakage recoverable",
+        dividend: "= flagged amount ₹6,050 caught before payment on one tournament alone",
+        livePage: { label: "Finance Console · Invoices Tab", path: "/tournaments" },
+        mockup: "image:/deck-screenshots/tournament_ai_audit.png",
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // 08 · Why this operating model works — pain-points synthesis

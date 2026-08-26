@@ -1,89 +1,73 @@
 /**
- * /launch-presentation — MPCA ERP · Stakeholder Pitch Deck (Iter 131)
- * ──────────────────────────────────────────────────────────────────
- * Feb 2026 · Complete rewrite requested by user. Eight tight slides
- * (~90s each) built for a live 10-minute stakeholder presentation to
- * Divisions, players and the MPCA committee.
+ * /launch-presentation — MPCA ERP · Stakeholder Pitch Deck (Iter 131c)
+ * ────────────────────────────────────────────────────────────────────
+ * Feb 2026 · Focused rewrite (Iter 131c):
+ *   User steer — "This should majorly show how we are making it convenient
+ *   for players. Then remove all stats — not live yet. On grants, show
+ *   Divisions can pick eligible scheme + AI verifies docs on the spot.
+ *   Other modules (squads, invoice audit, tournaments) — brief residual
+ *   mention at the end only."
  *
- * Slide arc (confirmed with user):
- *   1. Login (browser chrome frame + MPCA logo + ERP name overlay)
- *   2. What is this — 6-module overview
- *   3. Players — AI KYC verification
- *   4. Grants — AI review + MPCA approval (real ERP screenshots)
- *   5. Tournaments — one workspace, every fact (real ERP screenshot)
- *   6. AI Audit — invoice-by-invoice audit (real ERP screenshot)
- *   7. Impact — numbers before/after
- *   8. Sign-off — the standing offer
- *
- * The original /storyline deck is untouched.
+ * Slide arc (revised):
+ *   1. Login opener — browser chrome frame + MPCA logo + ERP name
+ *   2. What we're showing today — two highlights only
+ *   3. Players · A link, docs upload, AI reads it live
+ *   4. Players · If anything is off, we tell them & they fix it right away
+ *   5. Grants · Divisions pick eligible scheme, see exactly what to upload
+ *   6. Grants · AI verifies each document on the spot
+ *   7. Also inside the ERP — brief residual list (no numbers)
+ *   8. Sign-off — the promise, no stats
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
     ArrowRight, ArrowLeft, X, Sparkles, ShieldCheck, FileCheck2,
     Users, HandCoins, Trophy, Landmark, BarChart3, ClipboardList,
-    Lock,
+    Lock, MailCheck, Link2, ScrollText,
 } from "lucide-react";
 import { DL } from "@/lib/designSystem";
 
 // ═════════════════════════════════════════════════════════════════════
 // Palette shortcut
 // ═════════════════════════════════════════════════════════════════════
-const emerald    = DL.emerald;         // #0D3B2E
-const emeraldBg  = `linear-gradient(155deg, ${DL.emerald} 0%, ${DL.ink} 100%)`;
-const gold       = DL.gold;
-const oxblood    = DL.danger;
-const paper      = DL.paper;
-const ivory      = DL.ivory;
+const emerald   = DL.emerald;
+const emeraldBg = `linear-gradient(155deg, ${DL.emerald} 0%, ${DL.ink} 100%)`;
+const gold      = DL.gold;
+const oxblood   = DL.danger;
+const paper     = DL.paper;
+const ivory     = DL.ivory;
 
 // ═════════════════════════════════════════════════════════════════════
 // Slide 1 · Login (browser chrome frame + logo overlay)
 // ═════════════════════════════════════════════════════════════════════
 const SlideLogin = () => (
     <div className="w-full h-full flex flex-col items-center justify-center px-6 md:px-16 relative">
-        {/* Overline */}
         <div className="mb-4 flex items-center gap-3" style={{ fontFamily: DL.fontMono, fontSize: 11, letterSpacing: "0.32em", color: gold, fontWeight: 700 }}>
             <div style={{ width: 40, height: 1, background: gold }} />
             MADHYA PRADESH CRICKET ASSOCIATION
             <div style={{ width: 40, height: 1, background: gold }} />
         </div>
-
-        {/* Big title */}
-        <h1
-            className="text-center mb-3"
-            style={{
-                fontFamily: DL.fontDisplay, fontWeight: 800,
-                fontSize: "clamp(38px, 5vw, 68px)", lineHeight: 1.02,
-                letterSpacing: "-0.02em", color: paper,
-            }}
-        >
+        <h1 className="text-center mb-3" style={{
+            fontFamily: DL.fontDisplay, fontWeight: 800,
+            fontSize: "clamp(38px, 5vw, 68px)", lineHeight: 1.02,
+            letterSpacing: "-0.02em", color: paper,
+        }}>
             MPCA <span style={{ color: gold }}>Enterprise Resource Planning</span>
         </h1>
-        <p
-            className="text-center mb-8 max-w-3xl"
-            style={{
-                fontFamily: DL.fontBody, fontStyle: "italic",
-                fontSize: "clamp(15px, 1.4vw, 20px)",
-                color: "rgba(245,239,230,0.72)",
-            }}
-        >
-            One state · ten divisions · one platform for players, grants, tournaments and governance.
+        <p className="text-center mb-8 max-w-3xl" style={{
+            fontFamily: DL.fontBody, fontStyle: "italic",
+            fontSize: "clamp(15px, 1.4vw, 20px)",
+            color: "rgba(245,239,230,0.72)",
+        }}>
+            Built to make life simpler for our players and our divisions.
         </p>
 
-        {/* Browser chrome around the login screenshot */}
-        <div
-            className="w-full max-w-[1080px] relative"
-            style={{
-                borderRadius: 12, overflow: "hidden",
-                boxShadow: "0 30px 80px -20px rgba(0,0,0,0.6), 0 8px 24px -8px rgba(0,0,0,0.4)",
-                border: `1px solid rgba(184,131,40,0.35)`,
-            }}
-        >
-            {/* Browser chrome bar */}
-            <div
-                className="flex items-center gap-2 px-4 py-2.5"
-                style={{ background: "#E9E2D2", borderBottom: `1px solid ${DL.ruleStrong}` }}
-            >
+        <div className="w-full max-w-[1080px] relative" style={{
+            borderRadius: 12, overflow: "hidden",
+            boxShadow: "0 30px 80px -20px rgba(0,0,0,0.6), 0 8px 24px -8px rgba(0,0,0,0.4)",
+            border: `1px solid rgba(184,131,40,0.35)`,
+        }}>
+            <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: "#E9E2D2", borderBottom: `1px solid ${DL.ruleStrong}` }}>
                 <div className="flex gap-1.5">
                     <div style={{ width: 12, height: 12, borderRadius: 6, background: "#E36363" }} />
                     <div style={{ width: 12, height: 12, borderRadius: 6, background: "#E6B84D" }} />
@@ -91,7 +75,7 @@ const SlideLogin = () => (
                 </div>
                 <div className="ml-4 flex-1 flex items-center gap-2 px-3 py-1 rounded" style={{ background: "rgba(255,255,255,0.75)", border: `1px solid ${DL.rule}` }}>
                     <Lock size={11} style={{ color: emerald }} />
-                    <span style={{ fontFamily: DL.fontMono, fontSize: 10, color: DL.ink2, letterSpacing: "0.02em" }}>
+                    <span style={{ fontFamily: DL.fontMono, fontSize: 10, color: DL.ink2 }}>
                         https://erp.mpcaonline.com/login
                     </span>
                 </div>
@@ -99,7 +83,6 @@ const SlideLogin = () => (
                     Live
                 </div>
             </div>
-            {/* Screenshot */}
             <img
                 src="/deck-screenshots/login_page.png"
                 alt="MPCA ERP Login"
@@ -108,56 +91,194 @@ const SlideLogin = () => (
             />
         </div>
 
-        {/* Footer strip */}
         <div className="mt-6 flex items-center gap-6" style={{ fontFamily: DL.fontMono, fontSize: 11, letterSpacing: "0.24em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
             <span>Est. 1957</span>
             <span style={{ opacity: 0.5 }}>·</span>
             <span>2026 Digital Era</span>
-            <span style={{ opacity: 0.5 }}>·</span>
-            <span>Built for cricket, run by MPCA</span>
         </div>
     </div>
 );
 
 // ═════════════════════════════════════════════════════════════════════
-// Slide 2 · What is this (6-module overview)
+// Slide 2 · What we're showing today (two highlights)
 // ═════════════════════════════════════════════════════════════════════
-const MODULES = [
-    { icon: Users,        title: "Player Registration", copy: "3,000+ players. AI reads every KYC document, fills the form, flags fraud." },
-    { icon: HandCoins,    title: "Grant Claims",         copy: "33 schemes across 7 categories. AI reviews every claim before a human opens it." },
-    { icon: Trophy,       title: "Tournaments",          copy: "40+ tournaments. One workspace per tournament — fixtures, officials, budget, closure." },
-    { icon: ClipboardList,title: "Squad Selection",       copy: "Selection console with signed PDF verification, AI-driven bias flags." },
-    { icon: Landmark,     title: "Governance",           copy: "Maker-Checker, meetings, minutes — every decision signed and immutable." },
-    { icon: BarChart3,    title: "Reporting",            copy: "Live dashboards. Season-wise finance rollups. Zero end-of-year scramble." },
-];
-
 const SlideOverview = () => (
     <div>
-        <Eyebrow n="02" text="Overview" />
-        <Title>The ERP that runs MPCA end-to-end.</Title>
-        <Subtitle>Six modules. One database. One audit trail. Rewritable per season.</Subtitle>
+        <Eyebrow n="02" text="What we're showing today" />
+        <Title>Two things that used to take weeks. Now they take a link.</Title>
+        <Subtitle>The ERP does many things. Today we focus on the two that matter the most to Players and Divisions — everything else is quietly handled the same way, inside the same platform.</Subtitle>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
+            {/* Highlight 1 · Players */}
+            <div style={{
+                background: "linear-gradient(155deg, rgba(184,131,40,0.14) 0%, rgba(184,131,40,0.03) 100%)",
+                border: `1.5px solid ${gold}88`,
+                padding: "28px 26px", borderRadius: 4,
+            }}>
+                <div className="flex items-center gap-3 mb-4">
+                    <div style={{ width: 44, height: 44, background: gold, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Users size={22} style={{ color: emerald }} strokeWidth={2.2} />
+                    </div>
+                    <div style={{ fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.24em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
+                        Highlight 01
+                    </div>
+                </div>
+                <div style={{ fontFamily: DL.fontDisplay, fontSize: 22, fontWeight: 800, color: paper, lineHeight: 1.2, marginBottom: 8 }}>
+                    Players register online with live AI checks.
+                </div>
+                <div style={{ fontFamily: DL.fontBody, fontSize: 14, color: "rgba(245,239,230,0.82)", lineHeight: 1.6 }}>
+                    Player receives one link, uploads documents, and gets an instant AI check on the spot. If anything is off, they get a clear message and can rectify it right away.
+                </div>
+            </div>
+
+            {/* Highlight 2 · Grants */}
+            <div style={{
+                background: "linear-gradient(155deg, rgba(184,131,40,0.14) 0%, rgba(184,131,40,0.03) 100%)",
+                border: `1.5px solid ${gold}88`,
+                padding: "28px 26px", borderRadius: 4,
+            }}>
+                <div className="flex items-center gap-3 mb-4">
+                    <div style={{ width: 44, height: 44, background: gold, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <HandCoins size={22} style={{ color: emerald }} strokeWidth={2.2} />
+                    </div>
+                    <div style={{ fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.24em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
+                        Highlight 02
+                    </div>
+                </div>
+                <div style={{ fontFamily: DL.fontDisplay, fontSize: 22, fontWeight: 800, color: paper, lineHeight: 1.2, marginBottom: 8 }}>
+                    Divisions claim grants without the paperwork guesswork.
+                </div>
+                <div style={{ fontFamily: DL.fontBody, fontSize: 14, color: "rgba(245,239,230,0.82)", lineHeight: 1.6 }}>
+                    Divisions pick an eligible scheme and see exactly what to upload. AI verifies every document on the spot so nothing gets rejected weeks later for a missing paper.
+                </div>
+            </div>
+        </div>
+
+        <div className="mt-10 text-center max-w-3xl mx-auto">
+            <div style={{ fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.28em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
+                Ten minutes · Two highlights · One platform
+            </div>
+        </div>
+    </div>
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 3 · Players — one link, docs upload, AI on the spot
+// ═════════════════════════════════════════════════════════════════════
+const SlidePlayerLink = () => (
+    <FeatureShell
+        eyebrow="03 · Players"
+        icon={Link2}
+        title="One link. Upload documents. Register on the spot."
+        subtitle="Players no longer come to the office with paper files. Each player receives a secure registration link from their Division. Everything happens online, in the player's own hands."
+        screenshot="/deck-screenshots/public_reg_docs_first.png"
+        screenshotCaption="Live ERP · Public player registration link"
+        bullets={[
+            { icon: MailCheck, text: "Division emails or shares one registration link with each player" },
+            { icon: FileCheck2, text: "Player uploads Aadhaar, Birth Certificate, Marksheets and other KYC — right from their phone" },
+            { icon: Sparkles,   text: "AI reads every document and auto-fills the form — player just reviews and confirms" },
+            { icon: ShieldCheck,text: "Nothing is submitted to MPCA until the player is happy with what AI has extracted" },
+        ]}
+        closer="No queues. No paperwork days. No trips to the Division office."
+    />
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 4 · Players — rectification on the fly
+// ═════════════════════════════════════════════════════════════════════
+const SlidePlayerRectify = () => (
+    <FeatureShell
+        eyebrow="04 · Players"
+        icon={ShieldCheck}
+        title="If anything is off, the player is told immediately."
+        subtitle="No more waiting for the Division to reply with a rejection weeks later. AI flags issues on the spot — the player can correct the document and re-run the check without leaving the page."
+        screenshot="/deck-screenshots/player_kyc_ai.png"
+        screenshotCaption="Live ERP · AI Verification report with cross-document warnings"
+        bullets={[
+            { icon: Sparkles,    text: "Each uploaded document gets a live status — AI Verified, Needs Review, or Problem" },
+            { icon: ScrollText,  text: "Clear message tells the player exactly what to fix — e.g. \"Aadhaar last update was in 2014, please share a recent update history\"" },
+            { icon: FileCheck2,  text: "Player replaces the document, re-runs the check, and moves on — no email chains" },
+            { icon: MailCheck,   text: "Even after submission, if MPCA needs a correction, the player gets a tokenised link — no login needed" },
+        ]}
+        closer="Corrections that used to take weeks now happen in minutes."
+    />
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 5 · Grants — Divisions pick eligible scheme, see docs needed
+// ═════════════════════════════════════════════════════════════════════
+const SlideGrantsPick = () => (
+    <FeatureShell
+        eyebrow="05 · Grants"
+        icon={HandCoins}
+        title="Divisions see every eligible scheme — and exactly what to upload."
+        subtitle="No more guessing which scheme to claim under, or which papers to attach. The Schemes Register lays out every active scheme with its eligibility conditions and required documents right on the screen."
+        screenshot="/deck-screenshots/schemes_register.png"
+        screenshotCaption="Live ERP · Schemes Register · 33 schemes across 7 categories"
+        bullets={[
+            { icon: Landmark,    text: "One master document · every grant, reimbursement, camp, award, welfare, infrastructure and revenue-share scheme MPCA runs" },
+            { icon: ClipboardList, text: "Category tabs let Divisions filter to what's actually relevant — Annual, Reimbursement, Camp, Infrastructure and more" },
+            { icon: FileCheck2,  text: "Every scheme lists exactly which documents to attach and which eligibility conditions apply" },
+            { icon: ShieldCheck, text: "Division hits Claim → the claim form opens pre-configured with the scheme's document checklist" },
+        ]}
+        closer="Divisions never wonder what to file, or under which head, ever again."
+    />
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 6 · Grants — AI verifies each document on the spot
+// ═════════════════════════════════════════════════════════════════════
+const SlideGrantsAi = () => (
+    <FeatureShell
+        eyebrow="06 · Grants"
+        icon={Sparkles}
+        title="AI verifies every document as it's uploaded."
+        subtitle="The moment a Division attaches a document, AI reads it, matches it against the scheme's rate card and eligibility rules, and writes a comment right next to the document. Nothing sits in an inbox waiting for a reviewer."
+        screenshot="/deck-screenshots/claim_detail_0142.png"
+        screenshotCaption="Live ERP · Claim Detail · Per-document AI verdicts with rule citations"
+        bullets={[
+            { icon: Sparkles,    text: "AI reads each supporting document, extracts the numbers, and compares against the scheme's approved rates" },
+            { icon: ShieldCheck, text: "Any variance is called out on the spot — Division sees it before submitting to MPCA" },
+            { icon: FileCheck2,  text: "MPCA reviewers open the claim already knowing exactly what's clean and what needs a second look" },
+            { icon: MailCheck,   text: "If MPCA asks for more documents, the request lands directly with the Division — with a clear reason" },
+        ]}
+        closer="Fewer rejections. Fewer resubmissions. Claims settle faster."
+    />
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 7 · Also inside the ERP (residual list — no numbers)
+// ═════════════════════════════════════════════════════════════════════
+const ALSO_INSIDE = [
+    { icon: Trophy,        title: "Tournaments",         copy: "One workspace per tournament — fixtures, officials, budgets, closure. Every fact in one place." },
+    { icon: ClipboardList, title: "Squad Selection",     copy: "Selection console with signed PDFs and AI cross-checks against the roster." },
+    { icon: FileCheck2,    title: "Invoice AI Audit",    copy: "Every tournament invoice AI-audited against the budget head and rate card before payment." },
+    { icon: Landmark,      title: "Governance",          copy: "Maker-Checker on every major action. Meetings, minutes and audit trail baked in." },
+    { icon: BarChart3,     title: "Reporting",           copy: "Live season dashboards — finance, tournaments, players — always current, never stale." },
+];
+
+const SlideAlsoInside = () => (
+    <div>
+        <Eyebrow n="07" text="Also inside the ERP" />
+        <Title>Everything else runs on the same discipline — quietly, in the background.</Title>
+        <Subtitle>Once Players and Grants are on the platform, the rest of MPCA&apos;s operating surface uses the same signed audit trail, the same AI-first review, the same one-source-of-truth database. Happy to demo any of these separately.</Subtitle>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-10">
-            {MODULES.map((m, i) => {
+            {ALSO_INSIDE.map((m, i) => {
                 const Icon = m.icon;
                 return (
-                    <div
-                        key={i}
-                        style={{
-                            background: "rgba(245,239,230,0.05)",
-                            border: `1px solid ${gold}44`,
-                            padding: "20px 18px", borderRadius: 4,
-                            transition: "all 220ms",
-                        }}
-                        data-testid={`overview-tile-${i}`}
-                    >
-                        <div className="flex items-center justify-center w-10 h-10 mb-3" style={{ background: gold, borderRadius: 3 }}>
-                            <Icon size={20} style={{ color: emerald }} strokeWidth={2.2} />
+                    <div key={i} style={{
+                        background: "rgba(245,239,230,0.04)",
+                        border: `1px solid ${gold}33`,
+                        padding: "18px 16px", borderRadius: 3,
+                    }} data-testid={`residual-tile-${i}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <Icon size={16} style={{ color: gold }} strokeWidth={2.2} />
+                            <div style={{ fontFamily: DL.fontDisplay, fontSize: 15, fontWeight: 700, color: paper }}>
+                                {m.title}
+                            </div>
                         </div>
-                        <div style={{ fontFamily: DL.fontDisplay, fontSize: 17, fontWeight: 700, color: paper, lineHeight: 1.2, marginBottom: 6 }}>
-                            {m.title}
-                        </div>
-                        <div style={{ fontFamily: DL.fontBody, fontSize: 13, color: "rgba(245,239,230,0.7)", lineHeight: 1.5 }}>
+                        <div style={{ fontFamily: DL.fontBody, fontSize: 12.5, color: "rgba(245,239,230,0.68)", lineHeight: 1.5 }}>
                             {m.copy}
                         </div>
                     </div>
@@ -165,205 +286,38 @@ const SlideOverview = () => (
             })}
         </div>
 
-        <div className="mt-10 text-center max-w-3xl mx-auto">
-            <div style={{ fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.28em", color: gold, fontWeight: 700, marginBottom: 8, textTransform: "uppercase" }}>
-                What this deck covers
+        <div className="mt-8 text-center max-w-3xl mx-auto">
+            <div className="border-t pt-4" style={{ borderColor: `${gold}33` }}>
+                <p style={{ fontFamily: DL.fontBody, fontStyle: "italic", fontSize: 14, color: "rgba(245,239,230,0.65)", lineHeight: 1.6 }}>
+                    Each of these modules deserves its own conversation. Today, we wanted to keep the room focused on the two backlogs Players and Divisions feel every single day.
+                </p>
             </div>
-            <p style={{ fontFamily: DL.fontBody, fontSize: 15, lineHeight: 1.6, color: "rgba(245,239,230,0.82)" }}>
-                Next six slides walk through the first three modules in depth — <strong style={{ color: gold }}>Players, Grants, Tournaments</strong> — then land on the impact and the offer.
-            </p>
         </div>
     </div>
 );
 
 // ═════════════════════════════════════════════════════════════════════
-// Slide 3 · Players · AI KYC Verification
-// ═════════════════════════════════════════════════════════════════════
-const SlidePlayers = () => (
-    <FeatureShell
-        eyebrow="03 · Players · AI KYC"
-        icon={Users}
-        title="Every player. Every document. Verified by AI."
-        subtitle="The registration form now works in reverse — player uploads KYC first, our AI reads it, fills the form and flags fraud before any reviewer opens the file."
-        beforeAfter={{
-            before: "15–30 min / player",
-            after: "under 60 seconds",
-            label: "KYC verification time",
-        }}
-        stat={{ value: "3,000+", label: "players onboarded · one Aadhaar, one submission, one clean audit trail" }}
-        screenshot="/deck-screenshots/player_kyc_ai.png"
-        screenshotCaption="Live ERP · Player Detail → KYC & Documents · AI Suspected Fraud verdict"
-        bullets={[
-            "AI reads Aadhaar, PAN, Birth cert, Marksheets, Cheque — extracts every field",
-            "Cross-document consistency check: name, DOB, photo, QR verification",
-            "Verdicts cite the exact document · every rule leaves an audit line",
-            "Suspected fraud auto-blocks approval — human override requires signed note",
-        ]}
-    />
-);
-
-// ═════════════════════════════════════════════════════════════════════
-// Slide 4 · Grants · AI Review + MPCA Approval
-// ═════════════════════════════════════════════════════════════════════
-const SlideGrants = () => (
-    <FeatureShell
-        eyebrow="04 · Grants · AI Review"
-        icon={HandCoins}
-        title="Every claim, auto-verified against its scheme."
-        subtitle="33 schemes. 7 categories. AI reads the claim, cites the scheme, writes per-document comments — MPCA bulk-approves the greens, opens only the ambers."
-        beforeAfter={{
-            before: "45 min / claim",
-            after: "≤ 45 seconds",
-            label: "AI comment generation per claim",
-        }}
-        stat={{ value: "≈ 350 hours saved / season", label: "Secretariat freed from data entry · claimants paid weeks earlier" }}
-        screenshot="/deck-screenshots/claim_detail_0142.png"
-        screenshotCaption="Live ERP · Grant Claims → Claim Detail · AI verdict with rule citation"
-        bullets={[
-            "Every attached document parsed · rate-card matched · variance flagged",
-            "Green (cleared) · Amber (variance) · Red (issue) — sorted for the approver queue",
-            "One click bulk-approves all greens · ambers open with the AI's citation",
-            "Every decision signed, Maker-Checker logged, immutable",
-        ]}
-    />
-);
-
-// ═════════════════════════════════════════════════════════════════════
-// Slide 5 · Tournaments · One Workspace
-// ═════════════════════════════════════════════════════════════════════
-const SlideTournaments = () => (
-    <FeatureShell
-        eyebrow="05 · Tournaments"
-        icon={Trophy}
-        title="One tournament. One page. Every fact."
-        subtitle="Basics, fixtures, officials, squads, unified budget, finance console, closure — 10 tiles, one identity, one audit trail. Nothing sits in an inbox."
-        beforeAfter={{
-            before: "12 apps + 40 emails",
-            after: "1 workspace",
-            label: "operating surface per tournament",
-        }}
-        stat={{ value: "40+", label: "tournaments run through the workspace this season" }}
-        screenshot="/deck-screenshots/tournament_detail.png"
-        screenshotCaption="Live ERP · Tournament Detail · 10-step Progression wiring"
-        bullets={[
-            "Tournament progression wiring — every step visible, every gate signed",
-            "Match calendar, ground allocation, officials — all in one place",
-            "Unified budget rolls up MPCA + Division allocations in real time",
-            "Divisions and MPCA share one source of truth — zero 'which version is final?'",
-        ]}
-    />
-);
-
-// ═════════════════════════════════════════════════════════════════════
-// Slide 6 · AI Audit · Invoice-by-invoice
-// ═════════════════════════════════════════════════════════════════════
-const SlideAiAudit = () => (
-    <FeatureShell
-        eyebrow="06 · Tournament AI Audit"
-        icon={Sparkles}
-        title="60 invoices reviewed one at a time — by AI, in a minute."
-        subtitle="Every invoice is read, matched against the budget head and rate card, and returned with a specific variance citation. Variance found before payment, not after."
-        beforeAfter={{
-            before: "days / tournament",
-            after: "≤ 60 seconds",
-            label: "full invoice audit",
-        }}
-        stat={{ value: "₹2.29 L", label: "eligible reimbursement · flagged variances kept out" }}
-        screenshot="/deck-screenshots/tournament_ai_audit.png"
-        screenshotCaption="Live ERP · Madhavrao Scindia Trophy · Invoice Audit rollup"
-        bullets={[
-            "8 approved · AI match · 3 needs review · 1 rejected — sorted by AI",
-            "Per-invoice remarks: variance 6.9%, date-outside-window, over-cap detected",
-            "Approver opens only the flagged files — greens auto-cleared",
-            "Every audit line stamped with model, timestamp, confidence",
-        ]}
-    />
-);
-
-// ═════════════════════════════════════════════════════════════════════
-// Slide 7 · Impact
-// ═════════════════════════════════════════════════════════════════════
-const IMPACT_STATS = [
-    { value: "≈ 1,800", label: "staff-hours saved / season · across players, grants, tournaments" },
-    { value: "5–7 days",  label: "grant approval cycle · down from 45–60 days" },
-    { value: "0",         label: "post-hoc disqualifications · every eligibility check signed at gate" },
-    { value: "100%",      label: "of financial transactions AI-audited before payment" },
-];
-
-const SlideImpact = () => (
-    <div>
-        <Eyebrow n="07" text="Impact" />
-        <Title>Numbers that show up on the ledger.</Title>
-        <Subtitle>Six months in. Real workflows, real reductions.</Subtitle>
-
-        <div className="grid grid-cols-2 gap-6 mt-10">
-            {IMPACT_STATS.map((s, i) => (
-                <div key={i}
-                    style={{
-                        background: "linear-gradient(135deg, rgba(184,131,40,0.10) 0%, rgba(184,131,40,0.02) 100%)",
-                        border: `1px solid ${gold}55`,
-                        padding: "28px 24px", borderRadius: 4,
-                    }}
-                    data-testid={`impact-stat-${i}`}
-                >
-                    <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(40px, 5vw, 64px)", color: gold, lineHeight: 1, letterSpacing: "-0.02em" }}>
-                        {s.value}
-                    </div>
-                    <div style={{ fontFamily: DL.fontBody, fontSize: 13, color: "rgba(245,239,230,0.8)", lineHeight: 1.55, marginTop: 10 }}>
-                        {s.label}
-                    </div>
-                </div>
-            ))}
-        </div>
-
-        <div className="mt-10 text-center max-w-3xl mx-auto border-t pt-6" style={{ borderColor: `${gold}33` }}>
-            <p style={{ fontFamily: DL.fontBody, fontSize: 16, lineHeight: 1.6, color: paper, fontStyle: "italic" }}>
-                “The ERP does not replace the Secretariat. It gives every reviewer the same evidence, at the same time, in the same shape.”
-            </p>
-        </div>
-    </div>
-);
-
-// ═════════════════════════════════════════════════════════════════════
-// Slide 8 · Sign-off
+// Slide 8 · Sign-off (no numbers)
 // ═════════════════════════════════════════════════════════════════════
 const SlideSignOff = () => (
-    <div>
-        <Eyebrow n="08" text="The Standing Offer" />
-        <Title>Every association runs the same backlogs. MPCA just wrote the answer.</Title>
-        <Subtitle>One state. Ten divisions. One codebase. One audit trail. Rewritable per season, portable to any board.</Subtitle>
-
-        <div className="grid grid-cols-4 gap-6 mt-10">
-            {[
-                { value: "10",     label: "MPCA divisions unified" },
-                { value: "33",     label: "Grant schemes on one signed master" },
-                { value: "3,000+", label: "Players · one KYC-verified register" },
-                { value: "0",      label: "Vendor lock-in · every line owned by MPCA" },
-            ].map((s, i) => (
-                <div key={i} className="text-center">
-                    <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(32px, 3.5vw, 46px)", color: gold, lineHeight: 1 }}>
-                        {s.value}
-                    </div>
-                    <div style={{ fontFamily: DL.fontMono, fontSize: 10, color: "rgba(245,239,230,0.65)", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 8 }}>
-                        {s.label}
-                    </div>
-                </div>
-            ))}
-        </div>
+    <div className="flex flex-col justify-center min-h-[68vh]">
+        <Eyebrow n="08" text="The Promise" />
+        <Title>Players register with a link. Divisions claim with a click.</Title>
+        <Subtitle>The MPCA ERP is designed so that neither of them ever has to visit an office, chase an email, or wonder where their file is stuck. Everything lands where it should — signed, audited, and traceable.</Subtitle>
 
         <div
-            className="mt-14 mx-auto text-center px-10 py-10 max-w-4xl relative"
-            style={{
-                border: `2px solid ${gold}`, borderRadius: 4,
-                background: "rgba(184,131,40,0.06)",
-            }}
+            className="mt-10 mx-auto text-center px-10 py-10 max-w-4xl relative"
+            style={{ border: `2px solid ${gold}`, borderRadius: 4, background: "rgba(184,131,40,0.06)" }}
         >
             <Sparkles size={22} style={{ color: gold, margin: "0 auto 14px", display: "block" }} />
-            <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: "clamp(24px, 2.6vw, 34px)", color: paper, lineHeight: 1.3, letterSpacing: "-0.01em" }}>
-                MPCA moved first.
+            <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: "clamp(24px, 2.6vw, 34px)", color: paper, lineHeight: 1.3 }}>
+                Simpler for players.
             </div>
-            <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: "clamp(24px, 2.6vw, 34px)", color: gold, lineHeight: 1.3, letterSpacing: "-0.01em", marginTop: 4 }}>
-                Players and Divisions no longer wait on paperwork.
+            <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: "clamp(24px, 2.6vw, 34px)", color: gold, lineHeight: 1.3, marginTop: 4 }}>
+                Faster for divisions.
+            </div>
+            <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: "clamp(24px, 2.6vw, 34px)", color: paper, lineHeight: 1.3, marginTop: 4 }}>
+                Cleaner for MPCA.
             </div>
         </div>
 
@@ -386,7 +340,7 @@ const Eyebrow = ({ n, text }) => (
 const Title = ({ children }) => (
     <h1 className="mb-3" style={{
         fontFamily: DL.fontDisplay, fontWeight: 800,
-        fontSize: "clamp(30px, 3.6vw, 50px)", lineHeight: 1.08,
+        fontSize: "clamp(28px, 3.4vw, 46px)", lineHeight: 1.1,
         letterSpacing: "-0.01em", color: paper, maxWidth: 1100,
     }}>
         {children}
@@ -396,14 +350,14 @@ const Title = ({ children }) => (
 const Subtitle = ({ children }) => (
     <p style={{
         fontFamily: DL.fontBody, fontStyle: "italic",
-        fontSize: "clamp(15px, 1.4vw, 19px)",
-        color: "rgba(245,239,230,0.72)", maxWidth: 900, lineHeight: 1.55,
+        fontSize: "clamp(14px, 1.35vw, 18px)",
+        color: "rgba(245,239,230,0.72)", maxWidth: 950, lineHeight: 1.55,
     }}>
         {children}
     </p>
 );
 
-const FeatureShell = ({ eyebrow, icon: Icon, title, subtitle, beforeAfter, stat, screenshot, screenshotCaption, bullets }) => (
+const FeatureShell = ({ eyebrow, icon: Icon, title, subtitle, screenshot, screenshotCaption, bullets, closer }) => (
     <div>
         <div className="flex items-start gap-3 mb-3">
             <div className="flex items-center justify-center w-10 h-10 shrink-0" style={{ background: gold, borderRadius: 3 }}>
@@ -419,63 +373,40 @@ const FeatureShell = ({ eyebrow, icon: Icon, title, subtitle, beforeAfter, stat,
         <div className="grid grid-cols-[1.15fr_1fr] gap-8 mt-6 items-start">
             {/* Left · Screenshot */}
             <div>
-                <div
-                    style={{
-                        border: `2px solid ${gold}`, borderRadius: 4,
-                        overflow: "hidden",
-                        boxShadow: "0 25px 60px -20px rgba(0,0,0,0.5), 0 6px 16px -6px rgba(0,0,0,0.4)",
-                    }}
-                >
-                    <img
-                        src={screenshot}
-                        alt=""
-                        style={{ display: "block", width: "100%", height: "auto", maxHeight: "58vh", objectFit: "contain", background: paper }}
-                    />
+                <div style={{
+                    border: `2px solid ${gold}`, borderRadius: 4, overflow: "hidden",
+                    boxShadow: "0 25px 60px -20px rgba(0,0,0,0.5), 0 6px 16px -6px rgba(0,0,0,0.4)",
+                }}>
+                    <img src={screenshot} alt="" style={{ display: "block", width: "100%", height: "auto", maxHeight: "60vh", objectFit: "contain", background: paper }} />
                 </div>
                 <div className="mt-2 text-center" style={{ fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.14em", color: `rgba(245,239,230,0.55)`, textTransform: "uppercase" }}>
                     {screenshotCaption}
                 </div>
             </div>
 
-            {/* Right · Bullets + before/after + stat */}
+            {/* Right · bullets + closer */}
             <div>
-                <ul className="space-y-2.5 mb-6">
-                    {bullets.map((b, i) => (
-                        <li key={i} className="flex items-start gap-2.5" style={{ fontFamily: DL.fontBody, fontSize: 13.5, color: "rgba(245,239,230,0.85)", lineHeight: 1.5 }}>
-                            <ShieldCheck size={13} style={{ color: gold, marginTop: 3, flexShrink: 0 }} />
-                            <span>{b}</span>
-                        </li>
-                    ))}
+                <ul className="space-y-3.5">
+                    {bullets.map((b, i) => {
+                        const BIcon = b.icon || ShieldCheck;
+                        return (
+                            <li key={i} className="flex items-start gap-3" style={{ fontFamily: DL.fontBody, fontSize: 14, color: "rgba(245,239,230,0.88)", lineHeight: 1.55 }}>
+                                <div style={{ width: 26, height: 26, background: `${gold}22`, border: `1px solid ${gold}77`, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                                    <BIcon size={13} style={{ color: gold }} />
+                                </div>
+                                <span>{b.text}</span>
+                            </li>
+                        );
+                    })}
                 </ul>
 
-                {/* Before / after */}
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div style={{ background: "rgba(139,31,31,0.15)", border: `1px solid ${oxblood}55`, padding: "12px 14px", borderRadius: 3 }}>
-                        <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", color: oxblood, fontWeight: 700, marginBottom: 4 }}>BEFORE</div>
-                        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: 20, color: paper, lineHeight: 1.15 }}>
-                            {beforeAfter.before}
+                {closer && (
+                    <div className="mt-8 pt-5" style={{ borderTop: `1px solid ${gold}55` }}>
+                        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: "clamp(18px, 1.8vw, 24px)", color: gold, lineHeight: 1.3, fontStyle: "italic" }}>
+                            {closer}
                         </div>
                     </div>
-                    <div style={{ background: "rgba(184,131,40,0.15)", border: `1px solid ${gold}77`, padding: "12px 14px", borderRadius: 3 }}>
-                        <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", color: gold, fontWeight: 700, marginBottom: 4 }}>AFTER</div>
-                        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: 20, color: gold, lineHeight: 1.15 }}>
-                            {beforeAfter.after}
-                        </div>
-                    </div>
-                </div>
-                <div style={{ fontFamily: DL.fontMono, fontSize: 10, color: "rgba(245,239,230,0.55)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10 }}>
-                    {beforeAfter.label}
-                </div>
-
-                {/* Big stat */}
-                <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${gold}33` }}>
-                    <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(26px, 2.6vw, 34px)", color: gold, lineHeight: 1, letterSpacing: "-0.02em" }}>
-                        {stat.value}
-                    </div>
-                    <div style={{ fontFamily: DL.fontBody, fontSize: 12.5, color: "rgba(245,239,230,0.75)", lineHeight: 1.5, marginTop: 6 }}>
-                        {stat.label}
-                    </div>
-                </div>
+                )}
             </div>
         </div>
     </div>
@@ -485,14 +416,14 @@ const FeatureShell = ({ eyebrow, icon: Icon, title, subtitle, beforeAfter, stat,
 // Deck shell — 8 slides
 // ═════════════════════════════════════════════════════════════════════
 const SLIDES = [
-    { id: "login",       kind: "full",  render: SlideLogin },
-    { id: "overview",    kind: "std",   render: SlideOverview },
-    { id: "players",     kind: "std",   render: SlidePlayers },
-    { id: "grants",      kind: "std",   render: SlideGrants },
-    { id: "tournaments", kind: "std",   render: SlideTournaments },
-    { id: "audit",       kind: "std",   render: SlideAiAudit },
-    { id: "impact",      kind: "std",   render: SlideImpact },
-    { id: "signoff",     kind: "std",   render: SlideSignOff },
+    { id: "login",           kind: "full", render: SlideLogin },
+    { id: "overview",        kind: "std",  render: SlideOverview },
+    { id: "player-link",     kind: "std",  render: SlidePlayerLink },
+    { id: "player-rectify",  kind: "std",  render: SlidePlayerRectify },
+    { id: "grants-pick",     kind: "std",  render: SlideGrantsPick },
+    { id: "grants-ai",       kind: "std",  render: SlideGrantsAi },
+    { id: "also-inside",     kind: "std",  render: SlideAlsoInside },
+    { id: "signoff",         kind: "std",  render: SlideSignOff },
 ];
 
 export default function LaunchPresentation() {
@@ -519,8 +450,7 @@ export default function LaunchPresentation() {
     const isFull = current.kind === "full";
 
     return (
-        <div
-            className="fixed inset-0"
+        <div className="fixed inset-0"
             data-testid="launch-presentation-page"
             style={{ background: emeraldBg, color: paper, fontFamily: DL.fontBody, overflow: "hidden" }}
         >
@@ -536,27 +466,22 @@ export default function LaunchPresentation() {
 
             {/* Progress bar */}
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "rgba(255,255,255,0.08)", zIndex: 5 }}>
-                <div
-                    data-testid="launch-progress"
-                    style={{
-                        width: `${progress}%`, height: "100%", background: gold,
-                        transition: "width 320ms cubic-bezier(0.22,1,0.36,1)",
-                        boxShadow: `0 0 12px ${gold}`,
-                    }}
-                />
+                <div data-testid="launch-progress" style={{
+                    width: `${progress}%`, height: "100%", background: gold,
+                    transition: "width 320ms cubic-bezier(0.22,1,0.36,1)",
+                    boxShadow: `0 0 12px ${gold}`,
+                }} />
             </div>
 
             {/* Top-right controls */}
             <div style={{ position: "absolute", top: 22, right: 28, display: "flex", gap: 10, alignItems: "center", zIndex: 5 }}>
-                <span
-                    className="text-[11px] uppercase tracking-[0.24em] font-bold"
+                <span className="text-[11px] uppercase tracking-[0.24em] font-bold"
                     style={{ fontFamily: DL.fontMono, color: gold, opacity: 0.9 }}
                     data-testid="launch-counter"
                 >
                     {String(slide + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
                 </span>
-                <Link
-                    to="/dashboard"
+                <Link to="/dashboard"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-[0.22em] font-bold transition-all"
                     style={{ fontFamily: DL.fontMono, color: gold, border: `1px solid rgba(184,131,40,0.5)` }}
                     data-testid="launch-exit"
@@ -585,17 +510,14 @@ export default function LaunchPresentation() {
                 </NavBtn>
                 <div className="flex items-center gap-2" data-testid="launch-dots">
                     {SLIDES.map((_, i) => (
-                        <button
-                            key={i}
-                            onClick={() => setSlide(i)}
+                        <button key={i} onClick={() => setSlide(i)}
                             className="rounded-full transition-all"
                             style={{
                                 height: 6, width: i === slide ? 24 : 6,
                                 background: i === slide ? gold : "rgba(255,255,255,0.28)",
                                 border: "none", cursor: "pointer",
                             }}
-                            data-testid={`launch-dot-${i}`}
-                        />
+                            data-testid={`launch-dot-${i}`} />
                     ))}
                 </div>
                 <NavBtn onClick={next} disabled={slide === total - 1} testid="launch-next" primary>
@@ -606,11 +528,8 @@ export default function LaunchPresentation() {
     );
 }
 
-// Local nav button (formerly imported from Storyline — now self-contained)
 const NavBtn = ({ onClick, disabled, primary, children, testid }) => (
-    <button
-        onClick={onClick}
-        disabled={disabled}
+    <button onClick={onClick} disabled={disabled}
         className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[12px] uppercase tracking-[0.22em] font-bold transition-all"
         style={{
             fontFamily: DL.fontMono,
@@ -621,11 +540,8 @@ const NavBtn = ({ onClick, disabled, primary, children, testid }) => (
             cursor: disabled ? "not-allowed" : "pointer",
         }}
         data-testid={testid}
-    >
-        {children}
-    </button>
+    >{children}</button>
 );
 
-// Reference the imported tokens so ESLint doesn't warn about "unused" that
-// are actually used inside inline styles via the `ivory` / `paper` locals.
-export const __tokens_ref__ = { ivory, paper, emerald, gold, oxblood, FileCheck2 };
+// Reference imports so ESLint doesn't nag on unused tokens/icons.
+export const __refs__ = { ivory, paper, emerald, gold, oxblood };

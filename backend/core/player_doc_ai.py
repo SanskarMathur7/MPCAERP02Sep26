@@ -170,6 +170,8 @@ Respond with a SINGLE JSON object — no prose, no code fences. Shape:
     "extracted_name": "<child name or null>",
     "extracted_dob": "<YYYY-MM-DD or null>",
     "extracted_father_name": "<or null>",
+    "extracted_place_of_birth_city": "<city / town / village of birth as printed, or null>",
+    "extracted_place_of_birth_state": "<state (usually 'Madhya Pradesh'), or null>",
     "qr_present": true|false,
     "qr_decoded_url": "<url if a QR is visible; null otherwise>",
     "issuing_authority": "<free text>",
@@ -328,6 +330,53 @@ def _rules_engine(reg_doc: Dict[str, Any], ext: Dict[str, Any]) -> Dict[str, Any
             critical.append(
                 f"DOB mismatch: form {pd['dob']}, Aadhaar {aad_ocr['extracted_dob']}."
             )
+    # ── Iter 131e · Missing mandatory documents ──
+    # Every registration MUST include these — anything absent is a critical
+    # issue that stops the AI verdict from going green.
+    core_mandatory = {
+        "aadhaar_url":             "Aadhaar (Unmasked)",
+        "birth_cert_url":          "Birth Certificate",
+        "photo_url":               "Passport Size Photo",
+        "address_proof_url":       "Current Address Proof",
+        "samagra_id_player_url":   "Samagra ID (Player)",
+        "samagra_id_family_url":   "Samagra ID (Family)",
+        "consent_form_url":        "Consent Form (Notarized)",
+    }
+    missing_core: List[str] = [
+        label for key, label in core_mandatory.items() if not pd.get(key)
+    ]
+    # Employment path vs student path — one of them is mandatory
+    is_employed = bool(pd.get("is_employed"))
+    no_studies = bool(pd.get("no_recent_studies"))
+    if is_employed:
+        for key, label in [
+            ("appointment_letter_url", "Appointment Letter"),
+            ("salary_slip_url",        "Latest Salary Slip"),
+            ("bank_statement_1yr_url", "1-Year Bank Statement"),
+        ]:
+            if not pd.get(key):
+                missing_core.append(label)
+    elif no_studies:
+        if not pd.get("no_study_affidavit_url"):
+            missing_core.append("No-Study Affidavit")
+    else:
+        for key, label in [
+            ("marksheet_3yr_url",       "Marksheets · Last 3 years"),
+            ("bonafide_school_cert_url","School Bonafide"),
+        ]:
+            if not pd.get(key):
+                missing_core.append(label)
+    # NOC required if last-season division differs from current
+    lsd = (pd.get("last_season_division_code") or "").strip()
+    psd = (pd.get("preferred_division_code") or "").strip()
+    if lsd and psd and lsd != psd and not pd.get("noc_previous_division_url"):
+        missing_core.append(f"NOC from {lsd}")
+
+    if missing_core:
+        critical.append(
+            "Missing required document(s): " + ", ".join(missing_core) + "."
+        )
+
     aad_year = (aad_ocr.get("issued_or_updated_year") or "").strip()
     # Feb 2026 · If an Aadhaar Update History PDF was uploaded and Gemini
     # extracted a latest update date, prefer THAT over the year printed on
@@ -535,6 +584,14 @@ def _build_field_suggestions(extraction: Dict[str, Any]) -> Dict[str, Any]:
     father = bc.get("extracted_father_name") or ms.get("father_name")
     if father:
         out["father_name"] = father.strip()
+
+    # ── Place of birth (Birth Certificate only) ──
+    pob_city = bc.get("extracted_place_of_birth_city")
+    pob_state = bc.get("extracted_place_of_birth_state")
+    if pob_city:
+        out["place_of_birth_city"] = pob_city.strip()
+    if pob_state:
+        out["place_of_birth_state"] = pob_state.strip()
 
     # ── DOB (Aadhaar > Birth Cert > PAN) ──
     dob = aad.get("extracted_dob") or bc.get("extracted_dob") or pan.get("extracted_dob")

@@ -267,6 +267,7 @@ export default function PublicPlayerRegistration() {
                             <>
                                 <StepHeader n="3" title="Confirm your details" subtitle="AI-filled values are highlighted in gold. Manual fields are below the AI section. Everything remains editable." />
                                 <AiFilledFieldsBlock form={form} setField={setField} aiFilledFields={aiFilledFields} />
+                                <BankDetailsBlock form={form} setField={setField} aiFilledFields={aiFilledFields} />
                                 <ManualFieldsBlock form={form} setField={setField} divisions={env.divisions || []} />
                                 <DocumentContextTogglesBlock form={form} setField={setField} />
                                 <MpcaFinalApprovalNotice />
@@ -363,18 +364,19 @@ function DOC_ROSTER(form) {
 const DocStatusPill = ({ status }) => {
     if (!status) return null;
     const s = status.status;
-    // Compact dot + short label. Sits on the "Uploaded ✓" row (right side),
-    // never on the header row — so the doc label always has full width.
+    // Feb 2026 · Reverted to boxed pill style (per user ask "keep UI as previous
+    // but make fonts smaller"). Compact 8px letters, tighter padding, so the
+    // box is small enough not to steal room from the doc label.
     const tone =
-        s === "verified" ? { dot: "bg-mpca-green-dark", txt: "text-mpca-green-dark", label: "Verified", testid: "doc-status-verified" } :
-        s === "warning"  ? { dot: "bg-mpca-brass",     txt: "text-mpca-brass",     label: "Review",   testid: "doc-status-warning"  } :
-        s === "error"    ? { dot: "bg-mpca-oxblood",   txt: "text-mpca-oxblood",   label: "Fix",      testid: "doc-status-error"    } :
+        s === "verified" ? { bg: "bg-mpca-green-dark",  label: "AI Verified",  testid: "doc-status-verified", Icon: CheckCircle2 } :
+        s === "warning"  ? { bg: "bg-mpca-brass",       label: "Needs Review", testid: "doc-status-warning",  Icon: AlertTriangle } :
+        s === "error"    ? { bg: "bg-mpca-oxblood",     label: "Problem",      testid: "doc-status-error",    Icon: XCircle } :
         null;
     if (!tone) return null;
+    const { Icon } = tone;
     return (
-        <span className={`inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold ${tone.txt}`} data-testid={tone.testid}>
-            <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
-            {tone.label}
+        <span className={`inline-flex items-center gap-0.5 text-[8px] uppercase tracking-wider font-bold ${tone.bg} text-mpca-ivory px-1.5 py-0.5 rounded-sm whitespace-nowrap`} data-testid={tone.testid}>
+            <Icon size={8} strokeWidth={2.5} /> {tone.label}
         </span>
     );
 };
@@ -594,8 +596,22 @@ const AiFilledFieldsBlock = ({ form, setField, aiFilledFields }) => (
             <FilledField label="Gender" k="gender" as="select" options={[["M","Male"],["F","Female"],["Other","Other"]]} required form={form} setField={setField} aiSet={aiFilledFields} />
             <FilledField label="Aadhaar no." k="aadhaar_no" form={form} setField={setField} aiSet={aiFilledFields} placeholder="12-digit" />
             <FilledField label="PAN no." k="pan_no" form={form} setField={setField} aiSet={aiFilledFields} placeholder="ABCDE1234F" />
+            <FilledField label="Place of birth · City" k="place_of_birth_city" form={form} setField={setField} aiSet={aiFilledFields} placeholder="e.g. Indore" />
+            <FilledField label="Place of birth · State" k="place_of_birth_state" form={form} setField={setField} aiSet={aiFilledFields} placeholder="e.g. Madhya Pradesh" />
+        </Grid>
+    </Section>
+);
+
+// Feb 2026 · Bank details grouped in one dedicated section (per user ask).
+// Bank Name & IFSC may be AI-filled from the cancelled cheque; Account No.
+// is always typed by the player.
+const BankDetailsBlock = ({ form, setField, aiFilledFields }) => (
+    <Section title="Bank Details" icon={FileCheck2}>
+        <div className="text-[10px] text-mpca-brass italic mb-2 -mt-1">If you uploaded a cancelled cheque, Bank Name and IFSC are filled by AI. Enter your account number manually.</div>
+        <Grid>
             <FilledField label="Bank name" k="bank_name" form={form} setField={setField} aiSet={aiFilledFields} />
             <FilledField label="Bank IFSC" k="bank_ifsc" form={form} setField={setField} aiSet={aiFilledFields} placeholder="e.g. HDFC0001234" />
+            <Field label="Bank account no." span={2}><input value={form.bank_account_no} onChange={(e) => setField("bank_account_no", e.target.value)} className="input-heritage font-mono !py-1.5 !text-xs" data-testid="pr-pub-bank-account-no" placeholder="Enter your bank account number" /></Field>
         </Grid>
     </Section>
 );
@@ -633,10 +649,7 @@ const ManualFieldsBlock = ({ form, setField, divisions }) => (
                     <option value="Local_MP">Local MP</option><option value="Guest">Guest</option><option value="Foreign">Foreign</option>
                 </select>
             </Field>
-            <Field label="Bank account no."><input value={form.bank_account_no} onChange={(e) => setField("bank_account_no", e.target.value)} className="input-heritage font-mono !py-1.5 !text-xs" /></Field>
             <Field label="GST no. (optional)"><input value={form.gst_no} onChange={(e) => setField("gst_no", e.target.value)} placeholder="15-char GSTIN" className="input-heritage font-mono !py-1.5 !text-xs" /></Field>
-            <Field label="Place of birth · City"><input value={form.place_of_birth_city} onChange={(e) => setField("place_of_birth_city", e.target.value)} placeholder="e.g. Indore" className="input-heritage !py-1.5 !text-xs" /></Field>
-            <Field label="Place of birth · State"><input value={form.place_of_birth_state} onChange={(e) => setField("place_of_birth_state", e.target.value)} placeholder="e.g. Madhya Pradesh" className="input-heritage !py-1.5 !text-xs" /></Field>
             <Field label="Division played last season">
                 <select value={form.last_season_division_code} onChange={(e) => setField("last_season_division_code", e.target.value)} className="input-heritage !py-1.5 !text-xs">
                     <option value="">— None / new to cricket —</option>
@@ -675,7 +688,7 @@ const MpcaFinalApprovalNotice = () => (
     <div className="border-2 border-mpca-oxblood bg-mpca-oxblood/8 px-4 py-3 flex items-start gap-3" data-testid="mpca-final-approval-notice">
         <FileCheck2 size={18} className="text-mpca-oxblood mt-0.5 shrink-0" />
         <div className="text-[12px] text-mpca-oxblood">
-            <div className="font-bold uppercase tracking-wide mb-0.5">MPCA holds the power of final approval</div>
+            <div className="font-bold uppercase tracking-wide mb-0.5">Final approval rests with MPCA</div>
             <div className="text-[11px] text-mpca-oxblood/90">AI verification is an assistive check. Your registration is confirmed only after review and sign-off by your Division Secretary and the MPCA Secretariat.</div>
         </div>
     </div>

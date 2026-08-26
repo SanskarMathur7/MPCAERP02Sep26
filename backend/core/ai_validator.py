@@ -331,9 +331,19 @@ async def _collect_player_documents(player_doc: dict) -> list:
 
 async def _collect_player_docs_with_paths(player_doc: dict) -> list:
     """Iter 129 · like _collect_player_documents but also yields (doc_type, path)
-    tuples so the QR / signal helpers can operate on the raw file."""
+    tuples so the QR / signal helpers can operate on the raw file.
+
+    Feb 2026 · Only the Birth Certificate is scanned for QR/barcodes. Other
+    KYC documents (Aadhaar, PAN, Samagra, address proof, photo) do not carry
+    a meaningful QR MPCA needs to verify, so we skip them to keep the KYC
+    signals table clean.
+    """
+    BIRTH_CERT_DOC_TYPES = {"birth_cert", "birth_certificate", "birth"}
     out: list = []
     for d in player_doc.get("documents", []) or []:
+        doc_type = (d.get("doc_type") or "").lower()
+        if doc_type not in BIRTH_CERT_DOC_TYPES:
+            continue
         url = d.get("url") or ""
         if "/api/uploads/" not in url:
             continue
@@ -344,7 +354,7 @@ async def _collect_player_docs_with_paths(player_doc: dict) -> list:
         path = rec.get("_path")
         if not path or not Path(path).exists():
             continue
-        out.append((d.get("doc_type") or "unknown", path))
+        out.append((d.get("doc_type") or "birth_cert", path))
     return out
 
 

@@ -23,35 +23,110 @@ const paper     = DL.paper;
 // ═════════════════════════════════════════════════════════════════════
 // Slide 1 · Live login (iframe · fire signals animate live)
 // ═════════════════════════════════════════════════════════════════════
-const SlideLive = () => (
-    <div className="w-full h-full flex flex-col items-center justify-center px-6 md:px-16">
-        <div className="mb-3" style={{ fontFamily: DL.fontMono, fontSize: 12, letterSpacing: "0.34em", color: gold, fontWeight: 700 }}>
-            MPCA · ERP
-        </div>
-        <h1 className="text-center mb-8" style={{
-            fontFamily: DL.fontDisplay, fontWeight: 800,
-            fontSize: "clamp(48px, 6vw, 88px)", lineHeight: 1, letterSpacing: "-0.02em", color: paper,
-        }}>
-            One platform. <span style={{ color: gold }}>Every workflow.</span>
-        </h1>
+const SlideLive = () => {
+    // Same-origin iframe → hide the login page's own scrollbar so the
+    // frame looks like a clean product shot, not a browser inside a browser.
+    const hideIframeScrollbar = (e) => {
+        try {
+            const doc = e.target.contentDocument;
+            if (doc) {
+                if (doc.body) doc.body.style.overflow = "hidden";
+                if (doc.documentElement) doc.documentElement.style.overflow = "hidden";
+                // WebKit scrollbar suppression
+                const style = doc.createElement("style");
+                style.textContent = `::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}html,body{scrollbar-width:none!important;-ms-overflow-style:none!important;}`;
+                doc.head?.appendChild(style);
+            }
+        } catch { /* cross-origin — ignore */ }
+    };
 
-        {/* Live iframe · shows the actual login page with fire signals animating */}
-        <div className="w-full max-w-[1200px]" style={{
-            borderRadius: 10, overflow: "hidden",
-            boxShadow: "0 30px 80px -20px rgba(0,0,0,0.7)",
-            border: `1px solid rgba(184,131,40,0.35)`,
-            aspectRatio: "16/9", background: "#0b1d18",
-        }}>
-            <iframe
-                src="/login"
-                title="MPCA ERP Login"
-                data-testid="login-live-iframe"
-                style={{ width: "100%", height: "100%", border: 0, display: "block" }}
-                loading="eager"
-            />
+    return (
+        <div className="w-full h-full flex flex-col items-center justify-center px-6 md:px-16 relative">
+            {/* Corner marks — subtle brand crop, gives an editorial edge */}
+            <CornerMarks />
+
+            <div className="mb-4 flex items-center gap-3" style={{
+                fontFamily: DL.fontMono, fontSize: 12, letterSpacing: "0.34em",
+                color: gold, fontWeight: 700, textTransform: "uppercase",
+            }}>
+                <span style={{ width: 28, height: 1, background: gold, opacity: 0.7 }} />
+                MPCA · ERP
+                <span style={{ width: 28, height: 1, background: gold, opacity: 0.7 }} />
+            </div>
+
+            <h1 className="text-center mb-3" style={{
+                fontFamily: DL.fontDisplay, fontWeight: 800,
+                fontSize: "clamp(48px, 6.2vw, 92px)", lineHeight: 1,
+                letterSpacing: "-0.02em", color: paper,
+            }}>
+                One platform. <span style={{ color: gold }}>Every workflow.</span>
+            </h1>
+
+            <p className="text-center mb-9 max-w-2xl" style={{
+                fontFamily: DL.fontBody, fontStyle: "italic",
+                fontSize: "clamp(16px, 1.35vw, 20px)",
+                color: "rgba(245,239,230,0.62)",
+            }}>
+                Built for MPCA · Divisions · Players
+            </p>
+
+            {/* Live iframe — no scrollbar, no chrome, just the login page. */}
+            <div style={{
+                width: "min(78vw, 1180px)",
+                aspectRatio: "16/9",
+                borderRadius: 12, overflow: "hidden",
+                background: "#0b1d18",
+                boxShadow: "0 40px 90px -25px rgba(0,0,0,0.75), 0 12px 28px -10px rgba(0,0,0,0.5), 0 0 0 1px rgba(184,131,40,0.22)",
+                position: "relative",
+            }}>
+                <iframe
+                    src="/login"
+                    title="MPCA ERP Login"
+                    data-testid="login-live-iframe"
+                    scrolling="no"
+                    onLoad={hideIframeScrollbar}
+                    style={{ width: "100%", height: "100%", border: 0, display: "block" }}
+                    loading="eager"
+                />
+                {/* Soft gold vignette on top so any residual browser edge blends with the deck */}
+                <div style={{
+                    position: "absolute", inset: 0, pointerEvents: "none",
+                    boxShadow: `inset 0 0 90px rgba(184,131,40,0.10)`,
+                }} />
+            </div>
         </div>
-    </div>
-);
+    );
+};
+
+// Editorial corner marks — thin gold brackets at the four corners of the slide.
+const CornerMarks = () => {
+    const size = 34, thick = 2, colour = gold, off = 30;
+    const arm = { position: "absolute", background: colour, opacity: 0.55 };
+    return (
+        <>
+            {/* Top-left */}
+            <div style={{ position: "absolute", top: off, left: off, width: size, height: size, pointerEvents: "none" }}>
+                <div style={{ ...arm, top: 0, left: 0, width: size, height: thick }} />
+                <div style={{ ...arm, top: 0, left: 0, width: thick, height: size }} />
+            </div>
+            {/* Top-right */}
+            <div style={{ position: "absolute", top: off, right: off, width: size, height: size, pointerEvents: "none" }}>
+                <div style={{ ...arm, top: 0, right: 0, width: size, height: thick }} />
+                <div style={{ ...arm, top: 0, right: 0, width: thick, height: size }} />
+            </div>
+            {/* Bottom-left */}
+            <div style={{ position: "absolute", bottom: off, left: off, width: size, height: size, pointerEvents: "none" }}>
+                <div style={{ ...arm, bottom: 0, left: 0, width: size, height: thick }} />
+                <div style={{ ...arm, bottom: 0, left: 0, width: thick, height: size }} />
+            </div>
+            {/* Bottom-right */}
+            <div style={{ position: "absolute", bottom: off, right: off, width: size, height: size, pointerEvents: "none" }}>
+                <div style={{ ...arm, bottom: 0, right: 0, width: size, height: thick }} />
+                <div style={{ ...arm, bottom: 0, right: 0, width: thick, height: size }} />
+            </div>
+        </>
+    );
+};
 
 // ═════════════════════════════════════════════════════════════════════
 // Caption slides — bold, single-message, auditorium-first

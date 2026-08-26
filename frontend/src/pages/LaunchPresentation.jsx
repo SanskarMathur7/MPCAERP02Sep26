@@ -195,12 +195,28 @@ const SLIDES = [
         aiCount: 2,
         aiPreview: "Every invoice auto-diffed against its PDF. One click rolls up the whole tournament. MPCA approves ambers, not greens.",
     },
-    // 07 · Tournament Claims — deep-dive (real tournament detail)
+    // 07 · Tournament Module — the workspace (what it manages)
     {
         kind: "feature",
         bucketId: "tournament_claims",
         icon: Trophy,
-        eyebrow: "Tournament Claims · Deep-Dive",
+        eyebrow: "Tournament Module · Scope",
+        featureName: "Every Tournament · 12 Tiles · One Workspace",
+        problem: "Fixtures on WhatsApp. Umpires by phone. Budget on a spreadsheet. Squads on paper.",
+        aiVerb: "COALESCES INTO ONE WORKSPACE",
+        aiDescription: "Every tournament opens the same workspace: Basics, Participants, Match Officials, Squads, Match Calendar, Days Engine, Unified Budget, Finance Console, Closure Letter, Activity Log, Discussion, Pre-Tournament Camps. Each tile owns its own data, its own approvals, its own audit trail — but all share one tournament identity.",
+        metric: { before: "12 apps + 40 emails", after: "1 workspace", label: "per tournament" },
+        seasonSave: "≈ 800 staff-hours · every fact lives in one place",
+        dividend: "= zero \"which version is final?\" · zero attachments lost in inbox chains",
+        livePage: { label: "Tournament Detail · Workspace", path: "/tournaments" },
+        mockup: "image:/deck-screenshots/tournament_workspace.png",
+    },
+    // 08 · Tournament Detail — real screenshot of the wiring bar
+    {
+        kind: "feature",
+        bucketId: "tournament_claims",
+        icon: Calendar,
+        eyebrow: "Tournament · Detail Page",
         featureName: "One Tournament Page · Every Fact, Every Rupee",
         problem: "40 tournaments a year, each a folder of PDFs and WhatsApp chats.",
         aiVerb: "COALESCES · AI-AUDITS · ROLLS-UP",

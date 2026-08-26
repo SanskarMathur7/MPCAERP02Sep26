@@ -128,6 +128,74 @@ const CornerMarks = () => {
 };
 
 // ═════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════
+// Slide 2 · Live login (iframe · fire signals animate live during pitch)
+// ═════════════════════════════════════════════════════════════════════
+const SlideLogin = () => {
+    // Same-origin iframe → hide the login page's own scrollbar so the frame
+    // looks like a clean product hero, not a browser-inside-a-browser.
+    const hideIframeScrollbar = (e) => {
+        try {
+            const doc = e.target.contentDocument;
+            if (doc) {
+                if (doc.body) doc.body.style.overflow = "hidden";
+                if (doc.documentElement) doc.documentElement.style.overflow = "hidden";
+                const style = doc.createElement("style");
+                style.textContent = `::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}html,body{scrollbar-width:none!important;-ms-overflow-style:none!important;}`;
+                doc.head?.appendChild(style);
+            }
+        } catch { /* cross-origin — ignore */ }
+    };
+
+    return (
+        <div className="w-full h-full flex flex-col items-center justify-center px-6 md:px-16 relative" data-testid="login-slide">
+            <CornerMarks />
+
+            {/* Big eyebrow + headline */}
+            <div style={{
+                fontFamily: DL.fontMono, fontSize: "clamp(18px, 1.5vw, 22px)",
+                letterSpacing: "0.34em", color: gold, fontWeight: 700,
+                textTransform: "uppercase", marginBottom: 22,
+            }}>
+                The Platform
+            </div>
+
+            <h1 className="text-center" style={{
+                fontFamily: DL.fontDisplay, fontWeight: 800,
+                fontSize: "clamp(52px, 6.4vw, 96px)", lineHeight: 1,
+                letterSpacing: "-0.02em", color: paper, marginBottom: 36,
+            }}>
+                One platform. <span style={{ color: gold }}>Every workflow.</span>
+            </h1>
+
+            {/* Live iframe — the actual login page with fire signals animating */}
+            <div style={{
+                width: "min(76vw, 1140px)",
+                aspectRatio: "16/9",
+                borderRadius: 12, overflow: "hidden",
+                background: "#0b1d18",
+                boxShadow: "0 40px 90px -25px rgba(0,0,0,0.75), 0 12px 28px -10px rgba(0,0,0,0.5), 0 0 0 1px rgba(184,131,40,0.22)",
+                position: "relative",
+            }}>
+                <iframe
+                    src="/login"
+                    title="MPCA ERP Login"
+                    data-testid="login-live-iframe"
+                    scrolling="no"
+                    onLoad={hideIframeScrollbar}
+                    style={{ width: "100%", height: "100%", border: 0, display: "block" }}
+                    loading="eager"
+                />
+                <div style={{
+                    position: "absolute", inset: 0, pointerEvents: "none",
+                    boxShadow: `inset 0 0 90px rgba(184,131,40,0.10)`,
+                }} />
+            </div>
+        </div>
+    );
+};
+
+// ═════════════════════════════════════════════════════════════════════
 // Caption slides — bold, single-message, auditorium-first
 // ═════════════════════════════════════════════════════════════════════
 const CaptionSlide = ({ eyebrow, headline, sub }) => (
@@ -209,10 +277,12 @@ const SlideClose = () => (
 // Deck spec — 8 slides
 // ═════════════════════════════════════════════════════════════════════
 const SLIDES = [
-    // 1 · Mass-audience cover — logo + welcome, no product screenshot
+    // 1 · Mass-audience cover
     { render: () => <SlideCover /> },
+    // 2 · Live login (iframe · fire signals animate)
+    { render: () => <SlideLogin /> },
 
-    // 2 · Players caption
+    // 3 · Players caption
     { render: () => (
         <CaptionSlide
             eyebrow="Players"
@@ -220,10 +290,10 @@ const SLIDES = [
             sub="No queues. No office visits. Everything happens in the player's own hands."
         />
     )},
-    // 3 · Players screenshot
+    // 4 · Players screenshot
     { render: () => <ScreenshotSlide src="/deck-screenshots/public_reg_docs_first.png" /> },
 
-    // 4 · Players AI caption
+    // 5 · Players AI caption
     { render: () => (
         <CaptionSlide
             eyebrow="Players · AI Check"
@@ -231,10 +301,10 @@ const SLIDES = [
             sub="AI reads every document, flags any issue, and lets the player fix it right away."
         />
     )},
-    // 5 · Players AI screenshot
+    // 6 · Players AI screenshot
     { render: () => <ScreenshotSlide src="/deck-screenshots/player_ai_flagged.png" /> },
 
-    // 6 · Grants caption
+    // 7 · Grants caption
     { render: () => (
         <CaptionSlide
             eyebrow="Grants"
@@ -242,10 +312,10 @@ const SLIDES = [
             sub="Divisions see every scheme they qualify for, with the exact documents required."
         />
     )},
-    // 7 · Grants screenshot
+    // 8 · Grants screenshot
     { render: () => <ScreenshotSlide src="/deck-screenshots/schemes_division.png" /> },
 
-    // 8 · Close
+    // 9 · Close
     { render: () => <SlideClose /> },
 ];
 
@@ -263,7 +333,7 @@ export default function LaunchPresentation() {
         const onKey = (e) => {
             if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); next(); }
             else if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
-            else if (e.key >= "1" && e.key <= "8") setSlide(Math.min(total - 1, Number(e.key) - 1));
+            else if (e.key >= "1" && e.key <= "9") setSlide(Math.min(total - 1, Number(e.key) - 1));
             else if (e.key === "0") setSlide(total - 1);
         };
         window.addEventListener("keydown", onKey);

@@ -21,84 +21,83 @@ const gold      = DL.gold;
 const paper     = DL.paper;
 
 // ═════════════════════════════════════════════════════════════════════
-// Slide 1 · Live login (iframe · fire signals animate live)
+// Slide 1 · Cover (MASS-audience welcome — logo hero, big welcome line)
 // ═════════════════════════════════════════════════════════════════════
-const SlideLive = () => {
-    // Same-origin iframe → hide the login page's own scrollbar so the
-    // frame looks like a clean product shot, not a browser inside a browser.
-    const hideIframeScrollbar = (e) => {
-        try {
-            const doc = e.target.contentDocument;
-            if (doc) {
-                if (doc.body) doc.body.style.overflow = "hidden";
-                if (doc.documentElement) doc.documentElement.style.overflow = "hidden";
-                // WebKit scrollbar suppression
-                const style = doc.createElement("style");
-                style.textContent = `::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}html,body{scrollbar-width:none!important;-ms-overflow-style:none!important;}`;
-                doc.head?.appendChild(style);
-            }
-        } catch { /* cross-origin — ignore */ }
-    };
+const SlideCover = () => (
+    <div className="w-full h-full flex flex-col items-center justify-center px-6 md:px-16 relative"
+         data-testid="cover-slide">
+        <CornerMarks />
 
-    return (
-        <div className="w-full h-full flex flex-col items-center justify-center px-6 md:px-16 relative">
-            {/* Corner marks — subtle brand crop, gives an editorial edge */}
-            <CornerMarks />
-
-            <div className="mb-4 flex items-center gap-3" style={{
-                fontFamily: DL.fontMono, fontSize: 12, letterSpacing: "0.34em",
-                color: gold, fontWeight: 700, textTransform: "uppercase",
-            }}>
-                <span style={{ width: 28, height: 1, background: gold, opacity: 0.7 }} />
-                MPCA · ERP
-                <span style={{ width: 28, height: 1, background: gold, opacity: 0.7 }} />
-            </div>
-
-            <h1 className="text-center mb-3" style={{
-                fontFamily: DL.fontDisplay, fontWeight: 800,
-                fontSize: "clamp(48px, 6.2vw, 92px)", lineHeight: 1,
-                letterSpacing: "-0.02em", color: paper,
-            }}>
-                One platform. <span style={{ color: gold }}>Every workflow.</span>
-            </h1>
-
-            <p className="text-center mb-9 max-w-2xl" style={{
-                fontFamily: DL.fontBody, fontStyle: "italic",
-                fontSize: "clamp(16px, 1.35vw, 20px)",
-                color: "rgba(245,239,230,0.62)",
-            }}>
-                Built for MPCA · Divisions · Players
-            </p>
-
-            {/* Live iframe — no scrollbar, no chrome, just the login page. */}
+        {/* MPCA emblem — the hero of a mass-audience cover */}
+        <div style={{
+            position: "relative", marginBottom: 44,
+            filter: "drop-shadow(0 24px 40px rgba(0,0,0,0.45))",
+            animation: "coverPulse 4s ease-in-out infinite",
+        }}>
+            <img
+                src="/assets/mpca-logo.png"
+                alt="MPCA emblem"
+                data-testid="cover-emblem"
+                style={{
+                    width: "clamp(160px, 18vw, 240px)",
+                    height: "auto",
+                    display: "block",
+                    background: paper,
+                    padding: 14,
+                    borderRadius: 8,
+                    border: `2px solid ${gold}`,
+                }}
+            />
+            {/* Soft gold aura around the emblem */}
             <div style={{
-                width: "min(78vw, 1180px)",
-                aspectRatio: "16/9",
-                borderRadius: 12, overflow: "hidden",
-                background: "#0b1d18",
-                boxShadow: "0 40px 90px -25px rgba(0,0,0,0.75), 0 12px 28px -10px rgba(0,0,0,0.5), 0 0 0 1px rgba(184,131,40,0.22)",
-                position: "relative",
-            }}>
-                <iframe
-                    src="/login"
-                    title="MPCA ERP Login"
-                    data-testid="login-live-iframe"
-                    scrolling="no"
-                    onLoad={hideIframeScrollbar}
-                    style={{ width: "100%", height: "100%", border: 0, display: "block" }}
-                    loading="eager"
-                />
-                {/* Soft gold vignette on top so any residual browser edge blends with the deck */}
-                <div style={{
-                    position: "absolute", inset: 0, pointerEvents: "none",
-                    boxShadow: `inset 0 0 90px rgba(184,131,40,0.10)`,
-                }} />
-            </div>
+                position: "absolute", inset: -30, borderRadius: "50%",
+                background: `radial-gradient(circle, ${gold}22 0%, transparent 60%)`,
+                zIndex: -1, filter: "blur(20px)",
+            }} />
         </div>
-    );
-};
 
-// Editorial corner marks — thin gold brackets at the four corners of the slide.
+        {/* Association name — the pride line */}
+        <div style={{
+            fontFamily: DL.fontMono, fontSize: "clamp(18px, 1.8vw, 22px)",
+            letterSpacing: "0.32em", color: gold, fontWeight: 700,
+            textTransform: "uppercase", marginBottom: 20, textAlign: "center",
+        }} data-testid="cover-association">
+            Madhya Pradesh Cricket Association
+        </div>
+
+        {/* Big welcome */}
+        <h1 className="text-center" style={{
+            fontFamily: DL.fontDisplay, fontWeight: 800,
+            fontSize: "clamp(64px, 8vw, 132px)", lineHeight: 0.98,
+            letterSpacing: "-0.03em", color: paper, marginBottom: 20,
+        }} data-testid="cover-welcome">
+            Welcome.
+        </h1>
+
+        {/* Golden second line */}
+        <div className="text-center" style={{
+            fontFamily: DL.fontDisplay, fontWeight: 700,
+            fontSize: "clamp(28px, 3.4vw, 52px)", lineHeight: 1.1,
+            letterSpacing: "-0.01em", color: gold, marginBottom: 40,
+            maxWidth: 1200,
+        }} data-testid="cover-tagline">
+            To your association&apos;s new home online.
+        </div>
+
+        {/* Season badge */}
+        <div style={{
+            fontFamily: DL.fontMono, fontSize: "clamp(20px, 1.8vw, 24px)",
+            letterSpacing: "0.34em", color: paper, fontWeight: 700,
+            textTransform: "uppercase", padding: "12px 32px",
+            border: `2px solid ${gold}`, borderRadius: 4,
+            background: "rgba(184,131,40,0.10)",
+        }} data-testid="cover-season">
+            Season 2026 – 27
+        </div>
+    </div>
+);
+
+// Editorial corner marks — thin gold brackets at the four corners.
 const CornerMarks = () => {
     const size = 34, thick = 2, colour = gold, off = 30;
     const arm = { position: "absolute", background: colour, opacity: 0.55 };
@@ -131,82 +130,77 @@ const CornerMarks = () => {
 // ═════════════════════════════════════════════════════════════════════
 // Caption slides — bold, single-message, auditorium-first
 // ═════════════════════════════════════════════════════════════════════
-const CaptionSlide = ({ eyebrow, headline, sub, footnote }) => (
+const CaptionSlide = ({ eyebrow, headline, sub }) => (
     <div className="w-full h-full flex flex-col justify-center px-6 md:px-24">
-        <div className="mb-4" style={{ fontFamily: DL.fontMono, fontSize: 13, letterSpacing: "0.34em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
+        <div className="mb-6" style={{
+            fontFamily: DL.fontMono, fontSize: "clamp(18px, 1.4vw, 22px)",
+            letterSpacing: "0.34em", color: gold, fontWeight: 700,
+            textTransform: "uppercase",
+        }}>
             {eyebrow}
         </div>
         <h1 style={{
             fontFamily: DL.fontDisplay, fontWeight: 800,
-            fontSize: "clamp(52px, 6.4vw, 96px)", lineHeight: 1.02,
-            letterSpacing: "-0.02em", color: paper, maxWidth: 1400,
+            fontSize: "clamp(56px, 6.8vw, 104px)", lineHeight: 1.02,
+            letterSpacing: "-0.02em", color: paper, maxWidth: 1500,
         }}>
             {headline}
         </h1>
         {sub && (
-            <p className="mt-6" style={{
+            <p className="mt-8" style={{
                 fontFamily: DL.fontBody, fontStyle: "italic",
-                fontSize: "clamp(20px, 1.7vw, 28px)",
-                color: gold, maxWidth: 1200, lineHeight: 1.4,
+                fontSize: "clamp(24px, 2.0vw, 34px)",
+                color: gold, maxWidth: 1300, lineHeight: 1.35,
             }}>
                 {sub}
             </p>
-        )}
-        {footnote && (
-            <div className="mt-10" style={{ fontFamily: DL.fontMono, fontSize: 13, letterSpacing: "0.28em", color: "rgba(245,239,230,0.55)", fontWeight: 600, textTransform: "uppercase" }}>
-                {footnote}
-            </div>
         )}
     </div>
 );
 
 // ═════════════════════════════════════════════════════════════════════
-// Screenshot slides — near-full-bleed, minimal chrome
+// Screenshot slides — near-full-bleed, minimal chrome, no small caption
 // ═════════════════════════════════════════════════════════════════════
-const ScreenshotSlide = ({ src, caption }) => (
+const ScreenshotSlide = ({ src }) => (
     <div className="w-full h-full flex flex-col items-center justify-center px-6 md:px-12 py-6">
-        <div className="w-full flex items-center justify-center" style={{ maxHeight: "82vh" }}>
+        <div className="w-full flex items-center justify-center">
             <img
                 src={src}
                 alt=""
                 style={{
-                    maxWidth: "100%", maxHeight: "82vh", height: "auto",
+                    maxWidth: "100%", maxHeight: "86vh", height: "auto",
                     display: "block", objectFit: "contain",
-                    borderRadius: 6,
-                    boxShadow: "0 30px 80px -20px rgba(0,0,0,0.6)",
+                    borderRadius: 8,
+                    boxShadow: "0 40px 90px -20px rgba(0,0,0,0.7)",
                     border: `2px solid ${gold}`,
                     background: paper,
                 }}
                 data-testid="screenshot-img"
             />
         </div>
-        {caption && (
-            <div className="mt-4 text-center" style={{ fontFamily: DL.fontMono, fontSize: 13, letterSpacing: "0.24em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
-                {caption}
-            </div>
-        )}
     </div>
 );
 
 // ═════════════════════════════════════════════════════════════════════
-// Final promise
+// Final promise — no small text
 // ═════════════════════════════════════════════════════════════════════
 const SlideClose = () => (
     <div className="w-full h-full flex flex-col items-center justify-center px-6 md:px-16 text-center">
-        <div className="mb-6" style={{ fontFamily: DL.fontMono, fontSize: 13, letterSpacing: "0.34em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
-            The Promise
-        </div>
-        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(44px, 5.6vw, 84px)", color: paper, lineHeight: 1.04, letterSpacing: "-0.02em" }}>
+        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(48px, 6vw, 92px)", color: paper, lineHeight: 1.04, letterSpacing: "-0.02em" }}>
             Simpler for players.
         </div>
-        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(44px, 5.6vw, 84px)", color: gold, lineHeight: 1.04, letterSpacing: "-0.02em" }}>
+        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(48px, 6vw, 92px)", color: gold, lineHeight: 1.04, letterSpacing: "-0.02em" }}>
             Faster for divisions.
         </div>
-        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(44px, 5.6vw, 84px)", color: paper, lineHeight: 1.04, letterSpacing: "-0.02em" }}>
+        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(48px, 6vw, 92px)", color: paper, lineHeight: 1.04, letterSpacing: "-0.02em" }}>
             Cleaner for MPCA.
         </div>
-        <div className="mt-14" style={{ fontFamily: DL.fontMono, fontSize: 14, letterSpacing: "0.34em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
-            Thank you · Questions welcome
+        <div className="mt-16" style={{
+            fontFamily: DL.fontMono, fontSize: "clamp(18px, 1.5vw, 22px)",
+            letterSpacing: "0.34em", color: gold, fontWeight: 700,
+            textTransform: "uppercase",
+        }}>
+            Thank you
         </div>
     </div>
 );
@@ -215,8 +209,8 @@ const SlideClose = () => (
 // Deck spec — 8 slides
 // ═════════════════════════════════════════════════════════════════════
 const SLIDES = [
-    // 1 · Live login opener
-    { render: () => <SlideLive /> },
+    // 1 · Mass-audience cover — logo + welcome, no product screenshot
+    { render: () => <SlideCover /> },
 
     // 2 · Players caption
     { render: () => (
@@ -227,7 +221,7 @@ const SLIDES = [
         />
     )},
     // 3 · Players screenshot
-    { render: () => <ScreenshotSlide src="/deck-screenshots/public_reg_docs_first.png" caption="The player's registration link" /> },
+    { render: () => <ScreenshotSlide src="/deck-screenshots/public_reg_docs_first.png" /> },
 
     // 4 · Players AI caption
     { render: () => (
@@ -237,8 +231,8 @@ const SLIDES = [
             sub="AI reads every document, flags any issue, and lets the player fix it right away."
         />
     )},
-    // 5 · Players AI screenshot (flagged, not fraud)
-    { render: () => <ScreenshotSlide src="/deck-screenshots/player_ai_flagged.png" caption="AI · Flagged for Review · cites the exact issue" /> },
+    // 5 · Players AI screenshot
+    { render: () => <ScreenshotSlide src="/deck-screenshots/player_ai_flagged.png" /> },
 
     // 6 · Grants caption
     { render: () => (
@@ -248,8 +242,8 @@ const SLIDES = [
             sub="Divisions see every scheme they qualify for, with the exact documents required."
         />
     )},
-    // 7 · Grants screenshot (Division Secretary view · Claim buttons)
-    { render: () => <ScreenshotSlide src="/deck-screenshots/schemes_division.png" caption="Division Secretary · Schemes Register · Claim buttons" /> },
+    // 7 · Grants screenshot
+    { render: () => <ScreenshotSlide src="/deck-screenshots/schemes_division.png" /> },
 
     // 8 · Close
     { render: () => <SlideClose /> },
@@ -287,6 +281,10 @@ export default function LaunchPresentation() {
             <style>{`
                 @keyframes fadeInSlide { 0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: none; } }
                 .slide-fade { animation: fadeInSlide 500ms cubic-bezier(0.22,1,0.36,1) both; }
+                @keyframes coverPulse {
+                    0%, 100% { transform: scale(1); }
+                    50%      { transform: scale(1.035); }
+                }
             `}</style>
 
             {/* Slim gold progress bar */}
@@ -298,17 +296,16 @@ export default function LaunchPresentation() {
                 }} />
             </div>
 
-            {/* Slide counter + exit (top-right) */}
-            <div style={{ position: "absolute", top: 18, right: 22, display: "flex", gap: 14, alignItems: "center", zIndex: 5 }}>
-                <span data-testid="launch-counter"
-                    style={{ fontFamily: DL.fontMono, fontSize: 12, letterSpacing: "0.28em", color: gold, fontWeight: 700, opacity: 0.7 }}>
+            {/* Exit only (counter removed — was too small for auditorium display) */}
+            <div style={{ position: "absolute", top: 22, right: 26, display: "flex", gap: 14, alignItems: "center", zIndex: 5 }}>
+                <span data-testid="launch-counter" aria-label={`Slide ${slide + 1} of ${total}`} style={{ display: "none" }}>
                     {String(slide + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
                 </span>
                 <Link to="/dashboard" data-testid="launch-exit" title="Exit deck"
-                    style={{ color: gold, opacity: 0.55, transition: "opacity 200ms" }}
+                    style={{ color: gold, opacity: 0.4, transition: "opacity 200ms" }}
                     onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
-                    onMouseLeave={(e) => e.currentTarget.style.opacity = 0.55}>
-                    <X size={20} strokeWidth={2} />
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = 0.4}>
+                    <X size={22} strokeWidth={2} />
                 </Link>
             </div>
 

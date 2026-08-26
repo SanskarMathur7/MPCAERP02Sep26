@@ -355,10 +355,20 @@ function DOC_ROSTER(form) {
 const DocStatusPill = ({ status }) => {
     if (!status) return null;
     const s = status.status;
-    if (s === "verified") return <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold bg-mpca-green-dark text-mpca-ivory px-2 py-0.5" data-testid="doc-status-verified"><CheckCircle2 size={9} /> AI verified</span>;
-    if (s === "warning") return <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold bg-mpca-brass text-mpca-ivory px-2 py-0.5" data-testid="doc-status-warning"><AlertTriangle size={9} /> Needs review</span>;
-    if (s === "error") return <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold bg-mpca-oxblood text-mpca-ivory px-2 py-0.5" data-testid="doc-status-error"><XCircle size={9} /> Problem</span>;
-    return null;
+    // Compact dot + short label. Sits on the "Uploaded ✓" row (right side),
+    // never on the header row — so the doc label always has full width.
+    const tone =
+        s === "verified" ? { dot: "bg-mpca-green-dark", txt: "text-mpca-green-dark", label: "Verified", testid: "doc-status-verified" } :
+        s === "warning"  ? { dot: "bg-mpca-brass",     txt: "text-mpca-brass",     label: "Review",   testid: "doc-status-warning"  } :
+        s === "error"    ? { dot: "bg-mpca-oxblood",   txt: "text-mpca-oxblood",   label: "Fix",      testid: "doc-status-error"    } :
+        null;
+    if (!tone) return null;
+    return (
+        <span className={`inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold ${tone.txt}`} data-testid={tone.testid}>
+            <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
+            {tone.label}
+        </span>
+    );
 };
 
 const DocumentsGrid = ({ form, setField, upload, uploadingKey, perDocStatus, token }) => {
@@ -369,29 +379,37 @@ const DocumentsGrid = ({ form, setField, upload, uploadingKey, perDocStatus, tok
                 <ShieldAlert size={11} className="inline mr-1" /> PDF / JPG / PNG · Max 5 MB per file · Aadhaar must be issued/updated within last 3 years.
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {roster.map(([key, label, required]) => (
+                {roster.map(([key, label, required]) => {
+                    const st = perDocStatus[key];
+                    const hasIssue = st?.issues?.length > 0;
+                    return (
                     <div key={key} className="border border-mpca-brass/30 bg-mpca-parchment p-3" data-testid={`doc-tile-${key}`}>
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                            <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark min-w-0 truncate">
-                                {label}{required && <span className="text-mpca-oxblood ml-1">*</span>}
-                            </div>
-                            <DocStatusPill status={perDocStatus[key]} />
+                        {/* Header · always full-width label, no pill competing for space */}
+                        <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-1.5">
+                            {label}{required && <span className="text-mpca-oxblood ml-1">*</span>}
                         </div>
-                        {perDocStatus[key]?.issues?.length > 0 && (
-                            <div className="text-[10px] text-mpca-oxblood italic mb-1" data-testid={`doc-issues-${key}`}>
-                                {perDocStatus[key].issues[0].slice(0, 140)}
-                            </div>
-                        )}
                         {form[key] ? (
-                            <div className="flex items-center justify-between text-[11px] gap-2">
-                                <a href={form[key]} target="_blank" rel="noreferrer" className="text-mpca-oxblood underline truncate">Uploaded ✓</a>
-                                <label className="flex items-center gap-1 cursor-pointer text-[9px] uppercase tracking-widest text-mpca-brass hover:text-mpca-oxblood">
-                                    <RefreshCw size={9} /> Replace
-                                    <input type="file" accept="image/*,application/pdf" className="hidden"
-                                           onChange={(e) => upload(key, e.target.files?.[0])}
-                                           data-testid={`pr-pub-reupload-${key}`} />
-                                </label>
-                            </div>
+                            <>
+                                {/* Row 1 · Uploaded + status pill + Replace */}
+                                <div className="flex items-center justify-between gap-2 text-[11px]">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <a href={form[key]} target="_blank" rel="noreferrer" className="text-mpca-oxblood underline truncate">Uploaded ✓</a>
+                                        <DocStatusPill status={st} />
+                                    </div>
+                                    <label className="flex items-center gap-1 cursor-pointer text-[9px] uppercase tracking-widest text-mpca-brass hover:text-mpca-oxblood shrink-0">
+                                        <RefreshCw size={9} /> Replace
+                                        <input type="file" accept="image/*,application/pdf" className="hidden"
+                                               onChange={(e) => upload(key, e.target.files?.[0])}
+                                               data-testid={`pr-pub-reupload-${key}`} />
+                                    </label>
+                                </div>
+                                {/* Row 2 · Comment (only when an issue exists) */}
+                                {hasIssue && (
+                                    <div className={`mt-1.5 text-[10px] leading-snug ${st.status === "error" ? "text-mpca-oxblood" : "text-mpca-brass"}`} data-testid={`doc-issues-${key}`}>
+                                        {st.issues[0].slice(0, 160)}
+                                    </div>
+                                )}
+                            </>
                         ) : (
                             <label className="flex items-center gap-2 text-[11px] cursor-pointer">
                                 <Upload size={11} className="text-mpca-brass" />
@@ -403,7 +421,8 @@ const DocumentsGrid = ({ form, setField, upload, uploadingKey, perDocStatus, tok
                             </label>
                         )}
                     </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

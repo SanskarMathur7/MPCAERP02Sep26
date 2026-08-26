@@ -263,6 +263,9 @@ export default function PublicPlayerRegistration() {
                                 <DocumentContextTogglesBlock form={form} setField={setField} />
                                 <MpcaFinalApprovalNotice />
                                 <ConsentBlock form={form} setField={setField} />
+                                <div className="text-center text-[11px] text-mpca-brass italic -mb-2" data-testid="submit-approval-caption">
+                                    By submitting, you understand this form is <strong className="text-mpca-oxblood not-italic">subject to final approval by MPCA</strong>. AI verification is only an assistive check.
+                                </div>
                                 <button
                                     type="submit"
                                     disabled={submitting || !form.consent || !form.dpdp_consent || !aiReport}
@@ -271,6 +274,9 @@ export default function PublicPlayerRegistration() {
                                 >
                                     {submitting ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />} Submit Registration to MPCA
                                 </button>
+                                <div className="text-center text-[10px] text-mpca-gray-dark -mt-1" data-testid="submit-hint">
+                                    Your registration will be reviewed and finally approved by MPCA before your player ID is issued.
+                                </div>
                             </>
                         )}
                     </form>

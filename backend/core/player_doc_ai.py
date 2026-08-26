@@ -129,12 +129,13 @@ You receive a set of KYC documents uploaded by a prospective cricket player. For
 
 Documents you may receive (each labelled with its role in the attached order):
   1. Aadhaar card (unmasked)
-  2. PAN card
-  3. Birth certificate (may contain a QR code linking to dc.crsorgi.gov.in)
-  4. Marksheet PDF — expected to contain 3 marksheets from 3 distinct academic years
-  5. Cancelled cheque
-  6. Address proof
-  7. Passport photo
+  2. Aadhaar Update History (a UIDAI-issued PDF listing every enrolment/update record for a UID, most recent first — each record shows "Date of Enrolment/Update: DD/MM/YYYY" and a Type such as "Biometric" / "Demographic")
+  3. PAN card
+  4. Birth certificate (may contain a QR code linking to dc.crsorgi.gov.in)
+  5. Marksheet PDF — expected to contain 3 marksheets from 3 distinct academic years
+  6. Cancelled cheque
+  7. Address proof
+  8. Passport photo
 
 You are STRICTLY an information-extractor + fraud sniffer. You NEVER approve or reject.
 
@@ -148,6 +149,15 @@ Respond with a SINGLE JSON object — no prose, no code fences. Shape:
     "extracted_gender": "<M/F/Other or null>",
     "issued_or_updated_year": "<YYYY or null>",
     "tampering_signals": ["<any splicing / font-mismatch / photocopy defects>"],
+    "ocr_confidence": 0.0..1.0
+  },
+  "aadhaar_update_history": {
+    "latest_update_date": "<YYYY-MM-DD of the most recent enrolment/update record, or null>",
+    "latest_update_type": "<Biometric | Demographic | Enrolment | Update | null>",
+    "records_count": <integer number of records visible in the PDF>,
+    "uid_last4": "<last 4 digits of UID shown at the top of the history, or null>",
+    "extracted_name": "<name on the latest record or null>",
+    "extracted_dob": "<YYYY-MM-DD from the latest record or null>",
     "ocr_confidence": 0.0..1.0
   },
   "pan": {
@@ -319,12 +329,38 @@ def _rules_engine(reg_doc: Dict[str, Any], ext: Dict[str, Any]) -> Dict[str, Any
                 f"DOB mismatch: form {pd['dob']}, Aadhaar {aad_ocr['extracted_dob']}."
             )
     aad_year = (aad_ocr.get("issued_or_updated_year") or "").strip()
-    if aad_year and aad_year.isdigit():
+    # Feb 2026 · If an Aadhaar Update History PDF was uploaded and Gemini
+    # extracted a latest update date, prefer THAT over the year printed on
+    # the Aadhaar card — the printed year is the enrolment year, but the
+    # update history reflects the most recent biometric/demographic update,
+    # which is what MPCA's "within last 3 years" policy actually cares about.
+    auh = ext.get("aadhaar_update_history", {}) or {}
+    auh_latest = (auh.get("latest_update_date") or "").strip()
+    auh_year: Optional[str] = None
+    if auh_latest and len(auh_latest) >= 4:
+        try:
+            auh_year = str(datetime.strptime(auh_latest[:10], "%Y-%m-%d").year)
+        except Exception:
+            # Accept bare year strings too
+            if auh_latest[:4].isdigit():
+                auh_year = auh_latest[:4]
+    effective_year = auh_year or aad_year
+    if effective_year and effective_year.isdigit():
         this_year = date.today().year
-        if this_year - int(aad_year) > 3:
+        if this_year - int(effective_year) > 3:
+            src = (
+                f"Aadhaar Update History latest update {auh_latest}"
+                if auh_year else f"Aadhaar card printed year {aad_year}"
+            )
             warnings.append(
-                f"Aadhaar appears to have been issued/updated in {aad_year} — "
+                f"Aadhaar was last updated in {effective_year} ({src}) — "
                 f"MPCA policy expects it within the last 3 years."
+            )
+        elif auh_year:
+            # Explicit positive confirmation when history overrides the card
+            info.append(
+                f"Aadhaar Update History confirms latest update on {auh_latest} "
+                f"({auh.get('latest_update_type') or 'update'})."
             )
 
     # ── 4. Birth certificate QR ──────────────────────────────────────

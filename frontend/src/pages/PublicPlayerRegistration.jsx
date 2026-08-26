@@ -172,7 +172,7 @@ export default function PublicPlayerRegistration() {
 
     // ── Derived helpers ──
     const uploadedCount = useMemo(
-        () => DOC_ROSTER(form).filter(([k]) => form[k]).length,
+        () => DOC_ROSTER(form).filter(([k]) => form[k]).length + (form.other_docs || []).length,
         [form],
     );
 
@@ -240,6 +240,14 @@ export default function PublicPlayerRegistration() {
                             upload={upload}
                             uploadingKey={uploadingKey}
                             perDocStatus={aiReport?.per_doc_status || {}}
+                            token={token}
+                        />
+                        <OtherDocsBlock
+                            form={form}
+                            setField={setField}
+                            uploadingKey={uploadingKey}
+                            setUploadingKey={setUploadingKey}
+                            invalidateReport={() => { setAiReport(null); setAiFilledFields(new Set()); }}
                             token={token}
                         />
 
@@ -424,6 +432,64 @@ const DocumentsGrid = ({ form, setField, upload, uploadingKey, perDocStatus, tok
                     );
                 })}
             </div>
+        </div>
+    );
+};
+
+// ─── Other Documents — free-form multi-upload with player-supplied labels ──
+const OtherDocsBlock = ({ form, setField, uploadingKey, setUploadingKey, invalidateReport, token }) => {
+    const list = form.other_docs || [];
+
+    const addOne = async (file) => {
+        if (!file) return;
+        const label = window.prompt("Label this document (e.g. Domicile certificate, NOC letter, Sports certificate)");
+        if (!label || !label.trim()) return;
+        setUploadingKey("__other__");
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("related_type", "player_registration_public");
+            fd.append("registration_token", token);
+            const { data } = await public_api.post("/public/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+            setField("other_docs", [...list, { label: label.trim(), url: data.url }]);
+            invalidateReport();
+        } catch (e) { alert(e?.response?.data?.detail || e.message); }
+        finally { setUploadingKey(null); }
+    };
+
+    const removeOne = (i) => {
+        setField("other_docs", list.filter((_, x) => x !== i));
+        invalidateReport();
+    };
+
+    return (
+        <div className="border border-dashed border-mpca-brass/60 bg-mpca-parchment p-3" data-testid="other-docs-block">
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-2 flex items-center gap-1.5">
+                <Upload size={11} className="text-mpca-brass" /> Other supporting documents (optional)
+            </div>
+            {list.length === 0 && (
+                <div className="text-[10px] text-mpca-gray-dark italic mb-2">
+                    Anything else that supports your registration — domicile certificate, sports certificates, previous NOCs, etc. AI will read them alongside the required documents.
+                </div>
+            )}
+            {list.map((d, i) => (
+                <div key={i} className="flex items-center gap-2 text-[11px] mb-1.5 border border-mpca-brass/20 bg-mpca-parchment px-2 py-1.5" data-testid={`other-doc-row-${i}`}>
+                    <FileCheck2 size={11} className="text-mpca-green-dark shrink-0" />
+                    <span className="flex-1 truncate text-mpca-charcoal font-semibold">{d.label}</span>
+                    <a href={d.url} target="_blank" rel="noreferrer" className="text-mpca-oxblood underline text-[10px] uppercase tracking-widest">View</a>
+                    <button type="button" onClick={() => removeOne(i)} className="text-[9px] uppercase text-mpca-brass hover:text-mpca-oxblood tracking-widest" data-testid={`other-doc-remove-${i}`}>
+                        Remove
+                    </button>
+                </div>
+            ))}
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer mt-2 text-mpca-brass hover:text-mpca-oxblood">
+                <Upload size={11} />
+                <input type="file" accept="image/*,application/pdf"
+                       onChange={(e) => { addOne(e.target.files?.[0]); e.target.value = ""; }}
+                       data-testid="pr-pub-upload-other" />
+                {uploadingKey === "__other__" && <Loader2 size={11} className="animate-spin" />}
+                <span className="italic">+ Add another document</span>
+            </label>
         </div>
     );
 };

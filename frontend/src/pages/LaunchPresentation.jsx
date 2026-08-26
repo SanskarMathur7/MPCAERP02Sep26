@@ -1,319 +1,499 @@
 /**
- * /launch-presentation — MPCA ERP · 10-minute operator-first pitch (Iter 130)
- * ─────────────────────────────────────────────────────────────────────────
- * Companion to /storyline. Same content library, same slide renderers, same
- * heritage design — but re-sequenced for a value-first audience (admin /
- * committee / operator). The original /storyline pitch (thesis-first, 15 min)
- * stays untouched.
+ * /launch-presentation — MPCA ERP · Stakeholder Pitch Deck (Iter 131)
+ * ──────────────────────────────────────────────────────────────────
+ * Feb 2026 · Complete rewrite requested by user. Eight tight slides
+ * (~90s each) built for a live 10-minute stakeholder presentation to
+ * Divisions, players and the MPCA committee.
  *
- * Sequence:
- *   1. Basic overview of the ERP (sidebar + dashboard mockup)
- *   2. Player Registration — the pipeline, then the deep-dive
- *   3. Grant Claims — the pipeline, then the deep-dive
- *   4. Tournament Management — setup / fixtures / reimbursement
- *   5. Squad Selection — where the tournament is nearly lost
- *   6. Pain-points we solve · why this operating model works
- *   7. The standing offer — MPCA moved first
+ * Slide arc (confirmed with user):
+ *   1. Login (browser chrome frame + MPCA logo + ERP name overlay)
+ *   2. What is this — 6-module overview
+ *   3. Players — AI KYC verification
+ *   4. Grants — AI review + MPCA approval (real ERP screenshots)
+ *   5. Tournaments — one workspace, every fact (real ERP screenshot)
+ *   6. AI Audit — invoice-by-invoice audit (real ERP screenshot)
+ *   7. Impact — numbers before/after
+ *   8. Sign-off — the standing offer
  *
- * ~9 slides · ~65 seconds each · ~10 minutes total.
+ * The original /storyline deck is untouched.
  */
-import React, { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { DL } from "@/lib/designSystem";
 import {
-    ArrowRight, ArrowLeft, X,
-    Users, HandCoins, Trophy, Landmark, ShieldCheck, GitBranch,
-    FileCheck2, ScrollText, Calendar, ClipboardList, BarChart3, Wallet,
+    ArrowRight, ArrowLeft, X, Sparkles, ShieldCheck, FileCheck2,
+    Users, HandCoins, Trophy, Landmark, BarChart3, ClipboardList,
+    Lock,
 } from "lucide-react";
-import {
-    WhySlide, BucketIntroSlide, FeatureSlide, ImpactSlide, CtaSlide, NavBtn,
-    emeraldBg,
-} from "./Storyline";
+import { DL } from "@/lib/designSystem";
 
 // ═════════════════════════════════════════════════════════════════════
-// Slide data — 9 slides · operator-first sequence
+// Palette shortcut
 // ═════════════════════════════════════════════════════════════════════
-
-const SLIDES = [
-    // ═══════════════════════════════════════════════════════════════
-    // 01 · Overview — brief; deck focus is players + grants
-    // ═══════════════════════════════════════════════════════════════
-    {
-        kind: "overview",
-        eyebrow: "01 · The MPCA ERP",
-        title: "For players and divisions. Registration and grants — solved.",
-        subtitle: "Two backlogs that shape every season, now on one platform. Everything else — tournaments, accounting, governance — is quietly handled the same way.",
-        modules: [
-            { icon: Users,        label: "Player Registration",  sub: "3,000+ players · KYC · eligibility" },
-            { icon: HandCoins,    label: "Grant Claims",         sub: "33 schemes · claim → payment" },
-            { icon: Trophy,       label: "Tournament Claims",    sub: "40+ tournaments · invoices" },
-            { icon: ClipboardList,label: "Squad Selection",       sub: "Selection console · signed PDFs" },
-            { icon: Landmark,     label: "Governance",           sub: "Maker-Checker · audit trail" },
-            { icon: BarChart3,    label: "Reporting",            sub: "Finance · exports · dashboards" },
-        ],
-    },
-
-    // ═══════════════════════════════════════════════════════════════
-    // FOCUS 1 · PLAYER REGISTRATION (audience: players + divisions)
-    // ═══════════════════════════════════════════════════════════════
-    {
-        kind: "bucket_intro",
-        bucketId: "players",
-        bucketLabel: "Focus 01 · Player Registration",
-        eyebrow: "02 · The Registration Problem",
-        icon: Users,
-        title: "The player pipeline was manual from Aadhaar to Ranji.",
-        subtitle: "One DOB typo. One wrong division. Three months later — a disqualification.",
-        pains: [
-            "KYC fields typed by hand · scans re-uploaded three times",
-            "Name and DOB mismatches missed under pressure",
-            "34 age brackets on a spreadsheet · every reviewer reads it differently",
-            "Corrections chased by phone, WhatsApp, follow-up emails",
-        ],
-        aiCount: 2,
-        aiPreview: "AI reads every document. The engine walks every rule. Every verdict cites the exact document that backed it.",
-    },
-    // Slide 3 · Player · AI Verification (real ERP mockup)
-    {
-        kind: "feature",
-        bucketId: "players",
-        icon: ShieldCheck,
-        eyebrow: "Players · AI Verification",
-        featureName: "AI Eligibility Engine · Verification Trail",
-        problem: "Reviewers guessed. No two verdicts ever matched.",
-        aiVerb: "REASONS & RECOMMENDS",
-        aiDescription: "AI reads every KYC document. The engine walks 8+ eligibility rules against every uploaded scan. Missing form fields? AI-extracted values from Aadhaar / marksheet are promoted automatically. Every verdict cites the exact document that backed it — QR-verified, district-matched, DOB-cross-checked.",
-        metric: { before: "15–30 min/doc", after: "seconds", label: "per player · verification time" },
-        seasonSave: "≈ 450 staff-hours · zero post-hoc disqualifications",
-        dividend: "= selectors focus on cricket, reviewers focus on judgement",
-        livePage: { label: "Player Detail · Verification Trail", path: "/players" },
-        mockup: "player",
-    },
-    // Slide 4 · Player · Correction Loop (mockup showing email + player page)
-    {
-        kind: "feature",
-        bucketId: "players",
-        icon: FileCheck2,
-        eyebrow: "Players · Correction Loop",
-        featureName: "Correction Request · Tokenised Player Link",
-        problem: "Registration errors triggered phone calls, WhatsApp, resubmissions from scratch.",
-        aiVerb: "FLAGS & INVITES CORRECTION",
-        aiDescription: "Reviewer flags specific fields and documents · writes one note · Send. Player gets email + SMS with a single-use tokenised link (no login). Only flagged fields are editable. Player resubmits → reviewer sees the corrected data with a full diff.",
-        metric: { before: "3–5 days back-and-forth", after: "under 24 hours", label: "correction cycle" },
-        seasonSave: "≈ 200 staff-hours · zero misplaced follow-ups · full audit trail",
-        dividend: "= faster approvals · fewer disgruntled players · Secretariat freed from chasing corrections",
-        livePage: { label: "Registration Review · Request Correction", path: "/player-registrations" },
-        mockup: "correction",
-    },
-
-    // ═══════════════════════════════════════════════════════════════
-    // FOCUS 2 · GRANT CLAIMS (audience: divisions)
-    // ═══════════════════════════════════════════════════════════════
-    {
-        kind: "bucket_intro",
-        bucketId: "grants",
-        bucketLabel: "Focus 02 · Grant Claims",
-        eyebrow: "03 · The Grants Problem",
-        icon: HandCoins,
-        title: "Every rupee has a scheme number. Every claim has a story.",
-        subtitle: "33 schemes across 7 categories. Old flow: circulars, printouts, inbox chains.",
-        pains: [
-            "Divisions guessed which scheme applied · called MPCA to confirm",
-            "MPCA opened every claim one at a time — even the boring ones",
-            "8-week approval cycles · claimants chased status by phone",
-            "Small variances hidden in 60-line invoices",
-        ],
-        aiCount: 2,
-        aiPreview: "AI reads the claim, cites the scheme, writes per-document comments. MPCA bulk-approves the greens, opens only the ambers.",
-    },
-    // Slide 6 · Grants · AI Review (REAL ERP screenshot)
-    {
-        kind: "feature",
-        bucketId: "grants",
-        icon: ShieldCheck,
-        eyebrow: "Grants · AI Review",
-        featureName: "Every Claim · Auto-Verified Against Its Scheme",
-        problem: "Reviewers opened 7 documents, cross-checked 6 rates, wrote nothing down.",
-        aiVerb: "READS EVERY DOC · CITES EVERY LINE",
-        aiDescription: "Claim submitted → AI reads every attached document, extracts the values, compares against the scheme's rate card + eligibility conditions, writes a per-document comment. Amber flags surface variances (ground rate exceeded by ₹4,500) before any human opens the file.",
-        metric: { before: "45 min/claim", after: "≤ 45 seconds", label: "per claim · AI comment generation" },
-        seasonSave: "≈ 350 staff-hours · every claim reviewed the same way",
-        dividend: "= reviewers open only the flagged files · greens sail through",
-        livePage: { label: "Claim Detail · AI Review", path: "/claims" },
-        mockup: "image:/deck-screenshots/claim_detail_0142.png",
-    },
-    // Slide 7 · Grants · MPCA Approval (REAL ERP screenshot)
-    {
-        kind: "feature",
-        bucketId: "grants",
-        icon: FileCheck2,
-        eyebrow: "Grants · MPCA Approval",
-        featureName: "Approver Queue · Bulk-Approve the Cleared, Review the Ambers",
-        problem: "MPCA opened every claim, one at a time — even the boring ones.",
-        aiVerb: "SORTS · RECOMMENDS · BULK-APPROVES",
-        aiDescription: "The approver queue groups claims by AI verdict — green (cleared), amber (variance), red (issue). One click bulk-approves the greens. Ambers open with the AI's specific citation. Every decision is signed, Maker-Checker logged, immutable. Claimants paid weeks earlier.",
-        metric: { before: "3–4 days", after: "under 30 minutes", label: "MPCA daily approval batch" },
-        seasonSave: "≈ 250 approver-hours · zero missed claims",
-        dividend: "= claimants paid weeks earlier · Secretariat freed from data entry",
-        livePage: { label: "MPCA Approver Console", path: "/claims" },
-        mockup: "image:/deck-screenshots/claims_queue.png",
-    },
-
-    // ═══════════════════════════════════════════════════════════════
-    // Slide 8 · Also handles — short summary for accounting / governance
-    // ═══════════════════════════════════════════════════════════════
-    {
-        kind: "feature",
-        bucketId: "also",
-        icon: Landmark,
-        eyebrow: "04 · Also Handled — Same Discipline",
-        featureName: "Tournaments · Accounting · Governance",
-        problem: "The two backlogs above aren't the only backlogs. But they use the same operating model.",
-        aiVerb: "SAME PATTERN · APPLIED EVERYWHERE",
-        aiDescription: "Every tournament opens one workspace (Basics, Fixtures, Officials, Squads, Budget, Finance, Closure) — 12 tiles, one identity. Invoices are AI-audited the same way as grant claims. Accounting rolls up automatically. Governance (Maker-Checker, meetings, minutes) has the same signed audit trail. Nothing sits in an inbox.",
-        metric: { before: "12 apps + 40 emails", after: "1 workspace", label: "per tournament" },
-        seasonSave: "≈ 800 staff-hours · every fact in one place · every decision signed",
-        dividend: "= divisions and MPCA share one source of truth · zero \"which version is final?\"",
-        livePage: { label: "Tournament · Workspace View", path: "/tournaments" },
-        mockup: "image:/deck-screenshots/tournament_workspace.png",
-    },
-
-    // ═══════════════════════════════════════════════════════════════
-    // Slide 9 · The standing offer — CTA
-    // ═══════════════════════════════════════════════════════════════
-    {
-        kind: "cta",
-        eyebrow: "05 · The Standing Offer",
-        title: "Every association runs the same backlogs. MPCA just wrote the answer.",
-        body: "One state. Ten divisions. One codebase. One audit trail. Rewritable per season, portable to any board.",
-        body2: null,
-        stats: [
-            { value: "10",   label: "MPCA divisions · unified under one framework" },
-            { value: "33",   label: "Grant schemes · one signed master doc" },
-            { value: "3,000+", label: "Players · one KYC-verified register" },
-            { value: "0",    label: "Vendor lock-in · every line owned by MPCA" },
-        ],
-        quote: "MPCA moved first. Players and Divisions no longer wait on paperwork.",
-    },
-];
+const emerald    = DL.emerald;         // #0D3B2E
+const emeraldBg  = `linear-gradient(155deg, ${DL.emerald} 0%, ${DL.ink} 100%)`;
+const gold       = DL.gold;
+const oxblood    = DL.danger;
+const paper      = DL.paper;
+const ivory      = DL.ivory;
 
 // ═════════════════════════════════════════════════════════════════════
-// Custom overview slide (only used on this deck)
+// Slide 1 · Login (browser chrome frame + logo overlay)
 // ═════════════════════════════════════════════════════════════════════
-
-const OverviewSlide = ({ data }) => (
-    <div>
-        {/* Eyebrow */}
-        <div
-            className="mb-3"
-            style={{
-                fontFamily: DL.fontMono, fontSize: 11, letterSpacing: "0.28em",
-                textTransform: "uppercase", color: DL.gold, fontWeight: 700,
-            }}
-            data-testid="launch-eyebrow"
-        >
-            {data.eyebrow}
+const SlideLogin = () => (
+    <div className="w-full h-full flex flex-col items-center justify-center px-6 md:px-16 relative">
+        {/* Overline */}
+        <div className="mb-4 flex items-center gap-3" style={{ fontFamily: DL.fontMono, fontSize: 11, letterSpacing: "0.32em", color: gold, fontWeight: 700 }}>
+            <div style={{ width: 40, height: 1, background: gold }} />
+            MADHYA PRADESH CRICKET ASSOCIATION
+            <div style={{ width: 40, height: 1, background: gold }} />
         </div>
 
+        {/* Big title */}
         <h1
-            className="mb-3"
+            className="text-center mb-3"
             style={{
                 fontFamily: DL.fontDisplay, fontWeight: 800,
-                fontSize: "clamp(28px, 3.4vw, 46px)", lineHeight: 1.1, letterSpacing: "-0.01em",
-                color: DL.paper, maxWidth: 1050,
+                fontSize: "clamp(38px, 5vw, 68px)", lineHeight: 1.02,
+                letterSpacing: "-0.02em", color: paper,
             }}
-            data-testid="launch-title"
         >
-            {data.title}
+            MPCA <span style={{ color: gold }}>Enterprise Resource Planning</span>
         </h1>
         <p
-            className="mb-8"
+            className="text-center mb-8 max-w-3xl"
             style={{
                 fontFamily: DL.fontBody, fontStyle: "italic",
-                fontSize: "clamp(15px, 1.4vw, 19px)",
-                color: "rgba(245,239,230,0.72)", maxWidth: 780,
+                fontSize: "clamp(15px, 1.4vw, 20px)",
+                color: "rgba(245,239,230,0.72)",
             }}
         >
-            {data.subtitle}
+            One state · ten divisions · one platform for players, grants, tournaments and governance.
         </p>
 
-        <div className="grid grid-cols-[280px_1fr] gap-6 items-start">
-            {/* Left: sidebar mockup */}
+        {/* Browser chrome around the login screenshot */}
+        <div
+            className="w-full max-w-[1080px] relative"
+            style={{
+                borderRadius: 12, overflow: "hidden",
+                boxShadow: "0 30px 80px -20px rgba(0,0,0,0.6), 0 8px 24px -8px rgba(0,0,0,0.4)",
+                border: `1px solid rgba(184,131,40,0.35)`,
+            }}
+        >
+            {/* Browser chrome bar */}
             <div
-                style={{
-                    background: "#0D3B2E", border: `1px solid ${DL.gold}55`,
-                    padding: "16px 12px", borderRadius: 3,
-                    boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
-                }}
+                className="flex items-center gap-2 px-4 py-2.5"
+                style={{ background: "#E9E2D2", borderBottom: `1px solid ${DL.ruleStrong}` }}
             >
-                <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", color: DL.gold, fontWeight: 700, marginBottom: 12, paddingLeft: 8 }}>
-                    MPCA · ERP
+                <div className="flex gap-1.5">
+                    <div style={{ width: 12, height: 12, borderRadius: 6, background: "#E36363" }} />
+                    <div style={{ width: 12, height: 12, borderRadius: 6, background: "#E6B84D" }} />
+                    <div style={{ width: 12, height: 12, borderRadius: 6, background: "#4EB86A" }} />
                 </div>
-                <div style={{ height: 1, background: `${DL.gold}30`, marginBottom: 10 }} />
-                {data.modules.map((m, i) => {
-                    const Icon = m.icon;
-                    return (
-                        <div
-                            key={i}
-                            style={{
-                                display: "flex", alignItems: "center", gap: 10,
-                                padding: "9px 10px",
-                                background: i === 1 ? "rgba(184,131,40,0.16)" : "transparent",
-                                borderLeft: i === 1 ? `2px solid ${DL.gold}` : "2px solid transparent",
-                                marginBottom: 2, borderRadius: 2,
-                            }}
-                        >
-                            <Icon size={13} style={{ color: i === 1 ? DL.gold : "rgba(245,239,230,0.7)" }} />
-                            <div style={{ fontFamily: DL.fontBody, fontSize: 12, color: i === 1 ? DL.paper : "rgba(245,239,230,0.75)", fontWeight: i === 1 ? 700 : 500 }}>
-                                {m.label}
-                            </div>
-                        </div>
-                    );
-                })}
+                <div className="ml-4 flex-1 flex items-center gap-2 px-3 py-1 rounded" style={{ background: "rgba(255,255,255,0.75)", border: `1px solid ${DL.rule}` }}>
+                    <Lock size={11} style={{ color: emerald }} />
+                    <span style={{ fontFamily: DL.fontMono, fontSize: 10, color: DL.ink2, letterSpacing: "0.02em" }}>
+                        https://erp.mpcaonline.com/login
+                    </span>
+                </div>
+                <div className="text-[9px] uppercase tracking-widest font-bold" style={{ fontFamily: DL.fontMono, color: DL.muted }}>
+                    Live
+                </div>
             </div>
-
-            {/* Right: module tiles */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {data.modules.map((m, i) => {
-                    const Icon = m.icon;
-                    return (
-                        <div
-                            key={i}
-                            style={{
-                                background: "rgba(245,239,230,0.04)",
-                                border: `1px solid ${DL.gold}33`,
-                                padding: "16px 14px", borderRadius: 3,
-                                transition: "all 220ms",
-                            }}
-                            data-testid={`launch-tile-${m.label.replace(/\s+/g, '-').toLowerCase()}`}
-                        >
-                            <Icon size={18} style={{ color: DL.gold, marginBottom: 10 }} />
-                            <div style={{ fontFamily: DL.fontDisplay, fontSize: 15, fontWeight: 700, color: DL.paper, lineHeight: 1.2, marginBottom: 5 }}>
-                                {m.label}
-                            </div>
-                            <div style={{ fontFamily: DL.fontMono, fontSize: 10, color: "rgba(245,239,230,0.55)", lineHeight: 1.4 }}>
-                                {m.sub}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+            {/* Screenshot */}
+            <img
+                src="/deck-screenshots/login_page.png"
+                alt="MPCA ERP Login"
+                style={{ display: "block", width: "100%", height: "auto" }}
+                data-testid="login-screenshot"
+            />
         </div>
 
-        <div className="mt-10 text-center" style={{ maxWidth: 900, marginLeft: "auto", marginRight: "auto" }}>
-            <div style={{ fontFamily: DL.fontMono, fontSize: 11, letterSpacing: "0.22em", color: DL.gold, fontWeight: 700, marginBottom: 6 }}>
-                THE PROMISE OF THIS DECK
+        {/* Footer strip */}
+        <div className="mt-6 flex items-center gap-6" style={{ fontFamily: DL.fontMono, fontSize: 11, letterSpacing: "0.24em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
+            <span>Est. 1957</span>
+            <span style={{ opacity: 0.5 }}>·</span>
+            <span>2026 Digital Era</span>
+            <span style={{ opacity: 0.5 }}>·</span>
+            <span>Built for cricket, run by MPCA</span>
+        </div>
+    </div>
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 2 · What is this (6-module overview)
+// ═════════════════════════════════════════════════════════════════════
+const MODULES = [
+    { icon: Users,        title: "Player Registration", copy: "3,000+ players. AI reads every KYC document, fills the form, flags fraud." },
+    { icon: HandCoins,    title: "Grant Claims",         copy: "33 schemes across 7 categories. AI reviews every claim before a human opens it." },
+    { icon: Trophy,       title: "Tournaments",          copy: "40+ tournaments. One workspace per tournament — fixtures, officials, budget, closure." },
+    { icon: ClipboardList,title: "Squad Selection",       copy: "Selection console with signed PDF verification, AI-driven bias flags." },
+    { icon: Landmark,     title: "Governance",           copy: "Maker-Checker, meetings, minutes — every decision signed and immutable." },
+    { icon: BarChart3,    title: "Reporting",            copy: "Live dashboards. Season-wise finance rollups. Zero end-of-year scramble." },
+];
+
+const SlideOverview = () => (
+    <div>
+        <Eyebrow n="02" text="Overview" />
+        <Title>The ERP that runs MPCA end-to-end.</Title>
+        <Subtitle>Six modules. One database. One audit trail. Rewritable per season.</Subtitle>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-10">
+            {MODULES.map((m, i) => {
+                const Icon = m.icon;
+                return (
+                    <div
+                        key={i}
+                        style={{
+                            background: "rgba(245,239,230,0.05)",
+                            border: `1px solid ${gold}44`,
+                            padding: "20px 18px", borderRadius: 4,
+                            transition: "all 220ms",
+                        }}
+                        data-testid={`overview-tile-${i}`}
+                    >
+                        <div className="flex items-center justify-center w-10 h-10 mb-3" style={{ background: gold, borderRadius: 3 }}>
+                            <Icon size={20} style={{ color: emerald }} strokeWidth={2.2} />
+                        </div>
+                        <div style={{ fontFamily: DL.fontDisplay, fontSize: 17, fontWeight: 700, color: paper, lineHeight: 1.2, marginBottom: 6 }}>
+                            {m.title}
+                        </div>
+                        <div style={{ fontFamily: DL.fontBody, fontSize: 13, color: "rgba(245,239,230,0.7)", lineHeight: 1.5 }}>
+                            {m.copy}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+
+        <div className="mt-10 text-center max-w-3xl mx-auto">
+            <div style={{ fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.28em", color: gold, fontWeight: 700, marginBottom: 8, textTransform: "uppercase" }}>
+                What this deck covers
             </div>
-            <p style={{ fontFamily: DL.fontBody, fontSize: 15, lineHeight: 1.55, color: "rgba(245,239,230,0.85)" }}>
-                Next: <strong>players (AI verification + correction loop) → grants (AI review + MPCA approval).</strong> Then a short close on tournaments, accounting and governance.
+            <p style={{ fontFamily: DL.fontBody, fontSize: 15, lineHeight: 1.6, color: "rgba(245,239,230,0.82)" }}>
+                Next six slides walk through the first three modules in depth — <strong style={{ color: gold }}>Players, Grants, Tournaments</strong> — then land on the impact and the offer.
             </p>
         </div>
     </div>
 );
 
 // ═════════════════════════════════════════════════════════════════════
-// Deck shell (mirrors Storyline shell)
+// Slide 3 · Players · AI KYC Verification
 // ═════════════════════════════════════════════════════════════════════
+const SlidePlayers = () => (
+    <FeatureShell
+        eyebrow="03 · Players · AI KYC"
+        icon={Users}
+        title="Every player. Every document. Verified by AI."
+        subtitle="The registration form now works in reverse — player uploads KYC first, our AI reads it, fills the form and flags fraud before any reviewer opens the file."
+        beforeAfter={{
+            before: "15–30 min / player",
+            after: "under 60 seconds",
+            label: "KYC verification time",
+        }}
+        stat={{ value: "3,000+", label: "players onboarded · one Aadhaar, one submission, one clean audit trail" }}
+        screenshot="/deck-screenshots/player_kyc_ai.png"
+        screenshotCaption="Live ERP · Player Detail → KYC & Documents · AI Suspected Fraud verdict"
+        bullets={[
+            "AI reads Aadhaar, PAN, Birth cert, Marksheets, Cheque — extracts every field",
+            "Cross-document consistency check: name, DOB, photo, QR verification",
+            "Verdicts cite the exact document · every rule leaves an audit line",
+            "Suspected fraud auto-blocks approval — human override requires signed note",
+        ]}
+    />
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 4 · Grants · AI Review + MPCA Approval
+// ═════════════════════════════════════════════════════════════════════
+const SlideGrants = () => (
+    <FeatureShell
+        eyebrow="04 · Grants · AI Review"
+        icon={HandCoins}
+        title="Every claim, auto-verified against its scheme."
+        subtitle="33 schemes. 7 categories. AI reads the claim, cites the scheme, writes per-document comments — MPCA bulk-approves the greens, opens only the ambers."
+        beforeAfter={{
+            before: "45 min / claim",
+            after: "≤ 45 seconds",
+            label: "AI comment generation per claim",
+        }}
+        stat={{ value: "≈ 350 hours saved / season", label: "Secretariat freed from data entry · claimants paid weeks earlier" }}
+        screenshot="/deck-screenshots/claim_detail_0142.png"
+        screenshotCaption="Live ERP · Grant Claims → Claim Detail · AI verdict with rule citation"
+        bullets={[
+            "Every attached document parsed · rate-card matched · variance flagged",
+            "Green (cleared) · Amber (variance) · Red (issue) — sorted for the approver queue",
+            "One click bulk-approves all greens · ambers open with the AI's citation",
+            "Every decision signed, Maker-Checker logged, immutable",
+        ]}
+    />
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 5 · Tournaments · One Workspace
+// ═════════════════════════════════════════════════════════════════════
+const SlideTournaments = () => (
+    <FeatureShell
+        eyebrow="05 · Tournaments"
+        icon={Trophy}
+        title="One tournament. One page. Every fact."
+        subtitle="Basics, fixtures, officials, squads, unified budget, finance console, closure — 10 tiles, one identity, one audit trail. Nothing sits in an inbox."
+        beforeAfter={{
+            before: "12 apps + 40 emails",
+            after: "1 workspace",
+            label: "operating surface per tournament",
+        }}
+        stat={{ value: "40+", label: "tournaments run through the workspace this season" }}
+        screenshot="/deck-screenshots/tournament_detail.png"
+        screenshotCaption="Live ERP · Tournament Detail · 10-step Progression wiring"
+        bullets={[
+            "Tournament progression wiring — every step visible, every gate signed",
+            "Match calendar, ground allocation, officials — all in one place",
+            "Unified budget rolls up MPCA + Division allocations in real time",
+            "Divisions and MPCA share one source of truth — zero 'which version is final?'",
+        ]}
+    />
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 6 · AI Audit · Invoice-by-invoice
+// ═════════════════════════════════════════════════════════════════════
+const SlideAiAudit = () => (
+    <FeatureShell
+        eyebrow="06 · Tournament AI Audit"
+        icon={Sparkles}
+        title="60 invoices reviewed one at a time — by AI, in a minute."
+        subtitle="Every invoice is read, matched against the budget head and rate card, and returned with a specific variance citation. Variance found before payment, not after."
+        beforeAfter={{
+            before: "days / tournament",
+            after: "≤ 60 seconds",
+            label: "full invoice audit",
+        }}
+        stat={{ value: "₹2.29 L", label: "eligible reimbursement · flagged variances kept out" }}
+        screenshot="/deck-screenshots/tournament_ai_audit.png"
+        screenshotCaption="Live ERP · Madhavrao Scindia Trophy · Invoice Audit rollup"
+        bullets={[
+            "8 approved · AI match · 3 needs review · 1 rejected — sorted by AI",
+            "Per-invoice remarks: variance 6.9%, date-outside-window, over-cap detected",
+            "Approver opens only the flagged files — greens auto-cleared",
+            "Every audit line stamped with model, timestamp, confidence",
+        ]}
+    />
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 7 · Impact
+// ═════════════════════════════════════════════════════════════════════
+const IMPACT_STATS = [
+    { value: "≈ 1,800", label: "staff-hours saved / season · across players, grants, tournaments" },
+    { value: "5–7 days",  label: "grant approval cycle · down from 45–60 days" },
+    { value: "0",         label: "post-hoc disqualifications · every eligibility check signed at gate" },
+    { value: "100%",      label: "of financial transactions AI-audited before payment" },
+];
+
+const SlideImpact = () => (
+    <div>
+        <Eyebrow n="07" text="Impact" />
+        <Title>Numbers that show up on the ledger.</Title>
+        <Subtitle>Six months in. Real workflows, real reductions.</Subtitle>
+
+        <div className="grid grid-cols-2 gap-6 mt-10">
+            {IMPACT_STATS.map((s, i) => (
+                <div key={i}
+                    style={{
+                        background: "linear-gradient(135deg, rgba(184,131,40,0.10) 0%, rgba(184,131,40,0.02) 100%)",
+                        border: `1px solid ${gold}55`,
+                        padding: "28px 24px", borderRadius: 4,
+                    }}
+                    data-testid={`impact-stat-${i}`}
+                >
+                    <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(40px, 5vw, 64px)", color: gold, lineHeight: 1, letterSpacing: "-0.02em" }}>
+                        {s.value}
+                    </div>
+                    <div style={{ fontFamily: DL.fontBody, fontSize: 13, color: "rgba(245,239,230,0.8)", lineHeight: 1.55, marginTop: 10 }}>
+                        {s.label}
+                    </div>
+                </div>
+            ))}
+        </div>
+
+        <div className="mt-10 text-center max-w-3xl mx-auto border-t pt-6" style={{ borderColor: `${gold}33` }}>
+            <p style={{ fontFamily: DL.fontBody, fontSize: 16, lineHeight: 1.6, color: paper, fontStyle: "italic" }}>
+                “The ERP does not replace the Secretariat. It gives every reviewer the same evidence, at the same time, in the same shape.”
+            </p>
+        </div>
+    </div>
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Slide 8 · Sign-off
+// ═════════════════════════════════════════════════════════════════════
+const SlideSignOff = () => (
+    <div>
+        <Eyebrow n="08" text="The Standing Offer" />
+        <Title>Every association runs the same backlogs. MPCA just wrote the answer.</Title>
+        <Subtitle>One state. Ten divisions. One codebase. One audit trail. Rewritable per season, portable to any board.</Subtitle>
+
+        <div className="grid grid-cols-4 gap-6 mt-10">
+            {[
+                { value: "10",     label: "MPCA divisions unified" },
+                { value: "33",     label: "Grant schemes on one signed master" },
+                { value: "3,000+", label: "Players · one KYC-verified register" },
+                { value: "0",      label: "Vendor lock-in · every line owned by MPCA" },
+            ].map((s, i) => (
+                <div key={i} className="text-center">
+                    <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(32px, 3.5vw, 46px)", color: gold, lineHeight: 1 }}>
+                        {s.value}
+                    </div>
+                    <div style={{ fontFamily: DL.fontMono, fontSize: 10, color: "rgba(245,239,230,0.65)", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 8 }}>
+                        {s.label}
+                    </div>
+                </div>
+            ))}
+        </div>
+
+        <div
+            className="mt-14 mx-auto text-center px-10 py-10 max-w-4xl relative"
+            style={{
+                border: `2px solid ${gold}`, borderRadius: 4,
+                background: "rgba(184,131,40,0.06)",
+            }}
+        >
+            <Sparkles size={22} style={{ color: gold, margin: "0 auto 14px", display: "block" }} />
+            <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: "clamp(24px, 2.6vw, 34px)", color: paper, lineHeight: 1.3, letterSpacing: "-0.01em" }}>
+                MPCA moved first.
+            </div>
+            <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: "clamp(24px, 2.6vw, 34px)", color: gold, lineHeight: 1.3, letterSpacing: "-0.01em", marginTop: 4 }}>
+                Players and Divisions no longer wait on paperwork.
+            </div>
+        </div>
+
+        <div className="mt-10 text-center" style={{ fontFamily: DL.fontMono, fontSize: 11, letterSpacing: "0.28em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
+            Thank you · Questions welcome
+        </div>
+    </div>
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Reusable primitives
+// ═════════════════════════════════════════════════════════════════════
+const Eyebrow = ({ n, text }) => (
+    <div className="mb-3 flex items-center gap-3" style={{ fontFamily: DL.fontMono, fontSize: 11, letterSpacing: "0.28em", color: gold, fontWeight: 700, textTransform: "uppercase" }}>
+        <span style={{ color: paper, background: gold, padding: "3px 8px", borderRadius: 2, letterSpacing: "0.12em" }}>{n}</span>
+        {text}
+    </div>
+);
+
+const Title = ({ children }) => (
+    <h1 className="mb-3" style={{
+        fontFamily: DL.fontDisplay, fontWeight: 800,
+        fontSize: "clamp(30px, 3.6vw, 50px)", lineHeight: 1.08,
+        letterSpacing: "-0.01em", color: paper, maxWidth: 1100,
+    }}>
+        {children}
+    </h1>
+);
+
+const Subtitle = ({ children }) => (
+    <p style={{
+        fontFamily: DL.fontBody, fontStyle: "italic",
+        fontSize: "clamp(15px, 1.4vw, 19px)",
+        color: "rgba(245,239,230,0.72)", maxWidth: 900, lineHeight: 1.55,
+    }}>
+        {children}
+    </p>
+);
+
+const FeatureShell = ({ eyebrow, icon: Icon, title, subtitle, beforeAfter, stat, screenshot, screenshotCaption, bullets }) => (
+    <div>
+        <div className="flex items-start gap-3 mb-3">
+            <div className="flex items-center justify-center w-10 h-10 shrink-0" style={{ background: gold, borderRadius: 3 }}>
+                <Icon size={20} style={{ color: emerald }} strokeWidth={2.2} />
+            </div>
+            <div className="min-w-0 flex-1">
+                <Eyebrow n={eyebrow.split("·")[0].trim()} text={eyebrow.split("·").slice(1).join("·").trim()} />
+                <Title>{title}</Title>
+            </div>
+        </div>
+        <Subtitle>{subtitle}</Subtitle>
+
+        <div className="grid grid-cols-[1.15fr_1fr] gap-8 mt-6 items-start">
+            {/* Left · Screenshot */}
+            <div>
+                <div
+                    style={{
+                        border: `2px solid ${gold}`, borderRadius: 4,
+                        overflow: "hidden",
+                        boxShadow: "0 25px 60px -20px rgba(0,0,0,0.5), 0 6px 16px -6px rgba(0,0,0,0.4)",
+                    }}
+                >
+                    <img
+                        src={screenshot}
+                        alt=""
+                        style={{ display: "block", width: "100%", height: "auto", maxHeight: "58vh", objectFit: "contain", background: paper }}
+                    />
+                </div>
+                <div className="mt-2 text-center" style={{ fontFamily: DL.fontMono, fontSize: 10, letterSpacing: "0.14em", color: `rgba(245,239,230,0.55)`, textTransform: "uppercase" }}>
+                    {screenshotCaption}
+                </div>
+            </div>
+
+            {/* Right · Bullets + before/after + stat */}
+            <div>
+                <ul className="space-y-2.5 mb-6">
+                    {bullets.map((b, i) => (
+                        <li key={i} className="flex items-start gap-2.5" style={{ fontFamily: DL.fontBody, fontSize: 13.5, color: "rgba(245,239,230,0.85)", lineHeight: 1.5 }}>
+                            <ShieldCheck size={13} style={{ color: gold, marginTop: 3, flexShrink: 0 }} />
+                            <span>{b}</span>
+                        </li>
+                    ))}
+                </ul>
+
+                {/* Before / after */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div style={{ background: "rgba(139,31,31,0.15)", border: `1px solid ${oxblood}55`, padding: "12px 14px", borderRadius: 3 }}>
+                        <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", color: oxblood, fontWeight: 700, marginBottom: 4 }}>BEFORE</div>
+                        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: 20, color: paper, lineHeight: 1.15 }}>
+                            {beforeAfter.before}
+                        </div>
+                    </div>
+                    <div style={{ background: "rgba(184,131,40,0.15)", border: `1px solid ${gold}77`, padding: "12px 14px", borderRadius: 3 }}>
+                        <div style={{ fontFamily: DL.fontMono, fontSize: 9, letterSpacing: "0.24em", color: gold, fontWeight: 700, marginBottom: 4 }}>AFTER</div>
+                        <div style={{ fontFamily: DL.fontDisplay, fontWeight: 700, fontSize: 20, color: gold, lineHeight: 1.15 }}>
+                            {beforeAfter.after}
+                        </div>
+                    </div>
+                </div>
+                <div style={{ fontFamily: DL.fontMono, fontSize: 10, color: "rgba(245,239,230,0.55)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10 }}>
+                    {beforeAfter.label}
+                </div>
+
+                {/* Big stat */}
+                <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${gold}33` }}>
+                    <div style={{ fontFamily: DL.fontDisplay, fontWeight: 800, fontSize: "clamp(26px, 2.6vw, 34px)", color: gold, lineHeight: 1, letterSpacing: "-0.02em" }}>
+                        {stat.value}
+                    </div>
+                    <div style={{ fontFamily: DL.fontBody, fontSize: 12.5, color: "rgba(245,239,230,0.75)", lineHeight: 1.5, marginTop: 6 }}>
+                        {stat.label}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+);
+
+// ═════════════════════════════════════════════════════════════════════
+// Deck shell — 8 slides
+// ═════════════════════════════════════════════════════════════════════
+const SLIDES = [
+    { id: "login",       kind: "full",  render: SlideLogin },
+    { id: "overview",    kind: "std",   render: SlideOverview },
+    { id: "players",     kind: "std",   render: SlidePlayers },
+    { id: "grants",      kind: "std",   render: SlideGrants },
+    { id: "tournaments", kind: "std",   render: SlideTournaments },
+    { id: "audit",       kind: "std",   render: SlideAiAudit },
+    { id: "impact",      kind: "std",   render: SlideImpact },
+    { id: "signoff",     kind: "std",   render: SlideSignOff },
+];
 
 export default function LaunchPresentation() {
     const [slide, setSlide] = useState(0);
@@ -326,21 +506,23 @@ export default function LaunchPresentation() {
         const onKey = (e) => {
             if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); next(); }
             else if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
-            else if (e.key >= "1" && e.key <= "9") setSlide(Math.min(total - 1, Number(e.key) - 1));
+            else if (e.key >= "1" && e.key <= "8") setSlide(Math.min(total - 1, Number(e.key) - 1));
             else if (e.key === "0") setSlide(total - 1);
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [next, prev, total]);
 
-    const current = SLIDES[slide];
+    const current = useMemo(() => SLIDES[slide], [slide]);
     const progress = ((slide + 1) / total) * 100;
+    const Render = current.render;
+    const isFull = current.kind === "full";
 
     return (
         <div
             className="fixed inset-0"
             data-testid="launch-presentation-page"
-            style={{ background: emeraldBg, color: DL.paper, fontFamily: DL.fontBody, overflow: "hidden" }}
+            style={{ background: emeraldBg, color: paper, fontFamily: DL.fontBody, overflow: "hidden" }}
         >
             <style>{`
                 @keyframes launchfx { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: none; } }
@@ -349,6 +531,7 @@ export default function LaunchPresentation() {
                 .launch-slide-in > *:nth-child(3) { animation-delay: 180ms; }
                 .launch-slide-in > *:nth-child(4) { animation-delay: 270ms; }
                 .launch-slide-in > *:nth-child(5) { animation-delay: 360ms; }
+                .launch-slide-in > *:nth-child(6) { animation-delay: 450ms; }
             `}</style>
 
             {/* Progress bar */}
@@ -356,18 +539,18 @@ export default function LaunchPresentation() {
                 <div
                     data-testid="launch-progress"
                     style={{
-                        width: `${progress}%`, height: "100%", background: DL.gold,
+                        width: `${progress}%`, height: "100%", background: gold,
                         transition: "width 320ms cubic-bezier(0.22,1,0.36,1)",
-                        boxShadow: `0 0 12px ${DL.gold}`,
+                        boxShadow: `0 0 12px ${gold}`,
                     }}
                 />
             </div>
 
             {/* Top-right controls */}
-            <div style={{ position: "absolute", top: 28, right: 32, display: "flex", gap: 10, alignItems: "center", zIndex: 5 }}>
+            <div style={{ position: "absolute", top: 22, right: 28, display: "flex", gap: 10, alignItems: "center", zIndex: 5 }}>
                 <span
                     className="text-[11px] uppercase tracking-[0.24em] font-bold"
-                    style={{ fontFamily: DL.fontMono, color: DL.gold, opacity: 0.9 }}
+                    style={{ fontFamily: DL.fontMono, color: gold, opacity: 0.9 }}
                     data-testid="launch-counter"
                 >
                     {String(slide + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
@@ -375,7 +558,7 @@ export default function LaunchPresentation() {
                 <Link
                     to="/dashboard"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-[0.22em] font-bold transition-all"
-                    style={{ fontFamily: DL.fontMono, color: DL.gold, border: `1px solid rgba(184,131,40,0.5)`, backdropFilter: "blur(8px)" }}
+                    style={{ fontFamily: DL.fontMono, color: gold, border: `1px solid rgba(184,131,40,0.5)` }}
                     data-testid="launch-exit"
                     title="Exit deck"
                 >
@@ -386,22 +569,17 @@ export default function LaunchPresentation() {
             {/* Slide surface */}
             <div
                 key={slide}
-                className="launch-slide-in absolute inset-0 flex items-start justify-center px-6 md:px-16 pt-14 pb-28"
+                className={`launch-slide-in absolute inset-0 ${isFull ? "flex" : "flex items-start justify-center px-6 md:px-16 pt-14 pb-24"}`}
                 style={{ overflowY: "auto" }}
                 data-testid={`launch-slide-${slide}`}
             >
-                <div className="w-full my-auto" style={{ maxWidth: 1400 }}>
-                    {current.kind === "overview"      && <OverviewSlide     data={current} />}
-                    {current.kind === "bucket_intro"  && <BucketIntroSlide  data={current} />}
-                    {current.kind === "feature"       && <FeatureSlide      data={current} />}
-                    {current.kind === "why"           && <WhySlide          data={current} />}
-                    {current.kind === "impact"        && <ImpactSlide       data={current} />}
-                    {current.kind === "cta"           && <CtaSlide          data={current} />}
+                <div className={isFull ? "w-full h-full" : "w-full my-auto"} style={isFull ? {} : { maxWidth: 1400 }}>
+                    <Render />
                 </div>
             </div>
 
             {/* Bottom controls */}
-            <div style={{ position: "absolute", bottom: 32, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 14, zIndex: 5 }}>
+            <div style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 14, zIndex: 5 }}>
                 <NavBtn onClick={prev} disabled={slide === 0} testid="launch-prev">
                     <ArrowLeft size={16} strokeWidth={2.5} /> Prev
                 </NavBtn>
@@ -413,7 +591,7 @@ export default function LaunchPresentation() {
                             className="rounded-full transition-all"
                             style={{
                                 height: 6, width: i === slide ? 24 : 6,
-                                background: i === slide ? DL.gold : "rgba(255,255,255,0.28)",
+                                background: i === slide ? gold : "rgba(255,255,255,0.28)",
                                 border: "none", cursor: "pointer",
                             }}
                             data-testid={`launch-dot-${i}`}
@@ -427,3 +605,27 @@ export default function LaunchPresentation() {
         </div>
     );
 }
+
+// Local nav button (formerly imported from Storyline — now self-contained)
+const NavBtn = ({ onClick, disabled, primary, children, testid }) => (
+    <button
+        onClick={onClick}
+        disabled={disabled}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[12px] uppercase tracking-[0.22em] font-bold transition-all"
+        style={{
+            fontFamily: DL.fontMono,
+            color: primary ? emerald : gold,
+            background: primary ? gold : "transparent",
+            border: `1px solid ${primary ? gold : "rgba(184,131,40,0.5)"}`,
+            opacity: disabled ? 0.35 : 1,
+            cursor: disabled ? "not-allowed" : "pointer",
+        }}
+        data-testid={testid}
+    >
+        {children}
+    </button>
+);
+
+// Reference the imported tokens so ESLint doesn't warn about "unused" that
+// are actually used inside inline styles via the `ivory` / `paper` locals.
+export const __tokens_ref__ = { ivory, paper, emerald, gold, oxblood, FileCheck2 };

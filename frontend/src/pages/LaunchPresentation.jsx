@@ -36,44 +36,44 @@ import {
 
 const SLIDES = [
     // ═══════════════════════════════════════════════════════════════
-    // 01 · Overview — sidebar + dashboard mockup
+    // 01 · Overview — brief; deck focus is players + grants
     // ═══════════════════════════════════════════════════════════════
     {
         kind: "overview",
-        eyebrow: "01 · The ERP",
-        title: "One system. Six modules. Every part of MPCA's operations, digitised.",
-        subtitle: "Built for operators. Owned by MPCA. Open to every association.",
+        eyebrow: "01 · The MPCA ERP",
+        title: "For players and divisions. Registration and grants — solved.",
+        subtitle: "Two backlogs that shape every season, now on one platform. Everything else — tournaments, accounting, governance — is quietly handled the same way.",
         modules: [
             { icon: Users,        label: "Player Registration",  sub: "3,000+ players · KYC · eligibility" },
-            { icon: HandCoins,    label: "Grant Claims",         sub: "20+ schemes · claim → payment" },
-            { icon: Trophy,       label: "Tournament Claims",    sub: "40+ tournaments · invoices · reimbursement" },
+            { icon: HandCoins,    label: "Grant Claims",         sub: "33 schemes · claim → payment" },
+            { icon: Trophy,       label: "Tournament Claims",    sub: "40+ tournaments · invoices" },
             { icon: ClipboardList,label: "Squad Selection",       sub: "Selection console · signed PDFs" },
-            { icon: Landmark,     label: "Governance",           sub: "Maker-Checker · meetings · minutes" },
-            { icon: BarChart3,    label: "Reporting",            sub: "Finance · audit trail · exports" },
+            { icon: Landmark,     label: "Governance",           sub: "Maker-Checker · audit trail" },
+            { icon: BarChart3,    label: "Reporting",            sub: "Finance · exports · dashboards" },
         ],
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 02 · Player Registration — intro
+    // FOCUS 1 · PLAYER REGISTRATION (audience: players + divisions)
     // ═══════════════════════════════════════════════════════════════
     {
         kind: "bucket_intro",
         bucketId: "players",
-        bucketLabel: "Module 01 · Player Registration",
-        eyebrow: "02 · Player Registration — from guessing to certainty",
+        bucketLabel: "Focus 01 · Player Registration",
+        eyebrow: "02 · The Registration Problem",
         icon: Users,
         title: "The player pipeline was manual from Aadhaar to Ranji.",
-        subtitle: "One DOB typo · one disqualified squad · three months later.",
+        subtitle: "One DOB typo. One wrong division. Three months later — a disqualification.",
         pains: [
-            "KYC fields copied by hand",
-            "Name mismatches missed under pressure",
-            "34 age brackets on a spreadsheet",
-            "Every reviewer reads the rules differently",
+            "KYC fields typed by hand · scans re-uploaded three times",
+            "Name and DOB mismatches missed under pressure",
+            "34 age brackets on a spreadsheet · every reviewer reads it differently",
+            "Corrections chased by phone, WhatsApp, follow-up emails",
         ],
         aiCount: 2,
-        aiPreview: "AI reads the docs. The engine walks the rules. Every reviewer sees the same reasoning.",
+        aiPreview: "AI reads every document. The engine walks every rule. Every verdict cites the exact document that backed it.",
     },
-    // 03 · Player Registration — AI Verification (deep-dive)
+    // Slide 3 · Player · AI Verification (real ERP mockup)
     {
         kind: "feature",
         bucketId: "players",
@@ -89,7 +89,7 @@ const SLIDES = [
         livePage: { label: "Player Detail · Verification Trail", path: "/players" },
         mockup: "player",
     },
-    // 04 · Player Registration — Correction Request Loop
+    // Slide 4 · Player · Correction Loop (mockup showing email + player page)
     {
         kind: "feature",
         bucketId: "players",
@@ -98,7 +98,7 @@ const SLIDES = [
         featureName: "Correction Request · Tokenised Player Link",
         problem: "Registration errors triggered phone calls, WhatsApp, resubmissions from scratch.",
         aiVerb: "FLAGS & INVITES CORRECTION",
-        aiDescription: "Reviewer flags specific fields and documents · writes one note · Send. Player gets email + SMS with a single-use tokenised link (no login). Only flagged fields are editable. New documents can be requested inline. Player resubmits → reviewer sees the corrected data with a full diff.",
+        aiDescription: "Reviewer flags specific fields and documents · writes one note · Send. Player gets email + SMS with a single-use tokenised link (no login). Only flagged fields are editable. Player resubmits → reviewer sees the corrected data with a full diff.",
         metric: { before: "3–5 days back-and-forth", after: "under 24 hours", label: "correction cycle" },
         seasonSave: "≈ 200 staff-hours · zero misplaced follow-ups · full audit trail",
         dividend: "= faster approvals · fewer disgruntled players · Secretariat freed from chasing corrections",
@@ -107,42 +107,26 @@ const SLIDES = [
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 04 · Grants — MPCA Schemes Register (non-tournament)
+    // FOCUS 2 · GRANT CLAIMS (audience: divisions)
     // ═══════════════════════════════════════════════════════════════
     {
         kind: "bucket_intro",
         bucketId: "grants",
-        bucketLabel: "Module 02 · MPCA Schemes Register",
-        eyebrow: "03 · Grants — one signed master document, all 33 schemes",
+        bucketLabel: "Focus 02 · Grant Claims",
+        eyebrow: "03 · The Grants Problem",
         icon: HandCoins,
-        title: "Every rupee MPCA spends has a scheme number.",
-        subtitle: "33 schemes across 7 categories — Annual Grants · Reimbursements · Camps · Awards · Welfare · Infrastructure · Revenue Share.",
+        title: "Every rupee has a scheme number. Every claim has a story.",
+        subtitle: "33 schemes across 7 categories. Old flow: circulars, printouts, inbox chains.",
         pains: [
-            "Scheme policy lived across circulars, WhatsApp forwards, and last-year's PDF",
-            "Divisions guessed which scheme applied to their claim",
-            "Rate cards frozen in printouts — impossible to revise mid-season",
-            "No single source of truth for the season's grants regime",
+            "Divisions guessed which scheme applied · called MPCA to confirm",
+            "MPCA opened every claim one at a time — even the boring ones",
+            "8-week approval cycles · claimants chased status by phone",
+            "Small variances hidden in 60-line invoices",
         ],
         aiCount: 2,
-        aiPreview: "One Master Document. 33 schemes. Signed by the President. Every claim ties back to its scheme number, its rate card, its approval chain.",
+        aiPreview: "AI reads the claim, cites the scheme, writes per-document comments. MPCA bulk-approves the greens, opens only the ambers.",
     },
-    // 05 · Grants — deep-dive on the Schemes Register
-    {
-        kind: "feature",
-        bucketId: "grants",
-        icon: ScrollText,
-        eyebrow: "Schemes Register · Deep-Dive",
-        featureName: "MPCA Schemes Register · Structured Policy per Scheme",
-        problem: "Every scheme was a paragraph in a circular. Eligibility was tribal knowledge.",
-        aiVerb: "STANDARDISES & ENFORCES",
-        aiDescription: "One signed PDF activates the season's 33 schemes. Each scheme carries its own required documents and eligibility conditions — enforced at claim time, not remembered after the fact. When policy changes, re-sign · re-activate · done.",
-        metric: { before: "45–60 days", after: "5–7 days", label: "typical scheme-claim cycle" },
-        seasonSave: "≈ 400 staff-hours across MPCA + 10 divisions · zero 'which scheme applies?' calls",
-        dividend: "= divisions apply the right scheme the first time; claimants know their entitlement in advance",
-        livePage: { label: "MPCA Schemes Register", path: "/schemes" },
-        mockup: "schemes",
-    },
-    // 07 · Grants — AI reviews the claim
+    // Slide 6 · Grants · AI Review (REAL ERP screenshot)
     {
         kind: "feature",
         bucketId: "grants",
@@ -158,141 +142,58 @@ const SLIDES = [
         livePage: { label: "Claim Detail · AI Review", path: "/claims" },
         mockup: "image:/deck-screenshots/claim_detail_0142.png",
     },
-    // 08 · Grants — MPCA one-click approve
+    // Slide 7 · Grants · MPCA Approval (REAL ERP screenshot)
     {
         kind: "feature",
         bucketId: "grants",
         icon: FileCheck2,
         eyebrow: "Grants · MPCA Approval",
-        featureName: "Approver Queue · Bulk Approve the Cleared, Review the Ambers",
+        featureName: "Approver Queue · Bulk-Approve the Cleared, Review the Ambers",
         problem: "MPCA opened every claim, one at a time — even the boring ones.",
         aiVerb: "SORTS · RECOMMENDS · BULK-APPROVES",
-        aiDescription: "The approver queue groups claims by AI verdict — green (8 cleared), amber (3 variances), red (1 issue). One click bulk-approves the greens. Ambers open with the AI's specific citation. Every decision is signed, Maker-Checker logged, immutable.",
+        aiDescription: "The approver queue groups claims by AI verdict — green (cleared), amber (variance), red (issue). One click bulk-approves the greens. Ambers open with the AI's specific citation. Every decision is signed, Maker-Checker logged, immutable. Claimants paid weeks earlier.",
         metric: { before: "3–4 days", after: "under 30 minutes", label: "MPCA daily approval batch" },
         seasonSave: "≈ 250 approver-hours · zero missed claims",
         dividend: "= claimants paid weeks earlier · Secretariat freed from data entry",
-        livePage: { label: "MPCA Approver Console", path: "/claims?queue=mpca" },
+        livePage: { label: "MPCA Approver Console", path: "/claims" },
         mockup: "image:/deck-screenshots/claims_queue.png",
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // 06 · Tournament Claims — intro
+    // Slide 8 · Also handles — short summary for accounting / governance
     // ═══════════════════════════════════════════════════════════════
     {
-        kind: "bucket_intro",
-        bucketId: "tournament_claims",
-        bucketLabel: "Module 03 · Tournament Claims",
-        eyebrow: "04 · Tournament Claims — 60 invoices, one verdict",
-        icon: Trophy,
-        title: "Every tournament ends with a wave of invoices.",
-        subtitle: "Line-items keyed twice · approvals lost in inbox chains · leakage hidden by volume.",
-        pains: [
-            "60 invoices per tournament · every line-item keyed by hand",
-            "Status opaque · claimants call the Secretariat for updates",
-            "Approvals lost in inbox chains · 8-week claim cycles",
-            "No tournament-level rollup · every invoice audited in isolation",
-        ],
-        aiCount: 2,
-        aiPreview: "Every invoice auto-diffed against its PDF. One click rolls up the whole tournament. MPCA approves ambers, not greens.",
-    },
-    // 07 · Tournament Module — the workspace (what it manages)
-    {
         kind: "feature",
-        bucketId: "tournament_claims",
-        icon: Trophy,
-        eyebrow: "Tournament Module · Scope",
-        featureName: "Every Tournament · 12 Tiles · One Workspace",
-        problem: "Fixtures on WhatsApp. Umpires by phone. Budget on a spreadsheet. Squads on paper.",
-        aiVerb: "COALESCES INTO ONE WORKSPACE",
-        aiDescription: "Every tournament opens the same workspace: Basics, Participants, Match Officials, Squads, Match Calendar, Days Engine, Unified Budget, Finance Console, Closure Letter, Activity Log, Discussion, Pre-Tournament Camps. Each tile owns its own data, its own approvals, its own audit trail — but all share one tournament identity.",
+        bucketId: "also",
+        icon: Landmark,
+        eyebrow: "04 · Also Handled — Same Discipline",
+        featureName: "Tournaments · Accounting · Governance",
+        problem: "The two backlogs above aren't the only backlogs. But they use the same operating model.",
+        aiVerb: "SAME PATTERN · APPLIED EVERYWHERE",
+        aiDescription: "Every tournament opens one workspace (Basics, Fixtures, Officials, Squads, Budget, Finance, Closure) — 12 tiles, one identity. Invoices are AI-audited the same way as grant claims. Accounting rolls up automatically. Governance (Maker-Checker, meetings, minutes) has the same signed audit trail. Nothing sits in an inbox.",
         metric: { before: "12 apps + 40 emails", after: "1 workspace", label: "per tournament" },
-        seasonSave: "≈ 800 staff-hours · every fact lives in one place",
-        dividend: "= zero \"which version is final?\" · zero attachments lost in inbox chains",
-        livePage: { label: "Tournament Detail · Workspace", path: "/tournaments" },
+        seasonSave: "≈ 800 staff-hours · every fact in one place · every decision signed",
+        dividend: "= divisions and MPCA share one source of truth · zero \"which version is final?\"",
+        livePage: { label: "Tournament · Workspace View", path: "/tournaments" },
         mockup: "image:/deck-screenshots/tournament_workspace.png",
     },
-    // 08 · Tournament Detail — real screenshot of the wiring bar
-    {
-        kind: "feature",
-        bucketId: "tournament_claims",
-        icon: Calendar,
-        eyebrow: "Tournament · Detail Page",
-        featureName: "One Tournament Page · Every Fact, Every Rupee",
-        problem: "40 tournaments a year, each a folder of PDFs and WhatsApp chats.",
-        aiVerb: "COALESCES · AI-AUDITS · ROLLS-UP",
-        aiDescription: "One page holds the entire tournament — dates, format, grounds, teams, fixtures, budget heads, invoices. AI diffs every invoice against its PDF, rolls the tournament total up, flags the ambers. MPCA approves the tournament's financial console with the same one-click flow.",
-        metric: { before: "1–2 days", after: "≤ 90 seconds", label: "per claim · AI verification time" },
-        seasonSave: "≈ 600 staff-hours · 2–4% leakage recoverable",
-        dividend: "= reinvested into pitch covers, sight-screens, roller repairs",
-        livePage: { label: "Tournament Detail Page", path: "/tournaments" },
-        mockup: "image:/deck-screenshots/tournament_detail.png",
-    },
-    // 08 · Tournament AI Audit — real screenshot with AI remarks
-    {
-        kind: "feature",
-        bucketId: "tournament_claims",
-        icon: ShieldCheck,
-        eyebrow: "Tournament Claims · AI Audit",
-        featureName: "Tournament AI Audit · Every Invoice, Verified",
-        problem: "60 invoices reviewed one at a time. Variance found after payment.",
-        aiVerb: "AUDITS EVERY INVOICE · FLAGS THE VARIANCES",
-        aiDescription: "One click audits every invoice on the tournament. Gemini extracts vendor/date/amount from each PDF and diffs against the entered values. Ambers surface with the exact reason — variance amount, date-outside-window, vendor mismatch. MPCA reviews only the flagged 4 out of 12, not all 12.",
-        metric: { before: "days per tournament", after: "≤ 60 seconds", label: "full audit · 12 invoices" },
-        seasonSave: "≈ 600 staff-hours · 2–4% leakage recoverable",
-        dividend: "= flagged amount ₹6,050 caught before payment on one tournament alone",
-        livePage: { label: "Finance Console · Invoices Tab", path: "/tournaments" },
-        mockup: "image:/deck-screenshots/tournament_ai_audit.png",
-    },
 
     // ═══════════════════════════════════════════════════════════════
-    // 08 · Why this operating model works — pain-points synthesis
-    // ═══════════════════════════════════════════════════════════════
-    {
-        kind: "why",
-        eyebrow: "05 · The Operating Truth",
-        title: "AI does the labour. Humans do the leadership.",
-        subtitle: "Every AI verdict is advisory. Humans always decide. That is why the ERP actually gets used.",
-        columns: [
-            {
-                heading: "What AI does — quietly, at scale",
-                accent: "gold",
-                items: [
-                    "Reads every KYC document, every invoice, every fixture attachment",
-                    "Walks eligibility rules and grant schemes against every record",
-                    "Diffs invoices against their PDFs · rolls up the tournament total",
-                    "Cites the exact document that backed each verdict",
-                ],
-            },
-            {
-                heading: "What humans still do — the decisions that matter",
-                accent: "green",
-                items: [
-                    "Approve, reject, or send back — every state change is signed",
-                    "Accept AI-flagged exceptions with a note on the record",
-                    "Rewrite eligibility rules and schemes as the season demands",
-                    "Own the outcome · the AI is never accountable",
-                ],
-            },
-        ],
-        punch: "The ERP does not replace the Secretariat. It gives every reviewer the same evidence, at the same time, in the same shape.",
-    },
-
-    // ═══════════════════════════════════════════════════════════════
-    // 09 · The standing offer — CTA
+    // Slide 9 · The standing offer — CTA
     // ═══════════════════════════════════════════════════════════════
     {
         kind: "cta",
-        eyebrow: "06 · The Standing Offer",
+        eyebrow: "05 · The Standing Offer",
         title: "Every association runs the same backlogs. MPCA just wrote the answer.",
         body: "One state. Ten divisions. One codebase. One audit trail. Rewritable per season, portable to any board.",
         body2: null,
         stats: [
             { value: "10",   label: "MPCA divisions · unified under one framework" },
-            { value: "4",    label: "Cognitive layers · Ingest · Structure · Reason · Judge" },
-            { value: "20+",  label: "Cricket associations · plug into the same code" },
+            { value: "33",   label: "Grant schemes · one signed master doc" },
+            { value: "3,000+", label: "Players · one KYC-verified register" },
             { value: "0",    label: "Vendor lock-in · every line owned by MPCA" },
         ],
-        quote: "MPCA moved first. The rest of Indian cricket can now follow, or catch up.",
+        quote: "MPCA moved first. Players and Divisions no longer wait on paperwork.",
     },
 ];
 
@@ -404,7 +305,7 @@ const OverviewSlide = ({ data }) => (
                 THE PROMISE OF THIS DECK
             </div>
             <p style={{ fontFamily: DL.fontBody, fontSize: 15, lineHeight: 1.55, color: "rgba(245,239,230,0.85)" }}>
-                Next slides: <strong>players (AI + correction) → grants → tournament claims → the operating truth.</strong> For each — the old pain, the new flow, the hours saved.
+                Next: <strong>players (AI verification + correction loop) → grants (AI review + MPCA approval).</strong> Then a short close on tournaments, accounting and governance.
             </p>
         </div>
     </div>

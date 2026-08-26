@@ -1,21 +1,34 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { UserPlus, Loader2, ShieldCheck, ShieldAlert, CheckCircle2, Upload } from "lucide-react";
-import axios from "axios";
-
 /**
- * Sprint M35 · Public Player Registration Form
- * ────────────────────────────────────────────
- * Route:   /register/player/:token   (NO auth — anyone with the link)
- * Resolves either a campaign public_token or a per-player invite token,
- * shows a friendly form pre-filled from the invite when available, and
- * posts to /public/player-registration/submit.
+ * /register/player/:token — Public Player Registration (docs-first flow)
+ * ─────────────────────────────────────────────────────────────────────
+ * Feb 2026 · Rewrite requested by user:
+ *   1. Player uploads KYC documents FIRST
+ *   2. Player clicks "Start AI Verification"
+ *   3. AI reads every document, extracts fields, auto-fills the form
+ *   4. Player sees per-document status pills (verified / warning / error)
+ *      and can re-upload any document that failed
+ *   5. Player sees the same AI summary card used inside the ERP
+ *   6. Player edits any manual fields (mobile, email, address, home division,
+ *      cricket profile — anything not on a document) and reviews
+ *      the AI-parsed values
+ *   7. "MPCA holds the power of final approval" notice
+ *   8. Consent + Submit to MPCA
  */
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const public_api = axios.create({ baseURL: `${BACKEND_URL}/api` });
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import axios from "axios";
+import {
+    UserPlus, Loader2, ShieldCheck, ShieldAlert, CheckCircle2, Upload,
+    Sparkles, FileCheck2, AlertTriangle, RefreshCw, Edit3, XCircle,
+} from "lucide-react";
 
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const public_api = axios.create({ baseURL: `${BACKEND_URL}/api`, timeout: 240000 });
+
+// ─────────────────── Form defaults ───────────────────
 const emptyPlayer = {
-    full_name: "", first_name: "", surname: "", father_name: "", dob: "", gender: "M", role: "Batter",
+    full_name: "", first_name: "", surname: "", father_name: "",
+    dob: "", gender: "M", role: "Batter",
     batting_style: "Right_Hand", bowling_style: "None",
     mobile: "", email: "", preferred_division_code: "", category: "Local_MP",
     guardian_name: "", address: "", aadhaar_no: "", pan_no: "", gst_no: "",
@@ -26,7 +39,6 @@ const emptyPlayer = {
     address_proof_url: "", birth_cert_url: "",
     marksheet_3yr_url: "", affidavit_url: "",
     cancelled_cheque_url: "", gst_certificate_url: "",
-    // MPCA-151 · Feb-2026 · Extended fields
     samagra_id_player_url: "", samagra_id_family_url: "",
     consent_form_url: "", no_study_affidavit_url: "", bonafide_school_cert_url: "",
     is_employed: false,
@@ -37,73 +49,37 @@ const emptyPlayer = {
     other_docs: [],
 };
 
-// M39o · Batch A · Bilingual labels — EN default, HI toggle
-const t_dict = {
-    title: { en: "Player Registration", hi: "खिलाड़ी पंजीकरण" },
-    personal: { en: "Personal Information", hi: "व्यक्तिगत जानकारी" },
-    full_name: { en: "Full name", hi: "पूरा नाम" },
-    first_name: { en: "First name", hi: "प्रथम नाम" },
-    surname: { en: "Surname", hi: "उपनाम" },
-    father_name: { en: "Father's name", hi: "पिता का नाम" },
-    dob: { en: "Date of birth (DD/MM/YYYY)", hi: "जन्म तिथि (DD/MM/YYYY)" },
-    gender: { en: "Gender", hi: "लिंग" },
-    role: { en: "Playing role", hi: "खेल भूमिका" },
-    mobile: { en: "Mobile", hi: "मोबाइल" },
-    email: { en: "Email", hi: "ईमेल" },
-    home_div: { en: "Home Division", hi: "मूल संभाग" },
-    address: { en: "Current Address", hi: "वर्तमान पता" },
-    bank: { en: "Bank Information", hi: "बैंक जानकारी" },
-    bank_name: { en: "Bank name", hi: "बैंक का नाम" },
-    acct_no: { en: "Account no.", hi: "खाता संख्या" },
-    ifsc: { en: "IFSC", hi: "आईएफएससी" },
-    aadhaar_no: { en: "Aadhaar no. (unique — one submission per Aadhaar)", hi: "आधार संख्या (एक आधार, एक पंजीकरण)" },
-    pan_no: { en: "PAN no. (mandatory for age 18+)", hi: "पैन नंबर (18+ के लिए अनिवार्य)" },
-    gst_no: { en: "GST no. (if applicable)", hi: "जीएसटी नंबर (यदि लागू हो)" },
-    docs: { en: "Identity & Document Uploads", hi: "पहचान एवं दस्तावेज़ अपलोड" },
-    checklist: { en: "Keep these documents ready before you begin", hi: "शुरू करने से पहले ये दस्तावेज़ तैयार रखें" },
-    upload_note: { en: "PDF, JPG or PNG · Max 5 MB per file · Min 300 DPI recommended", hi: "पीडीएफ, जेपीजी या पीएनजी · अधिकतम 5 एमबी · न्यूनतम 300 डीपीआई" },
-    aadhaar_recent: { en: "Aadhaar card must be recent (issued/updated within last 3 years).", hi: "आधार कार्ड हाल का होना चाहिए (पिछले 3 वर्षों में जारी/अद्यतन)।" },
-    ack: { en: "Acknowledgement & Consent", hi: "स्वीकृति एवं सहमति" },
-    dpdp: { en: "I acknowledge the DPDP Act, 2023 and consent to MPCA processing my personal data for player registration & selection purposes.", hi: "मैं DPDP अधिनियम 2023 को स्वीकार करता/करती हूँ और MPCA द्वारा खिलाड़ी पंजीकरण एवं चयन हेतु मेरे व्यक्तिगत डेटा के प्रसंस्करण के लिए सहमति देता/देती हूँ।" },
-    consent: { en: "I certify all information above is true and complete to the best of my knowledge.", hi: "मैं प्रमाणित करता/करती हूँ कि उपरोक्त सभी जानकारी मेरी जानकारी के अनुसार सत्य एवं पूर्ण है।" },
-    no_studies: { en: "I did not study in the last 3 years (upload affidavit below instead of marksheets)", hi: "मैंने पिछले 3 वर्षों में अध्ययन नहीं किया (मार्कशीट के बजाय शपथ पत्र अपलोड करें)" },
-    submit: { en: "Submit Registration", hi: "पंजीकरण जमा करें" },
-    other_docs: { en: "Other supporting documents", hi: "अन्य सहायक दस्तावेज़" },
-    add_doc: { en: "+ Add another document", hi: "+ अन्य दस्तावेज़ जोड़ें" },
-};
-
-const PublicPlayerRegistration = () => {
+// ─────────────────── Component ───────────────────
+export default function PublicPlayerRegistration() {
     const { token } = useParams();
     const [env, setEnv] = useState(null);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState("");
     const [form, setForm] = useState(emptyPlayer);
-    const [submitting, setSubmitting] = useState(false);
-    const [done, setDone] = useState(null);
-    const [submitErr, setSubmitErr] = useState("");
     const [uploadingKey, setUploadingKey] = useState(null);
-    const [lang, setLang] = useState("en");
-    const tr = (k) => (t_dict[k] && t_dict[k][lang]) || k;
 
+    // AI verification state
+    const [verifying, setVerifying] = useState(false);
+    const [aiReport, setAiReport] = useState(null);   // full report from /verify
+    const [aiError, setAiError] = useState("");
+    const [aiFilledFields, setAiFilledFields] = useState(new Set());
+
+    const [submitting, setSubmitting] = useState(false);
+    const [submitErr, setSubmitErr] = useState("");
+    const [done, setDone] = useState(null);
+
+    // ── Resolve token ──
     useEffect(() => {
         (async () => {
             try {
                 const { data } = await public_api.get(`/public/player-registration/token/${token}`);
                 setEnv(data);
-                setForm((f) => {
-                    const pref = data.prefill?.full_name || "";
-                    const parts = pref.trim().split(/\s+/);
-                    const first = parts.length >= 2 ? parts.slice(0, -1).join(" ") : (parts[0] || "");
-                    const last = parts.length >= 2 ? parts[parts.length - 1] : "";
-                    return {
-                        ...f,
-                        full_name: pref,
-                        first_name: first,
-                        surname: last,
-                        email: data.prefill?.email || "",
-                        mobile: data.prefill?.mobile || "",
-                    };
-                });
+                setForm((f) => ({
+                    ...f,
+                    full_name: data.prefill?.full_name || "",
+                    email: data.prefill?.email || "",
+                    mobile: data.prefill?.mobile || "",
+                }));
             } catch (e) {
                 setErr(e?.response?.data?.detail || "Invalid or expired link.");
             } finally { setLoading(false); }
@@ -112,6 +88,7 @@ const PublicPlayerRegistration = () => {
 
     const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+    // ── Upload a single doc ──
     const upload = async (key, file) => {
         if (!file) return;
         setUploadingKey(key);
@@ -119,26 +96,58 @@ const PublicPlayerRegistration = () => {
             const fd = new FormData();
             fd.append("file", file);
             fd.append("related_type", "player_registration");
-            // Iter 123x · Public endpoint that doesn't require JWT — the
-            // registration token itself gates access.
             fd.append("registration_token", token);
-            const { data } = await public_api.post("/public/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+            const { data } = await public_api.post("/public/uploads", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
             setField(key, data.url);
+            // Any change to uploaded docs invalidates the last AI verdict
+            setAiReport(null);
+            setAiFilledFields(new Set());
         } catch (e) { alert(e?.response?.data?.detail || e.message); }
         finally { setUploadingKey(null); }
     };
 
+    // ── Run AI verification ──
+    const runVerify = async () => {
+        setAiError(""); setVerifying(true);
+        try {
+            const { data } = await public_api.post("/public/player-registration/verify", {
+                token,
+                player: form,
+            });
+            setAiReport(data);
+            // Merge AI-suggested values into form fields that are currently empty
+            const suggested = data.suggested_fields || {};
+            const changed = new Set();
+            setForm((f) => {
+                const next = { ...f };
+                for (const [k, v] of Object.entries(suggested)) {
+                    if (v == null || v === "") continue;
+                    // Only overwrite blanks or existing AI-filled values,
+                    // never touch a field the player has manually edited.
+                    if (!next[k] || aiFilledFields.has(k)) {
+                        next[k] = v;
+                        changed.add(k);
+                    }
+                }
+                return next;
+            });
+            setAiFilledFields((prev) => new Set([...prev, ...changed]));
+        } catch (e) {
+            setAiError(e?.response?.data?.detail || e.message || "AI verification failed.");
+        } finally { setVerifying(false); }
+    };
+
+    // ── Submit to MPCA ──
     const submit = async (e) => {
         e.preventDefault();
         setSubmitErr("");
-        if (!form.consent) return alert("Please tick the consent box before submitting.");
+        if (!form.consent || !form.dpdp_consent) return alert("Please tick both consent boxes before submitting.");
         if (!form.email?.trim()) { setSubmitErr("Email is required."); return; }
+        if (!aiReport) { setSubmitErr("Please run AI Verification before submitting."); return; }
         setSubmitting(true);
         try {
-            // Feb 2026 · Coerce empty numeric-optional fields to null so Pydantic
-            // doesn't reject the submission with an int_parsing 422. Historically
-            // `bcci_registration_year` was the culprit — the input is a text-mode
-            // number that stays as "" until the user explicitly types a year.
             const cleaned = {
                 ...form,
                 bcci_registration_year: form.bcci_registered && form.bcci_registration_year !== ""
@@ -149,13 +158,11 @@ const PublicPlayerRegistration = () => {
             setDone(data);
         } catch (e) {
             let msg = e?.response?.data?.detail || e.message;
-            // Pydantic v2 validation errors come back as an array — surface the
-            // first field-level message rather than the raw JSON blob.
             if (Array.isArray(msg)) {
                 const first = msg[0];
                 msg = first?.msg
                     ? `${(first.loc || []).slice(-1)[0] || "field"}: ${first.msg}`
-                    : "Some fields are invalid — please review the highlighted fields and try again.";
+                    : "Some fields are invalid — please review and try again.";
             }
             setSubmitErr(msg);
             window.scrollTo({ top: 0, behavior: "smooth" });
@@ -163,23 +170,28 @@ const PublicPlayerRegistration = () => {
         finally { setSubmitting(false); }
     };
 
+    // ── Derived helpers ──
+    const uploadedCount = useMemo(
+        () => DOC_ROSTER(form).filter(([k]) => form[k]).length,
+        [form],
+    );
+
+    // ── Early returns ──
     if (loading) return (
         <div className="min-h-screen bg-mpca-parchment flex items-center justify-center">
             <Loader2 size={22} className="animate-spin text-mpca-oxblood" />
         </div>
     );
-
     if (err) return (
         <div className="min-h-screen bg-mpca-parchment flex items-center justify-center p-6">
             <div className="max-w-md bulletin-card p-8 text-center bg-mpca-oxblood/5 border-mpca-oxblood/40" data-testid="pr-public-error">
                 <ShieldAlert size={30} className="text-mpca-oxblood mx-auto mb-3" />
                 <div className="font-serif text-xl text-mpca-oxblood">Sorry, this link cannot be opened.</div>
                 <div className="text-[11px] text-mpca-gray-dark mt-2">{err}</div>
-                <div className="text-[10px] text-mpca-brass mt-4">Please contact your Division secretary for a fresh registration link.</div>
+                <div className="text-[10px] text-mpca-brass mt-4">Please contact your Division secretary for a fresh link.</div>
             </div>
         </div>
     );
-
     if (done) return (
         <div className="min-h-screen bg-mpca-parchment flex items-center justify-center p-6" data-testid="pr-public-done">
             <div className="max-w-md bulletin-card p-8 text-center bg-mpca-green-dark/5 border-mpca-green-dark/40">
@@ -193,307 +205,74 @@ const PublicPlayerRegistration = () => {
         </div>
     );
 
+    // ── Main form ──
     return (
         <div className="min-h-screen bg-mpca-parchment py-10" data-testid="pr-public-form-page">
-            <div className="max-w-2xl mx-auto px-4">
+            <div className="max-w-3xl mx-auto px-4">
                 <div className="bulletin-card overflow-hidden">
                     {/* Header */}
                     <div className="bg-mpca-green-dark text-mpca-ivory px-6 py-5 border-b-4 border-mpca-oxblood flex items-center gap-4">
                         <img src="/assets/mpca-logo.png" alt="MPCA"
                              className="w-14 h-16 object-contain bg-white/95 rounded p-1 shrink-0" />
-                        <div className="min-w-0">
-                            <div className="overline !text-mpca-gold-light">Madhya Pradesh Cricket Association · {env.body_name || env.body_code}</div>
+                        <div className="min-w-0 flex-1">
+                            <div className="overline !text-mpca-gold-light">Madhya Pradesh Cricket Association{env.body_code && env.body_code !== "MPCA" ? ` · ${env.body_name || env.body_code}` : ""}</div>
                             <div className="font-serif text-2xl mt-1">{env.campaign_title}</div>
                             <div className="text-[11px] text-mpca-ivory/70 mt-1">Season {env.cycle_code}{env.expires_on ? ` · closes ${env.expires_on}` : ""}</div>
                         </div>
                     </div>
 
-                    <form onSubmit={submit} className="p-6 space-y-4" data-testid="pr-public-form">
+                    <form onSubmit={submit} className="p-6 space-y-6" data-testid="pr-public-form">
                         {submitErr && (
                             <div className="border-2 border-mpca-oxblood bg-mpca-oxblood/10 p-3 text-[11px] text-mpca-oxblood flex items-start gap-2" data-testid="pr-pub-submit-err">
                                 <ShieldAlert size={14} className="mt-0.5 shrink-0" />
                                 <div>{submitErr}</div>
                             </div>
                         )}
-                        <div className="flex items-center justify-end gap-2 -mt-2" data-testid="lang-toggle">
-                            <button type="button" onClick={() => setLang("en")} className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${lang === "en" ? "bg-mpca-oxblood text-mpca-ivory border-mpca-oxblood" : "border-mpca-brass/40 text-mpca-brass"}`} data-testid="lang-en">EN</button>
-                            <button type="button" onClick={() => setLang("hi")} className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${lang === "hi" ? "bg-mpca-oxblood text-mpca-ivory border-mpca-oxblood" : "border-mpca-brass/40 text-mpca-brass"}`} data-testid="lang-hi">हिं</button>
-                        </div>
 
-                        {/* M39o · Bold yellow note box · prominent per user's UI ask */}
-                        <div className="border-2 border-mpca-brass bg-mpca-gold-light/40 text-mpca-oxblood px-4 py-3 flex items-start gap-3 shadow-sm" data-testid="pr-pub-once-note">
-                            <ShieldAlert size={18} className="mt-0.5 shrink-0 text-mpca-oxblood" />
-                            <div>
-                                <div className="text-[12px] font-bold uppercase tracking-wide">NOTE · Aadhaar-linked unique submission</div>
-                                <div className="text-[11px] mt-1 font-semibold">One registration per Aadhaar. Please double-check every detail before submission — it cannot be edited by the player once sent.</div>
-                            </div>
-                        </div>
+                        {/* ── How this works ── */}
+                        <HowItWorks />
 
-                        {/* M39o · Pre-start checklist */}
-                        <div className="border-2 border-mpca-brass/60 bg-mpca-gold-light/25 px-4 py-3" data-testid="pr-pub-checklist">
-                            <div className="text-[11px] font-bold text-mpca-oxblood uppercase tracking-wide mb-2">{tr("checklist")}</div>
-                            <ul className="text-[11px] text-mpca-charcoal grid grid-cols-2 gap-x-3 gap-y-0.5 list-disc pl-5">
-                                <li>Passport-size photo</li>
-                                <li>Aadhaar (unmasked)</li>
-                                <li>Aadhaar update history</li>
-                                <li>PAN (required if 18+)</li>
-                                <li>Cancelled cheque</li>
-                                <li>Current address proof</li>
-                                <li>Birth certificate (with QR)</li>
-                                <li>Marksheets — last 3 years (single PDF)</li>
-                                <li>Bank passbook / cheque</li>
-                                <li>Passport / DL / Voter ID (any one alt)</li>
-                            </ul>
-                            <div className="text-[10px] text-mpca-brass mt-2 italic">{tr("upload_note")}</div>
-                        </div>
+                        {/* ── Step 1 · Documents ── */}
+                        <StepHeader n="1" title="Upload your documents" subtitle="Aadhaar, PAN, Birth certificate, Cheque, Marksheets — anything with your details on it." />
+                        <DocumentsGrid
+                            form={form}
+                            setField={setField}
+                            upload={upload}
+                            uploadingKey={uploadingKey}
+                            perDocStatus={aiReport?.per_doc_status || {}}
+                            token={token}
+                        />
 
-                        <Section title={tr("personal")}>
-                            <Grid>
-                                <Field label={tr("first_name")} required>
-                                    <input
-                                        required
-                                        value={form.first_name}
-                                        onChange={(e) => {
-                                            const v = e.target.value;
-                                            setForm((f) => ({ ...f, first_name: v, full_name: `${v} ${f.surname || ""}`.trim() }));
-                                        }}
-                                        className="input-heritage !py-1.5 !text-xs"
-                                        data-testid="pr-pub-first-name"
-                                    />
-                                </Field>
-                                <Field label={tr("surname")} required>
-                                    <input
-                                        required
-                                        value={form.surname}
-                                        onChange={(e) => {
-                                            const v = e.target.value;
-                                            setForm((f) => ({ ...f, surname: v, full_name: `${f.first_name || ""} ${v}`.trim() }));
-                                        }}
-                                        className="input-heritage !py-1.5 !text-xs"
-                                        data-testid="pr-pub-surname"
-                                    />
-                                </Field>
-                                <Field label={tr("father_name")} required><input required value={form.father_name} onChange={(e) => setField("father_name", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-father-name" /></Field>
-                                <Field label={tr("dob")} required><input required type="date" value={form.dob} onChange={(e) => setField("dob", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-dob" />
-                                    {form.dob && <div className="text-[9px] text-mpca-brass mt-1 font-mono">{form.dob.split("-").reverse().join("/")}</div>}
-                                </Field>
-                                <Field label={tr("gender")} required>
-                                    <select value={form.gender} onChange={(e) => setField("gender", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-gender">
-                                        <option value="M">Male</option><option value="F">Female</option><option value="Other">Other</option>
-                                    </select>
-                                </Field>
-                                <Field label="Category">
-                                    <select value={form.category} onChange={(e) => setField("category", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-category">
-                                        <option value="Local_MP">Local MP</option><option value="Guest">Guest</option><option value="Foreign">Foreign</option>
-                                    </select>
-                                </Field>
-                            </Grid>
-                        </Section>
+                        {/* ── Step 2 · AI Verification ── */}
+                        <StepHeader n="2" title="Start AI verification" subtitle="Our AI reads every document, fills your details automatically, and flags anything unclear." />
+                        <VerifyControl
+                            uploadedCount={uploadedCount}
+                            verifying={verifying}
+                            aiReport={aiReport}
+                            aiError={aiError}
+                            onVerify={runVerify}
+                        />
+                        {aiReport && <AiSummaryCard report={aiReport} />}
 
-                        <Section title="Cricket Profile">
-                            <Grid>
-                                <Field label={tr("role")} required>
-                                    <select value={form.role} onChange={(e) => setField("role", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-role">
-                                        <option value="Batter">Batter</option><option value="Bowler">Bowler</option><option value="All_Rounder">All-Rounder</option><option value="Wicket_Keeper">Wicket-Keeper</option>
-                                    </select>
-                                </Field>
-                                <Field label="Batting style">
-                                    <select value={form.batting_style} onChange={(e) => setField("batting_style", e.target.value)} className="input-heritage !py-1.5 !text-xs">
-                                        <option value="Right_Hand">Right-Hand</option><option value="Left_Hand">Left-Hand</option>
-                                    </select>
-                                </Field>
-                                <Field label="Bowling style">
-                                    <select value={form.bowling_style} onChange={(e) => setField("bowling_style", e.target.value)} className="input-heritage !py-1.5 !text-xs">
-                                        {["None", "Right_Arm_Fast", "Right_Arm_Off_Spin", "Right_Arm_Leg_Spin", "Left_Arm_Fast", "Left_Arm_Orthodox", "Left_Arm_Chinaman"].map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
-                                    </select>
-                                </Field>
-                            </Grid>
-                        </Section>
-
-                        <Section title="Contact">
-                            <Grid>
-                                <Field label={tr("mobile")} required><input required value={form.mobile} onChange={(e) => setField("mobile", e.target.value)} placeholder="10-digit mobile" className="input-heritage font-mono !py-1.5 !text-xs" data-testid="pr-pub-mobile" /></Field>
-                                <Field label={tr("email")} required><input required type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="you@example.com" className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-email" /></Field>
-                                <Field label={tr("home_div")} required>
-                                    <select
-                                        required
-                                        value={form.preferred_division_code}
-                                        onChange={(e) => setField("preferred_division_code", e.target.value)}
-                                        className="input-heritage !py-1.5 !text-xs"
-                                        data-testid="pr-pub-home-division"
-                                    >
-                                        <option value="">— Select your Home Division —</option>
-                                        {(env?.divisions || []).map((d) => (
-                                            <option key={d.code} value={d.code}>{d.name} ({d.code})</option>
-                                        ))}
-                                    </select>
-                                </Field>
-                                <Field label="Guardian name (if under 18)"><input value={form.guardian_name} onChange={(e) => setField("guardian_name", e.target.value)} className="input-heritage !py-1.5 !text-xs" /></Field>
-                                <Field label={tr("aadhaar_no")}><input value={form.aadhaar_no} onChange={(e) => setField("aadhaar_no", e.target.value)} placeholder="12-digit" className="input-heritage font-mono !py-1.5 !text-xs" data-testid="pr-pub-aadhaar-no" /></Field>
-                                <Field label={tr("pan_no")}><input value={form.pan_no} onChange={(e) => setField("pan_no", e.target.value)} placeholder="ABCDE1234F" className="input-heritage font-mono !py-1.5 !text-xs" data-testid="pr-pub-pan-no" /></Field>
-                                <Field label={tr("gst_no")}><input value={form.gst_no} onChange={(e) => setField("gst_no", e.target.value)} placeholder="15-char GSTIN" className="input-heritage font-mono !py-1.5 !text-xs" data-testid="pr-pub-gst-no" /></Field>
-                                <Field label={tr("address")} span={2}><textarea rows={2} value={form.address} onChange={(e) => setField("address", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-address" /></Field>
-                            </Grid>
-                        </Section>
-
-                        {/* MPCA-151 · Feb 2026 · Place of birth + cross-division audit + BCCI history */}
-                        <Section title="Place of Birth · Cross-Division · BCCI">
-                            <Grid>
-                                <Field label="Place of birth · City"><input value={form.place_of_birth_city} onChange={(e) => setField("place_of_birth_city", e.target.value)} placeholder="e.g. Indore" className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-pob-city" /></Field>
-                                <Field label="Place of birth · State"><input value={form.place_of_birth_state} onChange={(e) => setField("place_of_birth_state", e.target.value)} placeholder="e.g. Madhya Pradesh" className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-pob-state" /></Field>
-                                <Field label="Division played from LAST season">
-                                    <select value={form.last_season_division_code} onChange={(e) => setField("last_season_division_code", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-last-season-div">
-                                        <option value="">— None / new to cricket —</option>
-                                        {(env?.divisions || []).map((d) => (
-                                            <option key={d.code} value={d.code}>{d.name} ({d.code})</option>
-                                        ))}
-                                    </select>
-                                </Field>
-                                <Field label="BCCI Registered?">
-                                    <select value={form.bcci_registered ? "Yes" : "No"} onChange={(e) => setField("bcci_registered", e.target.value === "Yes")} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-bcci-registered">
-                                        <option value="No">No</option>
-                                        <option value="Yes">Yes</option>
-                                    </select>
-                                </Field>
-                                {form.bcci_registered && (
-                                    <Field label="BCCI Registration Year" required>
-                                        <input required type="number" min="1990" max="2100" value={form.bcci_registration_year} onChange={(e) => setField("bcci_registration_year", e.target.value)} placeholder="e.g. 2021" className="input-heritage font-mono !py-1.5 !text-xs" data-testid="pr-pub-bcci-year" />
-                                    </Field>
-                                )}
-                            </Grid>
-                        </Section>
-
-                        {/* MPCA-151 · Employment toggle (alternative to marksheets) */}
-                        <label className="flex items-start gap-2 text-[11px] text-mpca-charcoal border border-mpca-brass/40 bg-mpca-parchment px-3 py-2" data-testid="is-employed-row">
-                            <input type="checkbox" checked={form.is_employed} onChange={(e) => setField("is_employed", e.target.checked)} className="mt-0.5" data-testid="pr-pub-is-employed" />
-                            <span>I am currently employed — I will upload <strong>appointment letter, salary slip and 1-year bank statement</strong> in place of the 3-year marksheet + school bonafide.</span>
-                        </label>
-
-                        <Section title={tr("bank")}>
-                            <Grid>
-                                <Field label={tr("bank_name")}><input value={form.bank_name} onChange={(e) => setField("bank_name", e.target.value)} placeholder="e.g. HDFC Bank" className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-bank-name" /></Field>
-                                <Field label={tr("acct_no")}><input value={form.bank_account_no} onChange={(e) => setField("bank_account_no", e.target.value)} className="input-heritage font-mono !py-1.5 !text-xs" /></Field>
-                                <Field label={tr("ifsc")}><input value={form.bank_ifsc} onChange={(e) => setField("bank_ifsc", e.target.value)} placeholder="e.g. HDFC0001234" className="input-heritage font-mono !py-1.5 !text-xs" /></Field>
-                            </Grid>
-                        </Section>
-
-                        {/* M39o · U23 · no-recent-studies toggle switches marksheets ↔ affidavit */}
-                        <label className="flex items-start gap-2 text-[11px] text-mpca-charcoal border border-mpca-brass/40 bg-mpca-parchment px-3 py-2" data-testid="no-recent-studies-row">
-                            <input type="checkbox" checked={form.no_recent_studies} onChange={(e) => setField("no_recent_studies", e.target.checked)} className="mt-0.5" data-testid="pr-pub-no-studies" />
-                            <span>{tr("no_studies")}</span>
-                        </label>
-
-                        <Section title={tr("docs")}>
-                            <div className="border-2 border-mpca-brass/70 bg-mpca-gold-light/30 px-3 py-2 mb-3 text-[11px] font-semibold text-mpca-oxblood" data-testid="aadhaar-recent-note">
-                                ⚠ {tr("aadhaar_recent")}
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                {[
-                                    ["photo_url", "Passport Size Photo *"],
-                                    ["aadhaar_url", "Aadhaar (Unmasked) *"],
-                                    ["aadhaar_history_url", "Aadhaar update history"],
-                                    ["pan_url", "PAN Card (required if 18+)"],
-                                    ["passport_url", "Passport"],
-                                    ["driving_licence_url", "Driving Licence"],
-                                    ["voter_id_url", "Voter ID"],
-                                    ["birth_cert_url", "Birth Certificate * (with QR)"],
-                                    ["address_proof_url", "Current Address Proof *"],
-                                    // MPCA-151 · New required docs
-                                    ["samagra_id_player_url", "Samagra ID · Player *"],
-                                    ["samagra_id_family_url", "Samagra ID · Family *"],
-                                    ["consent_form_url", "Consent Form (Notarized) *", { template: "/api/uploads/consent_form_template.pdf" }],
-                                    ...(form.no_recent_studies
-                                        ? [["no_study_affidavit_url", "No-Study Affidavit *", { template: "/api/uploads/no_study_affidavit_template.pdf" }]]
-                                        : []),
-                                    ["cancelled_cheque_url", "Cancelled Cheque"],
-                                    // Employment path vs Marksheet + Bonafide path
-                                    ...(form.is_employed
-                                        ? [
-                                            ["appointment_letter_url", "Appointment Letter *"],
-                                            ["salary_slip_url", "Latest Salary Slip *"],
-                                            ["bank_statement_1yr_url", "1-Year Bank Statement (PDF) *"],
-                                        ]
-                                        : [
-                                            ["marksheet_3yr_url", "Marksheets · last 3 yrs (single PDF) *"],
-                                            ["bonafide_school_cert_url", "School Bonafide Certificate *"],
-                                        ]),
-                                    // NOC only if last-season division differs from current
-                                    ...(form.last_season_division_code && form.last_season_division_code !== form.preferred_division_code
-                                        ? [["noc_previous_division_url", `NOC from ${form.last_season_division_code} (Previous Division) *`]]
-                                        : []),
-                                    ...(form.gst_no ? [["gst_certificate_url", "GST Certificate"]] : []),
-                                ].map(([key, label, extra]) => (
-                                    <div key={key} className="border border-mpca-brass/30 bg-mpca-parchment p-3">
-                                        <div className="flex items-center justify-between gap-2 mb-1">
-                                            <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark">{label}</div>
-                                            {extra?.template && (
-                                                <a href={extra.template} target="_blank" rel="noreferrer" className="text-[9px] uppercase tracking-widest text-mpca-brass hover:underline" data-testid={`pr-pub-template-${key}`}>
-                                                    Sample →
-                                                </a>
-                                            )}
-                                        </div>
-                                        {form[key] ? (
-                                            <div className="flex items-center justify-between text-[11px]"><a href={form[key]} target="_blank" rel="noreferrer" className="text-mpca-oxblood underline truncate">Uploaded ✓</a><button type="button" onClick={() => setField(key, "")} className="text-[9px] uppercase text-mpca-brass">Remove</button></div>
-                                        ) : (
-                                            <label className="flex items-center gap-2 text-[11px] cursor-pointer">
-                                                <Upload size={11} className="text-mpca-brass" />
-                                                <input type="file" accept="image/*,application/pdf" onChange={(e) => upload(key, e.target.files?.[0])} className="text-[11px]" data-testid={`pr-pub-upload-${key}`} />
-                                                {uploadingKey === key && <Loader2 size={11} className="animate-spin" />}
-                                            </label>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                            {/* Other Documents · multi-upload */}
-                            <div className="mt-3 border border-dashed border-mpca-brass/50 p-3" data-testid="other-docs-block">
-                                <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-2">{tr("other_docs")}</div>
-                                {(form.other_docs || []).map((d, i) => (
-                                    <div key={i} className="flex items-center gap-2 text-[11px] mb-1">
-                                        <span className="flex-1 truncate">{d.label}</span>
-                                        <a href={d.url} target="_blank" rel="noreferrer" className="text-mpca-oxblood underline">✓</a>
-                                        <button type="button" onClick={() => setField("other_docs", form.other_docs.filter((_, x) => x !== i))} className="text-[9px] uppercase text-mpca-brass">Remove</button>
-                                    </div>
-                                ))}
-                                <label className="flex items-center gap-2 text-[11px] cursor-pointer">
-                                    <Upload size={11} className="text-mpca-brass" />
-                                    <input type="file" accept="image/*,application/pdf" onChange={async (e) => {
-                                        const file = e.target.files?.[0]; if (!file) return;
-                                        const label = window.prompt("Label this document (e.g. Domicile certificate)");
-                                        if (!label) return;
-                                        setUploadingKey("__other__");
-                                        try {
-                                            const fd = new FormData();
-                                            fd.append("file", file); fd.append("related_type", "player_registration_public"); fd.append("registration_token", token); fd.append("body_id", env.body_code); fd.append("uploaded_by", form.full_name || "public");
-                                            const { data } = await public_api.post("/public/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
-                                            setField("other_docs", [...(form.other_docs || []), { label, url: data.url }]);
-                                        } catch (err) { alert(err?.response?.data?.detail || err.message); }
-                                        finally { setUploadingKey(""); }
-                                    }} data-testid="pr-pub-upload-other" />
-                                    {uploadingKey === "__other__" && <Loader2 size={11} className="animate-spin" />}
-                                    <span className="text-mpca-brass italic">{tr("add_doc")}</span>
-                                </label>
-                            </div>
-                        </Section>
-
-                        {/* M39o · Rich Acknowledgement card */}
-                        <div className="border-2 border-mpca-oxblood bg-mpca-parchment px-4 py-4 space-y-3" data-testid="ack-card">
-                            <div className="flex items-center gap-2">
-                                <ShieldCheck size={16} className="text-mpca-oxblood" />
-                                <div className="font-serif text-lg text-mpca-oxblood">{tr("ack")}</div>
-                            </div>
-                            <label className="flex items-start gap-2 text-[11px] text-mpca-charcoal" data-testid="pr-pub-dpdp-row">
-                                <input type="checkbox" checked={form.dpdp_consent} onChange={(e) => setField("dpdp_consent", e.target.checked)} className="mt-1" data-testid="pr-pub-dpdp" required />
-                                <span>{tr("dpdp")}</span>
-                            </label>
-                            <label className="flex items-start gap-2 text-[11px] text-mpca-charcoal" data-testid="pr-pub-consent-row">
-                                <input type="checkbox" checked={form.consent} onChange={(e) => setField("consent", e.target.checked)} className="mt-1" data-testid="pr-pub-consent" required />
-                                <span>{tr("consent")}</span>
-                            </label>
-                        </div>
-
-                        <button type="submit" disabled={submitting || !form.consent || !form.dpdp_consent} className="w-full bg-mpca-oxblood text-mpca-ivory text-sm uppercase tracking-widest py-3 flex items-center justify-center gap-2 disabled:opacity-40 border-2 border-mpca-oxblood hover:bg-mpca-burgundy-dark transition-colors" data-testid="pr-pub-submit-btn">
-                            {submitting ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />} {tr("submit")}
-                        </button>
+                        {/* ── Step 3 · Confirm details ── */}
+                        {aiReport && (
+                            <>
+                                <StepHeader n="3" title="Confirm your details" subtitle="AI-filled values are highlighted in gold. Manual fields are below the AI section. Everything remains editable." />
+                                <AiFilledFieldsBlock form={form} setField={setField} aiFilledFields={aiFilledFields} />
+                                <ManualFieldsBlock form={form} setField={setField} divisions={env.divisions || []} />
+                                <DocumentContextTogglesBlock form={form} setField={setField} />
+                                <MpcaFinalApprovalNotice />
+                                <ConsentBlock form={form} setField={setField} />
+                                <button
+                                    type="submit"
+                                    disabled={submitting || !form.consent || !form.dpdp_consent || !aiReport}
+                                    className="w-full bg-mpca-oxblood text-mpca-ivory text-sm uppercase tracking-widest py-3 flex items-center justify-center gap-2 disabled:opacity-40 border-2 border-mpca-oxblood hover:bg-mpca-burgundy-dark transition-colors"
+                                    data-testid="pr-pub-submit-btn"
+                                >
+                                    {submitting ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />} Submit Registration to MPCA
+                                </button>
+                            </>
+                        )}
                     </form>
                 </div>
                 <div className="text-[10px] text-mpca-gray-dark text-center mt-4 flex items-center justify-center gap-1">
@@ -502,20 +281,374 @@ const PublicPlayerRegistration = () => {
             </div>
         </div>
     );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Sub-components
+// ═══════════════════════════════════════════════════════════════════════
+
+const HowItWorks = () => (
+    <div className="border-2 border-mpca-brass/60 bg-mpca-gold-light/25 px-4 py-3" data-testid="how-it-works">
+        <div className="text-[11px] font-bold text-mpca-oxblood uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <Sparkles size={12} /> How this works
+        </div>
+        <ol className="text-[11px] text-mpca-charcoal grid grid-cols-1 md:grid-cols-3 gap-3">
+            <li className="flex items-start gap-2"><span className="w-5 h-5 bg-mpca-oxblood text-mpca-ivory rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">1</span><span><b>Upload your KYC documents</b> — the more you attach, the less you type.</span></li>
+            <li className="flex items-start gap-2"><span className="w-5 h-5 bg-mpca-oxblood text-mpca-ivory rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">2</span><span><b>Start AI Verification</b> — our AI reads every document, fills your details and flags any issue.</span></li>
+            <li className="flex items-start gap-2"><span className="w-5 h-5 bg-mpca-oxblood text-mpca-ivory rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">3</span><span><b>Review &amp; Submit</b> — check the extracted details, correct anything the AI missed, then submit to MPCA.</span></li>
+        </ol>
+    </div>
+);
+
+const StepHeader = ({ n, title, subtitle }) => (
+    <div className="flex items-start gap-3 border-b-2 border-mpca-oxblood pb-2 mt-2">
+        <div className="w-8 h-8 bg-mpca-oxblood text-mpca-ivory rounded-full flex items-center justify-center font-serif text-lg font-bold shrink-0" data-testid={`step-${n}-badge`}>{n}</div>
+        <div className="min-w-0">
+            <div className="font-serif text-lg text-mpca-oxblood leading-tight">{title}</div>
+            <div className="text-[11px] text-mpca-gray-dark italic mt-0.5">{subtitle}</div>
+        </div>
+    </div>
+);
+
+// Doc roster — same requirements as the old flow, kept in one place so the
+// Documents grid and the "uploaded count" derivation stay in sync.
+function DOC_ROSTER(form) {
+    return [
+        ["photo_url", "Passport Size Photo", true],
+        ["aadhaar_url", "Aadhaar (Unmasked)", true],
+        ["aadhaar_history_url", "Aadhaar Update History", false],
+        ["pan_url", "PAN Card", false],
+        ["birth_cert_url", "Birth Certificate (with QR)", true],
+        ["address_proof_url", "Current Address Proof", true],
+        ["samagra_id_player_url", "Samagra ID · Player", true],
+        ["samagra_id_family_url", "Samagra ID · Family", true],
+        ["consent_form_url", "Consent Form (Notarized)", true],
+        ...(form.no_recent_studies
+            ? [["no_study_affidavit_url", "No-Study Affidavit", true]]
+            : []),
+        ["cancelled_cheque_url", "Cancelled Cheque", false],
+        ...(form.is_employed
+            ? [
+                ["appointment_letter_url", "Appointment Letter", true],
+                ["salary_slip_url", "Latest Salary Slip", true],
+                ["bank_statement_1yr_url", "1-Year Bank Statement", true],
+            ]
+            : [
+                ["marksheet_3yr_url", "Marksheets · Last 3 years", true],
+                ["bonafide_school_cert_url", "School Bonafide", true],
+            ]),
+        ...(form.last_season_division_code && form.last_season_division_code !== form.preferred_division_code
+            ? [["noc_previous_division_url", `NOC from ${form.last_season_division_code}`, true]]
+            : []),
+        ["passport_url", "Passport (optional alt.)", false],
+        ["driving_licence_url", "Driving Licence (optional alt.)", false],
+        ["voter_id_url", "Voter ID (optional alt.)", false],
+    ];
+}
+
+const DocStatusPill = ({ status }) => {
+    if (!status) return null;
+    const s = status.status;
+    if (s === "verified") return <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold bg-mpca-green-dark text-mpca-ivory px-2 py-0.5" data-testid="doc-status-verified"><CheckCircle2 size={9} /> AI verified</span>;
+    if (s === "warning") return <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold bg-mpca-brass text-mpca-ivory px-2 py-0.5" data-testid="doc-status-warning"><AlertTriangle size={9} /> Needs review</span>;
+    if (s === "error") return <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold bg-mpca-oxblood text-mpca-ivory px-2 py-0.5" data-testid="doc-status-error"><XCircle size={9} /> Problem</span>;
+    return null;
 };
 
-const Section = ({ title, children }) => (
+const DocumentsGrid = ({ form, setField, upload, uploadingKey, perDocStatus, token }) => {
+    const roster = DOC_ROSTER(form);
+    return (
+        <div>
+            <div className="border-2 border-mpca-brass/70 bg-mpca-gold-light/30 px-3 py-2 mb-3 text-[11px] font-semibold text-mpca-oxblood">
+                <ShieldAlert size={11} className="inline mr-1" /> PDF / JPG / PNG · Max 5 MB per file · Aadhaar must be issued/updated within last 3 years.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {roster.map(([key, label, required]) => (
+                    <div key={key} className="border border-mpca-brass/30 bg-mpca-parchment p-3" data-testid={`doc-tile-${key}`}>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark min-w-0 truncate">
+                                {label}{required && <span className="text-mpca-oxblood ml-1">*</span>}
+                            </div>
+                            <DocStatusPill status={perDocStatus[key]} />
+                        </div>
+                        {perDocStatus[key]?.issues?.length > 0 && (
+                            <div className="text-[10px] text-mpca-oxblood italic mb-1" data-testid={`doc-issues-${key}`}>
+                                {perDocStatus[key].issues[0].slice(0, 140)}
+                            </div>
+                        )}
+                        {form[key] ? (
+                            <div className="flex items-center justify-between text-[11px] gap-2">
+                                <a href={form[key]} target="_blank" rel="noreferrer" className="text-mpca-oxblood underline truncate">Uploaded ✓</a>
+                                <label className="flex items-center gap-1 cursor-pointer text-[9px] uppercase tracking-widest text-mpca-brass hover:text-mpca-oxblood">
+                                    <RefreshCw size={9} /> Replace
+                                    <input type="file" accept="image/*,application/pdf" className="hidden"
+                                           onChange={(e) => upload(key, e.target.files?.[0])}
+                                           data-testid={`pr-pub-reupload-${key}`} />
+                                </label>
+                            </div>
+                        ) : (
+                            <label className="flex items-center gap-2 text-[11px] cursor-pointer">
+                                <Upload size={11} className="text-mpca-brass" />
+                                <input type="file" accept="image/*,application/pdf"
+                                       onChange={(e) => upload(key, e.target.files?.[0])}
+                                       className="text-[11px]"
+                                       data-testid={`pr-pub-upload-${key}`} />
+                                {uploadingKey === key && <Loader2 size={11} className="animate-spin" />}
+                            </label>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const VerifyControl = ({ uploadedCount, verifying, aiReport, aiError, onVerify }) => {
+    const canVerify = uploadedCount > 0 && !verifying;
+    return (
+        <div className="border-2 border-mpca-oxblood bg-mpca-parchment px-4 py-3 flex items-center justify-between gap-3 flex-wrap" data-testid="ai-verify-control">
+            <div className="min-w-0 flex-1">
+                <div className="text-[12px] font-bold uppercase tracking-widest text-mpca-oxblood">
+                    {uploadedCount === 0
+                        ? "Upload at least one document to enable verification"
+                        : aiReport
+                            ? `Re-run AI verification (${uploadedCount} documents attached)`
+                            : `${uploadedCount} document${uploadedCount === 1 ? "" : "s"} ready to verify`}
+                </div>
+                <div className="text-[10px] text-mpca-gray-dark italic mt-0.5">Runs in 30–90 seconds. Nothing is submitted to MPCA until you click Submit at the end.</div>
+                {aiError && <div className="text-[10px] text-mpca-oxblood mt-1 font-semibold" data-testid="ai-verify-error">{aiError}</div>}
+            </div>
+            <button
+                type="button"
+                onClick={onVerify}
+                disabled={!canVerify}
+                className="bg-mpca-oxblood text-mpca-ivory text-[12px] uppercase tracking-widest px-4 py-2 flex items-center gap-2 disabled:opacity-40 hover:bg-mpca-burgundy-dark transition-colors border-2 border-mpca-oxblood shrink-0"
+                data-testid="ai-verify-btn"
+            >
+                {verifying ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                {verifying ? "Reading documents…" : aiReport ? "Re-run Verification" : "Start AI Verification"}
+            </button>
+        </div>
+    );
+};
+
+const AiSummaryCard = ({ report }) => {
+    const verdict = report.verdict || "Manual_Review";
+    const verdictTone = verdict === "Recommend_Approve"
+        ? { bg: "bg-mpca-green-dark", label: "AI · Ready to submit" }
+        : verdict === "Recommend_Reject"
+            ? { bg: "bg-mpca-oxblood", label: "AI · Please fix the issues below" }
+            : { bg: "bg-mpca-brass", label: "AI · Manual review needed" };
+
+    const critical = report.critical_issues || [];
+    const warnings = report.warnings || [];
+    const info = report.info || [];
+
+    return (
+        <div className="border-2 border-mpca-oxblood bg-mpca-parchment" data-testid="ai-summary-card">
+            <div className={`${verdictTone.bg} text-mpca-ivory px-4 py-2 flex items-center gap-2`}>
+                <Sparkles size={14} />
+                <div className="text-[11px] uppercase tracking-widest font-bold">{verdictTone.label}</div>
+                <div className="ml-auto text-[10px] font-mono opacity-80">Confidence · {Math.round((report.overall_confidence || 0) * 100)}%</div>
+            </div>
+            <div className="p-4 space-y-3">
+                {critical.length > 0 && (
+                    <IssueList tone="error" icon={XCircle} title={`${critical.length} critical issue${critical.length === 1 ? "" : "s"} — please fix and re-verify`} items={critical} testid="ai-critical" />
+                )}
+                {warnings.length > 0 && (
+                    <IssueList tone="warning" icon={AlertTriangle} title={`${warnings.length} warning${warnings.length === 1 ? "" : "s"} — reviewer will double-check`} items={warnings} testid="ai-warnings" />
+                )}
+                {info.length > 0 && (
+                    <IssueList tone="ok" icon={CheckCircle2} title={`${info.length} check${info.length === 1 ? "" : "s"} passed`} items={info} testid="ai-info" />
+                )}
+                {critical.length === 0 && warnings.length === 0 && (
+                    <div className="text-[12px] text-mpca-green-dark flex items-center gap-2"><CheckCircle2 size={13} /> No issues found. Your documents look consistent with the details on this form.</div>
+                )}
+                {report.age_computed != null && (
+                    <div className="text-[10px] font-mono text-mpca-brass uppercase tracking-widest border-t border-mpca-brass/30 pt-2">
+                        Computed age · {report.age_computed} years · PAN {report.pan_required ? "required" : "optional"} · Engine {report.model}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const IssueList = ({ tone, icon: Icon, title, items, testid }) => {
+    const cls = tone === "error"
+        ? "border-mpca-oxblood bg-mpca-oxblood/5 text-mpca-oxblood"
+        : tone === "warning"
+            ? "border-mpca-brass bg-mpca-gold-light/40 text-mpca-oxblood"
+            : "border-mpca-green-dark bg-mpca-green-dark/5 text-mpca-green-dark";
+    return (
+        <div className={`border-l-4 ${cls} px-3 py-2`} data-testid={testid}>
+            <div className="text-[11px] font-bold uppercase tracking-wide flex items-center gap-1.5"><Icon size={11} /> {title}</div>
+            <ul className="text-[11px] mt-1 list-disc pl-5 space-y-0.5">
+                {items.map((it, i) => <li key={i}>{it}</li>)}
+            </ul>
+        </div>
+    );
+};
+
+// ─────────────────── Field blocks ───────────────────
+
+const AiFilledFieldsBlock = ({ form, setField, aiFilledFields }) => (
+    <Section title="Personal Details (AI-filled from your documents)" icon={Sparkles}>
+        <div className="text-[10px] text-mpca-brass italic mb-2 -mt-1">Values shown here were extracted from your uploaded documents. Edit any field if the AI missed something.</div>
+        <Grid>
+            <FilledField label="First name" k="first_name" required form={form} setField={(k,v) => { setField(k, v); setField("full_name", `${v} ${form.surname || ""}`.trim()); }} aiSet={aiFilledFields} />
+            <FilledField label="Surname" k="surname" required form={form} setField={(k,v) => { setField(k, v); setField("full_name", `${form.first_name || ""} ${v}`.trim()); }} aiSet={aiFilledFields} />
+            <FilledField label="Father's name" k="father_name" required form={form} setField={setField} aiSet={aiFilledFields} />
+            <FilledField label="Date of birth" k="dob" type="date" required form={form} setField={setField} aiSet={aiFilledFields} />
+            <FilledField label="Gender" k="gender" as="select" options={[["M","Male"],["F","Female"],["Other","Other"]]} required form={form} setField={setField} aiSet={aiFilledFields} />
+            <FilledField label="Aadhaar no." k="aadhaar_no" form={form} setField={setField} aiSet={aiFilledFields} placeholder="12-digit" />
+            <FilledField label="PAN no." k="pan_no" form={form} setField={setField} aiSet={aiFilledFields} placeholder="ABCDE1234F" />
+            <FilledField label="Bank name" k="bank_name" form={form} setField={setField} aiSet={aiFilledFields} />
+            <FilledField label="Bank IFSC" k="bank_ifsc" form={form} setField={setField} aiSet={aiFilledFields} placeholder="e.g. HDFC0001234" />
+        </Grid>
+    </Section>
+);
+
+const ManualFieldsBlock = ({ form, setField, divisions }) => (
+    <Section title="Details Not on Any Document (please fill manually)" icon={Edit3}>
+        <div className="text-[10px] text-mpca-brass italic mb-2 -mt-1">These fields are not on any KYC document. Please enter them yourself.</div>
+        <Grid>
+            <Field label="Mobile" required><input required value={form.mobile} onChange={(e) => setField("mobile", e.target.value)} placeholder="10-digit mobile" className="input-heritage font-mono !py-1.5 !text-xs" data-testid="pr-pub-mobile" /></Field>
+            <Field label="Email" required><input required type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="you@example.com" className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-email" /></Field>
+            <Field label="Home Division" required>
+                <select required value={form.preferred_division_code} onChange={(e) => setField("preferred_division_code", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-home-division">
+                    <option value="">— Select your Home Division —</option>
+                    {divisions.map((d) => <option key={d.code} value={d.code}>{d.name} ({d.code})</option>)}
+                </select>
+            </Field>
+            <Field label="Playing role" required>
+                <select value={form.role} onChange={(e) => setField("role", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-role">
+                    <option value="Batter">Batter</option><option value="Bowler">Bowler</option><option value="All_Rounder">All-Rounder</option><option value="Wicket_Keeper">Wicket-Keeper</option>
+                </select>
+            </Field>
+            <Field label="Batting style">
+                <select value={form.batting_style} onChange={(e) => setField("batting_style", e.target.value)} className="input-heritage !py-1.5 !text-xs">
+                    <option value="Right_Hand">Right-Hand</option><option value="Left_Hand">Left-Hand</option>
+                </select>
+            </Field>
+            <Field label="Bowling style">
+                <select value={form.bowling_style} onChange={(e) => setField("bowling_style", e.target.value)} className="input-heritage !py-1.5 !text-xs">
+                    {["None","Right_Arm_Fast","Right_Arm_Off_Spin","Right_Arm_Leg_Spin","Left_Arm_Fast","Left_Arm_Orthodox","Left_Arm_Chinaman"].map((s) => <option key={s} value={s}>{s.replace(/_/g," ")}</option>)}
+                </select>
+            </Field>
+            <Field label="Guardian name (if under 18)"><input value={form.guardian_name} onChange={(e) => setField("guardian_name", e.target.value)} className="input-heritage !py-1.5 !text-xs" /></Field>
+            <Field label="Category">
+                <select value={form.category} onChange={(e) => setField("category", e.target.value)} className="input-heritage !py-1.5 !text-xs">
+                    <option value="Local_MP">Local MP</option><option value="Guest">Guest</option><option value="Foreign">Foreign</option>
+                </select>
+            </Field>
+            <Field label="Bank account no."><input value={form.bank_account_no} onChange={(e) => setField("bank_account_no", e.target.value)} className="input-heritage font-mono !py-1.5 !text-xs" /></Field>
+            <Field label="GST no. (optional)"><input value={form.gst_no} onChange={(e) => setField("gst_no", e.target.value)} placeholder="15-char GSTIN" className="input-heritage font-mono !py-1.5 !text-xs" /></Field>
+            <Field label="Place of birth · City"><input value={form.place_of_birth_city} onChange={(e) => setField("place_of_birth_city", e.target.value)} placeholder="e.g. Indore" className="input-heritage !py-1.5 !text-xs" /></Field>
+            <Field label="Place of birth · State"><input value={form.place_of_birth_state} onChange={(e) => setField("place_of_birth_state", e.target.value)} placeholder="e.g. Madhya Pradesh" className="input-heritage !py-1.5 !text-xs" /></Field>
+            <Field label="Division played last season">
+                <select value={form.last_season_division_code} onChange={(e) => setField("last_season_division_code", e.target.value)} className="input-heritage !py-1.5 !text-xs">
+                    <option value="">— None / new to cricket —</option>
+                    {divisions.map((d) => <option key={d.code} value={d.code}>{d.name} ({d.code})</option>)}
+                </select>
+            </Field>
+            <Field label="BCCI Registered?">
+                <select value={form.bcci_registered ? "Yes" : "No"} onChange={(e) => setField("bcci_registered", e.target.value === "Yes")} className="input-heritage !py-1.5 !text-xs">
+                    <option value="No">No</option><option value="Yes">Yes</option>
+                </select>
+            </Field>
+            {form.bcci_registered && (
+                <Field label="BCCI Registration Year" required>
+                    <input required type="number" min="1990" max="2100" value={form.bcci_registration_year} onChange={(e) => setField("bcci_registration_year", e.target.value)} placeholder="e.g. 2021" className="input-heritage font-mono !py-1.5 !text-xs" />
+                </Field>
+            )}
+            <Field label="Current Address" span={2}><textarea rows={2} value={form.address} onChange={(e) => setField("address", e.target.value)} className="input-heritage !py-1.5 !text-xs" data-testid="pr-pub-address" /></Field>
+        </Grid>
+    </Section>
+);
+
+const DocumentContextTogglesBlock = ({ form, setField }) => (
+    <div className="space-y-2">
+        <label className="flex items-start gap-2 text-[11px] text-mpca-charcoal border border-mpca-brass/40 bg-mpca-parchment px-3 py-2">
+            <input type="checkbox" checked={form.is_employed} onChange={(e) => setField("is_employed", e.target.checked)} className="mt-0.5" data-testid="pr-pub-is-employed" />
+            <span>I am currently employed — I have uploaded <strong>appointment letter, salary slip and 1-year bank statement</strong> in place of the 3-year marksheet + school bonafide.</span>
+        </label>
+        <label className="flex items-start gap-2 text-[11px] text-mpca-charcoal border border-mpca-brass/40 bg-mpca-parchment px-3 py-2">
+            <input type="checkbox" checked={form.no_recent_studies} onChange={(e) => setField("no_recent_studies", e.target.checked)} className="mt-0.5" data-testid="pr-pub-no-studies" />
+            <span>I did not study in the last 3 years — I have uploaded a No-Study affidavit instead of marksheets.</span>
+        </label>
+    </div>
+);
+
+const MpcaFinalApprovalNotice = () => (
+    <div className="border-2 border-mpca-oxblood bg-mpca-oxblood/8 px-4 py-3 flex items-start gap-3" data-testid="mpca-final-approval-notice">
+        <FileCheck2 size={18} className="text-mpca-oxblood mt-0.5 shrink-0" />
+        <div className="text-[12px] text-mpca-oxblood">
+            <div className="font-bold uppercase tracking-wide mb-0.5">MPCA holds the power of final approval</div>
+            <div className="text-[11px] text-mpca-oxblood/90">AI verification is an assistive check. Your registration is confirmed only after review and sign-off by your Division Secretary and the MPCA Secretariat.</div>
+        </div>
+    </div>
+);
+
+const ConsentBlock = ({ form, setField }) => (
+    <div className="border-2 border-mpca-oxblood bg-mpca-parchment px-4 py-4 space-y-3" data-testid="ack-card">
+        <div className="flex items-center gap-2">
+            <ShieldCheck size={16} className="text-mpca-oxblood" />
+            <div className="font-serif text-lg text-mpca-oxblood">Acknowledgement &amp; Consent</div>
+        </div>
+        <label className="flex items-start gap-2 text-[11px] text-mpca-charcoal">
+            <input type="checkbox" checked={form.dpdp_consent} onChange={(e) => setField("dpdp_consent", e.target.checked)} className="mt-1" data-testid="pr-pub-dpdp" required />
+            <span>I acknowledge the DPDP Act, 2023 and consent to MPCA processing my personal data for player registration &amp; selection purposes.</span>
+        </label>
+        <label className="flex items-start gap-2 text-[11px] text-mpca-charcoal">
+            <input type="checkbox" checked={form.consent} onChange={(e) => setField("consent", e.target.checked)} className="mt-1" data-testid="pr-pub-consent" required />
+            <span>I certify all information above is true and complete to the best of my knowledge.</span>
+        </label>
+    </div>
+);
+
+// ─────────────────── Field primitives ───────────────────
+
+const Section = ({ title, children, icon: Icon }) => (
     <div>
-        <div className="text-[13px] font-serif font-bold text-mpca-oxblood mb-2 pb-1 border-b border-mpca-brass/40 uppercase tracking-wider">{title}</div>
+        <div className="text-[13px] font-serif font-bold text-mpca-oxblood mb-2 pb-1 border-b border-mpca-brass/40 uppercase tracking-wider flex items-center gap-1.5">
+            {Icon && <Icon size={13} />} {title}
+        </div>
         {children}
     </div>
 );
-const Grid = ({ children }) => <div className="grid grid-cols-2 gap-3">{children}</div>;
+const Grid = ({ children }) => <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{children}</div>;
 const Field = ({ label, children, required, span = 1 }) => (
-    <label className={`block ${span === 2 ? "col-span-2" : ""}`}>
+    <label className={`block ${span === 2 ? "md:col-span-2" : ""}`}>
         <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-1">{label}{required && <span className="text-mpca-oxblood ml-1">*</span>}</div>
         {children}
     </label>
 );
 
-export default PublicPlayerRegistration;
+const FilledField = ({ label, k, required, type = "text", as, options, placeholder, form, setField, aiSet }) => {
+    const aiFilled = aiSet && aiSet.has(k);
+    const cls = `input-heritage !py-1.5 !text-xs ${aiFilled ? "!bg-mpca-gold-light/40 !border-mpca-brass" : ""}`;
+    return (
+        <label className="block">
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-mpca-green-dark mb-1 flex items-center justify-between gap-2">
+                <span>{label}{required && <span className="text-mpca-oxblood ml-1">*</span>}</span>
+                {aiFilled && <span className="inline-flex items-center gap-1 text-[8px] uppercase tracking-widest font-bold text-mpca-brass" data-testid={`ai-filled-${k}`}><Sparkles size={8} /> AI-filled</span>}
+            </div>
+            {as === "select" ? (
+                <select value={form[k]} onChange={(e) => setField(k, e.target.value)} className={cls} data-testid={`pr-pub-${k}`}>
+                    {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+            ) : (
+                <input
+                    type={type}
+                    required={required}
+                    value={form[k] || ""}
+                    onChange={(e) => setField(k, e.target.value)}
+                    placeholder={placeholder}
+                    className={cls}
+                    data-testid={`pr-pub-${k}`}
+                />
+            )}
+        </label>
+    );
+};

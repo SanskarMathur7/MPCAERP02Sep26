@@ -923,6 +923,38 @@ class PublicSubmit(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class PublicVerifyDraft(BaseModel):
+    """Feb 2026 · Docs-first flow — player uploads KYC docs, then hits
+    "Start AI Verification" from the public form. Accepts loose draft data
+    (not all required fields need be filled) so the AI can extract values
+    from the uploaded documents and suggest them back to the form."""
+    token: str
+    player: Dict[str, Any] = Field(default_factory=dict)
+    model_config = ConfigDict(extra="ignore")
+
+
+@api_router.post("/public/player-registration/verify")
+async def public_verify_draft(payload: PublicVerifyDraft):
+    """Run the full AI report card on a DRAFT (unsaved) registration.
+
+    Returns the same shape as `ai_full_report` on a saved registration:
+    verdict, critical_issues, warnings, info, extraction, suggested_fields,
+    per_doc_status. Frontend uses `suggested_fields` to auto-fill the form
+    and `per_doc_status` to show green/amber/red pills next to each doc.
+    """
+    envelope = await resolve_token(payload.token)  # validates + 410s
+    from core.player_doc_ai import run_full_registration_ai as _run_full_ai
+    # Fake reg_doc shim so the orchestrator can walk the same doc_slots list.
+    reg_doc = {
+        "id": f"public-draft-{payload.token[:8]}",
+        "body_code": envelope.get("body_code"),
+        "cycle_code": envelope.get("cycle_code"),
+        "player_data": payload.player or {},
+    }
+    report = await _run_full_ai(reg_doc)
+    return report
+
+
 @api_router.post("/public/player-registration/submit", response_model=PlayerRegistration)
 async def public_submit(payload: PublicSubmit):
     # Reuse token resolution to get campaign context

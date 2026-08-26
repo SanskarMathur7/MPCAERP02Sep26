@@ -458,6 +458,131 @@ async def check_aadhaar_duplicate(
     return existing
 
 
+# ─────────────────── Field-suggestion + per-doc status ───────────────────
+#
+# Powers the docs-first public registration flow: after Gemini extracts each
+# document, we (a) suggest values for the manual form fields (name, dob, pan,
+# aadhaar, ifsc, etc.) and (b) tag each uploaded document with a per-doc
+# verdict pill (verified / warning / error) based on the rules-engine output.
+
+def _build_field_suggestions(extraction: Dict[str, Any]) -> Dict[str, Any]:
+    """Map Gemini extraction JSON → best-guess values for the manual form fields.
+    Priority: Aadhaar > Birth Certificate > PAN > Marksheet for name/DOB."""
+    if not isinstance(extraction, dict):
+        return {}
+    aad = extraction.get("aadhaar") or {}
+    pan = extraction.get("pan") or {}
+    bc  = extraction.get("birth_certificate") or {}
+    ms  = extraction.get("marksheet") or {}
+    cq  = extraction.get("cancelled_cheque") or {}
+
+    out: Dict[str, Any] = {}
+
+    # ── Name (Aadhaar > Birth Cert > PAN > Marksheet) ──
+    full_name = (
+        aad.get("extracted_name")
+        or bc.get("extracted_name")
+        or pan.get("extracted_name")
+        or ms.get("student_name")
+    )
+    if full_name:
+        out["full_name"] = full_name.strip()
+        parts = full_name.strip().split()
+        if len(parts) >= 2:
+            out["first_name"] = " ".join(parts[:-1])
+            out["surname"] = parts[-1]
+        else:
+            out["first_name"] = parts[0] if parts else ""
+            out["surname"] = ""
+
+    # ── Father's name (Birth Cert > Marksheet) ──
+    father = bc.get("extracted_father_name") or ms.get("father_name")
+    if father:
+        out["father_name"] = father.strip()
+
+    # ── DOB (Aadhaar > Birth Cert > PAN) ──
+    dob = aad.get("extracted_dob") or bc.get("extracted_dob") or pan.get("extracted_dob")
+    if dob:
+        out["dob"] = dob[:10]
+
+    # ── Gender (Aadhaar only) ──
+    g = (aad.get("extracted_gender") or "").strip().upper()
+    if g in {"M", "MALE"}: out["gender"] = "M"
+    elif g in {"F", "FEMALE"}: out["gender"] = "F"
+    elif g: out["gender"] = "Other"
+
+    # ── Aadhaar / PAN numbers ──
+    if aad.get("extracted_number"):
+        cleaned = re.sub(r"\D", "", str(aad["extracted_number"]))
+        if len(cleaned) == 12:
+            out["aadhaar_no"] = cleaned
+    if pan.get("extracted_number"):
+        p = str(pan["extracted_number"]).upper().replace(" ", "")
+        if re.match(r"^[A-Z]{5}[0-9]{4}[A-Z]$", p):
+            out["pan_no"] = p
+
+    # ── Bank (cancelled cheque) ──
+    if cq.get("bank_name"):
+        out["bank_name"] = cq["bank_name"].strip()
+    if cq.get("ifsc"):
+        out["bank_ifsc"] = cq["ifsc"].strip().upper()
+
+    return out
+
+
+def _build_per_doc_status(
+    pd: Dict[str, Any], extraction: Dict[str, Any], rules: Dict[str, Any],
+) -> Dict[str, Dict[str, Any]]:
+    """Return {doc_key: {status, issues: [...]}}. doc_key matches the form's
+    URL keys (aadhaar_url, pan_url, birth_cert_url, ...). Status is one of
+    'verified' | 'warning' | 'error' based on rules-engine severity."""
+    # Map each doc_key → keywords the rule-engine mentions when flagging that doc
+    doc_keys = {
+        "photo_url":            ["photo"],
+        "aadhaar_url":          ["aadhaar"],
+        "aadhaar_history_url":  ["aadhaar history", "aadhaar update"],
+        "pan_url":              ["pan"],
+        "passport_url":         ["passport"],
+        "driving_licence_url":  ["driving licence", "driving license"],
+        "voter_id_url":         ["voter id"],
+        "birth_cert_url":       ["birth cert", "birth certificate"],
+        "address_proof_url":    ["address proof"],
+        "marksheet_3yr_url":    ["marksheet", "student", "academic year"],
+        "affidavit_url":        ["affidavit"],
+        "cancelled_cheque_url": ["cheque", "ifsc"],
+        "gst_certificate_url":  ["gst"],
+        "samagra_id_player_url":  ["samagra"],
+        "samagra_id_family_url":  ["samagra"],
+        "consent_form_url":       ["consent"],
+        "no_study_affidavit_url": ["no-study", "no study"],
+        "bonafide_school_cert_url": ["bonafide", "school"],
+        "appointment_letter_url": ["appointment"],
+        "salary_slip_url":        ["salary"],
+        "bank_statement_1yr_url": ["bank statement"],
+        "noc_previous_division_url": ["noc"],
+    }
+    critical = [s.lower() for s in (rules.get("critical_issues") or [])]
+    warnings = [s.lower() for s in (rules.get("warnings") or [])]
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for dk, kws in doc_keys.items():
+        if not pd.get(dk):
+            continue
+        matched_err  = [s for s in critical if any(kw in s for kw in kws)]
+        matched_warn = [s for s in warnings if any(kw in s for kw in kws)]
+        if matched_err:
+            status = "error"
+        elif matched_warn:
+            status = "warning"
+        else:
+            status = "verified"
+        out[dk] = {
+            "status": status,
+            "issues": matched_err + matched_warn,
+        }
+    return out
+
+
 # ─────────────────── Public entry point ───────────────────
 
 async def run_full_registration_ai(reg_doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -550,8 +675,10 @@ async def run_full_registration_ai(reg_doc: Dict[str, Any]) -> Dict[str, Any]:
         "pan_required": rules.get("pan_required", False),
         "overall_confidence": rules.get("overall_confidence", 0.0),
         "extraction": extraction if isinstance(extraction, dict) else {"error": str(extraction)},
+        "suggested_fields": _build_field_suggestions(extraction if isinstance(extraction, dict) else {}),
+        "per_doc_status": _build_per_doc_status(pd, extraction if isinstance(extraction, dict) else {}, rules),
         "aadhaar_duplicate_of": (dup or {}).get("id") if dup else None,
         "validated_at": datetime.now(timezone.utc).isoformat(),
         "model": f"{AI_MODEL_PROVIDER}/{AI_MODEL_NAME}",
-        "engine_version": "M39p.1",
+        "engine_version": "M39p.2",
     }

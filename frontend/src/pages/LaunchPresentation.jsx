@@ -315,7 +315,18 @@ const SLIDES = [
     // 8 · Grants screenshot
     { render: () => <ScreenshotSlide src="/deck-screenshots/schemes_division.png" /> },
 
-    // 9 · Close
+    // 9 · Grants · AI review caption
+    { render: () => (
+        <CaptionSlide
+            eyebrow="Grants · AI Review"
+            headline={<>Documents in.<br /><span style={{ color: gold }}>AI verdict out.</span></>}
+            sub="Every attached document is read, matched against the scheme's rate card, and returned with a specific remark — before MPCA opens the file."
+        />
+    )},
+    // 10 · Grants · AI review screenshot
+    { render: () => <ScreenshotSlide src="/deck-screenshots/claim_detail_0142.png" /> },
+
+    // 11 · Close
     { render: () => <SlideClose /> },
 ];
 

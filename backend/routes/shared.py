@@ -1,18 +1,23 @@
 """Routes · Sprint 0 shared services — CODE generator, workflow configs, audit log.
 Read-only endpoints for now; the engine is called from module routes.
 """
-from typing import List, Optional
 from fastapi import HTTPException
-from core.infra import db, api_router
+
+from core.infra import api_router, db
 from core.shared_services import (
-    next_code, indian_fy, ENTITY_PREFIXES,
-    get_audit_trail, upsert_workflow_config, WorkflowConfig,
-    CANONICAL_ROLES, DEFAULT_ANNUAL_DISTRICT_GRANT_INR,
+    CANONICAL_ROLES,
+    DEFAULT_ANNUAL_DISTRICT_GRANT_INR,
+    ENTITY_PREFIXES,
+    WorkflowConfig,
+    get_audit_trail,
+    indian_fy,
+    next_code,
+    upsert_workflow_config,
 )
 
 
 @api_router.get("/shared/next-code")
-async def api_next_code(entity: str, org_short: str = "MPCA", fy: Optional[str] = None):
+async def api_next_code(entity: str, org_short: str = "MPCA", fy: str | None = None):
     if entity not in ENTITY_PREFIXES:
         raise HTTPException(400, f"Unknown entity '{entity}'. Known: {list(ENTITY_PREFIXES.keys())}")
     code = await next_code(entity, org_short=org_short, fy=fy)
@@ -58,5 +63,5 @@ async def upsert_workflow(cfg: WorkflowConfig):
 
 
 @api_router.get("/shared/audit-log")
-async def api_audit_log(module: Optional[str] = None, record_id: Optional[str] = None, limit: int = 100):
+async def api_audit_log(module: str | None = None, record_id: str | None = None, limit: int = 100):
     return await get_audit_trail(module=module, record_id=record_id, limit=limit)

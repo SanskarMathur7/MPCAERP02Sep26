@@ -12,15 +12,15 @@ from vendor.tds_rate_pct at PO creation and included in the burn-down maths.
 Burn-down: `invoiced_amount_inr` incremented every time a Vendor Bill is linked;
 `paid_amount_inr` when linked bill is Paid. `remaining_amount_inr = total - invoiced`.
 """
-from datetime import datetime, timezone
-from typing import List, Literal, Optional
 import uuid
+from datetime import datetime, timezone
+from typing import Literal
+
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
-from core.shared_services import next_code, write_audit_log, indian_fy
-
+from core.infra import api_router, db
+from core.shared_services import indian_fy, next_code, write_audit_log
 
 PoStatus = Literal[
     "Draft", "Submitted", "Approved", "Issued",
@@ -34,7 +34,7 @@ TWO_STEP_THRESHOLD_INR = 100_000.0  # >₹1L requires 3-step approval
 class POLineItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
     description: str
-    hsn_sac: Optional[str] = None
+    hsn_sac: str | None = None
     quantity: float = Field(gt=0)
     uom: str = "nos"
     unit_price_inr: float = Field(gt=0)
@@ -57,10 +57,10 @@ class ApprovalEntry(BaseModel):
     model_config = ConfigDict(extra="ignore")
     stage: str
     action: str
-    actor_user_id: Optional[str] = None
+    actor_user_id: str | None = None
     actor_name: str
-    actor_role: Optional[str] = None
-    note: Optional[str] = None
+    actor_role: str | None = None
+    note: str | None = None
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -68,16 +68,16 @@ class PurchaseOrderBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     body_id: str = "MPCA"
     vendor_id: str
-    vendor_name: Optional[str] = None
+    vendor_name: str | None = None
     fiscal_cycle: str = Field(default_factory=indian_fy)
     category: str = "General"
     subject: str  # short heading like "Kits · U-19 Team"
-    description: Optional[str] = None
-    items: List[POLineItem]
-    delivery_date: Optional[str] = None
-    delivery_address: Optional[str] = None
+    description: str | None = None
+    items: list[POLineItem]
+    delivery_date: str | None = None
+    delivery_address: str | None = None
     payment_terms: str = "Net 30"
-    linked_procurement_id: Optional[str] = None
+    linked_procurement_id: str | None = None
 
 
 class PurchaseOrder(PurchaseOrderBase):
@@ -98,34 +98,34 @@ class PurchaseOrder(PurchaseOrderBase):
     invoiced_amount_inr: float = 0.0
     paid_amount_inr: float = 0.0
 
-    approval_chain: List[ApprovalEntry] = []
-    linked_bill_ids: List[str] = []
+    approval_chain: list[ApprovalEntry] = []
+    linked_bill_ids: list[str] = []
     approval_required_steps: int = 2  # 2 or 3
-    created_by_name: Optional[str] = None
-    created_by_user_id: Optional[str] = None
+    created_by_name: str | None = None
+    created_by_user_id: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
 
 class PurchaseOrderCreate(PurchaseOrderBase):
-    created_by_name: Optional[str] = None
-    created_by_user_id: Optional[str] = None
+    created_by_name: str | None = None
+    created_by_user_id: str | None = None
 
 
 class ActionPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    actor_user_id: Optional[str] = None
-    actor_name: Optional[str] = "System"
-    actor_role: Optional[str] = None
-    note: Optional[str] = None
-    received_qty_pct: Optional[float] = None  # for partial-receipt
+    actor_user_id: str | None = None
+    actor_name: str | None = "System"
+    actor_role: str | None = None
+    note: str | None = None
+    received_qty_pct: float | None = None  # for partial-receipt
 
 
 class LinkBillPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     bill_id: str
     amount_inr: float
-    actor_name: Optional[str] = "MPCA Accounts"
+    actor_name: str | None = "MPCA Accounts"
     is_paid: bool = False  # if bill has been paid, also increment paid_amount_inr
 
 
@@ -136,7 +136,7 @@ async def _get(pid: str) -> dict:
     return doc
 
 
-def _compute_totals(items: List[POLineItem], tds_rate_pct: float) -> dict:
+def _compute_totals(items: list[POLineItem], tds_rate_pct: float) -> dict:
     sub = round(sum(i.subtotal for i in items), 2)
     gst = round(sum(i.gst_amount for i in items), 2)
     total = round(sub + gst, 2)
@@ -152,7 +152,7 @@ def _compute_totals(items: List[POLineItem], tds_rate_pct: float) -> dict:
 
 
 async def _append_chain(pid: str, *, action: str, new_status: str, new_stage: str,
-                         payload: ActionPayload, extra_set: Optional[dict] = None) -> dict:
+                         payload: ActionPayload, extra_set: dict | None = None) -> dict:
     po = await _get(pid)
     entry = ApprovalEntry(
         stage=po["current_stage"], action=action,
@@ -183,11 +183,11 @@ async def _append_chain(pid: str, *, action: str, new_status: str, new_stage: st
 
 # ═══════════════════ CRUD + LISTINGS ═══════════════════
 
-@api_router.get("/purchase-orders", response_model=List[PurchaseOrder])
-async def list_pos(body_id: Optional[str] = None,
-                    status: Optional[PoStatus] = None,
-                    vendor_id: Optional[str] = None,
-                    fiscal_cycle: Optional[str] = None):
+@api_router.get("/purchase-orders", response_model=list[PurchaseOrder])
+async def list_pos(body_id: str | None = None,
+                    status: PoStatus | None = None,
+                    vendor_id: str | None = None,
+                    fiscal_cycle: str | None = None):
     q: dict = {}
     if body_id: q["body_id"] = body_id
     if status: q["status"] = status
@@ -391,7 +391,7 @@ async def burn_down(pid: str):
 
 
 @api_router.get("/purchase-orders-stats/summary")
-async def po_summary(fiscal_cycle: Optional[str] = None):
+async def po_summary(fiscal_cycle: str | None = None):
     q: dict = {}
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
     docs = await db.purchase_orders.find(q, {"_id": 0}).to_list(2000)

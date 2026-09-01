@@ -18,15 +18,15 @@ PATCH /api/tournaments/{tid}/setup-meta (see hook in tournament_workspace.py).
 Existing rows no longer in the current pools are soft-deleted (removed_at set)
 and re-activated automatically if the division is re-added.
 """
-from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
 import copy
 import uuid
+from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from core.scoping import get_scope
 
 
@@ -34,10 +34,10 @@ from core.scoping import get_scope
 async def _notify_participation(
     body_code: str,
     body_type: str,
-    tournament: Optional[Dict[str, Any]],
+    tournament: dict[str, Any] | None,
     title: str,
     message: str,
-    *, severity: str = "info", link: Optional[str] = None,
+    *, severity: str = "info", link: str | None = None,
 ) -> None:
     """Fire a notification to the *Secretary* of the participating body (Division /
     District). Wrapped in try/except so a notification failure never blocks the
@@ -61,10 +61,10 @@ async def _notify_participation(
 
 
 async def _notify_mpca(
-    tournament: Optional[Dict[str, Any]],
+    tournament: dict[str, Any] | None,
     title: str,
     message: str,
-    *, severity: str = "info", link: Optional[str] = None,
+    *, severity: str = "info", link: str | None = None,
 ) -> None:
     """Fire a notification to the MPCA Secretary (State-level) about a
     participant lifecycle transition."""
@@ -93,38 +93,38 @@ class TournamentParticipation(BaseModel):
     tournament_id: str
     body_code: str
     body_type: str = "Division"                 # Division | District
-    body_name: Optional[str] = None
+    body_name: str | None = None
     role: str = "Visitor"                       # Host | Visitor
-    pool_id: Optional[str] = None
-    pool_name: Optional[str] = None
+    pool_id: str | None = None
+    pool_name: str | None = None
     acceptance_status: str = "Pending"          # Pending | Accepted | Declined | Not_Required
-    acceptance_note: Optional[str] = None
-    acceptance_at: Optional[str] = None
-    acceptance_by_name: Optional[str] = None
-    budget_id: Optional[str] = None
-    claim_id: Optional[str] = None
-    notes: Optional[str] = None
+    acceptance_note: str | None = None
+    acceptance_at: str | None = None
+    acceptance_by_name: str | None = None
+    budget_id: str | None = None
+    claim_id: str | None = None
+    notes: str | None = None
     # M32 · Per-participant input variables (starts as copy of tournament master,
     # then Division/District can edit their own draft that drives their sub-budget).
-    input_variables: Optional[Dict[str, Any]] = None
-    input_variables_updated_at: Optional[str] = None
-    input_variables_updated_by: Optional[str] = None
-    removed_at: Optional[str] = None            # soft-delete marker
+    input_variables: dict[str, Any] | None = None
+    input_variables_updated_at: str | None = None
+    input_variables_updated_by: str | None = None
+    removed_at: str | None = None            # soft-delete marker
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class ParticipationPatch(BaseModel):
-    acceptance_status: Optional[str] = None
-    acceptance_note: Optional[str] = None
-    acceptance_by_name: Optional[str] = None
-    notes: Optional[str] = None
+    acceptance_status: str | None = None
+    acceptance_note: str | None = None
+    acceptance_by_name: str | None = None
+    notes: str | None = None
 
 
 class InputVariablesPatch(BaseModel):
     """M32 · Payload for Division/District to save their local input variables."""
-    input_variables: Dict[str, Any]
-    updated_by: Optional[str] = None
+    input_variables: dict[str, Any]
+    updated_by: str | None = None
     model_config = ConfigDict(extra="ignore")
 
 
@@ -132,8 +132,8 @@ class InputVariablesPatch(BaseModel):
 
 async def sync_participants_from_pools(
     tid: str,
-    division_pools: Optional[List[Dict[str, Any]]] = None,
-    district_pools: Optional[List[Dict[str, Any]]] = None,
+    division_pools: list[dict[str, Any]] | None = None,
+    district_pools: list[dict[str, Any]] | None = None,
 ):
     """Idempotent — upserts one row per (tournament_id, body_code) based on the
     supplied division_pools + district_pools. Bodies dropped from the pools are
@@ -146,7 +146,7 @@ async def sync_participants_from_pools(
     if division_pools is None and district_pools is None:
         return
 
-    merged_pools: List[Dict[str, Any]] = []
+    merged_pools: list[dict[str, Any]] = []
     for p in (division_pools or []):
         merged_pools.append({**p, "_default_body_type": "Division"})
     for p in (district_pools or []):
@@ -159,14 +159,14 @@ async def sync_participants_from_pools(
         h = p.get("host_division_code") or p.get("host_district_code")
         if h:
             codes_in_pools.add(h)
-    body_docs: Dict[str, Dict[str, Any]] = {}
+    body_docs: dict[str, dict[str, Any]] = {}
     if codes_in_pools:
         async for b in db.bodies.find({"code": {"$in": list(codes_in_pools)}}, {"_id": 0, "code": 1, "name": 1, "body_type": 1}):
             body_docs[b["code"]] = b
 
     now_iso = datetime.now(timezone.utc).isoformat()
     kept_codes: set = set()
-    newly_added: List[Dict[str, Any]] = []
+    newly_added: list[dict[str, Any]] = []
 
     # M32 · Snapshot the tournament's master input_variables so new participants
     # inherit a working copy they can edit.
@@ -251,7 +251,7 @@ async def sync_participants_from_pools(
 
 # ───────────────────────── Derivations ─────────────────────────
 
-async def _totals_for_participant(tid: str, body_code: str) -> Dict[str, float]:
+async def _totals_for_participant(tid: str, body_code: str) -> dict[str, float]:
     inv_total = 0.0
     inv_count = 0
     async for inv in db.tournament_invoices.find(
@@ -310,10 +310,10 @@ async def list_tournament_participants(tid: str, include_removed: bool = False):
     t = await db.tournaments.find_one({"id": tid}, {"_id": 1})
     if not t:
         raise HTTPException(404, "Tournament not found")
-    q: Dict[str, Any] = {"tournament_id": tid}
+    q: dict[str, Any] = {"tournament_id": tid}
     if not include_removed:
         q["removed_at"] = None
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     async for row in db.tournament_participations.find(q, {"_id": 0}).sort([("role", -1), ("body_name", 1)]):
         totals = await _totals_for_participant(tid, row["body_code"])
         rows.append({**row, **totals})
@@ -334,7 +334,7 @@ async def get_tournament_participant(tid: str, body_code: str):
 
 # ─────────────── Shared helpers for downstream modules (M26 · Phase B) ───────────────
 
-async def resolve_participant_body_code(tid: str, body_code: Optional[str]) -> Optional[str]:
+async def resolve_participant_body_code(tid: str, body_code: str | None) -> str | None:
     """If an active participant row exists for (tournament, body_code), returns
     body_code — used by Budget/Invoice/Claim create endpoints to auto-tag the
     row so ParticipantsMatrix lights up. Returns None otherwise (no forced link)."""
@@ -347,7 +347,7 @@ async def resolve_participant_body_code(tid: str, body_code: Optional[str]) -> O
     return row["body_code"] if row else None
 
 
-async def link_budget_to_participant(tid: str, body_code: Optional[str], budget_id: str):
+async def link_budget_to_participant(tid: str, body_code: str | None, budget_id: str):
     if not body_code:
         return
     await db.tournament_participations.update_one(
@@ -356,7 +356,7 @@ async def link_budget_to_participant(tid: str, body_code: Optional[str], budget_
     )
 
 
-async def link_claim_to_participant(tid: str, body_code: Optional[str], claim_id: str):
+async def link_claim_to_participant(tid: str, body_code: str | None, claim_id: str):
     if not body_code:
         return
     await db.tournament_participations.update_one(
@@ -381,7 +381,7 @@ async def participant_finance_snapshot(tid: str, body_code: str):
         {"tournament_id": tid, "participant_body_code": body_code},
         {"_id": 0}, sort=[("created_at", -1)],
     )
-    invoices: List[Dict[str, Any]] = []
+    invoices: list[dict[str, Any]] = []
     async for inv in db.tournament_invoices.find(
         {"tournament_id": tid, "participant_body_code": body_code}, {"_id": 0}
     ).sort([("created_at", -1)]):
@@ -390,7 +390,7 @@ async def participant_finance_snapshot(tid: str, body_code: str):
         {"tournament_id": tid, "participant_body_code": body_code},
         {"_id": 0}, sort=[("created_at", -1)],
     )
-    receipts: List[Dict[str, Any]] = []
+    receipts: list[dict[str, Any]] = []
     async for r in db.tournament_receipts.find(
         {"tournament_id": tid, "participant_body_code": body_code}, {"_id": 0}
     ).sort([("receipt_date", -1)]):
@@ -416,7 +416,7 @@ async def participant_finance_snapshot(tid: str, body_code: str):
 
 @api_router.patch("/tournaments/{tid}/participants/{body_code}")
 async def patch_tournament_participant(tid: str, body_code: str, patch: ParticipationPatch, request: Request):
-    updates: Dict[str, Any] = {k: v for k, v in patch.model_dump(exclude_none=True).items()}
+    updates: dict[str, Any] = {k: v for k, v in patch.model_dump(exclude_none=True).items()}
     if not updates:
         raise HTTPException(400, "No fields to update")
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -505,7 +505,7 @@ async def generate_participant_budget(tid: str, body_code: str):
     subsidy subset. If a live budget already exists, its head allocations are
     OVERWRITTEN with the freshly computed values while status/notes stay put."""
     from models import TournamentBudget
-    from routes.scheme_calc import compute_budget, ComputeRequest
+    from routes.scheme_calc import ComputeRequest, compute_budget
     from routes.tournament_workspace import _is_visitor_head
 
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
@@ -607,6 +607,8 @@ async def generate_participant_budget(tid: str, body_code: str):
     doc = tb.model_dump()
     await db.tournament_budgets.insert_one(doc)
     await link_budget_to_participant(tid, body_code, tb.id)
+    # Strip the ObjectId that insert_one adds so the JSON response is clean.
+    doc.pop("_id", None)
     return {"budget": doc, "generated": True, "regenerated": False}
 
 
@@ -627,10 +629,11 @@ async def resync_participants(tid: str):
 
 # ─────────────── Phase D · Roll-ups & Bulk NEFT ───────────────
 
-from fastapi import Body
-from fastapi.responses import PlainTextResponse
 import csv
 import io
+
+from fastapi import Body
+from fastapi.responses import PlainTextResponse
 
 
 @api_router.get("/tournaments/{tid}/neft-batch")
@@ -640,7 +643,7 @@ async def neft_batch_preview(tid: str):
     if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
         raise HTTPException(404, "Tournament not found")
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     async for p in db.tournament_participations.find({"tournament_id": tid, "removed_at": None}, {"_id": 0}):
         totals = await _totals_for_participant(tid, p["body_code"])
         if totals["outstanding_inr"] <= 0:
@@ -664,9 +667,9 @@ async def neft_batch_preview(tid: str):
 @api_router.post("/tournaments/{tid}/neft-export", response_class=PlainTextResponse)
 async def neft_export(
     tid: str,
-    body_codes: List[str] = Body(..., embed=True),
-    recorded_by_name: Optional[str] = Body(None, embed=True),
-    remarks: Optional[str] = Body(None, embed=True),
+    body_codes: list[str] = Body(..., embed=True),
+    recorded_by_name: str | None = Body(None, embed=True),
+    remarks: str | None = Body(None, embed=True),
     dry_run: bool = Body(False, embed=True),
 ):
     """Generates a bank-ready NEFT CSV for the supplied participant body_codes.
@@ -695,7 +698,7 @@ async def neft_export(
     ])
 
     receipts_created = 0
-    skipped: List[Dict[str, str]] = []
+    skipped: list[dict[str, str]] = []
     for i, code in enumerate(body_codes, start=1):
         p = await db.tournament_participations.find_one(
             {"tournament_id": tid, "body_code": code, "removed_at": None}, {"_id": 0}
@@ -766,7 +769,7 @@ async def closure_readiness(tid: str):
     if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
         raise HTTPException(404, "Tournament not found")
     total_active = 0
-    unsettled: List[Dict[str, Any]] = []
+    unsettled: list[dict[str, Any]] = []
     async for p in db.tournament_participations.find({"tournament_id": tid, "removed_at": None}, {"_id": 0}):
         total_active += 1
         totals = await _totals_for_participant(tid, p["body_code"])
@@ -815,9 +818,9 @@ async def participation_reminders(tid: str):
         except Exception:
             end_date = None
 
-    reminders: List[Dict[str, Any]] = []
+    reminders: list[dict[str, Any]] = []
     async for p in db.tournament_participations.find({"tournament_id": tid, "removed_at": None}, {"_id": 0}):
-        reasons: List[str] = []
+        reasons: list[str] = []
         # 1 · Pending acceptance for > 7 days
         if p.get("acceptance_status") == "Pending":
             created = p.get("created_at")
@@ -1002,7 +1005,7 @@ async def participants_variance_summary(tid: str):
     """Returns per-participant variance analytics for the Financial Summary view."""
     if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
         raise HTTPException(404, "Tournament not found")
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     async for p in db.tournament_participations.find({"tournament_id": tid, "removed_at": None}, {"_id": 0}):
         t = await _totals_for_participant(tid, p["body_code"])
         budget = t["budget_total_inr"]

@@ -10,12 +10,12 @@
 MPCA Secretary is the sole allowed editor (RBAC_MANAGE permission).
 """
 from datetime import datetime, timezone
-from typing import Optional
+
 from fastapi import Body, HTTPException, Request
 from pydantic import BaseModel
 
 from core.infra import api_router, db
-from lib.authz import get_principal, Permission
+from lib.authz import Permission, get_principal
 
 
 def _require_admin(request: Request):
@@ -47,7 +47,7 @@ class WorkflowIn(BaseModel):
     key: str
     label: str
     category: str
-    description: Optional[str] = ""
+    description: str | None = ""
     collection: str
     id_field: str = "id"
     status_field: str = "mc_status"

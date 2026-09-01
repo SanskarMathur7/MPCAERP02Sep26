@@ -6,7 +6,6 @@ Camps auto-mirror `Inter_Divisional` entries, so this module does not
 carry a `Pre_Tournament_Camp` category.
 """
 from datetime import datetime, timezone
-from typing import List, Optional
 
 from fastapi import HTTPException
 
@@ -15,12 +14,11 @@ from models import (
     TournamentMaster,
     TournamentMasterCreate,
     TournamentMasterPatch,
-    TournamentMasterCategory,
 )
 
 
-@api_router.get("/tournament-master", response_model=List[TournamentMaster])
-async def list_tournament_master(category: Optional[str] = None, include_inactive: bool = False):
+@api_router.get("/tournament-master", response_model=list[TournamentMaster])
+async def list_tournament_master(category: str | None = None, include_inactive: bool = False):
     q: dict = {}
     if category:
         q["category"] = category
@@ -241,7 +239,7 @@ SEED_INTER_DIV = [
 ]
 
 # Play-type + age-grp + gender → canonical TournamentFormat (best-effort)
-def _derive_default_format(play_type: Optional[str], age_grp: Optional[str], gender: Optional[str]) -> Optional[str]:
+def _derive_default_format(play_type: str | None, age_grp: str | None, gender: str | None) -> str | None:
     if not play_type:
         return None
     age = (age_grp or "").upper()

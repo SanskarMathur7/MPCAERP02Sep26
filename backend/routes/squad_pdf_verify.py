@@ -16,11 +16,12 @@ Both endpoints require an authenticated caller (AuthMiddleware) and return
 the fresh parsed / matched shape for the UI to display without a refetch.
 """
 from datetime import datetime, timezone
+
 from fastapi import HTTPException, Request
 
-from core.infra import api_router, db, logger
-from services.squad_pdf_reader import parse_squad_pdf, cross_check_roster
+from core.infra import api_router, db
 from lib.authz import get_principal, require_scope
+from services.squad_pdf_reader import cross_check_roster, parse_squad_pdf
 
 
 @api_router.post("/tournaments/{tid}/parse-signed-squad")

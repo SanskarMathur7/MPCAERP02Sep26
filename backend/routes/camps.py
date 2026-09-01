@@ -9,15 +9,15 @@ The finance pipeline (TournamentBudget + TournamentInvoice + ReimbursementClaim)
 is reused by threading `tournament_id = camp_id` (both are UUIDs — the models
 don't foreign-key check).
 """
-from datetime import datetime, timezone
-from typing import List, Optional, Literal
 import uuid
+from datetime import datetime, timezone
+from typing import Literal
+
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
-from core.scoping import get_scope, body_scope
-
+from core.infra import api_router, db
+from core.scoping import body_scope, get_scope
 
 CampType = Literal["Periodical_Coaching", "Vacation_Camp", "Reciprocal_Match", "Pre_Tournament_Camp"]
 CampStatus = Literal["Draft", "Scheduled", "Running", "Completed", "Cancelled"]
@@ -35,20 +35,20 @@ class CampBase(BaseModel):
     name: str
     camp_type: CampType
     body_id: str                                  # organising Division / District
-    scheme_code: Optional[str] = None             # 3-A / 3-B / 3-C / 3-D
+    scheme_code: str | None = None             # 3-A / 3-B / 3-C / 3-D
     start_date: str
     end_date: str
-    venue_hint: Optional[str] = None
-    coach_name: Optional[str] = None
-    trainer_name: Optional[str] = None
-    manager_name: Optional[str] = None
-    target_age_group: Optional[str] = None        # "U-18", "U-23" etc.
+    venue_hint: str | None = None
+    coach_name: str | None = None
+    trainer_name: str | None = None
+    manager_name: str | None = None
+    target_age_group: str | None = None        # "U-18", "U-23" etc.
     planned_participants: int = 0
-    notes: Optional[str] = None
+    notes: str | None = None
     fiscal_cycle: str = "2025-26"
     # MPCA-204 · Pre-Tournament Camps must be linked to an Inter-Division tournament.
-    inter_division_tournament_id: Optional[str] = None
-    inter_division_tournament_name: Optional[str] = None
+    inter_division_tournament_id: str | None = None
+    inter_division_tournament_name: str | None = None
 
 
 class ReciprocalVisitor(BaseModel):
@@ -60,28 +60,28 @@ class ReciprocalVisitor(BaseModel):
     body_id: str                                  # visiting body code
     body_name: str
     invited_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    invited_by: Optional[str] = None              # actor persona name
-    confirmed_at: Optional[str] = None
+    invited_by: str | None = None              # actor persona name
+    confirmed_at: str | None = None
 
 
 class Camp(CampBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     camp_no: str
     status: CampStatus = "Draft"
-    actual_participants: Optional[int] = None
-    auto_budget_id: Optional[str] = None
-    reciprocal_visitors: List[ReciprocalVisitor] = Field(default_factory=list)
-    created_by: Optional[str] = None
+    actual_participants: int | None = None
+    auto_budget_id: str | None = None
+    reciprocal_visitors: list[ReciprocalVisitor] = Field(default_factory=list)
+    created_by: str | None = None
     auto_created_from_tournament: bool = False    # true if the auto-hook birthed it
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     # MPCA-254 · Ship B — Populated after the camp is promoted into
     # db.tournaments. If set, UI redirects the user to /tournaments/{id}.
-    migrated_to_tournament_id: Optional[str] = None
-    migrated_at: Optional[str] = None
+    migrated_to_tournament_id: str | None = None
+    migrated_at: str | None = None
 
 
 class CampCreate(CampBase):
-    created_by: Optional[str] = None
+    created_by: str | None = None
 
 
 async def _next_camp_no(cycle: str) -> str:
@@ -89,13 +89,13 @@ async def _next_camp_no(cycle: str) -> str:
     return f"CMP-{cycle}-{count + 1:03d}"
 
 
-@api_router.get("/camps", response_model=List[Camp])
+@api_router.get("/camps", response_model=list[Camp])
 async def list_camps(
     request: Request,
-    body_id: Optional[str] = None,
-    camp_type: Optional[CampType] = None,
-    status: Optional[CampStatus] = None,
-    fiscal_cycle: Optional[str] = None,
+    body_id: str | None = None,
+    camp_type: CampType | None = None,
+    status: CampStatus | None = None,
+    fiscal_cycle: str | None = None,
 ):
     q: dict = {}
     if body_id:
@@ -199,7 +199,7 @@ async def patch_camp(cid: str, patch: dict):
 
 
 @api_router.post("/camps/{cid}/complete", response_model=Camp)
-async def complete_camp(cid: str, actual_participants: Optional[int] = None):
+async def complete_camp(cid: str, actual_participants: int | None = None):
     doc = await db.camps.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Camp not found")
@@ -222,7 +222,7 @@ async def delete_camp(cid: str):
 
 
 @api_router.get("/camps-stats/summary")
-async def camps_stats(request: Request, body_id: Optional[str] = None, fiscal_cycle: Optional[str] = None):
+async def camps_stats(request: Request, body_id: str | None = None, fiscal_cycle: str | None = None):
     q: dict = {}
     if body_id: q["body_id"] = body_id
     else: q.update(body_scope(get_scope(request)))
@@ -294,7 +294,7 @@ async def auto_create_pre_camps_for_tournament(tournament: dict) -> dict:
     return {"created": created, "skipped": skipped}
 
 
-@api_router.get("/tournaments/{tid}/pre-tournament-camps", response_model=List[Camp])
+@api_router.get("/tournaments/{tid}/pre-tournament-camps", response_model=list[Camp])
 async def list_pre_tournament_camps(tid: str):
     """List all Pre-Tournament Camps auto-linked to this Inter-Divisional tournament."""
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "tournament_scope": 1, "scope": 1})
@@ -314,7 +314,7 @@ async def list_pre_tournament_camps(tid: str):
 class ReciprocalVisitorPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     body_id: str
-    invited_by: Optional[str] = None
+    invited_by: str | None = None
 
 
 @api_router.post("/camps/{cid}/reciprocal-visitors", response_model=Camp)
@@ -403,7 +403,7 @@ CAMP_TYPE_TO_FAMILY = {
 }
 
 
-async def _promote_one_camp_to_tournament(camp: dict) -> Optional[str]:
+async def _promote_one_camp_to_tournament(camp: dict) -> str | None:
     """Create a `db.tournaments` row that mirrors this camp. Returns the new
     tournament id, or None if the camp isn't promotable (e.g. Reciprocal_Match).
     """
@@ -414,7 +414,7 @@ async def _promote_one_camp_to_tournament(camp: dict) -> Optional[str]:
         return camp["migrated_to_tournament_id"]
 
     # Reserve a tournament number.
-    from routes.tournaments import _next_tournament_no   # local import avoids cycle
+    from routes.tournaments import _next_tournament_no  # local import avoids cycle
     tno = await _next_tournament_no(camp.get("fiscal_cycle") or "2025-26")
 
     tid = str(uuid.uuid4())
@@ -474,7 +474,7 @@ async def migrate_camps_to_tournaments():
     camps_to_migrate = await db.camps.find(q, {"_id": 0}).to_list(2000)
     promoted = 0
     skipped_reciprocal = 0
-    failed: List[dict] = []
+    failed: list[dict] = []
     for camp in camps_to_migrate:
         try:
             new_tid = await _promote_one_camp_to_tournament(camp)

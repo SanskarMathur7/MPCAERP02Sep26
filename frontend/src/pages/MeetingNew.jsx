@@ -33,7 +33,37 @@ const MeetingNew = () => {
     const [committees, setCommittees] = useState([]);
     const [subCommitteeMembers, setSubCommitteeMembers] = useState([]);
     const [newExternal, setNewExternal] = useState({ name: "", email: "", org: "" });
-    const [newDoc, setNewDoc] = useState({ name: "", url: "" });
+    const [uploadingDoc, setUploadingDoc] = useState(false);
+
+    // MPCA-114 · Upload a real file (PDF/image) to /api/uploads and push
+    // { name, url } into form.documents. Replaces the previous free-text
+    // URL entry which was error-prone and unfriendly.
+    const uploadDoc = async (file) => {
+        if (!file) return;
+        setUploadingDoc(true);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("related_type", "meeting");
+            const { data } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+            setForm((f) => ({
+                ...f,
+                documents: [
+                    ...f.documents,
+                    {
+                        name: file.name,
+                        url: data.url,
+                        uploaded_at: new Date().toISOString(),
+                        uploaded_by: "Current User",
+                    },
+                ],
+            }));
+        } catch (e) {
+            alert(e?.response?.data?.detail || e.message);
+        } finally {
+            setUploadingDoc(false);
+        }
+    };
 
     useEffect(() => {
         api.get("/sub-committees").then((r) => setCommittees(r.data || [])).catch(() => setCommittees([]));
@@ -241,27 +271,24 @@ const MeetingNew = () => {
                             <div key={i} className="flex items-center gap-2 border border-mpca-brass/40 px-2 py-1.5 text-[11px]">
                                 <FileText size={11} className="text-mpca-oxblood shrink-0" />
                                 <span className="flex-1 font-serif text-mpca-green-dark truncate">{d.name}</span>
-                                <a href={d.url} target="_blank" rel="noreferrer" className="text-[10px] text-mpca-brass hover:underline truncate max-w-[240px]">{d.url}</a>
+                                <a href={d.url} target="_blank" rel="noreferrer" className="text-[10px] text-mpca-brass hover:underline">View</a>
                                 <button type="button" onClick={() => setForm({ ...form, documents: form.documents.filter((_, idx) => idx !== i) })} className="text-mpca-oxblood" data-testid={`doc-remove-${i}`}>
                                     <Trash2 size={11} />
                                 </button>
                             </div>
                         ))}
                     </div>
-                    <div className="grid grid-cols-[1fr_1.5fr_auto] gap-1.5">
-                        <input placeholder="Document name (e.g. Agenda PDF)" value={newDoc.name} onChange={(e) => setNewDoc({ ...newDoc, name: e.target.value })} className="input-heritage !py-1 !text-xs" data-testid="doc-name-input" />
-                        <input placeholder="URL (Google Drive, S3, upload link)" value={newDoc.url} onChange={(e) => setNewDoc({ ...newDoc, url: e.target.value })} className="input-heritage !py-1 !text-xs" data-testid="doc-url-input" />
-                        <button type="button" className="btn-heritage-ghost !py-1 !text-[10px]" data-testid="doc-add-btn" onClick={() => {
-                            if (!newDoc.name.trim() || !newDoc.url.trim()) return;
-                            setForm({
-                                ...form,
-                                documents: [...form.documents, { ...newDoc, uploaded_at: new Date().toISOString(), uploaded_by: "Current User" }],
-                            });
-                            setNewDoc({ name: "", url: "" });
-                        }}>
-                            <Paperclip size={11} /> Attach
-                        </button>
-                    </div>
+                    <label className="inline-flex items-center gap-2 border-2 border-dashed border-mpca-brass/50 bg-mpca-parchment px-3 py-2 cursor-pointer hover:border-mpca-oxblood/50 text-[11px] text-mpca-brass hover:text-mpca-oxblood">
+                        <Paperclip size={11} />
+                        <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            onChange={(e) => { uploadDoc(e.target.files?.[0]); e.target.value = ""; }}
+                            data-testid="doc-file-input"
+                        />
+                        <span className="italic">{uploadingDoc ? "Uploading…" : "+ Attach a document (PDF or image)"}</span>
+                    </label>
                 </div>
 
                 <div className="bulletin-card p-8" data-testid="agenda-section">

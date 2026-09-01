@@ -1,28 +1,31 @@
 """Routes · Phase T3 — Tournament Invoices with AI extractor + Budget vs Actual tracker."""
-import json
-import re
-from pathlib import Path
-from datetime import datetime, timezone
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
-from fastapi import HTTPException, Request
-
 import asyncio
-from core.infra import db, api_router
-from core.shared_services import next_seq  # H6 · atomic sequence
-from core.scoping import get_scope, body_scope
-from core.helpers import _create_notification
-from models import (
-    TournamentInvoice, TournamentInvoiceCreate, TournamentInvoiceStatus,
-    AIInvoiceExtraction, InvoiceHeadAllocation, AIInvoiceDiff,
-)
+from datetime import datetime, timezone
+from pathlib import Path
+
+from fastapi import HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 
 # Reuse LLM plumbing already in ai_validator
 from core.ai_validator import (
-    EMERGENT_LLM_KEY, AI_MODEL_PROVIDER, AI_MODEL_NAME,
-    LlmChat, UserMessage, FileContentWithMimeType, _parse_ai_response,
+    AI_MODEL_NAME,
+    AI_MODEL_PROVIDER,
+    EMERGENT_LLM_KEY,
+    FileContentWithMimeType,
+    LlmChat,
+    UserMessage,
+    _parse_ai_response,
 )
-
+from core.infra import api_router, db
+from core.scoping import body_scope, get_scope
+from core.shared_services import next_seq  # H6 · atomic sequence
+from models import (
+    AIInvoiceDiff,
+    InvoiceHeadAllocation,
+    TournamentInvoice,
+    TournamentInvoiceCreate,
+    TournamentInvoiceStatus,
+)
 
 INVOICE_SYSTEM_MESSAGE = """You are the MPCA Tournament Invoice Extractor.
 
@@ -134,13 +137,13 @@ async def ai_extract_invoice(file_url: str):
 # ═══════════════════ Invoice CRUD ═══════════════════
 
 
-@api_router.get("/tournament-invoices", response_model=List[TournamentInvoice])
+@api_router.get("/tournament-invoices", response_model=list[TournamentInvoice])
 async def list_invoices(
     request: Request,
-    tournament_id: Optional[str] = None,
-    body_id: Optional[str] = None,
-    budget_id: Optional[str] = None,
-    status: Optional[TournamentInvoiceStatus] = None,
+    tournament_id: str | None = None,
+    body_id: str | None = None,
+    budget_id: str | None = None,
+    status: TournamentInvoiceStatus | None = None,
 ):
     q: dict = {}
     if tournament_id: q["tournament_id"] = tournament_id
@@ -262,16 +265,16 @@ class TournamentInvoicePatch(BaseModel):
     # M3 · typed patch body. extra="ignore" drops unknown keys exactly like the
     # previous key-whitelist did; money fields are validated as non-negative numbers.
     model_config = ConfigDict(extra="ignore")
-    vendor_name: Optional[str] = None
-    invoice_no: Optional[str] = None
-    invoice_date: Optional[str] = None
-    amount_inr: Optional[float] = Field(None, ge=0)
-    gst_inr: Optional[float] = Field(None, ge=0)
-    total_inr: Optional[float] = Field(None, ge=0)
-    budget_head_code: Optional[str] = None
-    allocations: Optional[List[InvoiceHeadAllocation]] = None  # Sprint T-RIM · multi-head splits
-    notes: Optional[str] = None
-    manually_overridden: Optional[bool] = None
+    vendor_name: str | None = None
+    invoice_no: str | None = None
+    invoice_date: str | None = None
+    amount_inr: float | None = Field(None, ge=0)
+    gst_inr: float | None = Field(None, ge=0)
+    total_inr: float | None = Field(None, ge=0)
+    budget_head_code: str | None = None
+    allocations: list[InvoiceHeadAllocation] | None = None  # Sprint T-RIM · multi-head splits
+    notes: str | None = None
+    manually_overridden: bool | None = None
 
 
 @api_router.patch("/tournament-invoices/{iid}", response_model=TournamentInvoice)
@@ -358,9 +361,9 @@ async def reject_invoice(iid: str, reason: str = ""):
 # ── MPCA-201 · Bulk actions ────────────────────────────────────────────────
 class BulkInvoiceAction(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    ids: List[str] = Field(default_factory=list)
-    tournament_id: Optional[str] = None
-    body_id: Optional[str] = None
+    ids: list[str] = Field(default_factory=list)
+    tournament_id: str | None = None
+    body_id: str | None = None
 
 
 @api_router.post("/tournament-invoices/bulk-submit")
@@ -519,9 +522,9 @@ async def _apply_grant_eligibility(inv: TournamentInvoice) -> TournamentInvoice:
 
 
 def _compute_ai_diff(
-    typed_vendor: Optional[str],
-    typed_date: Optional[str],
-    typed_amount: Optional[float],
+    typed_vendor: str | None,
+    typed_date: str | None,
+    typed_amount: float | None,
     extracted: dict,
 ) -> AIInvoiceDiff:
     """Fuzzy compare typed values against Gemini extraction.
@@ -575,7 +578,7 @@ def _compute_ai_diff(
         amount_match = False
         a_ex = None
 
-    mismatches: List[str] = []
+    mismatches: list[str] = []
     if not vendor_match:
         mismatches.append(f"Vendor: typed '{typed_vendor or '—'}' vs AI '{ex_vendor or '—'}'")
     if not date_match:
@@ -601,7 +604,7 @@ def _compute_ai_diff(
     )
 
 
-async def _resolve_and_diff_invoice(inv_doc: dict) -> Optional[AIInvoiceDiff]:
+async def _resolve_and_diff_invoice(inv_doc: dict) -> AIInvoiceDiff | None:
     """Given a persisted invoice doc, run (or reuse) AI extraction and diff.
     Returns AIInvoiceDiff, or None when there's no file to diff against."""
     file_url = inv_doc.get("file_url") or ""
@@ -672,7 +675,7 @@ async def verify_invoice_ai(iid: str):
 
 
 @api_router.post("/tournaments/{tid}/invoices/ai-audit")
-async def run_tournament_ai_audit(tid: str, body_id: Optional[str] = None):
+async def run_tournament_ai_audit(tid: str, body_id: str | None = None):
     """Iter 124 · Roll up all invoices on this tournament (optionally scoped to
     a body) with fresh AI diffs. Returns approved / rejected / needs-review
     counts + eligible reimbursement total + per-invoice flag list so Division
@@ -701,7 +704,7 @@ async def run_tournament_ai_audit(tid: str, body_id: Optional[str] = None):
     rejected = 0
     needs_review = 0
     eligible_reimb = 0.0
-    flagged: List[dict] = []
+    flagged: list[dict] = []
     for inv in invoices:
         diff = diffs_by_inv.get(inv["id"])
         # Persist the diff so per-row chips reflect the audit run.
@@ -802,9 +805,7 @@ async def budget_tracker(bid: str):
             if allocs:
                 for a in allocs:
                     # match by label first (preferred), otherwise by code — never double-count
-                    if a.get("head_label") == head_label:
-                        spent += float(a.get("amount_inr") or 0)
-                    elif (a.get("head_code") or "").upper() == code:
+                    if a.get("head_label") == head_label or (a.get("head_code") or "").upper() == code:
                         spent += float(a.get("amount_inr") or 0)
             else:
                 if (i.get("budget_head_code") or "").upper() == code:

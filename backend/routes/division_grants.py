@@ -6,15 +6,15 @@
 Reuses shared_services CODE generator + audit_log. Voucher auto-created on Disburse
 via routes/vouchers.create_voucher_for_grant() to close the double-entry loop (P3.5).
 """
-from datetime import datetime, timezone
-from typing import List, Optional, Literal
 import uuid
+from datetime import datetime, timezone
+from typing import Literal
+
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router, logger
-from core.shared_services import next_code, write_audit_log, indian_fy
-
+from core.infra import api_router, db
+from core.shared_services import indian_fy, next_code, write_audit_log
 
 DivisionGrantStatus = Literal[
     "Draft", "Submitted", "Finance_Reviewed", "Approved",
@@ -30,10 +30,10 @@ class ApprovalEntry(BaseModel):
     model_config = ConfigDict(extra="ignore")
     stage: str
     action: str
-    actor_user_id: Optional[str] = None
+    actor_user_id: str | None = None
     actor_name: str
-    actor_role: Optional[str] = None
-    note: Optional[str] = None
+    actor_role: str | None = None
+    note: str | None = None
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -51,28 +51,28 @@ class DivisionGrant(DivisionGrantBase):
     code: str = ""
     status: DivisionGrantStatus = "Draft"
     current_stage: str = "Division_Request"
-    approval_chain: List[ApprovalEntry] = []
-    approved_amount_inr: Optional[float] = None
-    voucher_id: Optional[str] = None
-    disbursement_txn_id: Optional[str] = None
-    created_by_user_id: Optional[str] = None
-    created_by_name: Optional[str] = None
+    approval_chain: list[ApprovalEntry] = []
+    approved_amount_inr: float | None = None
+    voucher_id: str | None = None
+    disbursement_txn_id: str | None = None
+    created_by_user_id: str | None = None
+    created_by_name: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
 
 class DivisionGrantCreate(DivisionGrantBase):
-    created_by_user_id: Optional[str] = None
-    created_by_name: Optional[str] = None
+    created_by_user_id: str | None = None
+    created_by_name: str | None = None
 
 
 class ActionPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    actor_user_id: Optional[str] = None
-    actor_name: Optional[str] = "System"
-    actor_role: Optional[str] = None
-    note: Optional[str] = None
-    approved_amount_inr: Optional[float] = None
+    actor_user_id: str | None = None
+    actor_name: str | None = "System"
+    actor_role: str | None = None
+    note: str | None = None
+    approved_amount_inr: float | None = None
 
 
 # ---------------- helpers ----------------
@@ -94,7 +94,7 @@ async def _get(gid: str) -> dict:
 
 
 async def _apply(gid: str, *, action: str, new_status: str, new_stage: str,
-                 payload: ActionPayload, extra_set: Optional[dict] = None) -> dict:
+                 payload: ActionPayload, extra_set: dict | None = None) -> dict:
     grant = await _get(gid)
     entry = ApprovalEntry(
         stage=STAGE_LABELS.get(grant["current_stage"], grant["current_stage"]),
@@ -128,10 +128,10 @@ async def _apply(gid: str, *, action: str, new_status: str, new_stage: str,
 
 # ---------------- routes ----------------
 
-@api_router.get("/division-grants", response_model=List[DivisionGrant])
-async def list_division_grants(body_id: Optional[str] = None,
-                                status: Optional[DivisionGrantStatus] = None,
-                                fiscal_cycle: Optional[str] = None,
+@api_router.get("/division-grants", response_model=list[DivisionGrant])
+async def list_division_grants(body_id: str | None = None,
+                                status: DivisionGrantStatus | None = None,
+                                fiscal_cycle: str | None = None,
                                 skip: int = 0,
                                 limit: int = 500):
     q: dict = {}
@@ -238,7 +238,7 @@ async def reject_grant(gid: str, payload: ActionPayload):
 
 
 @api_router.get("/division-grants-stats/summary")
-async def division_grants_summary(fiscal_cycle: Optional[str] = None):
+async def division_grants_summary(fiscal_cycle: str | None = None):
     q: dict = {}
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
     docs = await db.division_grants.find(q, {"_id": 0}).to_list(1000)

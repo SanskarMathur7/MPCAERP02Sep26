@@ -9,15 +9,15 @@ date), floored at salvage_value_inr.
 Categories per BCCI/state association practice: Land · Building · Vehicle ·
 Equipment · Furniture · Computer · Networking · Sports_Equipment · Other.
 """
-from datetime import datetime, timezone
-from typing import List, Literal, Optional
 import uuid
+from datetime import datetime, timezone
+from typing import Literal
+
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router, logger
-from core.shared_services import next_code, write_audit_log, indian_fy
-
+from core.infra import api_router, db, logger
+from core.shared_services import indian_fy, next_code, write_audit_log
 
 AssetCategory = Literal[
     "Land", "Building", "Vehicle", "Equipment", "Furniture",
@@ -44,19 +44,19 @@ class AssetBase(BaseModel):
     body_id: str = "MPCA"
     category: AssetCategory
     description: str
-    location: Optional[str] = None
+    location: str | None = None
     purchase_date: str  # ISO date
     fiscal_cycle: str = Field(default_factory=indian_fy)
     cost_inr: float = Field(gt=0)
     salvage_value_inr: float = 0.0
-    useful_life_years: Optional[int] = None  # default from category if None
+    useful_life_years: int | None = None  # default from category if None
     depreciation_method: Literal["SLM"] = "SLM"
-    tag_no: Optional[str] = None  # QR/barcode / MPCA physical tag
-    vendor_id: Optional[str] = None
-    po_id: Optional[str] = None
-    invoice_ref: Optional[str] = None
-    gl_account: Optional[str] = None
-    notes: Optional[str] = None
+    tag_no: str | None = None  # QR/barcode / MPCA physical tag
+    vendor_id: str | None = None
+    po_id: str | None = None
+    invoice_ref: str | None = None
+    gl_account: str | None = None
+    notes: str | None = None
 
 
 class Asset(AssetBase):
@@ -65,32 +65,32 @@ class Asset(AssetBase):
     status: AssetStatus = "Active"
     accumulated_depreciation_inr: float = 0.0
     book_value_inr: float = 0.0  # cached; also recomputed on read
-    disposal_date: Optional[str] = None
-    disposal_amount_inr: Optional[float] = None
-    disposal_reason: Optional[str] = None
-    gain_loss_on_disposal_inr: Optional[float] = None  # +ve = gain, -ve = loss
-    created_by_name: Optional[str] = None
+    disposal_date: str | None = None
+    disposal_amount_inr: float | None = None
+    disposal_reason: str | None = None
+    gain_loss_on_disposal_inr: float | None = None  # +ve = gain, -ve = loss
+    created_by_name: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
 
 class AssetCreate(AssetBase):
-    created_by_name: Optional[str] = None
+    created_by_name: str | None = None
 
 
 class DisposePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    disposal_date: Optional[str] = None
+    disposal_date: str | None = None
     disposal_amount_inr: float = 0.0
     disposal_reason: str
-    actor_name: Optional[str] = "MPCA Accounts"
+    actor_name: str | None = "MPCA Accounts"
 
 
 def _months_between(d1: datetime, d2: datetime) -> int:
     return max(0, (d2.year - d1.year) * 12 + (d2.month - d1.month))
 
 
-def _compute_depreciation(asset: dict, as_on: Optional[datetime] = None) -> dict:
+def _compute_depreciation(asset: dict, as_on: datetime | None = None) -> dict:
     """Returns {accumulated_depreciation_inr, book_value_inr, months_used, monthly_dep}."""
     as_on = as_on or datetime.now(timezone.utc)
     cost = float(asset["cost_inr"])
@@ -138,11 +138,11 @@ async def _get(aid: str) -> dict:
 
 # ═════════════ CRUD ═════════════
 
-@api_router.get("/assets", response_model=List[Asset])
-async def list_assets(body_id: Optional[str] = None,
-                      category: Optional[AssetCategory] = None,
-                      status: Optional[AssetStatus] = None,
-                      fiscal_cycle: Optional[str] = None,
+@api_router.get("/assets", response_model=list[Asset])
+async def list_assets(body_id: str | None = None,
+                      category: AssetCategory | None = None,
+                      status: AssetStatus | None = None,
+                      fiscal_cycle: str | None = None,
                       skip: int = 0,
                       limit: int = 2000):
     q: dict = {}
@@ -271,7 +271,7 @@ async def dispose_asset(aid: str, payload: DisposePayload):
 
 
 @api_router.get("/assets-stats/summary")
-async def assets_summary(body_id: Optional[str] = None):
+async def assets_summary(body_id: str | None = None):
     q: dict = {}
     if body_id: q["body_id"] = body_id
     docs = await db.assets.find(q, {"_id": 0}).to_list(3000)

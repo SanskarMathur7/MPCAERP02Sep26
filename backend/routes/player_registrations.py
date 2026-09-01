@@ -14,18 +14,21 @@ RBAC
 * Public form endpoints: no auth. Token validity + rate limits protect
   them (rate limits deferred — env-controlled in a follow-up).
 """
-from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, Literal
 import secrets
 import uuid
+from datetime import datetime, timezone
+from typing import Any, Literal
 
-from fastapi import HTTPException, Header, Depends, Request
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from fastapi import Depends, HTTPException
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from core.infra import db, api_router
 from core.email_notifications import send_email
+from core.infra import api_router, db
+from lib.authz import (
+    principal_body_code,
+    principal_persona_id,
+    principal_role_id,
+)
 
 
 async def _ensure_indexes():
@@ -43,6 +46,7 @@ async def _ensure_indexes():
 
 
 import asyncio as _asyncio
+
 try:
     _loop = _asyncio.get_event_loop()
     if _loop.is_running():
@@ -70,14 +74,14 @@ class PlayerRegistrationCampaign(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     body_code: str
-    body_name: Optional[str] = None
-    body_type: Optional[str] = None
+    body_name: str | None = None
+    body_type: str | None = None
     cycle_code: str                                     # e.g. "2025-26"
     title: str
     public_token: str = Field(default_factory=lambda: secrets.token_urlsafe(12))
-    expires_on: Optional[str] = None                    # ISO date
+    expires_on: str | None = None                    # ISO date
     is_active: bool = True
-    notes: Optional[str] = None
+    notes: str | None = None
     invited_count: int = 0
     submitted_count: int = 0
     approved_count: int = 0
@@ -87,12 +91,12 @@ class PlayerRegistrationCampaign(BaseModel):
     # approves it before the public link becomes usable. MPCA-created
     # campaigns default to Approved.
     request_status: Literal["Pending", "Approved", "Rejected"] = "Approved"
-    requested_by: Optional[str] = None
-    request_note: Optional[str] = None
-    approved_by: Optional[str] = None
-    approved_at: Optional[str] = None
-    rejection_reason: Optional[str] = None
-    created_by: Optional[str] = None
+    requested_by: str | None = None
+    request_note: str | None = None
+    approved_by: str | None = None
+    approved_at: str | None = None
+    rejection_reason: str | None = None
+    created_by: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -102,11 +106,11 @@ class PlayerRegistrationInvite(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     campaign_id: str
     token: str = Field(default_factory=lambda: secrets.token_urlsafe(12))
-    prefill_name: Optional[str] = None
-    prefill_email: Optional[str] = None
-    prefill_phone: Optional[str] = None
+    prefill_name: str | None = None
+    prefill_email: str | None = None
+    prefill_phone: str | None = None
     status: str = "Sent"                                # Sent | Submitted | Approved | Rejected
-    submission_id: Optional[str] = None
+    submission_id: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -130,65 +134,65 @@ class PlayerRegistrationData(BaseModel):
         return data
 
     full_name: str = ""                                 # M39q · Auto-composed from first_name + surname (kept for backward-compat with squads / players)
-    first_name: Optional[str] = None                    # M39q · Split name capture
-    surname: Optional[str] = None                       # M39q · Split name capture
-    father_name: Optional[str] = None                   # M39o · Batch A
+    first_name: str | None = None                    # M39q · Split name capture
+    surname: str | None = None                       # M39q · Split name capture
+    father_name: str | None = None                   # M39o · Batch A
     dob: str                                            # ISO date (form displays DD/MM/YYYY)
     gender: str                                         # M | F | Other
     role: str                                           # Batter | Bowler | All_Rounder | Wicket_Keeper
-    batting_style: Optional[str] = None
-    bowling_style: Optional[str] = None
+    batting_style: str | None = None
+    bowling_style: str | None = None
     mobile: str
-    email: Optional[str] = None
-    home_district_code: Optional[str] = None
-    preferred_division_code: Optional[str] = None       # M38h · Player picks their Home Division from dropdown
+    email: str | None = None
+    home_district_code: str | None = None
+    preferred_division_code: str | None = None       # M38h · Player picks their Home Division from dropdown
     category: str = "Local_MP"                          # Local_MP | Guest | Foreign
-    guardian_name: Optional[str] = None
-    address: Optional[str] = None
-    aadhaar_no: Optional[str] = None
-    pan_no: Optional[str] = None                        # M39o · Mandatory display for 18+ (validation lands in Batch B)
-    gst_no: Optional[str] = None                        # M39o · Where applicable (coaches, contractors)
-    bank_name: Optional[str] = None                     # M39o · Bank Name field
+    guardian_name: str | None = None
+    address: str | None = None
+    aadhaar_no: str | None = None
+    pan_no: str | None = None                        # M39o · Mandatory display for 18+ (validation lands in Batch B)
+    gst_no: str | None = None                        # M39o · Where applicable (coaches, contractors)
+    bank_name: str | None = None                     # M39o · Bank Name field
     consent: bool = False
     dpdp_consent: bool = False                          # M39o · DPDP Act 2023 explicit acknowledgement
     no_recent_studies: bool = False                     # M39o · U23 · unlocks affidavit path
-    photo_url: Optional[str] = None
-    aadhaar_url: Optional[str] = None
-    aadhaar_history_url: Optional[str] = None           # M39o · Aadhaar update history from UIDAI portal
-    pan_url: Optional[str] = None                       # M39o
-    passport_url: Optional[str] = None                  # M39o
-    driving_licence_url: Optional[str] = None           # M39o
-    voter_id_url: Optional[str] = None                  # M39o
-    address_proof_url: Optional[str] = None             # Current Address Proof
-    birth_cert_url: Optional[str] = None
-    marksheet_3yr_url: Optional[str] = None             # M39o · Single PDF · last 3 years bundled (optional if is_employed)
-    affidavit_url: Optional[str] = None                 # M39o · Only when no_recent_studies=True
-    cancelled_cheque_url: Optional[str] = None          # M39o · Bank verification proof
-    gst_certificate_url: Optional[str] = None           # M39o · If GST number provided
+    photo_url: str | None = None
+    aadhaar_url: str | None = None
+    aadhaar_history_url: str | None = None           # M39o · Aadhaar update history from UIDAI portal
+    pan_url: str | None = None                       # M39o
+    passport_url: str | None = None                  # M39o
+    driving_licence_url: str | None = None           # M39o
+    voter_id_url: str | None = None                  # M39o
+    address_proof_url: str | None = None             # Current Address Proof
+    birth_cert_url: str | None = None
+    marksheet_3yr_url: str | None = None             # M39o · Single PDF · last 3 years bundled (optional if is_employed)
+    affidavit_url: str | None = None                 # M39o · Only when no_recent_studies=True
+    cancelled_cheque_url: str | None = None          # M39o · Bank verification proof
+    gst_certificate_url: str | None = None           # M39o · If GST number provided
     # MPCA-151 · Feb-2026 · Extended document set + conditional fields
-    samagra_id_player_url: Optional[str] = None         # Samagra ID (player's own)
-    samagra_id_family_url: Optional[str] = None         # Samagra ID (family)
-    consent_form_url: Optional[str] = None              # Notarized MPCA-issued consent template
-    no_study_affidavit_url: Optional[str] = None        # MPCA-issued No-Study affidavit template
-    bonafide_school_cert_url: Optional[str] = None      # School Bonafide certificate
+    samagra_id_player_url: str | None = None         # Samagra ID (player's own)
+    samagra_id_family_url: str | None = None         # Samagra ID (family)
+    consent_form_url: str | None = None              # Notarized MPCA-issued consent template
+    no_study_affidavit_url: str | None = None        # MPCA-issued No-Study affidavit template
+    bonafide_school_cert_url: str | None = None      # School Bonafide certificate
     # Employed-player alternate path (in lieu of marksheet_3yr_url)
     is_employed: bool = False
-    appointment_letter_url: Optional[str] = None        # if is_employed=True
-    salary_slip_url: Optional[str] = None               # if is_employed=True (last month)
-    bank_statement_1yr_url: Optional[str] = None        # if is_employed=True (12-month PDF)
+    appointment_letter_url: str | None = None        # if is_employed=True
+    salary_slip_url: str | None = None               # if is_employed=True (last month)
+    bank_statement_1yr_url: str | None = None        # if is_employed=True (12-month PDF)
     # Cross-division registration audit
-    last_season_division_code: Optional[str] = None     # Division played from LAST cricketing season
-    noc_previous_division_url: Optional[str] = None     # Required if last_season_division_code != preferred_division_code
+    last_season_division_code: str | None = None     # Division played from LAST cricketing season
+    noc_previous_division_url: str | None = None     # Required if last_season_division_code != preferred_division_code
     # Place of birth
-    place_of_birth_city: Optional[str] = None
-    place_of_birth_state: Optional[str] = None
+    place_of_birth_city: str | None = None
+    place_of_birth_state: str | None = None
     # BCCI registration history
     bcci_registered: bool = False
-    bcci_registration_year: Optional[int] = None        # e.g. 2019 — required if bcci_registered=True
-    other_docs: List[Dict[str, str]] = Field(default_factory=list)  # M39o · [{label, url}]
-    bank_account_no: Optional[str] = None
-    bank_ifsc: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    bcci_registration_year: int | None = None        # e.g. 2019 — required if bcci_registered=True
+    other_docs: list[dict[str, str]] = Field(default_factory=list)  # M39o · [{label, url}]
+    bank_account_no: str | None = None
+    bank_ifsc: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     model_config = ConfigDict(extra="ignore")
 
 
@@ -197,11 +201,11 @@ class PlayerRegistrationAuditEvent(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     event: str                                          # "submitted" / "division_approved" / "mpca_approved" / "returned" / "rejected" / "doc_uploaded" / "edited"
-    actor_name: Optional[str] = None
-    actor_body_id: Optional[str] = None
-    actor_role: Optional[str] = None
-    note: Optional[str] = None
-    diff: Optional[Dict[str, Any]] = None               # {field: [old, new]}
+    actor_name: str | None = None
+    actor_body_id: str | None = None
+    actor_role: str | None = None
+    note: str | None = None
+    diff: dict[str, Any] | None = None               # {field: [old, new]}
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -209,7 +213,7 @@ class PlayerRegistration(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     campaign_id: str
-    invite_id: Optional[str] = None
+    invite_id: str | None = None
     body_code: str
     cycle_code: str
     # M39n · Two-stage flow — Submitted → Division_Approved → Approved. Terminal
@@ -217,24 +221,24 @@ class PlayerRegistration(BaseModel):
     status: str = "Submitted"
     player_data: PlayerRegistrationData
     submitted_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    submitted_ip: Optional[str] = None
+    submitted_ip: str | None = None
     # Retained for backwards compat (used by legacy /approve endpoint)
-    reviewed_at: Optional[str] = None
-    reviewed_by: Optional[str] = None
-    review_note: Optional[str] = None
-    return_reason: Optional[str] = None
-    ai_summary: Optional[Dict[str, Any]] = None
-    ai_full_report: Optional[Dict[str, Any]] = None      # M39p · Batch B/C report card
+    reviewed_at: str | None = None
+    reviewed_by: str | None = None
+    review_note: str | None = None
+    return_reason: str | None = None
+    ai_summary: dict[str, Any] | None = None
+    ai_full_report: dict[str, Any] | None = None      # M39p · Batch B/C report card
     # M39n · Two-stage approval trail
-    division_remark: Optional[str] = None
-    division_reviewed_by: Optional[str] = None
-    division_reviewed_at: Optional[str] = None
-    mpca_remark: Optional[str] = None
-    mpca_reviewed_by: Optional[str] = None
-    mpca_reviewed_at: Optional[str] = None
+    division_remark: str | None = None
+    division_reviewed_by: str | None = None
+    division_reviewed_at: str | None = None
+    mpca_remark: str | None = None
+    mpca_reviewed_by: str | None = None
+    mpca_reviewed_at: str | None = None
     mpca_shortcut_used: bool = False                    # true if MPCA approved before Division
-    audit_events: List[PlayerRegistrationAuditEvent] = Field(default_factory=list)
-    linked_player_id: Optional[str] = None
+    audit_events: list[PlayerRegistrationAuditEvent] = Field(default_factory=list)
+    linked_player_id: str | None = None
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -244,32 +248,32 @@ class CampaignCreate(BaseModel):
     body_code: str
     cycle_code: str
     title: str
-    expires_on: Optional[str] = None
-    notes: Optional[str] = None
-    created_by: Optional[str] = None
+    expires_on: str | None = None
+    notes: str | None = None
+    created_by: str | None = None
     model_config = ConfigDict(extra="ignore")
 
 
 class CampaignPatch(BaseModel):
-    title: Optional[str] = None
-    expires_on: Optional[str] = None
-    is_active: Optional[bool] = None
-    notes: Optional[str] = None
+    title: str | None = None
+    expires_on: str | None = None
+    is_active: bool | None = None
+    notes: str | None = None
     model_config = ConfigDict(extra="ignore")
 
 
 class InviteBulk(BaseModel):
-    invites: List[Dict[str, Any]]                       # [{prefill_name, prefill_email, prefill_phone}, …]
+    invites: list[dict[str, Any]]                       # [{prefill_name, prefill_email, prefill_phone}, …]
 
 
 class ReviewAction(BaseModel):
-    reviewer_name: Optional[str] = None
-    note: Optional[str] = None
+    reviewer_name: str | None = None
+    note: str | None = None
 
 
 # ─────────────── Helpers ───────────────
 
-def _may_own(body_code: str, caller_body: Optional[str], caller_role: Optional[str]) -> bool:
+def _may_own(body_code: str, caller_body: str | None, caller_role: str | None) -> bool:
     """Who may CREATE/patch/approve campaigns for `body_code`."""
     if caller_body == body_code:
         return True
@@ -278,7 +282,7 @@ def _may_own(body_code: str, caller_body: Optional[str], caller_role: Optional[s
     return False
 
 
-def _may_read(campaign: Dict[str, Any], caller_body: Optional[str], caller_role: Optional[str]) -> bool:
+def _may_read(campaign: dict[str, Any], caller_body: str | None, caller_role: str | None) -> bool:
     if caller_body == campaign["body_code"]:
         return True
     if caller_body == "MPCA" and caller_role in MPCA_ROLES:
@@ -292,7 +296,7 @@ def _may_read(campaign: Dict[str, Any], caller_body: Optional[str], caller_role:
     return False
 
 
-async def _touch_counts(campaign_id: str, delta: Dict[str, int]):
+async def _touch_counts(campaign_id: str, delta: dict[str, int]):
     if not delta:
         return
     await db.player_registration_campaigns.update_one(
@@ -312,7 +316,7 @@ async def _log_event(rid: str, event: str, *, actor_name=None, actor_body_id=Non
     )
 
 
-def _is_home_division(reg_doc: Dict[str, Any], caller_body: Optional[str], caller_role: Optional[str]) -> bool:
+def _is_home_division(reg_doc: dict[str, Any], caller_body: str | None, caller_role: str | None) -> bool:
     """M39n · The 'home division' is preferred_division_code on the payload, or
     the registration's body_code if that already refers to a Division / District."""
     pd = reg_doc.get("player_data") or {}
@@ -330,29 +334,29 @@ def _is_home_division(reg_doc: Dict[str, Any], caller_body: Optional[str], calle
 
 class RemarkAction(BaseModel):
     """M39n · Remark required on approve; optional on other actions."""
-    remark: Optional[str] = None
-    actor_name: Optional[str] = None
+    remark: str | None = None
+    actor_name: str | None = None
 
 
 class EditAction(BaseModel):
     """M39n · Division can amend any field in `player_data`. Diff is logged."""
-    patch: Dict[str, Any]
-    actor_name: Optional[str] = None
+    patch: dict[str, Any]
+    actor_name: str | None = None
 
 
 class DocUploadAction(BaseModel):
     """M39n · Division adds a doc URL on player's behalf (photo, aadhaar, etc.)."""
     doc_key: str        # "photo_url" | "aadhaar_url" | "address_proof_url" | "birth_cert_url"
     doc_url: str
-    actor_name: Optional[str] = None
+    actor_name: str | None = None
 
 
 @api_router.post("/player-registrations/{rid}/division-approve", response_model=PlayerRegistration)
 async def division_approve(
     rid: str,
     action: RemarkAction,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """M39n · Home Division approves the registration with a mandatory remark.
     Status flips Submitted → Division_Approved. MPCA queue then picks it up."""
@@ -399,8 +403,8 @@ async def division_approve(
 async def mpca_approve(
     rid: str,
     action: RemarkAction,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """M39n · MPCA final approval. Creates the Player row. Accepts either a
     Division-approved registration (normal path) or, with a shortcut warning,
@@ -478,7 +482,7 @@ async def mpca_approve(
     for doc_type, url in reg_to_kyc:
         if url:
             player.documents.append(_PlayerDocument(
-                doc_type=doc_type, url=url, uploaded_at=now if False else datetime.now(timezone.utc).isoformat(),
+                doc_type=doc_type, url=url, uploaded_at=datetime.now(timezone.utc).isoformat(),
                 uploaded_by=doc.get("body_code") or "MPCA", verified=False,
             ))
     for other in (pd.get("other_docs") or []):
@@ -535,8 +539,8 @@ async def mpca_approve(
 async def return_to_player(
     rid: str,
     action: RemarkAction,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """M39n · Either stage can send the registration back for edits. Player can
     resubmit in-place; status flips Returned → Submitted on re-save."""
@@ -565,8 +569,8 @@ async def return_to_player(
 async def edit_registration(
     rid: str,
     action: EditAction,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """M39n · Home Division (or MPCA) can amend the player_data before approving.
     Diff of changed fields is logged. Only allowed while Submitted / Returned /
@@ -582,8 +586,8 @@ async def edit_registration(
         raise HTTPException(400, "Empty patch.")
 
     current = doc.get("player_data") or {}
-    diff: Dict[str, Any] = {}
-    updates: Dict[str, Any] = {}
+    diff: dict[str, Any] = {}
+    updates: dict[str, Any] = {}
     for k, v in action.patch.items():
         # Never allow the caller to change the campaign/body/cycle/status via this route
         if k in {"campaign_id", "body_code", "cycle_code", "status", "id"}:
@@ -606,8 +610,8 @@ async def edit_registration(
 async def upload_doc_on_behalf(
     rid: str,
     action: DocUploadAction,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """M39n · Division uploads a doc URL on the player's behalf. Doc URL
     typically comes from POST /api/uploads. Overwrites the player_data doc slot
@@ -663,8 +667,8 @@ async def resubmit_after_return(rid: str):
 @api_router.post("/player-registration-campaigns", response_model=PlayerRegistrationCampaign)
 async def create_campaign(
     payload: CampaignCreate,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     if not _may_own(payload.body_code, x_user_body_code, x_role_id):
         raise HTTPException(403, f"Only {payload.body_code} or MPCA may open a campaign for that body.")
@@ -691,9 +695,9 @@ async def create_campaign(
 @api_router.post("/player-registration-campaigns/{cid}/approve-request", response_model=PlayerRegistrationCampaign)
 async def approve_campaign_request(
     cid: str,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_persona_name: Optional[str] = Depends(principal_persona_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_persona_name: str | None = Depends(principal_persona_id),
 ):
     """MPCA-116 · MPCA approves a Division's campaign request. Public form
     submissions unlock once this fires."""
@@ -726,9 +730,9 @@ class _RejectPayload(BaseModel):
 async def reject_campaign_request(
     cid: str,
     payload: _RejectPayload,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_persona_name: Optional[str] = Depends(principal_persona_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_persona_name: str | None = Depends(principal_persona_id),
 ):
     """MPCA-116 · MPCA rejects a Division's campaign request."""
     if not (x_user_body_code == "MPCA" and x_role_id in MPCA_ROLES):
@@ -751,15 +755,15 @@ async def reject_campaign_request(
     return await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
 
 
-@api_router.get("/player-registration-campaigns", response_model=List[PlayerRegistrationCampaign])
+@api_router.get("/player-registration-campaigns", response_model=list[PlayerRegistrationCampaign])
 async def list_campaigns(
-    body_code: Optional[str] = None,
-    cycle_code: Optional[str] = None,
-    is_active: Optional[bool] = None,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    body_code: str | None = None,
+    cycle_code: str | None = None,
+    is_active: bool | None = None,
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
-    q: Dict[str, Any] = {}
+    q: dict[str, Any] = {}
     if body_code: q["body_code"] = body_code
     if cycle_code: q["cycle_code"] = cycle_code
     if is_active is not None: q["is_active"] = is_active
@@ -774,8 +778,8 @@ async def list_campaigns(
 @api_router.get("/player-registration-campaigns/{cid}", response_model=PlayerRegistrationCampaign)
 async def get_campaign(
     cid: str,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     doc = await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
     if not doc:
@@ -789,8 +793,8 @@ async def get_campaign(
 async def patch_campaign(
     cid: str,
     payload: CampaignPatch,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     doc = await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
     if not doc:
@@ -811,15 +815,15 @@ async def patch_campaign(
 async def bulk_invite(
     cid: str,
     payload: InviteBulk,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     doc = await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Campaign not found")
     if not _may_own(doc["body_code"], x_user_body_code, x_role_id):
         raise HTTPException(403, "Not permitted to add invites to this campaign.")
-    created: List[Dict[str, Any]] = []
+    created: list[dict[str, Any]] = []
     for inv in payload.invites or []:
         row = PlayerRegistrationInvite(
             campaign_id=cid,
@@ -836,8 +840,8 @@ async def bulk_invite(
 @api_router.get("/player-registration-campaigns/{cid}/invites")
 async def list_invites(
     cid: str,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     doc = await db.player_registration_campaigns.find_one({"id": cid}, {"_id": 0})
     if not doc:
@@ -929,7 +933,7 @@ class PublicVerifyDraft(BaseModel):
     (not all required fields need be filled) so the AI can extract values
     from the uploaded documents and suggest them back to the form."""
     token: str
-    player: Dict[str, Any] = Field(default_factory=dict)
+    player: dict[str, Any] = Field(default_factory=dict)
     model_config = ConfigDict(extra="ignore")
 
 
@@ -1045,6 +1049,7 @@ async def public_submit(payload: PublicSubmit):
     # reviewer already has it when they open the inbox.
     try:
         import asyncio as _aio
+
         from core.player_doc_ai import run_full_registration_ai as _run_full_ai
         async def _bg():
             try:
@@ -1066,16 +1071,16 @@ async def public_submit(payload: PublicSubmit):
 
 # ─────────────── Admin inbox ───────────────
 
-@api_router.get("/player-registrations", response_model=List[PlayerRegistration])
+@api_router.get("/player-registrations", response_model=list[PlayerRegistration])
 async def list_registrations(
-    campaign_id: Optional[str] = None,
-    body_code: Optional[str] = None,
-    cycle_code: Optional[str] = None,
-    status: Optional[str] = None,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    campaign_id: str | None = None,
+    body_code: str | None = None,
+    cycle_code: str | None = None,
+    status: str | None = None,
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
-    q: Dict[str, Any] = {}
+    q: dict[str, Any] = {}
     if campaign_id: q["campaign_id"] = campaign_id
     if cycle_code: q["cycle_code"] = cycle_code
     if status: q["status"] = status
@@ -1091,8 +1096,8 @@ async def list_registrations(
 @api_router.get("/player-registrations/{rid}", response_model=PlayerRegistration)
 async def get_registration(
     rid: str,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
     if not doc:
@@ -1105,9 +1110,9 @@ async def get_registration(
 @api_router.post("/player-registrations/{rid}/ai-review", response_model=PlayerRegistration)
 async def ai_review_registration(
     rid: str,
-    actor_name: Optional[str] = None,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    actor_name: str | None = None,
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """M38i · Run Gemini on the player-submitted KYC documents (photo,
     Aadhaar, address proof, birth certificate) and stamp a summary verdict
@@ -1124,7 +1129,7 @@ async def ai_review_registration(
     from core.ai_validator import _run_player_doc_validation
     pd = doc.get("player_data") or {}
     # Shape the registration into the format `_run_player_doc_validation` expects
-    docs_for_ai: List[dict] = []
+    docs_for_ai: list[dict] = []
     for key, doc_type in [("photo_url", "photo"), ("aadhaar_url", "aadhaar"),
                           ("address_proof_url", "address_proof"),
                           ("birth_cert_url", "birth_certificate")]:
@@ -1187,8 +1192,8 @@ async def ai_review_registration(
 @api_router.post("/player-registrations/{rid}/ai-full-review", response_model=PlayerRegistration)
 async def ai_full_review(
     rid: str,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """M39p · Manually re-run the full AI + rules report card. Available to the
     home Division or MPCA at any time before final approval."""
@@ -1211,8 +1216,8 @@ async def ai_full_review(
 async def approve_registration(
     rid: str,
     action: ReviewAction,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
     if not doc:
@@ -1276,8 +1281,8 @@ async def approve_registration(
 async def reject_registration(
     rid: str,
     action: ReviewAction,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
     if not doc:
@@ -1322,8 +1327,8 @@ async def reject_registration(
 async def return_registration(
     rid: str,
     action: ReviewAction,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """Send back to the player so they can edit and re-submit via the same token."""
     doc = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
@@ -1356,7 +1361,7 @@ async def return_registration(
 # Reviewer can send unlimited rounds. Token expires in 7 days.
 # ═════════════════════════════════════════════════════════════════════
 
-from core.sms_notifications import send_correction_sms  # noqa: E402
+from core.sms_notifications import send_correction_sms
 
 CORRECTION_TOKEN_TTL_DAYS = 7
 
@@ -1383,11 +1388,11 @@ class CorrectionDocumentFlag(BaseModel):
 
 class CorrectionRequestCreate(BaseModel):
     """Reviewer payload."""
-    actor_name: Optional[str] = None
+    actor_name: str | None = None
     overall_note: str
-    field_flags: List[CorrectionFieldFlag] = Field(default_factory=list)
-    document_flags: List[CorrectionDocumentFlag] = Field(default_factory=list)
-    origin: Optional[str] = None   # frontend base URL for building the player link
+    field_flags: list[CorrectionFieldFlag] = Field(default_factory=list)
+    document_flags: list[CorrectionDocumentFlag] = Field(default_factory=list)
+    origin: str | None = None   # frontend base URL for building the player link
     model_config = ConfigDict(extra="ignore")
 
 
@@ -1400,20 +1405,20 @@ class PlayerCorrectionRequest(BaseModel):
     token: str = Field(default_factory=lambda: secrets.token_urlsafe(24))
     status: Literal["Pending", "Resubmitted", "Cancelled", "Expired"] = "Pending"
     overall_note: str
-    field_flags: List[CorrectionFieldFlag] = Field(default_factory=list)
-    document_flags: List[CorrectionDocumentFlag] = Field(default_factory=list)
-    requested_by_name: Optional[str] = None
-    requested_by_body: Optional[str] = None
-    requested_by_role: Optional[str] = None
+    field_flags: list[CorrectionFieldFlag] = Field(default_factory=list)
+    document_flags: list[CorrectionDocumentFlag] = Field(default_factory=list)
+    requested_by_name: str | None = None
+    requested_by_body: str | None = None
+    requested_by_role: str | None = None
     requested_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     expires_at: str = ""
-    resubmitted_at: Optional[str] = None
-    resubmit_diff: Optional[Dict[str, Any]] = None
-    notification_result: Optional[Dict[str, Any]] = None
+    resubmitted_at: str | None = None
+    resubmit_diff: dict[str, Any] | None = None
+    notification_result: dict[str, Any] | None = None
 
 
 class PublicCorrectionSubmit(BaseModel):
-    patch: Dict[str, Any] = Field(default_factory=dict)
+    patch: dict[str, Any] = Field(default_factory=dict)
     model_config = ConfigDict(extra="ignore")
 
 
@@ -1426,8 +1431,8 @@ def _correction_link(origin: str | None, token: str) -> str:
 async def request_correction(
     rid: str,
     payload: CorrectionRequestCreate,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """Iter 128 · Division or MPCA flags specific fields/documents for the
     player to fix. Fires email + SMS with a unique tokenised link."""
@@ -1615,8 +1620,8 @@ def _build_correction_email_html(name: str, note: str, field_flags, document_fla
 async def cancel_correction(
     rid: str,
     cid: str,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     reg = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
     if not reg:
@@ -1642,8 +1647,8 @@ async def cancel_correction(
 @api_router.get("/player-registrations/{rid}/corrections")
 async def list_corrections(
     rid: str,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     reg = await db.player_registrations.find_one({"id": rid}, {"_id": 0})
     if not reg:
@@ -1711,8 +1716,8 @@ async def public_submit_correction(token: str, payload: PublicCorrectionSubmit):
         raise HTTPException(400, "Nothing to submit.")
 
     current = reg.get("player_data") or {}
-    updates: Dict[str, Any] = {}
-    diff: Dict[str, Any] = {}
+    updates: dict[str, Any] = {}
+    diff: dict[str, Any] = {}
     for k, v in payload.patch.items():
         if k not in flagged:
             raise HTTPException(400, f"Field '{k}' was not flagged for correction.")

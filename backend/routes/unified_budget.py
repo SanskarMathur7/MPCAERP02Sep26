@@ -33,20 +33,21 @@ Travel grant is a separate compute — implemented in `compute_travel_grant`.
 """
 from datetime import date
 from math import ceil
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import HTTPException, Header, Depends, Request
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
+from fastapi import Depends, Header, HTTPException
 
 from core.infra import api_router, db
 from core.wiring_guard import assert_wiring_owner, stamp_actor
+from lib.authz import (
+    principal_body_code,
+    principal_body_type,
+)
 from models import BUDGET_HEADS_META, TRAVEL_HEADS_META
-
 
 # ─────────────────── Date helpers ───────────────────
 
-def _parse_iso(s: Optional[str]) -> Optional[date]:
+def _parse_iso(s: str | None) -> date | None:
     if not s:
         return None
     try:
@@ -56,18 +57,18 @@ def _parse_iso(s: Optional[str]) -> Optional[date]:
         return None
 
 
-def _day_ordinal(d: Optional[date]) -> Optional[int]:
+def _day_ordinal(d: date | None) -> int | None:
     if d is None:
         return None
     return d.toordinal()
 
 
-def _from_date(m: Dict[str, Any]) -> Optional[date]:
+def _from_date(m: dict[str, Any]) -> date | None:
     """Read the match start date from any of the supported fixture shapes."""
     return _parse_iso(m.get("from_date") or m.get("from") or m.get("scheduled_date") or m.get("match_date"))
 
 
-def _to_date(m: Dict[str, Any]) -> Optional[date]:
+def _to_date(m: dict[str, Any]) -> date | None:
     """Read the match end date; falls back to `scheduled_date + days - 1`."""
     t = _parse_iso(m.get("to_date") or m.get("to"))
     if t:
@@ -79,12 +80,11 @@ def _to_date(m: Dict[str, Any]) -> Optional[date]:
         d = int(m.get("days") or 1)
     except (TypeError, ValueError):
         d = 1
-    if d < 1:
-        d = 1
+    d = max(d, 1)
     return date.fromordinal(f.toordinal() + d - 1)
 
 
-def span_days(m: Dict[str, Any]) -> int:
+def span_days(m: dict[str, Any]) -> int:
     """Inclusive day count between from_date and to_date."""
     f = _from_date(m)
     t = _to_date(m)
@@ -93,7 +93,7 @@ def span_days(m: Dict[str, Any]) -> int:
     return (t - f).days + 1
 
 
-def match_days(m: Dict[str, Any]) -> int:
+def match_days(m: dict[str, Any]) -> int:
     """Actual days played (multi-day matches may end early)."""
     span = span_days(m)
     if not span:
@@ -110,11 +110,11 @@ def match_days(m: Dict[str, Any]) -> int:
     return span
 
 
-def shortfall_days(m: Dict[str, Any]) -> int:
+def shortfall_days(m: dict[str, Any]) -> int:
     return max(span_days(m) - match_days(m), 0)
 
 
-def gap_map(matches: List[Dict[str, Any]]) -> Dict[str, int]:
+def gap_map(matches: list[dict[str, Any]]) -> dict[str, int]:
     """For each match, NMD gap immediately before its first playing day.
 
     First match (no earlier playing day) → 1 (arrival day).
@@ -128,7 +128,7 @@ def gap_map(matches: List[Dict[str, Any]]) -> Dict[str, int]:
         for x in range(f.toordinal(), t.toordinal() + 1):
             playing.add(x)
     sorted_days = sorted(playing)
-    gap: Dict[str, int] = {}
+    gap: dict[str, int] = {}
     for m in valid:
         f_ord = _from_date(m).toordinal()
         prev = None
@@ -141,7 +141,7 @@ def gap_map(matches: List[Dict[str, Any]]) -> Dict[str, int]:
     return gap
 
 
-def effective_nmd(m: Dict[str, Any], gap: Dict[str, int]) -> int:
+def effective_nmd(m: dict[str, Any], gap: dict[str, int]) -> int:
     """Manual override (`nmd_manual`) else gap + shortfall."""
     manual = m.get("nmd_manual")
     if manual is not None and manual != "":
@@ -156,7 +156,7 @@ def effective_nmd(m: Dict[str, Any], gap: Dict[str, int]) -> int:
 
 # ─────────────────── Driver helpers ───────────────────
 
-def _pool_of_match(m: Dict[str, Any], pools: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def _pool_of_match(m: dict[str, Any], pools: list[dict[str, Any]]) -> dict[str, Any] | None:
     pid = m.get("pool_id") or m.get("poolId")
     if not pid:
         return None
@@ -166,7 +166,7 @@ def _pool_of_match(m: Dict[str, Any], pools: List[Dict[str, Any]]) -> Optional[D
     return None
 
 
-def _team_pax(m: Dict[str, Any], default_squad: int) -> int:
+def _team_pax(m: dict[str, Any], default_squad: int) -> int:
     """Per-match squad override (`squad`) else tournament default."""
     q = m.get("squad")
     if q is None or q == "":
@@ -177,7 +177,7 @@ def _team_pax(m: Dict[str, Any], default_squad: int) -> int:
         return int(default_squad or 18)
 
 
-def host_away_pax(m: Dict[str, Any], pool: Optional[Dict[str, Any]], default_squad: int) -> Dict[str, Any]:
+def host_away_pax(m: dict[str, Any], pool: dict[str, Any] | None, default_squad: int) -> dict[str, Any]:
     """Compute host / away pax counts and team-count flags for a match."""
     sq = _team_pax(m, default_squad)
     sides = [s for s in [
@@ -197,7 +197,7 @@ def host_away_pax(m: Dict[str, Any], pool: Optional[Dict[str, Any]], default_squ
     }
 
 
-def officials_count(m: Dict[str, Any]) -> int:
+def officials_count(m: dict[str, Any]) -> int:
     """Total officials assigned to this match — umpires + scorers + selectors + observers.
 
     Supports THREE shapes:
@@ -221,7 +221,7 @@ def officials_count(m: Dict[str, Any]) -> int:
     return 0
 
 
-def driver_qty(m: Dict[str, Any], driver: Optional[str], pool: Optional[Dict[str, Any]], default_squad: int) -> int:
+def driver_qty(m: dict[str, Any], driver: str | None, pool: dict[str, Any] | None, default_squad: int) -> int:
     """Driver → per-match quantity. Faithful to HTML utility semantics
     (TeamCount uses `n` — matches actually playing)."""
     pax = host_away_pax(m, pool, default_squad)
@@ -244,7 +244,7 @@ def driver_qty(m: Dict[str, Any], driver: Optional[str], pool: Optional[Dict[str
     return 1
 
 
-def derived_qty(m: Dict[str, Any], head: Dict[str, Any], pool: Optional[Dict[str, Any]], default_squad: int) -> int:
+def derived_qty(m: dict[str, Any], head: dict[str, Any], pool: dict[str, Any] | None, default_squad: int) -> int:
     # MPCA-222 · Manual driver override takes precedence when present
     overrides = m.get("driver_overrides") or {}
     if head["key"] in overrides and overrides[head["key"]] not in (None, ""):
@@ -263,11 +263,11 @@ def derived_qty(m: Dict[str, Any], head: Dict[str, Any], pool: Optional[Dict[str
 # ─────────────────── Main compute ───────────────────
 
 def compute_tournament_budget(
-    matches: List[Dict[str, Any]],
-    pools: List[Dict[str, Any]],
-    rate_card: Dict[str, Any],
+    matches: list[dict[str, Any]],
+    pools: list[dict[str, Any]],
+    rate_card: dict[str, Any],
     default_squad: int = 18,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Roll up head totals + per-match totals + host/pool totals + grand.
 
     `rate_card` is expected to be a `RateCard` dict with `budget_rates` shape:
@@ -295,9 +295,9 @@ def compute_tournament_budget(
     valid_matches = [m for m in matches if match_days(m) > 0]
     gap = gap_map(valid_matches)
 
-    head_totals: Dict[str, Dict[str, float]] = {h["key"]: {"md_amount": 0.0, "nmd_amount": 0.0} for h in all_heads}
-    match_rows: List[Dict[str, Any]] = []
-    pool_totals: Dict[str, Dict[str, float]] = {}
+    head_totals: dict[str, dict[str, float]] = {h["key"]: {"md_amount": 0.0, "nmd_amount": 0.0} for h in all_heads}
+    match_rows: list[dict[str, Any]] = []
+    pool_totals: dict[str, dict[str, float]] = {}
 
     for m in valid_matches:
         md = match_days(m)
@@ -305,7 +305,7 @@ def compute_tournament_budget(
         pool = _pool_of_match(m, pools)
         m_md_amt = 0.0
         m_nmd_amt = 0.0
-        per_head_this_match: Dict[str, Dict[str, float]] = {}
+        per_head_this_match: dict[str, dict[str, float]] = {}
         for h in all_heads:
             r = budget_rates.get(h["key"]) or {"md": 0, "nmd": 0}
             qty = derived_qty(m, h, pool, default_squad)
@@ -391,13 +391,13 @@ def compute_tournament_budget(
     #   • Visitor heads       → (away team, pool)
     # A Division that is Host in one pool AND Visitor in another gets TWO separate
     # rows so Finance Console can materialise TWO independent TournamentBudget docs.
-    by_body: Dict[str, Dict[str, Any]] = {}   # key = f"{body_code}|{pool_id or ''}"
-    by_body_heads: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    by_body: dict[str, dict[str, Any]] = {}   # key = f"{body_code}|{pool_id or ''}"
+    by_body_heads: dict[str, dict[str, dict[str, Any]]] = {}
 
-    def _row_key(code: str, pool_id: Optional[str]) -> str:
+    def _row_key(code: str, pool_id: str | None) -> str:
         return f"{code}|{pool_id or ''}"
 
-    def _bump(code: str, pool_id: Optional[str], pool_name: Optional[str], role: str, key: str, amt: float):
+    def _bump(code: str, pool_id: str | None, pool_name: str | None, role: str, key: str, amt: float):
         if not code:
             return
         rk = _row_key(code, pool_id)
@@ -409,7 +409,7 @@ def compute_tournament_budget(
         by_body[rk][key] = by_body[rk].get(key, 0.0) + amt
         by_body[rk]["total"] = by_body[rk].get("budget", 0.0) + by_body[rk].get("travel_grant", 0.0)
 
-    def _bump_head(code: str, pool_id: Optional[str], head_key: str, head_name: str, owner: str, amt: float):
+    def _bump_head(code: str, pool_id: str | None, head_key: str, head_name: str, owner: str, amt: float):
         if not code or amt == 0:
             return
         rk = _row_key(code, pool_id)
@@ -438,9 +438,7 @@ def compute_tournament_budget(
             owner = h.get("owner", "Common")
             target = None
             role = None
-            if owner == "Host":
-                target, role = host_code, "Host"
-            elif owner == "Officials":
+            if owner == "Host" or owner == "Officials":
                 target, role = host_code, "Host"
             elif owner == "Common":
                 target, role = "MPCA", "Common"
@@ -482,17 +480,17 @@ def compute_tournament_budget(
 # ─────────────────── Travel-grant compute ───────────────────
 
 def compute_travel_grant(
-    matches: List[Dict[str, Any]],
-    pools: List[Dict[str, Any]],
-    rate_card: Dict[str, Any],
+    matches: list[dict[str, Any]],
+    pools: list[dict[str, Any]],
+    rate_card: dict[str, Any],
     default_squad: int = 18,
-    trip_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
-) -> Dict[str, Any]:
+    trip_overrides: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """One trip per visiting division per pool host. Host of the pool doesn't
     travel to it. Mirrors utility's `computeTravel` behaviour."""
     trip_overrides = trip_overrides or {}
     travel_rates = rate_card.get("travel_rates") or {}
-    trips: List[Dict[str, Any]] = []
+    trips: list[dict[str, Any]] = []
 
     for p in pools:
         pool_matches = [m for m in matches if (m.get("pool_id") or m.get("poolId")) == p.get("id")]
@@ -524,7 +522,7 @@ def compute_travel_grant(
             pax = int(ov.get("pax") if ov.get("pax") not in (None, "") else default_squad)
             md = int(ov.get("md") if ov.get("md") not in (None, "") else dm_md)
             nmd = int(ov.get("nmd") if ov.get("nmd") not in (None, "") else dm_nmd)
-            heads: List[Dict[str, Any]] = []
+            heads: list[dict[str, Any]] = []
             total = 0.0
             for h in TRAVEL_HEADS_META:
                 r = travel_rates.get(h["key"]) or {"md": 0, "nmd": 0}
@@ -563,8 +561,8 @@ def compute_travel_grant(
                 "total": total,
             })
 
-    by_head: Dict[str, float] = {h["key"]: 0.0 for h in TRAVEL_HEADS_META}
-    by_division: Dict[str, Dict[str, Any]] = {}
+    by_head: dict[str, float] = {h["key"]: 0.0 for h in TRAVEL_HEADS_META}
+    by_division: dict[str, dict[str, Any]] = {}
     grand = 0.0
     for tr in trips:
         for h in tr["heads"]:
@@ -586,7 +584,7 @@ def compute_travel_grant(
 
 # ─────────────────── API endpoints ───────────────────
 
-def _format_group_from_tournament(t: Dict[str, Any]) -> str:
+def _format_group_from_tournament(t: dict[str, Any]) -> str:
     """Collapse the 16 tournament formats down to `ltd_overs` / `multi_day`."""
     fmt = (t.get("format") or "").lower()
     if any(k in fmt for k in ("multi", "fourday", "pink")):
@@ -594,7 +592,7 @@ def _format_group_from_tournament(t: Dict[str, Any]) -> str:
     return "ltd_overs"
 
 
-def _tournament_type_key(t: Dict[str, Any]) -> str:
+def _tournament_type_key(t: dict[str, Any]) -> str:
     """Best-effort map from Tournament.scope/tournament_type to a rate-card key.
 
     MPCA-Feb2026 · Gap A · Check `tournament_type` (explicit family) BEFORE
@@ -620,7 +618,7 @@ def _tournament_type_key(t: Dict[str, Any]) -> str:
     return "Inter_Divisional"
 
 
-async def _load_rate_card_for_tournament(t: Dict[str, Any]) -> Dict[str, Any]:
+async def _load_rate_card_for_tournament(t: dict[str, Any]) -> dict[str, Any]:
     tt = _tournament_type_key(t)
     fg = _format_group_from_tournament(t)
     season = t.get("fiscal_cycle") or "2026-27"
@@ -658,7 +656,7 @@ async def days_engine_for_tournament(tid: str):
         raise HTTPException(404, "Tournament not found")
     # MPCA-217 · Read from `tournament_matches` (Match Calendar UI) — with a
     # fallback merge of `fixtures` for legacy pre-migration data.
-    matches: List[Dict[str, Any]] = []
+    matches: list[dict[str, Any]] = []
     async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
         matches.append(m)
     async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
@@ -666,7 +664,7 @@ async def days_engine_for_tournament(tid: str):
     valid = [m for m in matches if span_days(m) > 0]
     gap = gap_map(valid)
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     tot_md = 0
     tot_nmd_auto = 0
     tot_nmd_eff = 0
@@ -708,7 +706,7 @@ async def days_engine_for_tournament(tid: str):
             playing_days.add(x)
 
     # Calendar strip — all days between earliest and latest match
-    calendar: List[Dict[str, Any]] = []
+    calendar: list[dict[str, Any]] = []
     if playing_days:
         lo = min(playing_days)
         hi = max(playing_days)
@@ -747,7 +745,7 @@ async def compute_unified_budget_for_tournament(tid: str, save: bool = False):
     setup_meta = t.get("setup_meta") or {}
     pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
     # MPCA-217 · Read from tournament_matches (Match Calendar UI) + fixtures (legacy)
-    matches: List[Dict[str, Any]] = []
+    matches: list[dict[str, Any]] = []
     async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
         matches.append(m)
     async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
@@ -845,7 +843,7 @@ async def compute_unified_budget_for_tournament(tid: str, save: bool = False):
 
 
 @api_router.post("/rate-cards/{card_id}/compute-preview")
-async def preview_compute_with_card(card_id: str, payload: Dict[str, Any]):
+async def preview_compute_with_card(card_id: str, payload: dict[str, Any]):
     """Test-harness — compute a budget with a rate card and a hand-crafted set
     of matches + pools. Used by pytests and the utility-preview UI."""
     card = await db.rate_cards.find_one({"id": card_id}, {"_id": 0})
@@ -864,7 +862,7 @@ async def preview_compute_with_card(card_id: str, payload: Dict[str, Any]):
 # ─────────────────── MPCA-221 · Trip Overrides + Legacy Migration ───────────────────
 
 @api_router.patch("/tournaments/{tid}/travel-trip-overrides")
-async def patch_trip_overrides(tid: str, payload: Dict[str, Any]):
+async def patch_trip_overrides(tid: str, payload: dict[str, Any]):
     """MPCA-221 · Upsert per-trip override values (pax / md / nmd) on the
     tournament document. `payload` shape: `{ "<trip_id>": {"pax": 20, "md": 4, "nmd": 2} }`.
 
@@ -898,14 +896,14 @@ async def migrate_legacy_budgets(dry_run: bool = True):
     Returns a report so ops can see what would change before `dry_run=false`.
     """
     from datetime import datetime, timezone
-    report: List[Dict[str, Any]] = []
+    report: list[dict[str, Any]] = []
     total_grand = 0.0
     q = {"scope": {"$in": ["Inter_Divisional", "Inter_District", "Championship"]}}
     async for t in db.tournaments.find(q, {"_id": 0}):
         try:
             setup_meta = t.get("setup_meta") or {}
             pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
-            matches: List[Dict[str, Any]] = []
+            matches: list[dict[str, Any]] = []
             async for m in db.tournament_matches.find({"tournament_id": t["id"]}, {"_id": 0}):
                 matches.append(m)
             if not matches:
@@ -955,9 +953,9 @@ async def migrate_legacy_budgets(dry_run: bool = True):
 @api_router.post("/tournaments/{tid}/unified-budget/lock")
 async def lock_unified_budget(
     tid: str,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
-    x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
+    x_persona_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """Snapshot the current unified budget, freeze it at a new version, and
     block further recomputes from overwriting it.
@@ -978,7 +976,7 @@ async def lock_unified_budget(
 
     setup_meta = t.get("setup_meta") or {}
     pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
-    matches: List[Dict[str, Any]] = []
+    matches: list[dict[str, Any]] = []
     async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
         matches.append(m)
     async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
@@ -1026,8 +1024,8 @@ async def lock_unified_budget(
 @api_router.post("/tournaments/{tid}/unified-budget/unlock")
 async def unlock_unified_budget(
     tid: str,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     """Unfreeze the snapshot so the owning body can request re-computes.
 
@@ -1068,7 +1066,7 @@ async def unified_budget_status(tid: str):
     # Live compute (same code path as compute endpoint)
     setup_meta = t.get("setup_meta") or {}
     pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
-    matches: List[Dict[str, Any]] = []
+    matches: list[dict[str, Any]] = []
     async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
         matches.append(m)
     async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
@@ -1120,7 +1118,7 @@ async def proposed_budget_for_body(tid: str, body_code: str):
         # Do a live compute so callers always get an answer
         setup_meta = t.get("setup_meta") or {}
         pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
-        matches: List[Dict[str, Any]] = []
+        matches: list[dict[str, Any]] = []
         async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
             matches.append(m)
         async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):

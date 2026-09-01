@@ -23,14 +23,13 @@ Verdict shape
     }
 """
 import asyncio
-from datetime import datetime, timezone
-from typing import List, Optional
 from collections import Counter
+from datetime import datetime, timezone
+
 from fastapi import HTTPException
 
-from core.infra import db, api_router
 from core.helpers import _create_notification
-
+from core.infra import api_router, db
 
 # ─────────────── Scoring ───────────────
 
@@ -70,7 +69,7 @@ def _player_score(p: dict) -> float:
                  kyc_bonus * 0.15 + avail_bonus * 0.05, 1)
 
 
-def _kyc_gaps(p: dict) -> List[str]:
+def _kyc_gaps(p: dict) -> list[str]:
     gaps = []
     meta = p.get("selection_meta") or {}
     comp = meta.get("compliance") or {}
@@ -109,7 +108,7 @@ def _classify_role(p: dict) -> str:
     return "batter"
 
 
-def _pool_recommendation(pool: List[dict], target_size: int = 15) -> List[dict]:
+def _pool_recommendation(pool: list[dict], target_size: int = 15) -> list[dict]:
     """Deterministic XV pick with role balance:
     - 5-6 batters, 2 all-rounders, 1-2 keepers, 3 pace, 3 spin. Falls back to top-N by score
     if pool is too thin.
@@ -133,7 +132,7 @@ def _pool_recommendation(pool: List[dict], target_size: int = 15) -> List[dict]:
     return picked
 
 
-def _selection_bias(members_players: List[dict]) -> dict:
+def _selection_bias(members_players: list[dict]) -> dict:
     bodies = [p.get("body_id") or "UNKNOWN" for p in members_players]
     if not bodies:
         return {}
@@ -153,7 +152,7 @@ async def _get_squad(sid: str) -> dict:
     return s
 
 
-async def _fetch_players(pids: List[str]) -> List[dict]:
+async def _fetch_players(pids: list[str]) -> list[dict]:
     if not pids:
         return []
     docs = await db.players.find({"id": {"$in": pids}}, {"_id": 0}).to_list(500)
@@ -161,7 +160,7 @@ async def _fetch_players(pids: List[str]) -> List[dict]:
     return sorted(docs, key=lambda x: order.get(x["id"], 9999))
 
 
-async def _get_eligible_pool(tournament: dict, squad_body: str) -> List[dict]:
+async def _get_eligible_pool(tournament: dict, squad_body: str) -> list[dict]:
     """Pool = all players from same-or-child bodies of the squad's owning body,
     who meet the tournament's age-group eligibility."""
     # Simple pool: all players of same division suffix
@@ -313,6 +312,7 @@ async def ai_second_opinion(sid: str):
     # Fetch pool + selected
     try:
         import os
+
         from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
         key = os.environ.get("EMERGENT_LLM_KEY")
         if not key:
@@ -356,15 +356,16 @@ async def notify_ai_review(sid: str):
     is not Mandatory ("M"), no MPCA approval step exists, so we short-circuit
     and skip the notification entirely. Prevents notification spam for
     Inter-District, Inter-School, Inter-Club, BCCI, and camp tournaments."""
-    from motor.motor_asyncio import AsyncIOMotorClient  # local to avoid cycle
     import os
+
+    from motor.motor_asyncio import AsyncIOMotorClient  # local to avoid cycle
     _client = AsyncIOMotorClient(os.environ.get("MONGO_URL"))
     _db = _client[os.environ.get("DB_NAME")]
     _squad = await _db.squads.find_one({"id": sid}, {"_id": 0, "tournament_id": 1})
     if _squad:
         try:
-            from routes.tournament_wiring_status import _resolve_type_id
             from routes.tournament_wiring import _fetch_or_seed_wiring
+            from routes.tournament_wiring_status import _resolve_type_id
             _t = await _db.tournaments.find_one({"id": _squad.get("tournament_id")}, {"_id": 0}) or {}
             _type_id = await _resolve_type_id(_t) if _t else "interdiv"
             _wiring  = await _fetch_or_seed_wiring()

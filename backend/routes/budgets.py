@@ -1,21 +1,19 @@
 """Routes · Body Budgets"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
-from models import BodyBudget, BodyBudgetCreate, Body, TWO_SIGNATORY_THRESHOLD_INR
-from core.helpers import next_uid as _
-from models import SANCTION_THRESHOLDS
-
+from core.infra import api_router, db
+from models import (
+    SANCTION_THRESHOLDS,
+    TWO_SIGNATORY_THRESHOLD_INR,
+    BodyBudget,
+    BodyBudgetCreate,
+)
 
 # ---------------- Routes: Body Budgets & Reconciliation (Phase III.7) ----------------
 
 
 @api_router.get("/budgets")
-async def list_budgets(fiscal_cycle: str = "2025-26", body_id: Optional[str] = None):
+async def list_budgets(fiscal_cycle: str = "2025-26", body_id: str | None = None):
     """Returns every body's budget for a cycle, reconciled live against claims."""
     bodies_query: dict = {}
     if body_id:

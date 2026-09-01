@@ -14,19 +14,18 @@ Endpoints
     POST  /api/tournament-wiring/reset          → restore defaults
     GET   /api/tournament-wiring/export         → download JSON
 """
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
 import uuid
+from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from core.infra import api_router, db
 
-
 # ─────────────── Constants (verbatim from HTML wiring artifact) ───────────────
 
-STEP_KEYS: List[str] = [
+STEP_KEYS: list[str] = [
     "tournament_creation",
     "pool_basics",
     "match_official_posting",
@@ -39,7 +38,7 @@ STEP_KEYS: List[str] = [
     "mpca_visibility",
 ]
 
-STEPS_META: List[Dict[str, str]] = [
+STEPS_META: list[dict[str, str]] = [
     {"key": "tournament_creation",     "label": "Tournament Creation",   "bucket": "Pre_Tournament"},
     {"key": "pool_basics",             "label": "Pool (Basics)",         "bucket": "Pre_Tournament"},
     {"key": "match_official_posting",  "label": "Match Official Posting","bucket": "Pre_Tournament"},
@@ -52,7 +51,7 @@ STEPS_META: List[Dict[str, str]] = [
     {"key": "mpca_visibility",         "label": "MPCA Visibility",       "bucket": "Post_Tournament"},
 ]
 
-TYPES_META: List[Dict[str, str]] = [
+TYPES_META: list[dict[str, str]] = [
     {"id": "bcci",         "name": "BCCI",                          "sub": "MPCA-run · created by MPCA"},
     {"id": "interdiv",     "name": "Inter Division",                "sub": "MPCA-run · the full build"},
     {"id": "camp",         "name": "Pre-Tournament Camp",           "sub": "Division-run · linked to an Inter-Division tournament"},
@@ -79,7 +78,7 @@ FLAG_LABELS = {
 
 
 def _cell(flag: str, owner: str, approver: str, mode: str, visibility: str,
-          blocks_next: bool, sla_days: Optional[int], text: str) -> Dict[str, Any]:
+          blocks_next: bool, sla_days: int | None, text: str) -> dict[str, Any]:
     return {
         "flag":        flag,
         "owner":       owner,
@@ -94,7 +93,7 @@ def _cell(flag: str, owner: str, approver: str, mode: str, visibility: str,
 
 # ─────────────── DEFAULT MATRIX (from HTML artifact + sensible defaults) ───────────────
 
-def _default_cells() -> Dict[str, Dict[str, Dict[str, Any]]]:
+def _default_cells() -> dict[str, dict[str, dict[str, Any]]]:
     """8 types × 9 steps = 72 cells. Owner/approver/mode/visibility inferred
     from artifact 'text' and 'mode' fields; SLA days seeded conservatively."""
     C = _cell
@@ -204,19 +203,19 @@ class WiringCellPatch(BaseModel):
     model_config = ConfigDict(extra="ignore")
     type_id: str
     step_key: str
-    flag: Optional[str]        = None
-    owner: Optional[str]       = None
-    approver: Optional[str]    = None
-    mode: Optional[str]        = None
-    visibility: Optional[str]  = None
-    blocks_next: Optional[bool] = None
-    sla_days: Optional[int]    = None
-    text: Optional[str]        = None
+    flag: str | None        = None
+    owner: str | None       = None
+    approver: str | None    = None
+    mode: str | None        = None
+    visibility: str | None  = None
+    blocks_next: bool | None = None
+    sla_days: int | None    = None
+    text: str | None        = None
 
 
 # ─────────────── Seeder + fetcher ───────────────
 
-async def _fetch_or_seed_wiring() -> Dict[str, Any]:
+async def _fetch_or_seed_wiring() -> dict[str, Any]:
     doc = await db.tournament_wiring.find_one({"id": "singleton"}, {"_id": 0})
     if doc:
         return doc
@@ -236,7 +235,7 @@ async def _fetch_or_seed_wiring() -> Dict[str, Any]:
     return {k: v for k, v in new_doc.items() if k != "_id"}
 
 
-async def seed_tournament_wiring() -> Dict[str, Any]:
+async def seed_tournament_wiring() -> dict[str, Any]:
     """Idempotent — creates the singleton on first run."""
     return await _fetch_or_seed_wiring()
 
@@ -268,7 +267,7 @@ async def patch_wiring_cell(patch: WiringCellPatch):
     # Validate enum values on the way in
     cell = doc["cells"][patch.type_id][patch.step_key]
     before_snapshot = {k: cell.get(k) for k in ("flag", "owner", "approver", "mode", "visibility", "blocks_next", "sla_days", "text")}
-    updates: Dict[str, Any] = {}
+    updates: dict[str, Any] = {}
     if patch.flag is not None:
         if patch.flag not in FLAG_VALUES:
             raise HTTPException(status_code=422, detail=f"flag must be one of {FLAG_VALUES}")
@@ -403,9 +402,9 @@ async def export_tournament_wiring():
 # ─────────────── MPCA-235 · Ship B · Audit log + Season freeze ───────────────
 
 @api_router.get("/tournament-wiring/audit")
-async def list_wiring_audit(limit: int = 200, type_id: Optional[str] = None, step_key: Optional[str] = None):
+async def list_wiring_audit(limit: int = 200, type_id: str | None = None, step_key: str | None = None):
     """Chronological trail of wiring cell edits. Optional filters by type_id / step_key."""
-    q: Dict[str, Any] = {}
+    q: dict[str, Any] = {}
     if type_id:
         q["type_id"] = type_id
     if step_key:
@@ -442,8 +441,8 @@ async def freeze_season(cycle: str):
 
 
 @api_router.get("/tournament-wiring/snapshots")
-async def list_wiring_snapshots(cycle: Optional[str] = None):
-    q: Dict[str, Any] = {}
+async def list_wiring_snapshots(cycle: str | None = None):
+    q: dict[str, Any] = {}
     if cycle:
         q["cycle"] = cycle
     rows = await db.tournament_wiring_snapshots.find(q, {"_id": 0, "cells": 0}).sort("frozen_at", -1).to_list(500)
@@ -467,6 +466,7 @@ async def download_lifecycle_pdf():
     the browser opens it in a new tab.
     """
     import subprocess
+
     from fastapi.responses import FileResponse
 
     pdf_path = "/app/docs/mpca_tournament_lifecycle_reference.pdf"

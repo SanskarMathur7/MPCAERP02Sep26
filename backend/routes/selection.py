@@ -8,17 +8,25 @@ Workflow:
   5. Squad finalised at 12 → "Submitted to BCCI App" (placeholder).
   6. For international tournaments: Division proposes squad → MPCA validates → BCCI submit.
 """
-from datetime import datetime, timezone, date
-from typing import List, Optional
+from datetime import date, datetime, timezone
+
 from fastapi import HTTPException
 
-from core.infra import db, api_router
 from core.helpers import _create_notification
+from core.infra import api_router, db
 from models import (
-    SeasonRegistration, SeasonRegistrationCreate, SeasonRegStatus,
-    SelectionFunnel, SelectionFunnelCreate, SelectionEntry,
-    SelectionAddPlayers, SelectionAdvance, SelectionRemovePlayer, SelectionBCCISubmit,
-    STAGE_LIMITS, STAGE_NEXT,
+    STAGE_LIMITS,
+    STAGE_NEXT,
+    SeasonRegistration,
+    SeasonRegistrationCreate,
+    SeasonRegStatus,
+    SelectionAddPlayers,
+    SelectionAdvance,
+    SelectionBCCISubmit,
+    SelectionEntry,
+    SelectionFunnel,
+    SelectionFunnelCreate,
+    SelectionRemovePlayer,
 )
 
 
@@ -44,12 +52,12 @@ async def _next_seasonreg_no(season: str, body_id: str) -> str:
     return f"SR-{season}-{body_id}-{count + 1:05d}"
 
 
-@api_router.get("/season-registrations", response_model=List[SeasonRegistration])
+@api_router.get("/season-registrations", response_model=list[SeasonRegistration])
 async def list_season_registrations(
-    player_id: Optional[str] = None,
-    season_year: Optional[str] = None,
-    body_id: Optional[str] = None,
-    status: Optional[SeasonRegStatus] = None,
+    player_id: str | None = None,
+    season_year: str | None = None,
+    body_id: str | None = None,
+    status: SeasonRegStatus | None = None,
 ):
     q: dict = {}
     if player_id:
@@ -115,12 +123,12 @@ async def _next_funnel_no(season: str) -> str:
     return f"SF-{season}-{count + 1:03d}"
 
 
-@api_router.get("/selection-funnels", response_model=List[SelectionFunnel])
+@api_router.get("/selection-funnels", response_model=list[SelectionFunnel])
 async def list_selection_funnels(
-    tournament_id: Optional[str] = None,
-    season_year: Optional[str] = None,
-    is_international: Optional[bool] = None,
-    current_stage: Optional[str] = None,
+    tournament_id: str | None = None,
+    season_year: str | None = None,
+    is_international: bool | None = None,
+    current_stage: str | None = None,
 ):
     q: dict = {}
     if tournament_id:
@@ -372,7 +380,7 @@ async def delete_funnel(fid: str):
 
 
 @api_router.get("/selection-funnels-stats/summary")
-async def funnel_stats(season_year: Optional[str] = None):
+async def funnel_stats(season_year: str | None = None):
     q: dict = {}
     if season_year:
         q["season_year"] = season_year

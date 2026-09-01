@@ -1,18 +1,13 @@
 """Routes · File Uploads"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
 import uuid
-from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
-
-from core.infra import db, api_router
-from models import UploadRecord
-from core.helpers import next_uid as _
-from fastapi import UploadFile, File, Form
-from fastapi.responses import FileResponse
+from datetime import datetime, timezone
 from pathlib import Path
-from core.infra import UPLOAD_ROOT
 
+from fastapi import File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+
+from core.infra import UPLOAD_ROOT, api_router, db
+from models import UploadRecord
 
 # ============================================================
 # Step 3 · Real File Uploads (Feb 2026)
@@ -50,10 +45,10 @@ EXT_BY_MIME = {
 @api_router.post("/uploads", response_model=UploadRecord)
 async def upload_file(
     file: UploadFile = File(...),
-    body_id: Optional[str] = Form(None),
-    uploaded_by: Optional[str] = Form(None),
-    related_type: Optional[str] = Form(None),
-    related_id: Optional[str] = Form(None),
+    body_id: str | None = Form(None),
+    uploaded_by: str | None = Form(None),
+    related_type: str | None = Form(None),
+    related_id: str | None = Form(None),
 ):
     if file.content_type not in ALLOWED_MIMES:
         raise HTTPException(
@@ -107,11 +102,11 @@ async def upload_file(
 @api_router.post("/public/uploads", response_model=UploadRecord)
 async def public_upload_file(
     file: UploadFile = File(...),
-    body_id: Optional[str] = Form(None),
-    uploaded_by: Optional[str] = Form(None),
-    related_type: Optional[str] = Form(None),
-    related_id: Optional[str] = Form(None),
-    registration_token: Optional[str] = Form(None),
+    body_id: str | None = Form(None),
+    uploaded_by: str | None = Form(None),
+    related_type: str | None = Form(None),
+    related_id: str | None = Form(None),
+    registration_token: str | None = Form(None),
 ):
     if not (related_type or "").startswith("player_registration"):
         raise HTTPException(400, "public/uploads is only for player-registration flows.")

@@ -10,22 +10,29 @@ Variable items have their own approve/reject sub-workflow that MPCA can run
 independently of the overall budget approval.
 """
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
-from fastapi import HTTPException, Request, Header, Depends
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
+from typing import Any
+
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
-from core.infra import db, api_router
-from core.shared_services import next_seq  # H6 · atomic sequence
-from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
-from models import (
-    TournamentBudget, TournamentBudgetCreate, TournamentBudgetAction,
-    TournamentBudgetStatus, VariableItemDecision, BudgetHeadAllocation,
-    VariableBudgetItem, ApprovalStep,
+from core.infra import api_router, db
+from core.scoping import body_scope, get_scope
+from core.shared_services import next_seq  # H6 · atomic sequence
+from lib.authz import (
+    principal_body_code,
+    principal_body_type,
 )
-
+from models import (
+    ApprovalStep,
+    BudgetHeadAllocation,
+    TournamentBudget,
+    TournamentBudgetAction,
+    TournamentBudgetCreate,
+    TournamentBudgetStatus,
+    VariableBudgetItem,
+    VariableItemDecision,
+)
 
 # ─────────────── Helpers ───────────────
 
@@ -53,7 +60,7 @@ def _tb_recipient(doc: dict, new_status: str):
     return None
 
 
-async def _notify_for_tb(doc: dict, new_status: str, actor_name: Optional[str]) -> None:
+async def _notify_for_tb(doc: dict, new_status: str, actor_name: str | None) -> None:
     target = _tb_recipient(doc, new_status)
     if not target:
         return
@@ -85,15 +92,15 @@ async def _notify_for_tb(doc: dict, new_status: str, actor_name: Optional[str]) 
 
 # ─────────────── Read endpoints ───────────────
 
-@api_router.get("/tournament-budgets", response_model=List[TournamentBudget])
+@api_router.get("/tournament-budgets", response_model=list[TournamentBudget])
 async def list_tournament_budgets(
     request: Request,
-    tournament_id: Optional[str] = None,
-    body_id: Optional[str] = None,
-    status: Optional[TournamentBudgetStatus] = None,
-    fiscal_cycle: Optional[str] = None,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    tournament_id: str | None = None,
+    body_id: str | None = None,
+    status: TournamentBudgetStatus | None = None,
+    fiscal_cycle: str | None = None,
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     q: dict = {}
     if tournament_id:
@@ -116,7 +123,7 @@ async def list_tournament_budgets(
     # identity + status kept so MPCA sees who exists but not the numbers yet).
     if (x_body_type or "").lower() == "state" and tournament_id:
         try:
-            from core.wiring_guard import resolve_wiring_cell, _OWNER_TO_BODY_TYPES
+            from core.wiring_guard import _OWNER_TO_BODY_TYPES, resolve_wiring_cell
             cell = await resolve_wiring_cell(tournament_id, "unified_budget")
             visibility = (cell or {}).get("visibility")
             owner = (cell or {}).get("owner") or "MPCA"
@@ -144,7 +151,7 @@ async def get_tournament_budget(bid: str):
 
 
 @api_router.get("/tournament-budgets-stats/summary")
-async def tb_stats(body_id: Optional[str] = None, fiscal_cycle: Optional[str] = None):
+async def tb_stats(body_id: str | None = None, fiscal_cycle: str | None = None):
     q: dict = {}
     if body_id:
         q["body_id"] = body_id
@@ -249,16 +256,16 @@ class _HeadEditPayload(BaseModel):
     budget is sanctioned.
     """
     model_config = ConfigDict(extra="ignore")
-    head_allocations: List[BudgetHeadAllocation]
-    total_ceiling_inr: Optional[float] = None
-    edited_by: Optional[str] = None
+    head_allocations: list[BudgetHeadAllocation]
+    total_ceiling_inr: float | None = None
+    edited_by: str | None = None
 
 
 _MPCA_EDITABLE_SCOPES = {"BCCI", "Inter_Divisional"}  # legacy fallback — used only when wiring is unresolvable
 
 
-async def _may_edit_heads(tournament: dict, body_type: Optional[str],
-                          body_code: Optional[str] = None) -> bool:
+async def _may_edit_heads(tournament: dict, body_type: str | None,
+                          body_code: str | None = None) -> bool:
     """MPCA-243 · Ship 1 · Wiring-driven edit permission.
 
     Preferred path: read `unified_budget.owner` from wiring; caller's
@@ -268,7 +275,7 @@ async def _may_edit_heads(tournament: dict, body_type: Optional[str],
     tid = tournament.get("id")
     if tid:
         try:
-            from core.wiring_guard import resolve_wiring_cell, _OWNER_TO_BODY_TYPES
+            from core.wiring_guard import _OWNER_TO_BODY_TYPES, resolve_wiring_cell
             cell = await resolve_wiring_cell(tid, "unified_budget")
             owner = cell.get("owner") if cell else None
             if owner:
@@ -289,8 +296,8 @@ async def _may_edit_heads(tournament: dict, body_type: Optional[str],
 async def edit_budget_heads(
     bid: str,
     payload: _HeadEditPayload,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_user_body_code: str | None = Depends(principal_body_code),
 ):
     doc = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
     if not doc:
@@ -527,7 +534,7 @@ async def budget_diff_master(bid: str):
     """Compares the Division's submitted budget with what MPCA's master input
     variables would have produced. Highlights every head where the Division
     changed the amount so MPCA can see the delta before approving."""
-    from routes.scheme_calc import compute_budget, ComputeRequest
+    from routes.scheme_calc import ComputeRequest, compute_budget
 
     doc = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
     if not doc:
@@ -546,7 +553,7 @@ async def budget_diff_master(bid: str):
     master_preview = await compute_budget(scheme_code, ComputeRequest(inputs=master_iv))
     master_heads = {h["head"]: float(h["limit_inr"]) for h in master_preview.get("head_allocations") or []}
 
-    diffs: List[Dict[str, Any]] = []
+    diffs: list[dict[str, Any]] = []
     for h in doc.get("head_allocations") or []:
         head_name = h["head"]
         div_amt = float(h.get("limit_inr", 0))
@@ -566,7 +573,7 @@ async def budget_diff_master(bid: str):
     total_div = float(doc.get("total_ceiling_inr", 0))
 
     # IV diff (which raw inputs Division touched)
-    iv_diffs: List[Dict[str, Any]] = []
+    iv_diffs: list[dict[str, Any]] = []
     keys = set(master_iv.keys()) | set(div_iv.keys())
     for k in sorted(keys):
         mv = master_iv.get(k)

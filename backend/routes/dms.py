@@ -11,16 +11,16 @@ No S3 dependency yet — documents carry `url` (external link or existing KYC UR
 When object storage lands (Sprint 7), this same model handles it via url pointing
 to the presigned URL.
 """
-from datetime import datetime, timedelta, timezone
-from typing import List, Literal, Optional
-import uuid
-from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
-
 import re
-from core.infra import db, api_router, logger
-from core.shared_services import write_audit_log
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Literal
 
+from fastapi import HTTPException
+from pydantic import BaseModel, ConfigDict, Field
+
+from core.infra import api_router, db, logger
+from core.shared_services import write_audit_log
 
 DocFolder = Literal["Legal", "Statutory", "Financial", "HR", "Contracts", "Board", "Vendor_KYC", "Asset_Docs", "Other"]
 DocStatus = Literal["Active", "Expired", "Archived"]
@@ -30,27 +30,27 @@ class DocumentBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     body_id: str = "MPCA"
     folder: DocFolder = "Other"
-    tags: List[str] = []
+    tags: list[str] = []
     filename: str
     url: str
     doc_type: str  # free-text: e.g. "GST Certificate" / "Employment Contract" / "Board Resolution"
-    expiry_date: Optional[str] = None
-    related_module: Optional[str] = None  # vendor / asset / employee / po / meeting …
-    related_id: Optional[str] = None
-    related_code: Optional[str] = None
-    notes: Optional[str] = None
+    expiry_date: str | None = None
+    related_module: str | None = None  # vendor / asset / employee / po / meeting …
+    related_id: str | None = None
+    related_code: str | None = None
+    notes: str | None = None
 
 
 class Document(DocumentBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     doc_no: str = ""  # DOC-2026-27-NNNNN (short readable)
     status: DocStatus = "Active"
-    uploaded_by: Optional[str] = None
+    uploaded_by: str | None = None
     uploaded_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class DocumentCreate(DocumentBase):
-    uploaded_by: Optional[str] = None
+    uploaded_by: str | None = None
 
 
 async def _sync_from_kyc():
@@ -92,13 +92,13 @@ async def _sync_from_kyc():
 
 # ═══════════════════ CRUD ═══════════════════
 
-@api_router.get("/documents", response_model=List[Document])
-async def list_documents(folder: Optional[DocFolder] = None,
-                          status: Optional[DocStatus] = None,
-                          related_module: Optional[str] = None,
-                          related_id: Optional[str] = None,
-                          tag: Optional[str] = None,
-                          search: Optional[str] = None,
+@api_router.get("/documents", response_model=list[Document])
+async def list_documents(folder: DocFolder | None = None,
+                          status: DocStatus | None = None,
+                          related_module: str | None = None,
+                          related_id: str | None = None,
+                          tag: str | None = None,
+                          search: str | None = None,
                           skip: int = 0,
                           limit: int = 1000):
     q: dict = {}
@@ -177,8 +177,8 @@ async def expiring_soon(days: int = 60):
          "status": {"$ne": "Archived"}},
         {"_id": 0},
     ).sort("expiry_date", 1).to_list(500)
-    expiring: List[dict] = []
-    expired: List[dict] = []
+    expiring: list[dict] = []
+    expired: list[dict] = []
     for d in docs:
         try:
             exp = datetime.fromisoformat(d["expiry_date"].replace("Z", "+00:00"))

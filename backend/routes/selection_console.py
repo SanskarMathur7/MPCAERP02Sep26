@@ -1,15 +1,17 @@
 """Routes · M12 · Selection Console (post-acceptance squad workflow)."""
 from datetime import datetime, timezone
-from typing import List, Optional
-from fastapi import HTTPException, Header, Request, Depends
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
+
+from fastapi import Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
-from core.infra import db, api_router
-from core.scoping import get_scope
 from core.helpers import _create_notification
-from models import Squad, SquadMember, MatchOfficials, SquadWaiver, MemberDecision
+from core.infra import api_router, db
+from core.scoping import get_scope
+from lib.authz import (
+    principal_body_code,
+    principal_role_id,
+)
+from models import MatchOfficials, MemberDecision, Squad, SquadMember, SquadWaiver
 
 _DIVISION_ROLES = {
     # Capitalized legacy labels from principal_role_id()
@@ -39,8 +41,8 @@ async def heal_legacy_stuck_squads() -> dict:
     idempotency comes from the target status set which we only match
     once per squad."""
     try:
-        from routes.tournament_wiring_status import _resolve_type_id
         from routes.tournament_wiring import _fetch_or_seed_wiring
+        from routes.tournament_wiring_status import _resolve_type_id
     except Exception:
         return {"healed": 0, "reason": "wiring modules unavailable"}
 
@@ -125,20 +127,20 @@ async def get_selection(tid: str):
 
 class SelectionPatch(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    shortlist_ids: Optional[List[str]] = None
-    votes: Optional[dict] = None
-    voters: Optional[List[str]] = None
-    members: Optional[List[SquadMember]] = None
-    match_officials: Optional[MatchOfficials] = None
-    waivers: Optional[List[SquadWaiver]] = None
-    notes: Optional[str] = None
+    shortlist_ids: list[str] | None = None
+    votes: dict | None = None
+    voters: list[str] | None = None
+    members: list[SquadMember] | None = None
+    match_officials: MatchOfficials | None = None
+    waivers: list[SquadWaiver] | None = None
+    notes: str | None = None
 
 
 @api_router.patch("/tournaments/{tid}/selection", response_model=Squad)
 async def patch_selection(
     tid: str,
     payload: SelectionPatch,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     t = await _tournament_or_404(tid)
     await _ensure_accepted(t)
@@ -158,16 +160,16 @@ async def patch_selection(
 
 
 class SubmitPayload(BaseModel):
-    note: Optional[str] = None
+    note: str | None = None
 
 
 @api_router.post("/tournaments/{tid}/selection/submit", response_model=Squad)
 async def submit_selection(
     tid: str,
     payload: SubmitPayload,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_body_code: Optional[str] = Depends(principal_body_code),
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_body_code: str | None = Depends(principal_body_code),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
 ):
     if not x_role_id or x_role_id not in _DIVISION_ROLES:
         raise HTTPException(403, "Only Division / District Secretary may submit the squad to MPCA.")
@@ -185,8 +187,8 @@ async def submit_selection(
     # MPCA-240 · For Manual_PDF wiring types, the signed PDF IS the roster —
     # so the 11-player / captain gates only apply to Register-linked squads.
     try:
-        from routes.tournament_wiring_status import _resolve_type_id
         from routes.tournament_wiring import _fetch_or_seed_wiring
+        from routes.tournament_wiring_status import _resolve_type_id
         t = await db.tournaments.find_one({"id": tid}, {"_id": 0}) or {}
         type_id = await _resolve_type_id(t)
         w = await _fetch_or_seed_wiring()
@@ -211,8 +213,8 @@ async def submit_selection(
     # invoked per the wiring. Only Mandatory ("M") retains the
     # Awaiting_MPCA_Approval → MPCA review flow (Inter-Divisional default).
     try:
-        from routes.tournament_wiring_status import _resolve_type_id
         from routes.tournament_wiring import _fetch_or_seed_wiring
+        from routes.tournament_wiring_status import _resolve_type_id
         type_id = await _resolve_type_id(t)
         wiring  = await _fetch_or_seed_wiring()
         squad_approval_flag = wiring["cells"].get(type_id, {}).get("squad_approval", {}).get("flag")
@@ -245,15 +247,15 @@ async def submit_selection(
 
 class ReviewPayload(BaseModel):
     action: str
-    note: Optional[str] = None
+    note: str | None = None
 
 
 @api_router.post("/tournaments/{tid}/selection/review", response_model=Squad)
 async def review_selection(
     tid: str,
     payload: ReviewPayload,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
 ):
     if not x_role_id or x_role_id not in _MPCA_APPROVER_ROLES:
         raise HTTPException(403, "Only MPCA Hon. Secretary or President may approve or reject the squad.")
@@ -285,8 +287,8 @@ async def review_selection(
 #
 
 class SquadSubmitPayload(BaseModel):
-    note: Optional[str] = None
-    signed_copy_url: Optional[str] = None       # M37 · Mandatory for Division/District submissions
+    note: str | None = None
+    signed_copy_url: str | None = None       # M37 · Mandatory for Division/District submissions
     model_config = ConfigDict(extra="ignore")
 
 
@@ -297,7 +299,7 @@ class SquadSignedCopyPayload(BaseModel):
 
 class SquadReviewPayload(BaseModel):
     action: str  # "approve" | "reject" | "finalize"
-    note: Optional[str] = None
+    note: str | None = None
     model_config = ConfigDict(extra="ignore")
 
 
@@ -305,9 +307,9 @@ class SquadReviewPayload(BaseModel):
 async def submit_squad_to_mpca(
     sid: str,
     payload: SquadSubmitPayload,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_body_code: Optional[str] = Depends(principal_body_code),
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_body_code: str | None = Depends(principal_body_code),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """Division/District submits their squad to MPCA for review."""
     doc = await db.squads.find_one({"id": sid}, {"_id": 0})
@@ -325,8 +327,8 @@ async def submit_squad_to_mpca(
     members = doc.get("members") or []
     # MPCA-240 · Manual_PDF wiring types: PDF is the roster, no 11-player check.
     try:
-        from routes.tournament_wiring_status import _resolve_type_id
         from routes.tournament_wiring import _fetch_or_seed_wiring
+        from routes.tournament_wiring_status import _resolve_type_id
         t2 = await db.tournaments.find_one({"id": doc.get("tournament_id")}, {"_id": 0}) or {}
         type_id_m = await _resolve_type_id(t2)
         w2 = await _fetch_or_seed_wiring()
@@ -355,8 +357,8 @@ async def submit_squad_to_mpca(
     # tournament-level submit). If squad_approval.flag != "M", the squad
     # self-approves — no MPCA notification, no review queue entry.
     try:
-        from routes.tournament_wiring_status import _resolve_type_id
         from routes.tournament_wiring import _fetch_or_seed_wiring
+        from routes.tournament_wiring_status import _resolve_type_id
         t = await db.tournaments.find_one({"id": doc.get("tournament_id")}, {"_id": 0}) or {}
         type_id = await _resolve_type_id(t) if t else "interdiv"
         wiring  = await _fetch_or_seed_wiring()
@@ -395,8 +397,8 @@ async def submit_squad_to_mpca(
 async def upload_signed_copy(
     sid: str,
     payload: SquadSignedCopyPayload,
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """M37 · Division/District uploads the signed nomination copy for a squad.
     The URL is stamped on the squad so submission-to-MPCA can proceed.
@@ -472,8 +474,8 @@ async def rerun_squad_ai_review(sid: str):
 async def review_squad_by_mpca(
     sid: str,
     payload: SquadReviewPayload,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """MPCA approves / rejects / finalizes a squad.
 
@@ -498,7 +500,7 @@ async def review_squad_by_mpca(
     # MPCA-140 · Whole-list approval requires a per-player decision on every
     # nominated member. Rejected members are dropped from the roster at
     # Approve-time; the decision log is archived on the squad for audit + PDF.
-    dropped_members: List[dict] = []
+    dropped_members: list[dict] = []
     if payload.action == "approve":
         members = doc.get("members") or []
         decisions_by_id = {d.get("player_id"): d for d in (doc.get("member_decisions") or [])}
@@ -592,7 +594,7 @@ async def review_squad_by_mpca(
 class MemberDecisionPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     decision: str            # "Approved" | "Rejected"
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 @api_router.post("/squads/{sid}/members/{pid}/decision", response_model=Squad)
@@ -600,8 +602,8 @@ async def set_member_decision(
     sid: str,
     pid: str,
     payload: MemberDecisionPayload,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """MPCA records an Approved / Rejected verdict on a single nominated player.
     Every player must have a decision before the whole squad can be Approved
@@ -640,7 +642,7 @@ async def set_member_decision(
 async def clear_member_decision(
     sid: str,
     pid: str,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     if x_role_id not in _MPCA_APPROVER_ROLES:
         raise HTTPException(403, "Only MPCA may clear a player decision.")
@@ -656,7 +658,7 @@ async def clear_member_decision(
 @api_router.post("/squads/{sid}/reopen")
 async def reopen_squad(
     sid: str,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """MPCA unlocks a squad so the Division can amend the roster."""
     if x_role_id not in _MPCA_APPROVER_ROLES:
@@ -681,14 +683,14 @@ class SquadOfficialsPatch(BaseModel):
     """Bag of officials that the Division nominates alongside the XV.
     Every field is a free-text name of a person — future upgrade wires these
     to the /officials or /users collection so DA forms auto-populate."""
-    manager: Optional[str] = None
-    coach: Optional[str] = None
-    trainer: Optional[str] = None
-    physio: Optional[str] = None
-    umpire_1: Optional[str] = None
-    umpire_2: Optional[str] = None
-    scorer: Optional[str] = None
-    referee: Optional[str] = None
+    manager: str | None = None
+    coach: str | None = None
+    trainer: str | None = None
+    physio: str | None = None
+    umpire_1: str | None = None
+    umpire_2: str | None = None
+    scorer: str | None = None
+    referee: str | None = None
     model_config = ConfigDict(extra="ignore")
 
 
@@ -696,8 +698,8 @@ class SquadOfficialsPatch(BaseModel):
 async def patch_squad_officials(
     sid: str,
     payload: SquadOfficialsPatch,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     """Division/District secretary sets the manager, coach, umpires, scorer,
     physio and match referee for the tournament. Locked once submitted."""
@@ -729,7 +731,7 @@ async def tournament_pending_actions(tid: str):
     if not t:
         raise HTTPException(404, "Tournament not found")
 
-    items: List[dict] = []
+    items: list[dict] = []
 
     # 1) Tournament approval
     if t.get("status") == "Awaiting_Approval":
@@ -968,7 +970,7 @@ async def tournament_pending_actions(tid: str):
 async def mpca_pending_inbox(limit: int = 50):
     """Aggregates all tournament pending items across the ERP that need MPCA
     action. Used by the state dashboard's 'Pending With Me' panel."""
-    inbox: List[dict] = []
+    inbox: list[dict] = []
     async for t in db.tournaments.find({"status": {"$nin": ["Completed", "Cancelled"]}}, {"_id": 0}):
         # Reuse the per-tournament resolver
         try:
@@ -994,7 +996,7 @@ async def mpca_pending_inbox(limit: int = 50):
 @api_router.get("/pending-actions/me")
 async def my_pending_inbox(
     request: Request,
-    kind: Optional[str] = None,          # optional filter by action kind (squad_review, budget_approval, etc.)
+    kind: str | None = None,          # optional filter by action kind (squad_review, budget_approval, etc.)
     limit: int = 200,
 ):
     """Returns the list of pending items the current caller's persona should
@@ -1007,7 +1009,7 @@ async def my_pending_inbox(
       · Match Officials             → their own DA-form draft/rejected forms
     """
     scope = get_scope(request)
-    inbox: List[dict] = []
+    inbox: list[dict] = []
 
     # ── Match Officials: their own DA draft/rejected forms ──
     if scope.is_official and scope.name:
@@ -1083,9 +1085,7 @@ async def my_pending_inbox(
         for item in data.get("items", []):
             waiting = item.get("waiting_on")
             matches = False
-            if is_mpca and waiting == "MPCA":
-                matches = True
-            elif not is_mpca and my_body and (waiting == my_body or waiting == "Division"):
+            if is_mpca and waiting == "MPCA" or not is_mpca and my_body and (waiting == my_body or waiting == "Division"):
                 matches = True
             if matches and (not kind or item.get("kind") == kind):
                 inbox.append({

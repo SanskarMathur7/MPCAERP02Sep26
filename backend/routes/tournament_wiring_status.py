@@ -7,13 +7,12 @@ the Progression Ribbon without doing its own state derivation.
 Everything here is READ-ONLY and non-blocking — Ship 2 is a visibility
 layer. No step is gated by another; a user can always click any dot.
 """
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import HTTPException
 
 from core.infra import api_router, db
-from routes.tournament_wiring import _fetch_or_seed_wiring, STEPS_META, TYPES_META
-
+from routes.tournament_wiring import _fetch_or_seed_wiring
 
 # ─────────────── Tournament → wiring type_id resolver ───────────────
 
@@ -58,7 +57,7 @@ _CATEGORY_TO_TYPE = {
 }
 
 
-async def _resolve_type_id(t: Dict[str, Any]) -> str:
+async def _resolve_type_id(t: dict[str, Any]) -> str:
     """Best-effort mapping from a tournament doc to a wiring type_id."""
     # 1. Try Tournament Master Registry via tournament_type_code
     code = t.get("tournament_type_code")
@@ -90,7 +89,7 @@ async def _resolve_type_id(t: Dict[str, Any]) -> str:
 
 # ─────────────── Live state fetchers (kept small; each ~1 count query) ───────────────
 
-async def _gather_state(tid: str, t: Dict[str, Any]) -> Dict[str, Any]:
+async def _gather_state(tid: str, t: dict[str, Any]) -> dict[str, Any]:
     setup_meta = t.get("setup_meta") or {}
     pools = (setup_meta.get("division_pools") or []) + (setup_meta.get("district_pools") or [])
     pools_set = len(pools) > 0 or bool(setup_meta.get("teams")) or bool(setup_meta.get("pools"))
@@ -164,7 +163,7 @@ _ANCHOR = {
 }
 
 
-def _derive_status(step_key: str, cell: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
+def _derive_status(step_key: str, cell: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     """Return status ∈ {done, current, pending, na, info}, plus a short note."""
     flag = cell.get("flag")
     if flag == "NA":
@@ -217,7 +216,7 @@ def _derive_status(step_key: str, cell: Dict[str, Any], state: Dict[str, Any]) -
     return {"status": "pending", "note": current_note or cell.get("text") or ""}
 
 
-def _mark_current(step_infos: List[Dict[str, Any]]) -> None:
+def _mark_current(step_infos: list[dict[str, Any]]) -> None:
     """The first pending Mandatory step becomes 'current' (highlight pulse)."""
     for si in step_infos:
         if si["flag"] == "M" and si["status"] == "pending":
@@ -240,7 +239,7 @@ async def get_tournament_wiring_status(tid: str):
     state = await _gather_state(tid, t)
     cells_for_type = wiring["cells"].get(type_id, {})
 
-    steps_out: List[Dict[str, Any]] = []
+    steps_out: list[dict[str, Any]] = []
     for s in wiring["steps"]:
         cell = cells_for_type.get(s["key"], {})
         derived = _derive_status(s["key"], cell, state)

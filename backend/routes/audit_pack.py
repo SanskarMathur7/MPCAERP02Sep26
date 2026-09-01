@@ -14,10 +14,10 @@ Uses reportlab (already in requirements from Sprint 1).
 import asyncio
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Optional
+
 from fastapi.responses import StreamingResponse
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from core.shared_services import indian_fy
 
 
@@ -28,19 +28,24 @@ def _fmt(v):
 
 
 @api_router.get("/audit-pack/generate.pdf")
-async def audit_pack_pdf(fiscal_cycle: Optional[str] = None,
+async def audit_pack_pdf(fiscal_cycle: str | None = None,
                           body_id: str = "MPCA",
                           include_ledger: bool = True,
                           include_assets: bool = True,
                           include_payroll: bool = True,
                           include_compliance: bool = True,
                           include_pos: bool = True):
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import mm
     from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
     from reportlab.platypus import (
-        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak,
+        PageBreak,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
     )
 
     fy = fiscal_cycle or indian_fy()
@@ -262,7 +267,7 @@ async def audit_pack_pdf(fiscal_cycle: Optional[str] = None,
 
 
 @api_router.get("/audit-pack/preview")
-async def audit_pack_preview(fiscal_cycle: Optional[str] = None):
+async def audit_pack_preview(fiscal_cycle: str | None = None):
     """Returns metadata about what would go into the audit pack — used by the UI."""
     fy = fiscal_cycle or indian_fy()
     counts = {

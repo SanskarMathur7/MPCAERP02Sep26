@@ -12,17 +12,19 @@ All endpoints require the `sys_admin` role (SYSTEM_CONFIG permission).
     POST /api/sysadmin/backups/trigger  trigger a manual backup (stub)
 """
 import os
-import subprocess
 from collections import Counter, defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import psutil
-from fastapi import Depends, Request, HTTPException, Request
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+from fastapi import HTTPException, Request
 
-from core.infra import api_router, db, client
-from lib.authz import get_principal, Role, principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from lib.sysadmin_metrics import snapshot as metrics_snapshot, APP_STARTED_AT
+from core.infra import api_router, client, db
+from lib.authz import (
+    Role,
+    get_principal,
+)
+from lib.sysadmin_metrics import APP_STARTED_AT
+from lib.sysadmin_metrics import snapshot as metrics_snapshot
 
 
 def _require_sysadmin(request: Request):

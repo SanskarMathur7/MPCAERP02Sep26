@@ -15,15 +15,13 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from core.scoping import get_scope
 from models import ReimbursementScheme, ReimbursementSchemeHead
-
 
 CURRENT_FISCAL_CYCLE = "2026-27"
 
@@ -88,8 +86,8 @@ async def list_scheme_seasons():
     return {"current": CURRENT_FISCAL_CYCLE, "seasons": counts}
 
 
-@api_router.get("/reimbursement-schemes", response_model=List[ReimbursementScheme])
-async def list_schemes(active_only: bool = True, fiscal_cycle: Optional[str] = None):
+@api_router.get("/reimbursement-schemes", response_model=list[ReimbursementScheme])
+async def list_schemes(active_only: bool = True, fiscal_cycle: str | None = None):
     q: dict = {}
     if active_only:
         q["is_active"] = True
@@ -99,7 +97,7 @@ async def list_schemes(active_only: bool = True, fiscal_cycle: Optional[str] = N
 
 
 @api_router.get("/reimbursement-schemes/{scheme_code}", response_model=ReimbursementScheme)
-async def get_scheme(scheme_code: str, fiscal_cycle: Optional[str] = None):
+async def get_scheme(scheme_code: str, fiscal_cycle: str | None = None):
     q = {"scheme_code": scheme_code, "fiscal_cycle": fiscal_cycle or CURRENT_FISCAL_CYCLE}
     doc = await db.reimbursement_schemes.find_one(q, {"_id": 0})
     if not doc:
@@ -120,13 +118,13 @@ class SchemeUpdatePayload(BaseModel):
     """Body for PUT — MPCA can rewrite any of the editable fields.
     Every PUT appends a revision entry so we retain history."""
     model_config = ConfigDict(extra="ignore")
-    name: Optional[str] = None
-    description: Optional[str] = None
-    heads: Optional[List[ReimbursementSchemeHead]] = None
-    conditions: Optional[List[str]] = None
-    required_documents: Optional[List[str]] = None
-    is_active: Optional[bool] = None
-    revision_note: Optional[str] = None    # user-supplied "why this changed"
+    name: str | None = None
+    description: str | None = None
+    heads: list[ReimbursementSchemeHead] | None = None
+    conditions: list[str] | None = None
+    required_documents: list[str] | None = None
+    is_active: bool | None = None
+    revision_note: str | None = None    # user-supplied "why this changed"
 
 
 @api_router.put("/reimbursement-schemes/{scheme_code}", response_model=ReimbursementScheme)
@@ -134,7 +132,7 @@ async def update_scheme(
     scheme_code: str,
     payload: SchemeUpdatePayload,
     request: Request,
-    fiscal_cycle: Optional[str] = None,
+    fiscal_cycle: str | None = None,
 ):
     """MPCA inline-edits a scheme (mid-year revision). Every change is
     version-stamped inside `revision_history` for audit."""

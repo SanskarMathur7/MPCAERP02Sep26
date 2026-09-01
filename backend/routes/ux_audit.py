@@ -2,12 +2,15 @@
 Reads the Phase-1 audit JSON from disk and persists your inline decisions
 to `db.ux_audit_decisions`. Main agent uses these decisions to plan Round 1.
 """
-import os, json
-from typing import Optional, List, Dict, Any
+import json
+import os
 from datetime import datetime, timezone
+from typing import Any
+
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict
-from core.infra import db, api_router
+
+from core.infra import api_router, db
 
 REPORT_PATH = "/app/test_reports/iteration_ux_audit.json"
 
@@ -16,8 +19,8 @@ class DecisionPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     item_key: str          # unique key per audit item — main agent-composed
     decision: str          # KEEP / FIX / DELETE / MERGE / POSTPONE / MOVE_TO_SHOWCASE
-    note: Optional[str] = None
-    author_name: Optional[str] = None
+    note: str | None = None
+    author_name: str | None = None
 
 
 @api_router.get("/ux-audit/report")
@@ -47,5 +50,5 @@ async def save_decision(payload: DecisionPayload):
 
 
 @api_router.get("/ux-audit/decisions")
-async def list_decisions() -> List[Dict[str, Any]]:
+async def list_decisions() -> list[dict[str, Any]]:
     return await db.ux_audit_decisions.find({}, {"_id": 0}).sort("updated_at", -1).to_list(500)

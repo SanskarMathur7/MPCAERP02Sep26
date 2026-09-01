@@ -1,29 +1,33 @@
 """Routes · Phase M2-B/M2-C — Fixtures, Match Results, Rankings, HR Allocation."""
 import re
-from datetime import datetime, timezone
-from typing import List, Optional, Dict
-from fastapi import HTTPException, Header, Depends, Request
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
 
-from core.infra import db, api_router
-from models import (
-    Fixture, FixtureCreate, FixtureStatus,
-    MatchResult, MatchResultCreate, MatchOfficialAllocation, MatchOfficialRole,
-    SpecialPerformance,
-)
+from fastapi import Depends, HTTPException
+
 from core.helpers import _next_fixture_no
+from core.infra import api_router, db
 from core.wiring_guard import assert_wiring_owner
-
+from lib.authz import (
+    principal_body_code,
+    principal_body_type,
+)
+from models import (
+    Fixture,
+    FixtureCreate,
+    FixtureStatus,
+    MatchOfficialAllocation,
+    MatchOfficialRole,
+    MatchResult,
+    MatchResultCreate,
+)
 
 # ---------------- Fixtures ----------------
 
 
-@api_router.get("/fixtures", response_model=List[Fixture])
+@api_router.get("/fixtures", response_model=list[Fixture])
 async def list_fixtures(
-    tournament_id: Optional[str] = None,
-    status: Optional[FixtureStatus] = None,
-    ground_id: Optional[str] = None,
+    tournament_id: str | None = None,
+    status: FixtureStatus | None = None,
+    ground_id: str | None = None,
 ):
     q: dict = {}
     if tournament_id:
@@ -37,7 +41,7 @@ async def list_fixtures(
 
 
 @api_router.patch("/fixtures/{fid}", response_model=Fixture)
-async def patch_fixture(fid: str, payload: Dict = None):
+async def patch_fixture(fid: str, payload: dict = None):
     """MPCA-217 · Update days-engine + venue fields on a fixture.
 
     Allow-listed fields only — days-engine drivers (`actual_days`, `nmd_manual`,
@@ -72,8 +76,8 @@ async def get_fixture(fid: str):
 @api_router.post("/fixtures", response_model=Fixture)
 async def create_fixture(
     payload: FixtureCreate,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     t = await db.tournaments.find_one({"id": payload.tournament_id}, {"_id": 0})
     if not t:
@@ -133,8 +137,8 @@ async def _notify_officials_of_match_disruption(fixture: dict, new_status: str) 
         Match Fee stays payable for the scheduled day. DA/TA is not paid
         for a day that was not actually played.
     """
-    from core.helpers import _create_notification
     from core.email_notifications import send_email
+    from core.helpers import _create_notification
 
     tournament = await db.tournaments.find_one({"id": fixture["tournament_id"]}, {"_id": 0, "name": 1})
     t_name = (tournament or {}).get("name") or fixture.get("tournament_id")
@@ -217,7 +221,7 @@ async def remove_official(fid: str, oid: str):
 
 
 @api_router.post("/fixtures/{fid}/log-hours")
-async def log_work_hours(fid: str, official_id: str, hours: float, note: Optional[str] = None):
+async def log_work_hours(fid: str, official_id: str, hours: float, note: str | None = None):
     """M2-C · Log work hours for an allocated HR against a specific fixture."""
     if hours <= 0:
         raise HTTPException(400, "Work hours must be positive.")
@@ -265,8 +269,8 @@ async def get_match_result(rid: str):
     return doc
 
 
-@api_router.get("/match-results", response_model=List[MatchResult])
-async def list_match_results(tournament_id: Optional[str] = None):
+@api_router.get("/match-results", response_model=list[MatchResult])
+async def list_match_results(tournament_id: str | None = None):
     q: dict = {}
     if tournament_id:
         q["tournament_id"] = tournament_id
@@ -278,12 +282,12 @@ async def list_match_results(tournament_id: Optional[str] = None):
 
 
 @api_router.get("/rankings/batting")
-async def batting_rankings(tournament_id: Optional[str] = None, season: Optional[str] = None, limit: int = 20):
+async def batting_rankings(tournament_id: str | None = None, season: str | None = None, limit: int = 20):
     """Aggregate batting rankings by player."""
     match: dict = {}
     if tournament_id:
         match["tournament_id"] = tournament_id
-    pipeline: List[dict] = []
+    pipeline: list[dict] = []
     if match:
         pipeline.append({"$match": match})
     pipeline += [
@@ -309,11 +313,11 @@ async def batting_rankings(tournament_id: Optional[str] = None, season: Optional
 
 
 @api_router.get("/rankings/bowling")
-async def bowling_rankings(tournament_id: Optional[str] = None, limit: int = 20):
+async def bowling_rankings(tournament_id: str | None = None, limit: int = 20):
     match: dict = {}
     if tournament_id:
         match["tournament_id"] = tournament_id
-    pipeline: List[dict] = []
+    pipeline: list[dict] = []
     if match:
         pipeline.append({"$match": match})
     pipeline += [
@@ -340,11 +344,11 @@ async def bowling_rankings(tournament_id: Optional[str] = None, limit: int = 20)
 
 
 @api_router.get("/rankings/special-performances")
-async def special_performances(tournament_id: Optional[str] = None, limit: int = 50):
+async def special_performances(tournament_id: str | None = None, limit: int = 50):
     match: dict = {}
     if tournament_id:
         match["tournament_id"] = tournament_id
-    pipeline: List[dict] = []
+    pipeline: list[dict] = []
     if match:
         pipeline.append({"$match": match})
     pipeline += [
@@ -366,12 +370,12 @@ async def special_performances(tournament_id: Optional[str] = None, limit: int =
 
 
 @api_router.get("/hr-allocations/work-hours")
-async def hr_work_hours(name: Optional[str] = None, role: Optional[MatchOfficialRole] = None, tournament_id: Optional[str] = None):
+async def hr_work_hours(name: str | None = None, role: MatchOfficialRole | None = None, tournament_id: str | None = None):
     """M2-C · aggregated work-hours across fixtures for HR payment."""
     match_q: dict = {}
     if tournament_id:
         match_q["tournament_id"] = tournament_id
-    pipeline: List[dict] = [{"$match": match_q}] if match_q else []
+    pipeline: list[dict] = [{"$match": match_q}] if match_q else []
     pipeline += [
         {"$unwind": "$officials"},
     ]
@@ -390,11 +394,12 @@ async def hr_work_hours(name: Optional[str] = None, role: Optional[MatchOfficial
         }},
         {"$sort": {"total_hours": -1}},
     ]
-    return [row async for row in db.fixtures.aggregate(pipeline)]
+    # Strip _id from each aggregate row so FastAPI can serialise the response.
+    return [{k: v for k, v in row.items() if k != "_id"} async for row in db.fixtures.aggregate(pipeline)]
 
 
 @api_router.get("/fixtures-stats/summary")
-async def fixtures_stats(tournament_id: Optional[str] = None):
+async def fixtures_stats(tournament_id: str | None = None):
     q: dict = {}
     if tournament_id:
         q["tournament_id"] = tournament_id

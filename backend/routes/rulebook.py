@@ -1,18 +1,12 @@
 """Routes · Rulebook + Meeting Agenda"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
-from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
-
-from core.infra import db, api_router
-from models import Claim, Meeting
-from core.helpers import next_uid as _
-from fastapi.responses import FileResponse
+from datetime import datetime, timezone
 from pathlib import Path
-from core.infra import APPROVAL_MATRIX_PATH, MEETING_AGENDA_PATH
-from core.pdf_generator import _markdown_to_pdf_response, _markdown_to_colored_pdf
 
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
+
+from core.infra import APPROVAL_MATRIX_PATH, api_router
+from core.pdf_generator import _markdown_to_colored_pdf, _markdown_to_pdf_response
 
 # ============================================================
 # Approval Matrix (AI Rulebook) — view + download (.md / .pdf)

@@ -2024,4 +2024,3 @@ async def seed_selection_funnels():
             notes="International tournament — awaiting Division recommendation then MPCA validation before BCCI submission.",
         )
         await db.selection_funnels.insert_one(funnel_b.model_dump())
-        await db.ground_expenses.insert_one(ge.model_dump())

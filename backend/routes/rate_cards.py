@@ -15,7 +15,7 @@ Endpoints
     GET    /api/rate-cards/heads                        → returns BUDGET_HEADS_META + TRAVEL_HEADS_META (frontend meta)
 """
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import HTTPException
 
@@ -27,7 +27,6 @@ from models import (
     RateCardPatch,
     RateHead,
 )
-
 
 # ─────────────── Default rate values (from HTML utility v20) ───────────────
 # Two format groups: ltd_overs (Ltd Overs / T20 / One-Day) and multi_day
@@ -118,7 +117,7 @@ _DEFAULT_OFFICIALS_RATES = {
     },
 }
 
-SEED_TOURNAMENT_TYPES: List[str] = [
+SEED_TOURNAMENT_TYPES: list[str] = [
     "Inter_Divisional",
     "Inter_District",
     "BCCI",
@@ -178,8 +177,8 @@ async def rate_card_heads():
     }
 
 
-@api_router.get("/rate-cards", response_model=List[RateCard])
-async def list_rate_cards(season: Optional[str] = None):
+@api_router.get("/rate-cards", response_model=list[RateCard])
+async def list_rate_cards(season: str | None = None):
     q: dict = {}
     if season:
         q["season"] = season
@@ -229,7 +228,7 @@ async def patch_rate_card(card_id: str, patch: RateCardPatch):
     if patch.officials_rates is not None:
         # MPCA-232 · Sanitise incoming rates — only allow known roles + numeric values.
         _ALLOWED_ROLES = {"Umpire", "Scorer", "Selector", "Observer", "Referee"}
-        clean_off: Dict[str, Dict[str, float]] = {}
+        clean_off: dict[str, dict[str, float]] = {}
         for role, vals in (patch.officials_rates or {}).items():
             if role not in _ALLOWED_ROLES:
                 continue
@@ -267,8 +266,9 @@ async def reset_rate_card(card_id: str):
 
 # ─────────────── MPCA-223 · Custom line items ───────────────
 
-from models import RateCardCustomHead   # noqa: E402
-import re   # noqa: E402
+import re
+
+from models import RateCardCustomHead
 
 
 def _slugify(name: str) -> str:
@@ -342,7 +342,7 @@ _ALLOWED_META = {"name", "driver", "owner", "rooms", "basis"}
 
 
 @api_router.patch("/rate-cards/{card_id}/heads/{key}", response_model=RateCard)
-async def patch_head_meta(card_id: str, key: str, patch: Dict[str, Any]):
+async def patch_head_meta(card_id: str, key: str, patch: dict[str, Any]):
     """MPCA-224 · Edit the metadata of a rate-card head (default OR custom).
 
     Accepts any subset of `name`, `driver`, `owner`, `rooms`, `basis`. For
@@ -353,7 +353,7 @@ async def patch_head_meta(card_id: str, key: str, patch: Dict[str, Any]):
     if not card:
         raise HTTPException(404, "Rate card not found")
     # Sanitise + validate
-    clean: Dict[str, Any] = {}
+    clean: dict[str, Any] = {}
     for k, v in (patch or {}).items():
         if k not in _ALLOWED_META:
             continue
@@ -378,7 +378,7 @@ async def patch_head_meta(card_id: str, key: str, patch: Dict[str, Any]):
         return card
 
     default_keys = {h["key"] for h in __import__("models", fromlist=["BUDGET_HEADS_META"]).BUDGET_HEADS_META}
-    updates: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    updates: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if key in default_keys:
         # Default head → override
         overrides = dict(card.get("head_meta_overrides") or {})

@@ -1,14 +1,12 @@
 """Routes · AI Re-validate + Attach Docs"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
-from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from datetime import datetime, timezone
 
-from core.infra import db, api_router
-from models import Claim, Body
+from fastapi import HTTPException
+
+from core.ai_validator import _apply_ai_verdict, _run_ai_validation
 from core.helpers import _decorate_claim
-from core.ai_validator import _run_ai_validation, _apply_ai_verdict
+from core.infra import api_router, db
+from models import Claim
 
 
 @api_router.post("/claims/{claim_id}/attach-docs", response_model=Claim)
@@ -22,7 +20,7 @@ async def attach_docs(claim_id: str, payload: dict):
     new_urls = payload.get("urls") or []
     if not isinstance(new_urls, list) or not all(isinstance(u, str) for u in new_urls):
         raise HTTPException(400, "Body must be {urls: string[]}.")
-    merged = list((doc.get("supporting_doc_urls") or [])) + [u for u in new_urls if u]
+    merged = list(doc.get("supporting_doc_urls") or []) + [u for u in new_urls if u]
     await db.claims.update_one(
         {"id": claim_id},
         {"$set": {

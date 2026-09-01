@@ -1,38 +1,42 @@
 """Routes · Claims & Grant Workflow"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
-from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
-
-from core.infra import db, api_router
-from core.shared_services import next_seq  # H6 · atomic sequence
-from models import Claim, ClaimCreate, ClaimAction, ClaimStatus, ClaimCategory, ApprovalStep, BankTransaction, Body
-from core.helpers import _next_claim_no, _resolve_parent_body, _append_step, _notify_for_claim, _decorate_claim
-from core.ai_validator import _run_ai_validation, _apply_ai_verdict
 import logging
-from models import SANCTION_THRESHOLDS, TWO_SIGNATORY_THRESHOLD_INR
+from datetime import datetime, timezone
 
+from fastapi import HTTPException
+
+from core.ai_validator import _apply_ai_verdict, _run_ai_validation
+from core.helpers import (
+    _append_step,
+    _decorate_claim,
+    _next_claim_no,
+    _notify_for_claim,
+    _resolve_parent_body,
+)
+from core.infra import api_router, db
+from core.shared_services import next_seq  # H6 · atomic sequence
+from models import (
+    SANCTION_THRESHOLDS,
+    TWO_SIGNATORY_THRESHOLD_INR,
+    ApprovalStep,
+    BankTransaction,
+    Claim,
+    ClaimAction,
+    ClaimCreate,
+    ClaimStatus,
+)
 
 # ---------------- Routes: Claims & Grant Workflow ----------------
+# Local `_next_claim_no` / `_resolve_parent_body` removed — Feb 2026 · both
+# are imported from `core.helpers` already; the duplicate defs here were
+# stale copies (F811).
 
 
-async def _next_claim_no(cycle: str) -> str:
-    seq = await next_seq(f"claim:{cycle}", lambda: db.claims.count_documents({"fiscal_cycle": cycle}))
-    return f"CLM-{cycle}-{seq:03d}"
-
-
-async def _resolve_parent_body(body_id: str) -> Optional[str]:
-    body = await db.bodies.find_one({"code": body_id}, {"_id": 0, "parent_code": 1})
-    return body.get("parent_code") if body else None
-
-
-@api_router.get("/claims", response_model=List[Claim])
+@api_router.get("/claims", response_model=list[Claim])
 async def list_claims(
-    body_id: Optional[str] = None,
-    parent_body_id: Optional[str] = None,
-    status: Optional[ClaimStatus] = None,
-    fiscal_cycle: Optional[str] = None,
+    body_id: str | None = None,
+    parent_body_id: str | None = None,
+    status: ClaimStatus | None = None,
+    fiscal_cycle: str | None = None,
     skip: int = 0,
     limit: int = 500,
 ):

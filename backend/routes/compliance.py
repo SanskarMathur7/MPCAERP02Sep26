@@ -11,16 +11,16 @@ Society-Registrar / Auditor filings. Each ComplianceItem carries:
 Sprint 4 focuses on the register itself + due-date maths. Sprint 5 will wire
 this into dashboard reminder tiles.
 """
-from datetime import datetime, timezone, date, timedelta
-from dateutil.relativedelta import relativedelta
-from typing import List, Literal, Optional
 import uuid
+from datetime import date, datetime, timezone
+from typing import Literal
+
+from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from core.shared_services import write_audit_log
-
 
 Frequency = Literal["Monthly", "Quarterly", "Half_Yearly", "Yearly", "One_Time"]
 ComplianceStatus = Literal["Active", "Suspended"]
@@ -31,10 +31,10 @@ class FiledRecord(BaseModel):
     period: str  # e.g. "2026-01" / "Q1 2026-27" / "2025-26"
     filed_date: str
     filed_by: str
-    ack_ref: Optional[str] = None
-    filing_url: Optional[str] = None
-    amount_inr: Optional[float] = None
-    notes: Optional[str] = None
+    ack_ref: str | None = None
+    filing_url: str | None = None
+    amount_inr: float | None = None
+    notes: str | None = None
 
 
 class ComplianceItemBase(BaseModel):
@@ -44,16 +44,16 @@ class ComplianceItemBase(BaseModel):
     authority: str
     frequency: Frequency
     due_day: int = 10  # e.g. 10 = filed by 10th of next period
-    due_month: Optional[int] = None  # for Yearly (e.g. 7 for July)
-    section_ref: Optional[str] = None  # e.g. "GSTR-3B" / "Section 200 · TDS"
-    penalty_note: Optional[str] = None
-    notes: Optional[str] = None
+    due_month: int | None = None  # for Yearly (e.g. 7 for July)
+    section_ref: str | None = None  # e.g. "GSTR-3B" / "Section 200 · TDS"
+    penalty_note: str | None = None
+    notes: str | None = None
 
 
 class ComplianceItem(ComplianceItemBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     status: ComplianceStatus = "Active"
-    filed_history: List[FiledRecord] = []
+    filed_history: list[FiledRecord] = []
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -64,15 +64,15 @@ class ComplianceItemCreate(ComplianceItemBase):
 class FilePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     period: str
-    filed_date: Optional[str] = None
+    filed_date: str | None = None
     filed_by: str
-    ack_ref: Optional[str] = None
-    filing_url: Optional[str] = None
-    amount_inr: Optional[float] = None
-    notes: Optional[str] = None
+    ack_ref: str | None = None
+    filing_url: str | None = None
+    amount_inr: float | None = None
+    notes: str | None = None
 
 
-def _next_due_date(item: dict, today: Optional[date] = None) -> Optional[date]:
+def _next_due_date(item: dict, today: date | None = None) -> date | None:
     """Compute the next due date based on frequency + due_day + filed_history."""
     today = today or datetime.now(timezone.utc).date()
     freq = item.get("frequency")
@@ -81,7 +81,7 @@ def _next_due_date(item: dict, today: Optional[date] = None) -> Optional[date]:
 
     if freq == "Monthly":
         # Compute current-period unfiled month
-        for months_back in range(0, 24):
+        for months_back in range(24):
             probe = today - relativedelta(months=months_back + 1)
             period = probe.strftime("%Y-%m")
             if period not in filed_periods:
@@ -112,7 +112,7 @@ def _next_due_date(item: dict, today: Optional[date] = None) -> Optional[date]:
     if freq == "Half_Yearly":
         # H1 = Apr-Sep, H2 = Oct-Mar
         current_h = "H1" if 4 <= today.month <= 9 else "H2"
-        for delta_h in range(0, 8):
+        for delta_h in range(8):
             probe = today - relativedelta(months=6 * (delta_h + 1))
             h_label = "H1" if 4 <= probe.month <= 9 else "H2"
             fy_start = probe.year if probe.month >= 4 else probe.year - 1
@@ -129,7 +129,7 @@ def _next_due_date(item: dict, today: Optional[date] = None) -> Optional[date]:
         return None
     if freq == "Yearly":
         due_month = int(item.get("due_month") or 7)
-        for years_back in range(0, 5):
+        for years_back in range(5):
             fy_year = today.year - years_back - (1 if today.month < 4 else 0)
             fy = f"{fy_year}-{str(fy_year + 1)[-2:]}"
             if fy not in filed_periods:
@@ -151,7 +151,7 @@ def _next_due_date(item: dict, today: Optional[date] = None) -> Optional[date]:
     return None
 
 
-def _status_label(due: Optional[date], today: date) -> str:
+def _status_label(due: date | None, today: date) -> str:
     if due is None:
         return "Filed"
     delta = (due - today).days
@@ -171,10 +171,10 @@ async def _get(cid: str) -> dict:
 
 # ═══════════════════ ENDPOINTS ═══════════════════
 
-@api_router.get("/compliance", response_model=List[ComplianceItem])
-async def list_compliance(status: Optional[ComplianceStatus] = None,
-                           frequency: Optional[Frequency] = None,
-                           authority: Optional[str] = None):
+@api_router.get("/compliance", response_model=list[ComplianceItem])
+async def list_compliance(status: ComplianceStatus | None = None,
+                           frequency: Frequency | None = None,
+                           authority: str | None = None):
     q: dict = {}
     if status: q["status"] = status
     if frequency: q["frequency"] = frequency

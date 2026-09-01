@@ -1,17 +1,16 @@
 """Routes · Fee Invoices"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
 import uuid
+from datetime import datetime, timezone
+
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
-from models import FeeInvoice, FeeInvoiceCreate, FeeStatus, Member
 from core.helpers import _next_invoice_no
+from core.infra import api_router, db
+from models import FeeInvoice, FeeInvoiceCreate, FeeStatus
 
 
-@api_router.get("/fees", response_model=List[FeeInvoice])
-async def list_fee_invoices(status: Optional[FeeStatus] = None, cycle: Optional[str] = None, member_uid: Optional[str] = None):
+@api_router.get("/fees", response_model=list[FeeInvoice])
+async def list_fee_invoices(status: FeeStatus | None = None, cycle: str | None = None, member_uid: str | None = None):
     query = {}
     if status:
         query["status"] = status
@@ -42,7 +41,7 @@ async def create_fee_invoice(payload: FeeInvoiceCreate):
 
 
 @api_router.post("/fees/generate")
-async def generate_invoices(cycle: str, amount: float = 3000.0, due_date: Optional[str] = None):
+async def generate_invoices(cycle: str, amount: float = 3000.0, due_date: str | None = None):
     """Bulk-generate invoices for the given cycle for every active Individual + Institutional member."""
     if not due_date:
         due_date = "2025-12-31"
@@ -71,7 +70,7 @@ async def generate_invoices(cycle: str, amount: float = 3000.0, due_date: Option
 
 
 @api_router.post("/fees/{invoice_id}/pay")
-async def pay_invoice(invoice_id: str, payment_ref: Optional[str] = None):
+async def pay_invoice(invoice_id: str, payment_ref: str | None = None):
     """Mock payment — marks invoice as Paid. In real life this would be Stripe/Razorpay."""
     inv = await db.fee_invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:

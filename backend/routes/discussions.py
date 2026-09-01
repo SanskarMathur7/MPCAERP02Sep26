@@ -16,16 +16,15 @@ Two flavours of chat inside the ERP:
 Every message may carry `@mentions` — a list of `{persona_id, name, body_code}`
 handles that the frontend picker resolves before posting.
 """
-from datetime import datetime, timezone
-from typing import Optional, List, Literal
 import uuid
+from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from core.scoping import get_scope
-
 
 # ── Models ────────────────────────────────────────────────────────────────
 Kind = Literal["tournament", "inbox"]
@@ -33,15 +32,15 @@ Kind = Literal["tournament", "inbox"]
 
 class Mention(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    persona_id: Optional[str] = None
+    persona_id: str | None = None
     name: str
-    body_code: Optional[str] = None
+    body_code: str | None = None
 
 
 class MessageIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     body: str
-    mentions: List[Mention] = Field(default_factory=list)
+    mentions: list[Mention] = Field(default_factory=list)
 
 
 class Message(BaseModel):
@@ -49,10 +48,10 @@ class Message(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     thread_id: str
     body: str
-    mentions: List[Mention] = Field(default_factory=list)
-    author_name: Optional[str] = None
-    author_persona: Optional[str] = None
-    author_body_code: Optional[str] = None
+    mentions: list[Mention] = Field(default_factory=list)
+    author_name: str | None = None
+    author_persona: str | None = None
+    author_body_code: str | None = None
     posted_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -60,15 +59,15 @@ class Thread(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     kind: Kind
-    tournament_id: Optional[str] = None      # for kind=tournament
-    tournament_name: Optional[str] = None
-    body_scope: Optional[str] = None         # M39-v2 · null=general/broadcast; body_code=private MPCA↔body channel
-    body_scope_name: Optional[str] = None
-    body_a: Optional[str] = None             # for kind=inbox — sorted pair
-    body_b: Optional[str] = None
-    pair_key: Optional[str] = None
+    tournament_id: str | None = None      # for kind=tournament
+    tournament_name: str | None = None
+    body_scope: str | None = None         # M39-v2 · null=general/broadcast; body_code=private MPCA↔body channel
+    body_scope_name: str | None = None
+    body_a: str | None = None             # for kind=inbox — sorted pair
+    body_b: str | None = None
+    pair_key: str | None = None
     title: str
-    last_message_at: Optional[str] = None
+    last_message_at: str | None = None
     message_count: int = 0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -78,7 +77,7 @@ def _pair_key(a: str, b: str) -> str:
     return "::".join(sorted([a, b]))
 
 
-async def _get_or_create_tournament_thread(tid: str, body_scope: Optional[str] = None) -> dict:
+async def _get_or_create_tournament_thread(tid: str, body_scope: str | None = None) -> dict:
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0, "id": 1, "name": 1})
     if not t:
         raise HTTPException(404, "Tournament not found")
@@ -111,7 +110,7 @@ async def _get_or_create_tournament_thread(tid: str, body_scope: Optional[str] =
 
 # ── Endpoints ─────────────────────────────────────────────────────────────
 @api_router.get("/discussions/tournament/{tid}", response_model=Thread)
-async def get_or_create_tournament_thread(tid: str, body_scope: Optional[str] = None, request: Request = None):
+async def get_or_create_tournament_thread(tid: str, body_scope: str | None = None, request: Request = None):
     """M39-v2 · Resolves (or creates) a tournament discussion channel.
 
     - `body_scope=None` → the general/broadcast thread (every participating
@@ -182,7 +181,7 @@ async def list_tournament_channels(tid: str, request: Request):
     return {"tournament_id": tid, "tournament_name": t.get("name"), "channels": channels}
 
 
-@api_router.get("/discussions/{thread_id}/messages", response_model=List[Message])
+@api_router.get("/discussions/{thread_id}/messages", response_model=list[Message])
 async def list_messages(thread_id: str, request: Request, limit: int = 200):
     thread = await db.discussion_threads.find_one({"id": thread_id}, {"_id": 0})
     if not thread:
@@ -258,7 +257,7 @@ async def post_message(thread_id: str, payload: MessageIn, request: Request):
     return msg
 
 
-@api_router.get("/discussions/inbox/threads", response_model=List[Thread])
+@api_router.get("/discussions/inbox/threads", response_model=list[Thread])
 async def list_inbox_threads(request: Request):
     """Returns every inbox thread the caller's body participates in — MPCA
     sees all, a Division/District sees only ones involving them."""
@@ -276,7 +275,7 @@ async def list_inbox_threads(request: Request):
 class OpenInboxPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     other_body_code: str
-    initial_message: Optional[str] = None
+    initial_message: str | None = None
 
 
 @api_router.post("/discussions/inbox/open", response_model=Thread)

@@ -1,17 +1,12 @@
 """Routes · Disclosures"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from models import Disclosure, DisclosureCreate, DisclosureType
-from core.helpers import next_uid as _
 
 
-@api_router.get("/disclosures", response_model=List[Disclosure])
-async def list_disclosures(disclosure_type: Optional[DisclosureType] = None):
+@api_router.get("/disclosures", response_model=list[Disclosure])
+async def list_disclosures(disclosure_type: DisclosureType | None = None):
     query = {}
     if disclosure_type:
         query["disclosure_type"] = disclosure_type

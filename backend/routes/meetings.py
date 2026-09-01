@@ -1,19 +1,25 @@
 """Routes · Meetings + Resolutions"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
+from datetime import datetime, timezone
+
 from fastapi import HTTPException, Request
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict
 
-from core.infra import db, api_router
-from models import Meeting, MeetingCreate, MeetingType, MeetingStatus, Resolution, ResolutionCreate
-from core.helpers import _next_meeting_no
-from core.scoping import get_scope
 from core.ai_signed_docs import summarise_signed_minutes
+from core.helpers import _next_meeting_no
+from core.infra import api_router, db
+from core.scoping import get_scope
+from models import (
+    Meeting,
+    MeetingCreate,
+    MeetingStatus,
+    MeetingType,
+    Resolution,
+    ResolutionCreate,
+)
 
 
-@api_router.get("/meetings", response_model=List[Meeting])
-async def list_meetings(meeting_type: Optional[MeetingType] = None, status: Optional[MeetingStatus] = None):
+@api_router.get("/meetings", response_model=list[Meeting])
+async def list_meetings(meeting_type: MeetingType | None = None, status: MeetingStatus | None = None):
     query = {}
     if meeting_type:
         query["meeting_type"] = meeting_type
@@ -125,7 +131,7 @@ async def delete_meeting(meeting_id: str):
     return {"deleted": True}
 
 
-@api_router.get("/meetings/{meeting_id}/resolutions", response_model=List[Resolution])
+@api_router.get("/meetings/{meeting_id}/resolutions", response_model=list[Resolution])
 async def list_resolutions(meeting_id: str):
     docs = await db.resolutions.find({"meeting_id": meeting_id}, {"_id": 0}).sort("number", 1).to_list(200)
     return docs
@@ -144,7 +150,7 @@ async def add_resolution(meeting_id: str, payload: ResolutionCreate):
 class SignedMinutesUpload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     signed_minutes_url: str
-    uploaded_by: Optional[str] = None
+    uploaded_by: str | None = None
 
 
 @api_router.post("/meetings/{meeting_id}/signed-minutes", response_model=Meeting)

@@ -105,7 +105,11 @@ def _wrap_html(title: str, body_html: str) -> str:
 
 
 async def send_meeting_invitation(meeting) -> dict:
-    """Send invitation to all attendees whose members record has an email."""
+    """Send invitation to all attendees whose members record has an email.
+
+    Feb 2026 · MPCA-114 · If the meeting has attached documents, list them
+    in the email so invitees can preview / download before the meeting.
+    """
     doc = meeting.model_dump() if hasattr(meeting, "model_dump") else meeting
     attendee_ids = doc.get("attendees") or []
     external = doc.get("external_attendees") or []
@@ -121,6 +125,21 @@ async def send_meeting_invitation(meeting) -> dict:
         return {"status": "skipped", "reason": "no attendees with email"}
     subject = f"[MPCA] Meeting Invitation — {doc.get('title')}"
     when = f"{doc.get('scheduled_date')} {doc.get('scheduled_time') or ''}".strip()
+    # MPCA-114 · Documents block
+    docs = doc.get("documents") or []
+    docs_html = ""
+    if docs:
+        rows = "".join(
+            f'<li style="margin:2px 0;"><a href="{d.get("url")}" style="color:#7A1A1A;text-decoration:underline;">{d.get("name") or "Attached document"}</a></li>'
+            for d in docs if d.get("url")
+        )
+        docs_html = f"""
+        <div style="margin:14px 0;padding:10px 12px;background:#F5EFE6;border-left:3px solid #B88328;">
+            <div style="color:#7A1A1A;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;margin-bottom:6px;">
+                Documents attached ({len(docs)})
+            </div>
+            <ul style="margin:0;padding-left:18px;font-size:13px;color:#333;">{rows}</ul>
+        </div>"""
     body = _wrap_html("Meeting Invitation", f"""
         <p>You are invited to attend the following meeting.</p>
         <table style="width:100%;font-size:13px;margin:8px 0;">
@@ -130,9 +149,31 @@ async def send_meeting_invitation(meeting) -> dict:
             <tr><td style="color:#6b6b6b;padding:4px 0;">Venue</td><td>{doc.get('venue')}</td></tr>
             <tr><td style="color:#6b6b6b;padding:4px 0;">Chair</td><td>{doc.get('chairperson') or '—'}</td></tr>
         </table>
+        {docs_html}
         <p style="color:#7A1A1A;font-weight:600;">Meeting ref · {doc.get('meeting_no')}</p>
     """)
     return await send_email(list(recipients), subject, body)
+
+
+async def send_action_item_notification(member_id: str, subject_line: str, body_text: str, action_url: Optional[str] = None) -> dict:
+    """Feb 2026 · MPCA-118 · Send an email whenever a new action item lands
+    in a member's action-centre inbox. `subject_line` becomes the email
+    subject; `body_text` is rendered in a single paragraph. Best-effort —
+    silently no-ops if the member has no email on file."""
+    m = await db.members.find_one({"id": member_id}, {"_id": 0, "email": 1, "full_name": 1})
+    if not m or not m.get("email"):
+        return {"status": "skipped", "reason": "no email"}
+    cta = ""
+    if action_url:
+        cta = f'<p><a href="{action_url}" style="display:inline-block;margin-top:8px;padding:8px 16px;background:#7A1A1A;color:#F5EFE6;text-decoration:none;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;">Open Action</a></p>'
+    body = _wrap_html("New Action Required", f"""
+        <p>Dear {m.get("full_name") or "Member"},</p>
+        <p>{body_text}</p>
+        {cta}
+        <p style="color:#6b6b6b;font-size:11px;">This item is now visible in your MPCA ERP Action Centre.</p>
+    """)
+    return await send_email(m["email"], f"[MPCA · Action Required] {subject_line}", body)
+
 
 
 async def send_claim_rejection_notice(claim: dict, reason: str) -> dict:

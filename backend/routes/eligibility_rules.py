@@ -17,14 +17,13 @@ Read via routes.players._load_eligibility_rules at compute-time.
 """
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 
-
-_CANONICAL_TAGS: List[dict] = [
+_CANONICAL_TAGS: list[dict] = [
     {
         "code": "Local/Birth", "order": 1,
         "description": "Player born within the target Division's jurisdiction.",
@@ -79,18 +78,18 @@ class EligibilityRulesConfig(BaseModel):
     age_of_majority_for_parent: int = 21
     medical_required_by_default: bool = True
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_by: Optional[str] = None
+    updated_by: str | None = None
 
 
 class EligibilityRulesPatch(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    residency_min_months: Optional[int] = Field(None, ge=0, le=120)
-    education_min_months_local: Optional[int] = Field(None, ge=0, le=120)
-    education_min_months_guest: Optional[int] = Field(None, ge=0, le=120)
-    guest_prior_years_min: Optional[int] = Field(None, ge=0, le=20)
-    age_of_majority_for_parent: Optional[int] = Field(None, ge=10, le=30)
-    medical_required_by_default: Optional[bool] = None
-    updated_by: Optional[str] = None
+    residency_min_months: int | None = Field(None, ge=0, le=120)
+    education_min_months_local: int | None = Field(None, ge=0, le=120)
+    education_min_months_guest: int | None = Field(None, ge=0, le=120)
+    guest_prior_years_min: int | None = Field(None, ge=0, le=20)
+    age_of_majority_for_parent: int | None = Field(None, ge=10, le=30)
+    medical_required_by_default: bool | None = None
+    updated_by: str | None = None
 
 
 @api_router.get("/eligibility-rules/tags")
@@ -100,7 +99,7 @@ async def list_canonical_tags():
     return _CANONICAL_TAGS
 
 
-@api_router.get("/eligibility-rules", response_model=List[EligibilityRulesConfig])
+@api_router.get("/eligibility-rules", response_model=list[EligibilityRulesConfig])
 async def list_rules_configs():
     docs = await db.eligibility_rules_config.find({}, {"_id": 0}).sort("season", -1).to_list(50)
     return docs
@@ -137,7 +136,7 @@ class DuplicateSeasonPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     source_season: str
     target_season: str
-    actor_name: Optional[str] = None
+    actor_name: str | None = None
 
 
 @api_router.post("/eligibility-rules/duplicate", response_model=EligibilityRulesConfig)

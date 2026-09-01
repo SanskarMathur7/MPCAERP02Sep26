@@ -4,13 +4,18 @@ managing a squad picks officials from their own body when submitting to MPCA.
 """
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Literal, Dict, Any
-from fastapi import HTTPException, Header, Depends, Request
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, Literal
 
-from core.infra import db, api_router
+from fastapi import Depends, Header, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
+
+from core.infra import api_router, db
+from lib.authz import (
+    principal_body_code,
+    principal_body_type,
+    principal_persona_id,
+    principal_role_id,
+)
 
 OfficialRole = Literal["Umpire", "Scorer", "Selector", "Observer", "Referee", "Manager", "Coach", "Trainer", "Physio"]
 OfficialGrade = Literal["BCCI_Panel", "State_Panel", "Division_Panel", "District_Panel", "Trainee"]
@@ -22,33 +27,33 @@ class MatchOfficialBase(BaseModel):
     role: OfficialRole
     grade: OfficialGrade = "State_Panel"
     body_id: str = "MPCA"     # owning body (MPCA / Division / District)
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    accreditation_no: Optional[str] = None
+    phone: str | None = None
+    email: str | None = None
+    accreditation_no: str | None = None
     years_of_experience: int = 0
-    fee_per_match_inr: Optional[float] = None
+    fee_per_match_inr: float | None = None
     is_active: bool = True
-    notes: Optional[str] = None
+    notes: str | None = None
     # ── M38g · KYC + Bank profile (editable by MPCA · owning Division · the Official themselves) ──
-    date_of_birth: Optional[str] = None
-    gender: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    pincode: Optional[str] = None
-    photo_url: Optional[str] = None
-    pan_no: Optional[str] = None
-    pan_doc_url: Optional[str] = None
-    aadhaar_last4: Optional[str] = None
-    aadhaar_doc_url: Optional[str] = None
-    bank_account_no: Optional[str] = None
-    bank_ifsc: Optional[str] = None
-    bank_name: Optional[str] = None
-    bank_cancelled_cheque_url: Optional[str] = None
+    date_of_birth: str | None = None
+    gender: str | None = None
+    address: str | None = None
+    city: str | None = None
+    state: str | None = None
+    pincode: str | None = None
+    photo_url: str | None = None
+    pan_no: str | None = None
+    pan_doc_url: str | None = None
+    aadhaar_last4: str | None = None
+    aadhaar_doc_url: str | None = None
+    bank_account_no: str | None = None
+    bank_ifsc: str | None = None
+    bank_name: str | None = None
+    bank_cancelled_cheque_url: str | None = None
     kyc_status: Literal["Not_Started", "Docs_Submitted", "KYC_Verified", "Rejected"] = "Not_Started"
-    kyc_verified_at: Optional[str] = None
-    kyc_verified_by: Optional[str] = None
-    kyc_notes: Optional[str] = None
+    kyc_verified_at: str | None = None
+    kyc_verified_by: str | None = None
+    kyc_notes: str | None = None
 
 
 class MatchOfficial(MatchOfficialBase):
@@ -91,24 +96,24 @@ class TournamentMatchOfficialBase(BaseModel):
     days: int = 1
     per_day_fee_inr: float = 0.0                       # standard rate at assignment time
     per_day_da_inr: float = 0.0                        # standard DA at assignment time
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class TournamentMatchOfficial(TournamentMatchOfficialBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    assigned_by: Optional[str] = None
+    assigned_by: str | None = None
     assigned_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     # ── Snapshot for display / audit ──
-    official_name: Optional[str] = None
-    body_id: Optional[str] = None                      # official's owning body
+    official_name: str | None = None
+    body_id: str | None = None                      # official's owning body
     # MPCA-133+ · Assignment lifecycle. Officials can Accept / Reject; MPCA
     # can re-post replacement officials for a Rejected slot. Rejected rows are
     # PRESERVED (audit trail) — not deleted.
     acceptance_status: Literal["Pending", "Accepted", "Rejected"] = "Pending"
-    rejection_reason: Optional[str] = None
-    responded_at: Optional[str] = None
+    rejection_reason: str | None = None
+    responded_at: str | None = None
     # Snapshot for the Match Official portal
-    tournament_name: Optional[str] = None
+    tournament_name: str | None = None
 
 
 _ADMIN_ROLES = {
@@ -128,10 +133,10 @@ _ADMIN_ROLES = {
 }
 
 
-@api_router.get("/match-officials", response_model=List[MatchOfficial])
+@api_router.get("/match-officials", response_model=list[MatchOfficial])
 async def list_officials(
-    body_id: Optional[str] = None,
-    role: Optional[str] = None,
+    body_id: str | None = None,
+    role: str | None = None,
     active_only: bool = False,
 ):
     q = {}
@@ -147,7 +152,7 @@ async def list_officials(
 @api_router.post("/match-officials", response_model=MatchOfficial)
 async def create_official(
     payload: MatchOfficialBase,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _ADMIN_ROLES:
         raise HTTPException(403, "Only office bearers may add match officials.")
@@ -172,9 +177,9 @@ async def get_official(oid: str):
 async def update_official(
     oid: str,
     payload: MatchOfficialBase,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_persona_name: Optional[str] = Depends(principal_persona_id),
-    x_body_code: Optional[str] = Header(None, alias="X-Body-Code"),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_persona_name: str | None = Depends(principal_persona_id),
+    x_body_code: str | None = Header(None, alias="X-Body-Code"),
 ):
     doc = await db.match_officials.find_one({"id": oid}, {"_id": 0})
     if not doc:
@@ -200,7 +205,7 @@ async def update_official(
 @api_router.delete("/match-officials/{oid}")
 async def delete_official(
     oid: str,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _ADMIN_ROLES:
         raise HTTPException(403, "Only office bearers may remove match officials.")
@@ -213,7 +218,7 @@ async def delete_official(
 # ═══════════════════════════════════════════════════════════════════════════
 # MPCA-133 · Tournament-level Match-Official Assignments
 # ═══════════════════════════════════════════════════════════════════════════
-def _mpca_only(x_body_type: Optional[str], x_role_id: Optional[str]):
+def _mpca_only(x_body_type: str | None, x_role_id: str | None):
     """Central assignment is MPCA-only per MPCA-133."""
     if x_body_type and x_body_type != "State":
         raise HTTPException(403, "Only MPCA may assign match officials centrally (MPCA-133).")
@@ -221,7 +226,7 @@ def _mpca_only(x_body_type: Optional[str], x_role_id: Optional[str]):
         raise HTTPException(403, "Only MPCA office bearers may assign match officials.")
 
 
-async def _wiring_owner_guard(tid: str, x_body_type: Optional[str], x_role_id: Optional[str]):
+async def _wiring_owner_guard(tid: str, x_body_type: str | None, x_role_id: str | None):
     """MPCA-238 · Wiring-driven assignment guard.
 
     Reads the tournament's wiring config and allows the persona to assign
@@ -230,8 +235,8 @@ async def _wiring_owner_guard(tid: str, x_body_type: Optional[str], x_role_id: O
     """
     # Fallback to MPCA-only if we can't resolve the wiring (safest default)
     try:
-        from routes.tournament_wiring_status import _resolve_type_id
         from routes.tournament_wiring import _fetch_or_seed_wiring
+        from routes.tournament_wiring_status import _resolve_type_id
         t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
         if not t:
             raise HTTPException(404, "Tournament not found")
@@ -258,7 +263,7 @@ async def _wiring_owner_guard(tid: str, x_body_type: Optional[str], x_role_id: O
     _mpca_only(x_body_type, x_role_id)
 
 
-@api_router.get("/tournaments/{tid}/match-officials", response_model=List[TournamentMatchOfficial])
+@api_router.get("/tournaments/{tid}/match-officials", response_model=list[TournamentMatchOfficial])
 async def list_tournament_officials(tid: str):
     """MPCA-133 · List all officials assigned to this tournament."""
     if not await db.tournaments.find_one({"id": tid}, {"_id": 0}):
@@ -284,19 +289,19 @@ class _TmoCreate(BaseModel):
     official_id: str
     role: str                                # Umpire / Scorer / Referee / Physio
     days: int = 1
-    per_day_fee_inr: Optional[float] = None  # override; else standard
-    per_day_da_inr: Optional[float] = None   # override; else standard
-    notes: Optional[str] = None
+    per_day_fee_inr: float | None = None  # override; else standard
+    per_day_da_inr: float | None = None   # override; else standard
+    notes: str | None = None
 
 
 @api_router.post("/tournaments/{tid}/match-officials", response_model=TournamentMatchOfficial)
 async def assign_tournament_official(
     tid: str,
     payload: _TmoCreate,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
-    x_persona_name: Optional[str] = Depends(principal_persona_id),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
+    x_persona_name: str | None = Depends(principal_persona_id),
 ):
     await _wiring_owner_guard(tid, x_body_type, x_role_id)
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
@@ -313,7 +318,9 @@ async def assign_tournament_official(
     # constants, and finally allow an explicit MPCA override.
     rc_fee, rc_da = None, None
     try:
-        from routes.unified_budget import _load_rate_card_for_tournament  # local import to avoid circular
+        from routes.unified_budget import (
+            _load_rate_card_for_tournament,  # local import to avoid circular
+        )
         card = await _load_rate_card_for_tournament(t)
         off_rates = (card or {}).get("officials_rates") or {}
         row = off_rates.get(role) or {}
@@ -368,10 +375,10 @@ async def assign_tournament_official(
 
 class _TmoPatch(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    days: Optional[int] = None
-    per_day_fee_inr: Optional[float] = None
-    per_day_da_inr: Optional[float] = None
-    notes: Optional[str] = None
+    days: int | None = None
+    per_day_fee_inr: float | None = None
+    per_day_da_inr: float | None = None
+    notes: str | None = None
 
 
 @api_router.get("/tournaments/{tid}/match-officials/rollup")
@@ -390,9 +397,9 @@ async def officials_rollup(tid: str):
     assigns = await db.tournament_match_officials.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
     matches = await db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}).to_list(500)
 
-    by_id: Dict[str, Dict[str, Any]] = {a["official_id"]: a for a in assigns}
-    per_official: Dict[str, Dict[str, Any]] = {}
-    per_match: List[Dict[str, Any]] = []
+    by_id: dict[str, dict[str, Any]] = {a["official_id"]: a for a in assigns}
+    per_official: dict[str, dict[str, Any]] = {}
+    per_match: list[dict[str, Any]] = []
     grand_fees = 0.0
     grand_da = 0.0
 
@@ -439,7 +446,7 @@ async def officials_rollup(tid: str):
             "fees": match_fees, "da": match_da, "total": match_fees + match_da,
         })
 
-    per_role: Dict[str, Dict[str, float]] = {}
+    per_role: dict[str, dict[str, float]] = {}
     for po in per_official.values():
         r = per_role.setdefault(po["role"], {"role": po["role"], "count": 0, "fees": 0.0, "da": 0.0, "total": 0.0})
         r["count"] += 1
@@ -462,8 +469,8 @@ async def update_tournament_official(
     tid: str,
     aid: str,
     payload: _TmoPatch,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_body_type: str | None = Depends(principal_body_type),
 ):
     await _wiring_owner_guard(tid, x_body_type, x_role_id)
     doc = await db.tournament_match_officials.find_one({"id": aid, "tournament_id": tid}, {"_id": 0})
@@ -480,8 +487,8 @@ async def update_tournament_official(
 async def remove_tournament_official(
     tid: str,
     aid: str,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_body_type: str | None = Depends(principal_body_type),
 ):
     await _wiring_owner_guard(tid, x_body_type, x_role_id)
     r = await db.tournament_match_officials.delete_one({"id": aid, "tournament_id": tid})
@@ -527,9 +534,9 @@ class _RejectReason(BaseModel):
 
 def _official_may_respond(
     doc: dict,
-    x_persona_name: Optional[str],
-    x_role_id: Optional[str],
-    x_body_type: Optional[str],
+    x_persona_name: str | None,
+    x_role_id: str | None,
+    x_body_type: str | None,
 ) -> bool:
     """Assignment response allowed only for:
       · MPCA State-scope admins (secretary / president / treasurer with X-Body-Type=State), OR
@@ -548,9 +555,9 @@ def _official_may_respond(
 async def accept_tournament_assignment(
     tid: str,
     aid: str,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_persona_name: Optional[str] = Depends(principal_persona_id),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_persona_name: str | None = Depends(principal_persona_id),
 ):
     doc = await db.tournament_match_officials.find_one({"id": aid, "tournament_id": tid}, {"_id": 0})
     if not doc:
@@ -570,9 +577,9 @@ async def reject_tournament_assignment(
     tid: str,
     aid: str,
     payload: _RejectReason,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_persona_name: Optional[str] = Depends(principal_persona_id),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_persona_name: str | None = Depends(principal_persona_id),
 ):
     if not (payload.reason or "").strip():
         raise HTTPException(400, "A rejection reason is required.")
@@ -609,7 +616,7 @@ async def reject_tournament_assignment(
 
 @api_router.get("/match-officials/me/assignments")
 async def my_official_assignments(
-    x_persona_name: Optional[str] = Depends(principal_persona_id),
+    x_persona_name: str | None = Depends(principal_persona_id),
 ):
     """Match-Official portal · list every assignment addressed to the caller.
     Match uses the persona name (case-insensitive) against `official_name` snapshot.

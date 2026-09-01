@@ -18,17 +18,16 @@ ineligible players (with a red "❌ over-age / wrong gender / medical
 missing" chip) and to block "+ Pick" unless the caller is MPCA-State
 (which retains an override).
 """
-from typing import Optional
 import re
 
 from fastapi import HTTPException, Request
 
 from core.infra import api_router, db
-from core.scoping import get_scope, body_scope
+from core.scoping import body_scope, get_scope
 from core.tournament_eligibility import check_player_for_tournament
 
 
-async def _resolve_master(tournament: dict) -> Optional[dict]:
+async def _resolve_master(tournament: dict) -> dict | None:
     """Best-effort match: find the `tournament_master` row that governs this
     tournament's eligibility.
 
@@ -124,7 +123,7 @@ async def eligibility_spec_for_tournament(tid: str):
 async def eligible_players_for_tournament(
     tid: str,
     request: Request,
-    body_code: Optional[str] = None,
+    body_code: str | None = None,
     limit: int = 5000,
 ):
     """Return the body's player pool split into eligible / ineligible for

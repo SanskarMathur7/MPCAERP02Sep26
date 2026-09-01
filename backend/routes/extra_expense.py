@@ -4,17 +4,20 @@ Division can request MPCA approval for expenses not covered by the auto-budget.
 Every action is logged on tournament.expense_events (append-only ApprovalStep list).
 """
 from datetime import datetime, timezone
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
-from fastapi import HTTPException, Request
 
-from core.infra import db, api_router
-from core.scoping import get_scope, body_scope
+from fastapi import HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
+
 from core.helpers import _create_notification
-from core.shared_services import write_audit_log, next_code
+from core.infra import api_router, db
+from core.scoping import body_scope, get_scope
+from core.shared_services import next_code, write_audit_log
 from models import (
-    ExtraExpenseRequest, ExtraExpenseCreate, ExtraExpenseAction, ExtraExpenseStatus,
-    ApprovalStep, BudgetHeadAllocation,
+    ApprovalStep,
+    ExtraExpenseAction,
+    ExtraExpenseCreate,
+    ExtraExpenseRequest,
+    ExtraExpenseStatus,
 )
 
 
@@ -31,12 +34,12 @@ async def _log_expense_event(tid: str, step: ApprovalStep) -> None:
     )
 
 
-@api_router.get("/extra-expense-requests", response_model=List[ExtraExpenseRequest])
+@api_router.get("/extra-expense-requests", response_model=list[ExtraExpenseRequest])
 async def list_extra_expense_requests(
     request: Request,
-    tournament_id: Optional[str] = None,
-    body_id: Optional[str] = None,
-    status: Optional[ExtraExpenseStatus] = None,
+    tournament_id: str | None = None,
+    body_id: str | None = None,
+    status: ExtraExpenseStatus | None = None,
 ):
     q: dict = {}
     if tournament_id: q["tournament_id"] = tournament_id
@@ -91,14 +94,14 @@ async def create_extra_expense_request(payload: ExtraExpenseCreate, request: Req
 class ExtraExpensePatch(BaseModel):
     # M3 · typed patch body; extra keys ignored (as before), amount validated >= 0.
     model_config = ConfigDict(extra="ignore")
-    head_code: Optional[str] = None
-    head_label: Optional[str] = None
-    is_new_head: Optional[bool] = None
-    amount_inr: Optional[float] = Field(None, ge=0)
-    justification: Optional[str] = None
-    linked_invoice_id: Optional[str] = None
-    linked_invoice_ref: Optional[str] = None
-    supporting_file_url: Optional[str] = None
+    head_code: str | None = None
+    head_label: str | None = None
+    is_new_head: bool | None = None
+    amount_inr: float | None = Field(None, ge=0)
+    justification: str | None = None
+    linked_invoice_id: str | None = None
+    linked_invoice_ref: str | None = None
+    supporting_file_url: str | None = None
 
 
 @api_router.patch("/extra-expense-requests/{rid}", response_model=ExtraExpenseRequest)
@@ -352,13 +355,13 @@ async def get_tournament_expense_events(tid: str):
 # ── MPCA-201 · Bulk actions ────────────────────────────────────────────────
 class BulkExtraAction(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    ids: List[str] = Field(default_factory=list)
-    tournament_id: Optional[str] = None
-    body_id: Optional[str] = None
-    actor_name: Optional[str] = None
-    actor_post: Optional[str] = None
-    actor_body_id: Optional[str] = None
-    notes: Optional[str] = None
+    ids: list[str] = Field(default_factory=list)
+    tournament_id: str | None = None
+    body_id: str | None = None
+    actor_name: str | None = None
+    actor_post: str | None = None
+    actor_body_id: str | None = None
+    notes: str | None = None
 
 
 @api_router.post("/extra-expense-requests/bulk-submit")

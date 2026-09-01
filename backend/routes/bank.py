@@ -1,16 +1,16 @@
 """Routes · Bank Accounts + Transactions"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
-from models import BankAccount, BankAccountCreate, BankTransaction, BankTransactionCreate
-from core.helpers import next_uid as _
+from core.infra import api_router, db
+from models import (
+    BankAccount,
+    BankAccountCreate,
+    BankTransaction,
+    BankTransactionCreate,
+)
 
 
-@api_router.get("/bank/accounts", response_model=List[BankAccount])
+@api_router.get("/bank/accounts", response_model=list[BankAccount])
 async def list_bank_accounts():
     docs = await db.bank_accounts.find({}, {"_id": 0}).sort("name", 1).to_list(50)
     return docs
@@ -34,8 +34,8 @@ async def get_bank_account(account_id: str):
     return doc
 
 
-@api_router.get("/bank/transactions", response_model=List[BankTransaction])
-async def list_transactions(account_id: Optional[str] = None, limit: int = 200):
+@api_router.get("/bank/transactions", response_model=list[BankTransaction])
+async def list_transactions(account_id: str | None = None, limit: int = 200):
     query = {"account_id": account_id} if account_id else {}
     docs = await db.bank_txns.find(query, {"_id": 0}).sort("date", -1).to_list(limit)
     return docs

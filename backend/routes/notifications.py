@@ -1,13 +1,8 @@
 """Routes · Notifications Bell"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from models import Notification
-from core.helpers import next_uid as _
 
 
 @api_router.get("/")
@@ -19,10 +14,10 @@ async def root():
 # Step 2 · Notification endpoints (G3-a · in-app bell)
 # ============================================================
 
-@api_router.get("/notifications", response_model=List[Notification])
+@api_router.get("/notifications", response_model=list[Notification])
 async def list_notifications(
     recipient_role_id: str,
-    recipient_body_id: Optional[str] = None,
+    recipient_body_id: str | None = None,
     unread_only: bool = False,
     limit: int = 100,
 ):
@@ -38,7 +33,7 @@ async def list_notifications(
 @api_router.get("/notifications/stats")
 async def notifications_stats(
     recipient_role_id: str,
-    recipient_body_id: Optional[str] = None,
+    recipient_body_id: str | None = None,
 ):
     q: dict = {"recipient_role_id": recipient_role_id, "read": False}
     if recipient_body_id:
@@ -58,7 +53,7 @@ async def mark_notification_read(nid: str):
 @api_router.post("/notifications/mark-all-read")
 async def mark_all_notifications_read(
     recipient_role_id: str,
-    recipient_body_id: Optional[str] = None,
+    recipient_body_id: str | None = None,
 ):
     q: dict = {"recipient_role_id": recipient_role_id, "read": False}
     if recipient_body_id:

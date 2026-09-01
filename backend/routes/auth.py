@@ -16,7 +16,6 @@ Seed script inside — see `seed_users_from_personas()` in `startup.py`.
 """
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 import bcrypt
 import jwt
@@ -63,7 +62,7 @@ def create_access_token(user_id: str, email: str) -> str:
     return jwt.encode(payload, _secret(), algorithm=JWT_ALGO)
 
 
-def _extract_bearer(request: Request) -> Optional[str]:
+def _extract_bearer(request: Request) -> str | None:
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         return auth[7:].strip()

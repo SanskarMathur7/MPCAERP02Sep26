@@ -5,15 +5,15 @@ disbursed, but also supports manual entry (Journal Voucher) for adjustments.
 Each posted voucher forms one atomic ledger entry that the /ledger endpoint
 aggregates into a running-balance statement (P3.6).
 """
-from datetime import datetime, timezone
-from typing import List, Optional, Literal
 import uuid
+from datetime import datetime, timezone
+from typing import Literal
+
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
-from core.shared_services import next_code, write_audit_log, indian_fy
-
+from core.infra import api_router, db
+from core.shared_services import indian_fy, next_code, write_audit_log
 
 VoucherType = Literal["Payment", "Receipt", "Journal"]
 VoucherStatus = Literal["Draft", "Posted", "Cancelled"]
@@ -26,11 +26,11 @@ class VoucherBase(BaseModel):
     date: str  # ISO date
     amount_inr: float
     particulars: str
-    dr_account: Optional[str] = None  # e.g. "Grants Given — DIV-IND"
-    cr_account: Optional[str] = None  # e.g. "MPCA General Bank Account"
-    linked_module: Optional[str] = None  # "division_grant" / "claim" / "extra_expense"
-    linked_ref_id: Optional[str] = None
-    linked_ref_code: Optional[str] = None
+    dr_account: str | None = None  # e.g. "Grants Given — DIV-IND"
+    cr_account: str | None = None  # e.g. "MPCA General Bank Account"
+    linked_module: str | None = None  # "division_grant" / "claim" / "extra_expense"
+    linked_ref_id: str | None = None
+    linked_ref_code: str | None = None
     fiscal_cycle: str = Field(default_factory=indian_fy)
 
 
@@ -38,12 +38,12 @@ class Voucher(VoucherBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     voucher_no: str = ""  # VCH/MPCA/2025-26/00001
     status: VoucherStatus = "Posted"
-    created_by_name: Optional[str] = None
+    created_by_name: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class VoucherCreate(VoucherBase):
-    created_by_name: Optional[str] = None
+    created_by_name: str | None = None
     status: VoucherStatus = "Posted"
 
 
@@ -86,11 +86,11 @@ async def create_voucher_for_grant(grant: dict, actor_name: str = "System") -> d
 
 # ---------------- routes ----------------
 
-@api_router.get("/vouchers", response_model=List[Voucher])
-async def list_vouchers(body_id: Optional[str] = None,
-                        voucher_type: Optional[VoucherType] = None,
-                        fiscal_cycle: Optional[str] = None,
-                        linked_module: Optional[str] = None,
+@api_router.get("/vouchers", response_model=list[Voucher])
+async def list_vouchers(body_id: str | None = None,
+                        voucher_type: VoucherType | None = None,
+                        fiscal_cycle: str | None = None,
+                        linked_module: str | None = None,
                         skip: int = 0,
                         limit: int = 1000):
     q: dict = {}
@@ -148,7 +148,7 @@ async def cancel_voucher(vid: str, reason: str = ""):
 
 
 @api_router.get("/vouchers-stats/summary")
-async def vouchers_summary(fiscal_cycle: Optional[str] = None):
+async def vouchers_summary(fiscal_cycle: str | None = None):
     q: dict = {"status": "Posted"}
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
     docs = await db.vouchers.find(q, {"_id": 0}).to_list(2000)

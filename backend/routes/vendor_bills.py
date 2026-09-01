@@ -1,17 +1,22 @@
 """Routes · Vendor Master + Vendor Bills (F6a)"""
 import re
 from datetime import datetime, timezone
-from typing import List, Optional
+
 from fastapi import HTTPException
 
-from core.infra import db, api_router
 from core.helpers import _create_notification
+from core.infra import api_router, db
 from models import (
-    Vendor, VendorCreate, VendorCategory,
-    VendorBill, VendorBillCreate, VendorBillAction, VendorBillStatus,
-    ApprovalStep, BankTransaction,
+    ApprovalStep,
+    BankTransaction,
+    Vendor,
+    VendorBill,
+    VendorBillAction,
+    VendorBillCreate,
+    VendorBillStatus,
+    VendorCategory,
+    VendorCreate,
 )
-
 
 # ──────────────────────── Helpers ────────────────────────
 
@@ -49,7 +54,7 @@ def _vb_recipient(bill_doc: dict, new_status: str):
     return None
 
 
-async def _notify_for_vb(bill_doc: dict, new_status: str, actor_name: Optional[str]) -> None:
+async def _notify_for_vb(bill_doc: dict, new_status: str, actor_name: str | None) -> None:
     target = _vb_recipient(bill_doc, new_status)
     if not target:
         return
@@ -83,11 +88,11 @@ async def _notify_for_vb(bill_doc: dict, new_status: str, actor_name: Optional[s
 
 # ──────────────────────── Vendor CRUD ────────────────────────
 
-@api_router.get("/vendors", response_model=List[Vendor])
+@api_router.get("/vendors", response_model=list[Vendor])
 async def list_vendors(
-    category: Optional[VendorCategory] = None,
-    body_id: Optional[str] = None,
-    search: Optional[str] = None,
+    category: VendorCategory | None = None,
+    body_id: str | None = None,
+    search: str | None = None,
     include_blacklisted: bool = True,
     skip: int = 0,
     limit: int = 2000,
@@ -177,13 +182,13 @@ async def delete_vendor(vid: str):
 
 # ──────────────────────── Vendor Bills CRUD + workflow ────────────────────────
 
-@api_router.get("/vendor-bills", response_model=List[VendorBill])
+@api_router.get("/vendor-bills", response_model=list[VendorBill])
 async def list_vendor_bills(
-    body_id: Optional[str] = None,
-    status: Optional[VendorBillStatus] = None,
-    category: Optional[VendorCategory] = None,
-    vendor_id: Optional[str] = None,
-    fiscal_cycle: Optional[str] = None,
+    body_id: str | None = None,
+    status: VendorBillStatus | None = None,
+    category: VendorCategory | None = None,
+    vendor_id: str | None = None,
+    fiscal_cycle: str | None = None,
     skip: int = 0,
     limit: int = 2000,
 ):
@@ -418,7 +423,7 @@ async def delete_vendor_bill(bid: str):
 
 
 @api_router.get("/vendor-bills-stats/summary")
-async def vendor_bills_stats(body_id: Optional[str] = None, fiscal_cycle: Optional[str] = None):
+async def vendor_bills_stats(body_id: str | None = None, fiscal_cycle: str | None = None):
     q: dict = {}
     if body_id:
         q["body_id"] = body_id

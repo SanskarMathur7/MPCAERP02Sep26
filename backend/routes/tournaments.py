@@ -1,17 +1,36 @@
 """Routes · Tournaments + Squads"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
 import uuid
-from fastapi import Depends, Request, HTTPException, Header, Request
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from pydantic import BaseModel, Field, ConfigDict
+from datetime import datetime, timezone
+from typing import Literal
 
-from core.infra import db, api_router
-from core.shared_services import next_seq  # H6 · atomic sequence
+from fastapi import Depends, Header, HTTPException, Request
+from pydantic import BaseModel
+
+from core.helpers import (
+    _check_player_against_tournament,
+    _next_tournament_no,
+)
+from core.infra import api_router, db
 from core.scoping import get_scope
-from models import Tournament, TournamentCreate, TournamentStatus, Squad, SquadCreate, SquadAddPlayer, SquadMember, Body, Player, TournamentFormat, TournamentScope, TournamentAcceptance, TournamentAcceptanceEntry
-from core.helpers import _next_tournament_no, _check_player_against_tournament, _age_years
-
+from core.shared_services import next_seq  # H6 · atomic sequence
+from lib.authz import (
+    principal_body_code,
+    principal_body_type,
+    principal_role_id,
+)
+from models import (
+    Squad,
+    SquadAddPlayer,
+    SquadCreate,
+    SquadMember,
+    Tournament,
+    TournamentAcceptance,
+    TournamentAcceptanceEntry,
+    TournamentCreate,
+    TournamentFormat,
+    TournamentScope,
+    TournamentStatus,
+)
 
 # M11 · Persona role IDs that may accept a tournament on behalf of their body
 # M39d · Strict acceptance — MPCA (president / secretary) may no longer act on
@@ -23,14 +42,10 @@ _ACCEPTANCE_ROLE_PREFIXES = ("division-secretary", "district-secretary")
 
 
 # ---------------- Routes: Tournaments (Phase IV.2 — M2) ----------------
+# Local `_next_tournament_no` removed — imported from `core.helpers` (F811).
 
 
-async def _next_tournament_no(cycle: str) -> str:
-    seq = await next_seq(f"tournament:{cycle}", lambda: db.tournaments.count_documents({"fiscal_cycle": cycle}))
-    return f"TRN-{cycle}-{seq:03d}"
-
-
-async def _visible_tids_via_participations(scope) -> List[str]:
+async def _visible_tids_via_participations(scope) -> list[str]:
     """M39l · Bug 2 · Return every tournament id where the persona's body (or
     any of its downstream districts) is listed in `tournament_participations`.
     Fixes BCCI-hosted tournaments not showing up for visiting Divisions."""
@@ -85,7 +100,7 @@ def _tournament_scope_query(scope) -> dict:
     return {}
 
 
-async def _official_visible_tids(scope) -> List[str]:
+async def _official_visible_tids(scope) -> list[str]:
     """M37 · A match-official only sees tournaments in which they are
     listed on a squad's `match_officials.{umpire_1|umpire_2|scorer|referee}`
     slot OR have a DA form for. Returns the de-duplicated list of tournament
@@ -112,13 +127,13 @@ async def _official_visible_tids(scope) -> List[str]:
     return list(tids)
 
 
-@api_router.get("/tournaments", response_model=List[Tournament])
+@api_router.get("/tournaments", response_model=list[Tournament])
 async def list_tournaments(
     request: Request,
-    status: Optional[TournamentStatus] = None,
-    scope: Optional[TournamentScope] = None,
-    fiscal_cycle: Optional[str] = None,
-    format: Optional[TournamentFormat] = None,
+    status: TournamentStatus | None = None,
+    scope: TournamentScope | None = None,
+    fiscal_cycle: str | None = None,
+    format: TournamentFormat | None = None,
     include_camp_scoped: bool = True,   # MPCA-235 · Ship 4 · Visibility filter
     skip: int = 0,
     limit: int = 200,
@@ -182,8 +197,8 @@ async def list_tournaments(
     return docs
 
 
-@api_router.get("/tournaments/pending-acceptance", response_model=List[Tournament])
-async def list_pending_acceptance(x_body_code: Optional[str] = Depends(principal_body_code)):
+@api_router.get("/tournaments/pending-acceptance", response_model=list[Tournament])
+async def list_pending_acceptance(x_body_code: str | None = Depends(principal_body_code)):
     """List tournaments where the caller's body is on the required-acceptance list AND has NOT yet acted.
     Registered BEFORE the generic /tournaments/{tid} route to avoid tid='pending-acceptance' collision."""
     if not x_body_code:
@@ -325,8 +340,8 @@ def _auto_scheme_for(tournament_type, scope, type_code):
 async def create_tournament(
     payload: TournamentCreate,
     request: Request,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     # MPCA-260 · Ship P0.2 — wiring guard at CREATION time. Prevents a
     # Division/District persona from creating an MPCA-owned type (BCCI /
@@ -486,17 +501,17 @@ async def create_tournament(
 
 class TournamentAcceptancePayload(BaseModel):
     action: Literal["accept", "reject"]
-    note: Optional[str] = None
+    note: str | None = None
 
 
 @api_router.post("/tournaments/{tid}/acceptance", response_model=Tournament)
 async def act_on_tournament_acceptance(
     tid: str,
     payload: TournamentAcceptancePayload,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_body_code: Optional[str] = Depends(principal_body_code),
-    x_persona_body: Optional[str] = Header(None, alias="X-Body-Code"),
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_body_code: str | None = Depends(principal_body_code),
+    x_persona_body: str | None = Header(None, alias="X-Body-Code"),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """A Division or District secretary accepts (or rejects) a tournament that
     MPCA has allotted to their body. When ALL required bodies have accepted →
@@ -587,7 +602,7 @@ async def act_on_tournament_acceptance(
 
 
 @api_router.post("/tournaments/{tid}/submit-for-approval", response_model=Tournament)
-async def submit_tournament(tid: str, actor_name: str, actor_body_id: str, actor_post: str = "Secretary", notes: Optional[str] = None):
+async def submit_tournament(tid: str, actor_name: str, actor_body_id: str, actor_post: str = "Secretary", notes: str | None = None):
     """Draft → Awaiting_Approval."""
     doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not doc:
@@ -601,7 +616,7 @@ async def submit_tournament(tid: str, actor_name: str, actor_body_id: str, actor
 
 
 @api_router.post("/tournaments/{tid}/approve", response_model=Tournament)
-async def approve_tournament(tid: str, actor_name: str, actor_body_id: str = "MPCA", actor_post: str = "Hon. Secretary", notes: Optional[str] = None):
+async def approve_tournament(tid: str, actor_name: str, actor_body_id: str = "MPCA", actor_post: str = "Hon. Secretary", notes: str | None = None):
     """Awaiting_Approval → Upcoming (approved & live). Must be submitted first."""
     doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not doc:
@@ -615,7 +630,7 @@ async def approve_tournament(tid: str, actor_name: str, actor_body_id: str = "MP
 
 
 @api_router.post("/tournaments/{tid}/reject", response_model=Tournament)
-async def reject_tournament(tid: str, actor_name: str, actor_body_id: str = "MPCA", actor_post: str = "Hon. Secretary", notes: Optional[str] = None):
+async def reject_tournament(tid: str, actor_name: str, actor_body_id: str = "MPCA", actor_post: str = "Hon. Secretary", notes: str | None = None):
     """Reject a tournament proposal."""
     doc = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not doc:
@@ -631,8 +646,8 @@ async def reject_tournament(tid: str, actor_name: str, actor_body_id: str = "MPC
 @api_router.post("/tournaments/{tid}/status/{new_status}", response_model=Tournament)
 async def set_tournament_status(
     tid: str, new_status: TournamentStatus,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     """Manually transition a tournament between lifecycle states.
 
@@ -665,7 +680,7 @@ async def set_tournament_status(
 # ---------------- Routes: Squads ----------------
 
 
-@api_router.get("/tournaments/{tid}/squads", response_model=List[Squad])
+@api_router.get("/tournaments/{tid}/squads", response_model=list[Squad])
 async def list_squads(tid: str):
     docs = await db.squads.find({"tournament_id": tid}, {"_id": 0}).sort("team_name", 1).to_list(100)
     return docs
@@ -792,7 +807,10 @@ async def tournament_stats(request: Request):
     """Iter 108 (SEC-004): scoped to caller's body.  Tournaments belong to a
     body (Division/District/State); the filter uses the same host body_id
     scope semantics as elsewhere."""
-    from lib.authz import get_principal, scope_filter, principal_body_code, principal_role_id, principal_body_type, principal_persona_id
+    from lib.authz import (
+        get_principal,
+        scope_filter,
+    )
     principal = get_principal(request)
     sf = scope_filter(principal, field="body_id")
     total = await db.tournaments.count_documents(sf)

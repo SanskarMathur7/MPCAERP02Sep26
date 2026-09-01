@@ -8,21 +8,25 @@ All endpoints require an authenticated user (via AuthMiddleware).
     POST /api/mc/{key}/{doc_id}/transition        run a transition
     GET  /api/mc/inbox/needs-rework               my rework inbox
 """
-from typing import Optional
+
 from fastapi import Body, HTTPException, Request
 from pydantic import BaseModel
 
 from core.infra import api_router, db
 from lib.authz import get_principal
 from lib.mc import (
-    load_workflow, list_workflows, list_next_actions,
-    apply_transition, needs_rework_inbox, build_state_view,
+    apply_transition,
+    build_state_view,
+    list_next_actions,
+    list_workflows,
+    load_workflow,
+    needs_rework_inbox,
 )
 
 
 class TransitionIn(BaseModel):
     action: str
-    note: Optional[str] = None
+    note: str | None = None
 
 
 @api_router.get("/mc/workflows")

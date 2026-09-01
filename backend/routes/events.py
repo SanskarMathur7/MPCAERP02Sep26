@@ -11,17 +11,15 @@ Division users all see who to wish today.
 Email blast at 9 AM: MOCKED for now — payload is logged. A cron / scheduler
 will replace the log line once SMTP creds are wired in.
 """
-from datetime import datetime, timezone, date
-from typing import Optional, List
-import uuid
 import logging
+import uuid
+from datetime import date, datetime, timezone
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from core.scoping import get_scope
-
 
 logger = logging.getLogger("events")
 
@@ -32,21 +30,21 @@ EventType = str  # "meeting" | "tournament" | "announcement" | "holiday" | "othe
 class EventBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     event_date: str                         # ISO YYYY-MM-DD
-    end_date: Optional[str] = None          # ISO — for multi-day events
-    start_time: Optional[str] = None        # "10:30"
-    end_time: Optional[str] = None
-    location: Optional[str] = None
+    end_date: str | None = None          # ISO — for multi-day events
+    start_time: str | None = None        # "10:30"
+    end_time: str | None = None
+    location: str | None = None
     event_type: EventType = "announcement"
 
 
 class Event(EventBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    created_by_name: Optional[str] = None
-    created_by_body_code: Optional[str] = "MPCA"
+    created_by_name: str | None = None
+    created_by_body_code: str | None = "MPCA"
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -57,12 +55,12 @@ def _require_mpca(scope) -> None:
 
 
 # ── Event CRUD ────────────────────────────────────────────────────────────
-@api_router.get("/events", response_model=List[Event])
+@api_router.get("/events", response_model=list[Event])
 async def list_events(
     request: Request,
-    month: Optional[str] = None,          # "YYYY-MM" — filter to a specific month
-    from_date: Optional[str] = None,      # "YYYY-MM-DD"
-    to_date: Optional[str] = None,
+    month: str | None = None,          # "YYYY-MM" — filter to a specific month
+    from_date: str | None = None,      # "YYYY-MM-DD"
+    to_date: str | None = None,
 ):
     """Every authenticated user sees the same MPCA-wide calendar."""
     _ = get_scope(request)  # auth handled at frontend for now
@@ -153,7 +151,7 @@ async def birthdays_upcoming(days: int = 30):
     # Collect month-day patterns to search
     patterns: list[str] = []
     cur = today
-    for _ in range(0, (horizon - today).days + 1):
+    for _ in range((horizon - today).days + 1):
         patterns.append(f"-{cur.month:02d}-{cur.day:02d}$")
         cur = cur + timedelta(days=1)
     if not patterns:
@@ -180,24 +178,44 @@ async def birthdays_upcoming(days: int = 30):
 
 @api_router.post("/events/birthdays/send-daily-emails")
 async def send_daily_birthday_emails():
-    """MPCA-118 · Daily birthday emails.
+    """MPCA-118 · Daily birthday emails — idempotent per date.
 
-    Uses `core.email_notifications.send_birthday_greeting` which dispatches
-    via configured SMTP (env: `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM`)
-    or logs as MOCKED when SMTP isn't wired — no code change needed later.
+    Records each successful send in `daily_email_log` so replaying the cron
+    on the same day is safe (won't spam members). Uses
+    `core.email_notifications.send_birthday_greeting` which dispatches via
+    configured SMTP (env: `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM`)
+    or logs as MOCKED when SMTP isn't wired.
     """
     from core.email_notifications import send_birthday_greeting
     result = await birthdays_today()
+    today_iso = result["date"]
     sent = []
+    skipped_duplicates = 0
     mocked = 0
     for m in result.get("members", []):
         if not m.get("email"):
             continue
+        # Idempotency guard — one send per (member_id, date, kind)
+        already = await db.daily_email_log.find_one({
+            "date": today_iso, "member_id": m.get("id"), "kind": "birthday",
+        })
+        if already:
+            skipped_duplicates += 1
+            continue
         r = await send_birthday_greeting({"email": m["email"], "full_name": m.get("name")})
+        await db.daily_email_log.insert_one({
+            "date": today_iso, "member_id": m.get("id"), "kind": "birthday",
+            "email": m["email"], "status": r.get("status"),
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+        })
         sent.append({"to": m["email"], "name": m.get("name"), "status": r.get("status")})
         if r.get("status") == "mocked":
             mocked += 1
-    return {"date": result["date"], "attempted": len(sent), "sent": sent, "mocked": mocked > 0}
+    return {
+        "date": today_iso, "attempted": len(sent), "sent": sent,
+        "skipped_duplicates": skipped_duplicates, "mocked": mocked > 0,
+    }
+
 
 
 # ── Scheme season activation (M39c) ──────────────────────────────────────
@@ -205,8 +223,8 @@ class SchemeActivationPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     fiscal_cycle: str                          # e.g. "2025-26"
     signed_pdf_url: str                        # /api/uploads/<id>
-    signed_by: Optional[str] = None            # office bearer name (fallback: scope.name)
-    notes: Optional[str] = None
+    signed_by: str | None = None            # office bearer name (fallback: scope.name)
+    notes: str | None = None
 
 
 @api_router.get("/schemes/season-activation")

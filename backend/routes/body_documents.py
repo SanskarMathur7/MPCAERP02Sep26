@@ -15,17 +15,18 @@ Docs are stored via the existing /api/uploads pipeline; this route only tracks
 the metadata (kind, label, structured fields like GSTIN / PAN / IFSC etc.) and
 the reference to the upload record.
 """
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List, Literal
 import uuid
+from datetime import datetime, timezone
+from typing import Any, Literal
 
-from fastapi import HTTPException, Header, Depends, Request
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
-from pydantic import BaseModel, Field, ConfigDict
+from fastapi import Depends, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
-
+from core.infra import api_router, db
+from lib.authz import (
+    principal_body_code,
+    principal_role_id,
+)
 
 DOC_KINDS = Literal[
     "GST_Certificate",
@@ -60,16 +61,16 @@ class BodyDocument(BaseModel):
     body_code: str
     doc_kind: str = "Other"
     label: str                                    # human-readable name
-    doc_no: Optional[str] = None                  # GSTIN / PAN / A/C no. / policy no.
-    file_url: Optional[str] = None                # /api/uploads/<id>
-    file_name: Optional[str] = None
-    mime_type: Optional[str] = None
-    size_bytes: Optional[int] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)  # bank branch/ifsc/etc.
-    issued_on: Optional[str] = None
-    expires_on: Optional[str] = None
-    uploaded_by: Optional[str] = None
-    notes: Optional[str] = None
+    doc_no: str | None = None                  # GSTIN / PAN / A/C no. / policy no.
+    file_url: str | None = None                # /api/uploads/<id>
+    file_name: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)  # bank branch/ifsc/etc.
+    issued_on: str | None = None
+    expires_on: str | None = None
+    uploaded_by: str | None = None
+    notes: str | None = None
     is_active: bool = True
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -78,43 +79,43 @@ class BodyDocument(BaseModel):
 class BodyDocumentCreate(BaseModel):
     doc_kind: str = "Other"
     label: str
-    doc_no: Optional[str] = None
-    file_url: Optional[str] = None
-    file_name: Optional[str] = None
-    mime_type: Optional[str] = None
-    size_bytes: Optional[int] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    issued_on: Optional[str] = None
-    expires_on: Optional[str] = None
-    uploaded_by: Optional[str] = None
-    notes: Optional[str] = None
+    doc_no: str | None = None
+    file_url: str | None = None
+    file_name: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    issued_on: str | None = None
+    expires_on: str | None = None
+    uploaded_by: str | None = None
+    notes: str | None = None
     model_config = ConfigDict(extra="ignore")
 
 
 class BodyDocumentPatch(BaseModel):
-    doc_kind: Optional[str] = None
-    label: Optional[str] = None
-    doc_no: Optional[str] = None
-    file_url: Optional[str] = None
-    file_name: Optional[str] = None
-    mime_type: Optional[str] = None
-    size_bytes: Optional[int] = None
-    metadata: Optional[Dict[str, Any]] = None
-    issued_on: Optional[str] = None
-    expires_on: Optional[str] = None
-    notes: Optional[str] = None
-    is_active: Optional[bool] = None
+    doc_kind: str | None = None
+    label: str | None = None
+    doc_no: str | None = None
+    file_url: str | None = None
+    file_name: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    metadata: dict[str, Any] | None = None
+    issued_on: str | None = None
+    expires_on: str | None = None
+    notes: str | None = None
+    is_active: bool | None = None
     model_config = ConfigDict(extra="ignore")
 
 
-async def _ensure_body(body_code: str) -> Dict[str, Any]:
+async def _ensure_body(body_code: str) -> dict[str, Any]:
     body = await db.bodies.find_one({"code": body_code}, {"_id": 0})
     if not body:
         raise HTTPException(404, f"Body {body_code} not found")
     return body
 
 
-def _can_read(body: Dict[str, Any], caller_body: Optional[str], caller_role: Optional[str]) -> bool:
+def _can_read(body: dict[str, Any], caller_body: str | None, caller_role: str | None) -> bool:
     if caller_body == body["code"]:
         return True
     # MPCA sees every vault; BCCI sees every vault
@@ -128,24 +129,24 @@ def _can_read(body: Dict[str, Any], caller_body: Optional[str], caller_role: Opt
     return False
 
 
-def _can_write(body: Dict[str, Any], caller_body: Optional[str]) -> bool:
+def _can_write(body: dict[str, Any], caller_body: str | None) -> bool:
     return caller_body == body["code"]
 
 
 # ────────────────── Endpoints ──────────────────
 
-@api_router.get("/bodies/{body_code}/documents", response_model=List[BodyDocument])
+@api_router.get("/bodies/{body_code}/documents", response_model=list[BodyDocument])
 async def list_body_documents(
     body_code: str,
     include_inactive: bool = False,
-    doc_kind: Optional[str] = None,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    doc_kind: str | None = None,
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     body = await _ensure_body(body_code)
     if not _can_read(body, x_user_body_code, x_role_id):
         raise HTTPException(403, f"You may only view {body_code}'s vault if you belong to that body or MPCA.")
-    q: Dict[str, Any] = {"body_code": body_code}
+    q: dict[str, Any] = {"body_code": body_code}
     if not include_inactive:
         q["is_active"] = True
     if doc_kind:
@@ -158,7 +159,7 @@ async def list_body_documents(
 async def add_body_document(
     body_code: str,
     payload: BodyDocumentCreate,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_user_body_code: str | None = Depends(principal_body_code),
 ):
     body = await _ensure_body(body_code)
     if not _can_write(body, x_user_body_code):
@@ -173,7 +174,7 @@ async def patch_body_document(
     body_code: str,
     doc_id: str,
     patch: BodyDocumentPatch,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_user_body_code: str | None = Depends(principal_body_code),
 ):
     body = await _ensure_body(body_code)
     if not _can_write(body, x_user_body_code):
@@ -194,7 +195,7 @@ async def delete_body_document(
     body_code: str,
     doc_id: str,
     hard: bool = False,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
+    x_user_body_code: str | None = Depends(principal_body_code),
 ):
     body = await _ensure_body(body_code)
     if not _can_write(body, x_user_body_code):
@@ -216,8 +217,8 @@ async def delete_body_document(
 @api_router.get("/bodies/{body_code}/documents/kinds/summary")
 async def body_documents_kinds_summary(
     body_code: str,
-    x_user_body_code: Optional[str] = Depends(principal_body_code),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_user_body_code: str | None = Depends(principal_body_code),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """Rollup of doc_kind → count for the body — used to render the vault header
     ("GST · 1  ·  PAN · 1  ·  Bank · 2 …") and drive completeness badges."""
@@ -228,7 +229,7 @@ async def body_documents_kinds_summary(
         {"$match": {"body_code": body_code, "is_active": True}},
         {"$group": {"_id": "$doc_kind", "count": {"$sum": 1}}},
     ]
-    counts: Dict[str, int] = {}
+    counts: dict[str, int] = {}
     async for row in db.body_documents.aggregate(pipeline):
         counts[row["_id"]] = row["count"]
     # Completeness of the "essential four": GST, PAN, Bank_Account, Constitution

@@ -10,11 +10,11 @@ actuals from vouchers (Payment for outflows, Receipt for inflows).
 import asyncio
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import List, Optional
-from fastapi import HTTPException, Response
+
+from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from core.shared_services import indian_fy
 
 
@@ -34,8 +34,8 @@ async def _resolve_body(body_id: str) -> dict:
 
 
 async def _ledger_rows(body_id: str, fiscal_cycle: str,
-                       date_from: Optional[str] = None,
-                       date_to: Optional[str] = None) -> dict:
+                       date_from: str | None = None,
+                       date_to: str | None = None) -> dict:
     """Return {'body': body, 'opening': 0.0, 'rows': [...], 'totals': {...}}"""
     body = await _resolve_body(body_id)
 
@@ -58,7 +58,7 @@ async def _ledger_rows(body_id: str, fiscal_cycle: str,
     )
     opening = float((opening_doc or {}).get("opening_balance_inr", 0.0))
 
-    rows: List[dict] = []
+    rows: list[dict] = []
     running = opening
     total_dr = 0.0
     total_cr = 0.0
@@ -106,8 +106,8 @@ async def _ledger_rows(body_id: str, fiscal_cycle: str,
 # ═══════════════════ P3.6 · LEDGER ENDPOINT ═══════════════════
 
 @api_router.get("/ledger")
-async def ledger(body_id: str, fiscal_cycle: Optional[str] = None,
-                 date_from: Optional[str] = None, date_to: Optional[str] = None):
+async def ledger(body_id: str, fiscal_cycle: str | None = None,
+                 date_from: str | None = None, date_to: str | None = None):
     fy = fiscal_cycle or indian_fy()
     return await _ledger_rows(body_id, fy, date_from, date_to)
 
@@ -115,9 +115,9 @@ async def ledger(body_id: str, fiscal_cycle: Optional[str] = None,
 # ═══════════════════ P3.7 · EXPORT UTILITY ═══════════════════
 
 @api_router.get("/ledger/export.xlsx")
-async def ledger_export_xlsx(body_id: str, fiscal_cycle: Optional[str] = None):
+async def ledger_export_xlsx(body_id: str, fiscal_cycle: str | None = None):
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
     fy = fiscal_cycle or indian_fy()
     data = await _ledger_rows(body_id, fy)
@@ -191,12 +191,18 @@ async def ledger_export_xlsx(body_id: str, fiscal_cycle: Optional[str] = None):
 
 
 @api_router.get("/ledger/export.pdf")
-async def ledger_export_pdf(body_id: str, fiscal_cycle: Optional[str] = None):
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import mm
+async def ledger_export_pdf(body_id: str, fiscal_cycle: str | None = None):
     from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
 
     fy = fiscal_cycle or indian_fy()
     data = await _ledger_rows(body_id, fy)
@@ -258,8 +264,8 @@ async def ledger_export_pdf(body_id: str, fiscal_cycle: Optional[str] = None):
 # ═══════════════════ P3.9 · BUDGET-VS-ACTUAL ═══════════════════
 
 @api_router.get("/finance/budget-vs-actual")
-async def budget_vs_actual(fiscal_cycle: Optional[str] = None,
-                            body_id: Optional[str] = None):
+async def budget_vs_actual(fiscal_cycle: str | None = None,
+                            body_id: str | None = None):
     fy = fiscal_cycle or indian_fy()
     q_body: dict = {}
     if body_id: q_body["code"] = body_id

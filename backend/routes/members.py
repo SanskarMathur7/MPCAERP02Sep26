@@ -1,28 +1,28 @@
 """Routes · Members + Dynamic Member Categories + Bulk Upload (M6)."""
 import csv
-import re
 import io
+import re
 from datetime import datetime, timezone
-from typing import List, Optional
-from fastapi import HTTPException, UploadFile, File, Form, Header, Request, Depends
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
 
-from core.infra import db, api_router
-from core.scoping import get_scope, body_scope
+from fastapi import Depends, File, Form, Header, HTTPException, Request, UploadFile
+
+from core.helpers import next_uid
+from core.infra import api_router, db
+from core.scoping import body_scope, get_scope
+from lib.authz import (
+    principal_role_id,
+)
 from models import (
+    BulkUploadReport,
     Member,
-    MemberCreate,
     MemberCategory,
-    MemberUpdate,
     MemberCategoryDef,
     MemberCategoryDefCreate,
-    BulkUploadReport,
+    MemberCreate,
     MembershipAssignment,
     MembershipAssignmentCreate,
+    MemberUpdate,
 )
-from core.helpers import next_uid
-
 
 # Personas that can edit any member profile / manage categories / bulk-upload.
 _OFFICE_BEARER_ROLES = {
@@ -36,21 +36,21 @@ _OFFICE_BEARER_ROLES = {
 }
 
 
-def _actor(role_id: Optional[str], email: Optional[str]) -> dict:
+def _actor(role_id: str | None, email: str | None) -> dict:
     return {"role_id": role_id, "email": (email or "").strip().lower()}
 
 
 # ---------------- Routes: Members ----------------
 
 
-@api_router.get("/members", response_model=List[Member])
+@api_router.get("/members", response_model=list[Member])
 async def list_members(
     request: Request,
-    category: Optional[MemberCategory] = None,
-    member_type: Optional[str] = None,
-    division_body_id: Optional[str] = None,
-    search: Optional[str] = None,
-    body_id: Optional[str] = None,
+    category: MemberCategory | None = None,
+    member_type: str | None = None,
+    division_body_id: str | None = None,
+    search: str | None = None,
+    body_id: str | None = None,
     skip: int = 0,
     limit: int = 2000,
 ):
@@ -134,8 +134,8 @@ async def create_member(payload: MemberCreate):
 async def update_member(
     member_id: str,
     payload: MemberUpdate,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_user_email: Optional[str] = Header(None, alias="X-User-Email"),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_user_email: str | None = Header(None, alias="X-User-Email"),
 ):
     """RBAC:
     · Office bearers (president/secretary/treasurer/division-secretary) may edit any member.
@@ -167,7 +167,7 @@ async def update_member(
 @api_router.delete("/members/{member_id}")
 async def delete_member(
     member_id: str,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may remove members.")
@@ -196,8 +196,8 @@ def _ensure_single_primary(assignments: list) -> list:
 async def add_membership_assignment(
     member_id: str,
     payload: MembershipAssignmentCreate,
-    x_role_id: Optional[str] = Depends(principal_role_id),
-    x_user_email: Optional[str] = Header(None, alias="X-User-Email"),
+    x_role_id: str | None = Depends(principal_role_id),
+    x_user_email: str | None = Header(None, alias="X-User-Email"),
 ):
     doc = await db.members.find_one({"id": member_id}, {"_id": 0})
     if not doc:
@@ -231,7 +231,7 @@ async def update_membership_assignment(
     member_id: str,
     assignment_id: str,
     payload: MembershipAssignmentCreate,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may modify assignments.")
@@ -263,7 +263,7 @@ async def update_membership_assignment(
 async def remove_membership_assignment(
     member_id: str,
     assignment_id: str,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may remove assignments.")
@@ -289,7 +289,7 @@ async def remove_membership_assignment(
 # ---------------- Routes: Dynamic Member Categories (M6) ----------------
 
 
-@api_router.get("/member-categories", response_model=List[MemberCategoryDef])
+@api_router.get("/member-categories", response_model=list[MemberCategoryDef])
 async def list_member_categories(active_only: bool = False):
     q = {"active": True} if active_only else {}
     docs = await db.member_categories.find(q, {"_id": 0}).sort([("display_order", 1), ("name", 1)]).to_list(200)
@@ -299,7 +299,7 @@ async def list_member_categories(active_only: bool = False):
 @api_router.post("/member-categories", response_model=MemberCategoryDef)
 async def create_member_category(
     payload: MemberCategoryDefCreate,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may manage member categories.")
@@ -318,7 +318,7 @@ async def create_member_category(
 async def update_member_category(
     cat_id: str,
     payload: MemberCategoryDefCreate,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may manage member categories.")
@@ -333,7 +333,7 @@ async def update_member_category(
 @api_router.delete("/member-categories/{cat_id}")
 async def delete_member_category(
     cat_id: str,
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     if x_role_id and x_role_id not in _OFFICE_BEARER_ROLES:
         raise HTTPException(403, "Only office bearers may manage member categories.")
@@ -423,7 +423,7 @@ async def _build_body_resolver():
 async def bulk_upload_members(
     file: UploadFile = File(...),
     dry_run: bool = Form(False),
-    x_role_id: Optional[str] = Depends(principal_role_id),
+    x_role_id: str | None = Depends(principal_role_id),
 ):
     """Accepts a CSV file. Recognised (case-insensitive) columns:
     name*, category*, address*, email, phone, member_type (MPCA/Division),
@@ -454,7 +454,7 @@ async def bulk_upload_members(
     # Build a body-name resolver once — used for the whole file
     div_by_name, dist_by_name, by_code = await _build_body_resolver()
 
-    def _resolve_body(raw_value: Optional[str], expected_type: str) -> Optional[str]:
+    def _resolve_body(raw_value: str | None, expected_type: str) -> str | None:
         """Return the body code or None. Accepts either a code (DIV-IND/DIST-INDO-IND)
         or a plain name ('Indore', 'Indore Division', 'Indore District Cricket Association')."""
         if not raw_value:
@@ -470,8 +470,8 @@ async def bulk_upload_members(
 
     inserted = 0
     skipped = 0
-    errors: List[dict] = []
-    rows: List[dict] = []
+    errors: list[dict] = []
+    rows: list[dict] = []
 
     for idx, raw_row in enumerate(reader, start=2):  # header is row 1
         row = {_norm_key(k): _clean_val(v) for k, v in raw_row.items() if k}

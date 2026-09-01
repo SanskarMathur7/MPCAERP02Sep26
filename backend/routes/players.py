@@ -1,23 +1,34 @@
 """Routes · Player Module (M1)."""
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from fastapi import HTTPException, Request
-from fastapi.responses import Response
-
-from core.infra import db, api_router
-from core.scoping import get_scope, body_scope
-from models import (
-    Player, PlayerCreate, DisqualificationFlag, PlayerStatus, PlayerCategory,
-    PlayerDocument, PlayerAuditEvent, PlayerReviewAction, PLAYER_DOC_TYPES,
-)
-from core.helpers import (
-    _next_player_id, _new_player_display_id, _next_player_display_serial,
-    _derive_division_folder, _age_years, _validate_eligibility, _create_notification,
-)
 from pydantic import BaseModel, ConfigDict, Field
-from core.ai_validator import _run_player_doc_validation
 
+from core.ai_validator import _run_player_doc_validation
+from core.helpers import (
+    _age_years,
+    _create_notification,
+    _derive_division_folder,
+    _new_player_display_id,
+    _next_player_display_serial,
+    _next_player_id,
+    _validate_eligibility,
+)
+from core.infra import api_router, db
+from core.scoping import body_scope, get_scope
+from models import (
+    PLAYER_DOC_TYPES,
+    DisqualificationFlag,
+    Player,
+    PlayerAuditEvent,
+    PlayerCategory,
+    PlayerCreate,
+    PlayerDocument,
+    PlayerReviewAction,
+    PlayerStatus,
+)
 
 # ---------------- Routes: Player Module (Phase IV — M1) ----------------
 
@@ -30,16 +41,16 @@ async def _append_audit(player_id: str, event: PlayerAuditEvent) -> None:
     )
 
 
-@api_router.get("/players", response_model=List[Player])
+@api_router.get("/players", response_model=list[Player])
 async def list_players(
     request: Request,
-    body_id: Optional[str] = None,
-    category: Optional[PlayerCategory] = None,
-    status: Optional[PlayerStatus] = None,
-    search: Optional[str] = None,
-    division_folder: Optional[str] = None,
-    season_year: Optional[str] = None,
-    court_order_only: Optional[bool] = None,
+    body_id: str | None = None,
+    category: PlayerCategory | None = None,
+    status: PlayerStatus | None = None,
+    search: str | None = None,
+    division_folder: str | None = None,
+    season_year: str | None = None,
+    court_order_only: bool | None = None,
     skip: int = 0,
     limit: int = 2000,
 ):
@@ -79,7 +90,7 @@ async def list_players(
 
 
 @api_router.get("/players/lookup")
-async def lookup_player(display_id: Optional[str] = None, player_id: Optional[str] = None):
+async def lookup_player(display_id: str | None = None, player_id: str | None = None):
     """Safe lookup by player_display_id (which contains '/') or player_id (MPCA/…).
     Use this instead of GET /players/{id} when the identifier has slashes.
     """
@@ -262,7 +273,7 @@ async def division_approve(pid: str, action: PlayerReviewAction):
 
 
 @api_router.post("/players/{pid}/approve", response_model=Player)
-async def approve_player(pid: str, action: Optional[PlayerReviewAction] = None):
+async def approve_player(pid: str, action: PlayerReviewAction | None = None):
     """MPCA/Division-shortcut approves → Active. Accepts either Pending or Division_Approved.
 
     Iter 129b · If the AI validator raised a `district_division_mismatch` warning
@@ -307,9 +318,9 @@ def _has_district_division_mismatch(ai_v: dict) -> bool:
 
 
 class AiMismatchAccept(BaseModel):
-    actor_name: Optional[str] = None
-    actor_body_id: Optional[str] = None
-    actor_post: Optional[str] = None
+    actor_name: str | None = None
+    actor_body_id: str | None = None
+    actor_post: str | None = None
     note: str
 
 
@@ -397,7 +408,7 @@ async def update_player(pid: str, patch: dict):
 
 
 @api_router.post("/players/{pid}/documents", response_model=Player)
-async def add_document(pid: str, doc_type: str, url: str, filename: Optional[str] = None):
+async def add_document(pid: str, doc_type: str, url: str, filename: str | None = None):
     """Attach an uploaded document to the player."""
     # Feb-2026 · Free-form "other:*" docs bypass the fixed whitelist so
     # MPCA/Division can attach any extra document with a custom label.
@@ -574,7 +585,7 @@ async def players_stats(request: Request):
 
 
 # ── MPCA-209 · Eligibility Tag Compute (from MPCA_Eligibility_Checks doc) ────
-def _months_between(iso_from: Optional[str], iso_to: Optional[str] = None) -> float:
+def _months_between(iso_from: str | None, iso_to: str | None = None) -> float:
     """Rough month delta (30-day months) — good enough for eligibility windows."""
     if not iso_from:
         return 0.0
@@ -588,7 +599,7 @@ def _months_between(iso_from: Optional[str], iso_to: Optional[str] = None) -> fl
         return 0.0
 
 
-async def _resolve_division_of_district(district_body_id: Optional[str]) -> Optional[str]:
+async def _resolve_division_of_district(district_body_id: str | None) -> str | None:
     """Given a district body-code, return its parent Division code (or None)."""
     if not district_body_id:
         return None
@@ -612,7 +623,7 @@ _DEFAULT_ELIGIBILITY_RULES = {
 }
 
 
-async def _load_eligibility_rules(season: Optional[str] = None) -> dict:
+async def _load_eligibility_rules(season: str | None = None) -> dict:
     """Fetch the season's rule config from Mongo; falls back to defaults."""
     query = {"season": season} if season else {}
     doc = await db.eligibility_rules_config.find_one(query, {"_id": 0}, sort=[("updated_at", -1)])
@@ -634,9 +645,9 @@ async def compute_eligibility_tag(pid: str):
         raise HTTPException(404, "Player not found")
 
     rules = await _load_eligibility_rules(p.get("season_year") or "2026-27")
-    trace: List[dict] = []
-    reasons: List[str] = []
-    tag: Optional[str] = None
+    trace: list[dict] = []
+    reasons: list[str] = []
+    tag: str | None = None
 
     # Iter 126 · Also inspect the player's KYC documents so the trace can
     # name the actual proof (Birth Certificate, Aadhaar, School Marksheet)
@@ -650,7 +661,7 @@ async def compute_eligibility_tag(pid: str):
         """Return a short human-readable citation for the first-found doc(s)
         among the requested types — used by the 'Verified from' column so the
         approver knows WHICH file backed a passing rule."""
-        parts: List[str] = []
+        parts: list[str] = []
         for t in doc_types:
             for d in docs_by_type.get(t, []):
                 label = t.replace("_", " ").title()
@@ -669,7 +680,7 @@ async def compute_eligibility_tag(pid: str):
     # those and use them as (a) higher-authority values than the typed form
     # fields when the typed field is empty, and (b) additional citation for
     # the "KYC Evidence" column so approvers see WHAT the AI actually read.
-    ai_facts: Dict[str, Any] = {}
+    ai_facts: dict[str, Any] = {}
     linked_reg = await db.player_registrations.find_one(
         {"linked_player_id": pid}, {"_id": 0, "ai_full_report": 1, "player_data": 1}
     )
@@ -712,7 +723,7 @@ async def compute_eligibility_tag(pid: str):
                     return True
         return False
 
-    def _doc_evidence_full(kyc_types: List[str], ai_keys: List[str]) -> str:
+    def _doc_evidence_full(kyc_types: list[str], ai_keys: list[str]) -> str:
         """Combined citation: the KYC doc filename+verified state PLUS the AI
         extracted facts the engine actually looked at."""
         base = _doc_evidence(*kyc_types)
@@ -745,7 +756,7 @@ async def compute_eligibility_tag(pid: str):
     # is what closes the loop the user reported: verified KYC docs whose AI
     # extraction confirmed the player's identity were being ignored because
     # the compute engine only looked at the typed form fields.
-    ai_promoted: List[str] = []              # human-readable trail of what we promoted
+    ai_promoted: list[str] = []              # human-readable trail of what we promoted
     if ai_facts:
         # Institute (education) from Marksheet extraction.
         if not p.get("education") and ai_facts.get("ms_institute"):
@@ -964,11 +975,11 @@ class EligibilityTagOverride(BaseModel):
     model_config = ConfigDict(extra="ignore")
     eligibility_tag: str = Field(..., description="Local/Birth · Local/Residence · Local/Employment · Local/Education · Guest/MP-Domicile · Guest/Education · Guest/Out-of-MP · Ineligible")
     reason: str = Field(..., min_length=3)
-    actor_name: Optional[str] = None
-    actor_body_id: Optional[str] = None
+    actor_name: str | None = None
+    actor_body_id: str | None = None
     # Iter 125 · Signed override — the evidence document supporting the override.
-    signed_doc_url: Optional[str] = None
-    signed_doc_filename: Optional[str] = None
+    signed_doc_url: str | None = None
+    signed_doc_filename: str | None = None
 
 
 @api_router.post("/players/{pid}/eligibility-tag/override", response_model=Player)
@@ -1040,7 +1051,7 @@ async def clear_eligibility_override(pid: str):
 
 
 @api_router.post("/players/eligibility-tag/recompute-all")
-async def bulk_recompute_eligibility(request: Request, body_id: Optional[str] = None):
+async def bulk_recompute_eligibility(request: Request, body_id: str | None = None):
     """MPCA-210 · Bulk recompute for the whole player register in scope.
     - MPCA: retags every active player across MPCA.
     - Division scope: retags only players registered with that Division/District.

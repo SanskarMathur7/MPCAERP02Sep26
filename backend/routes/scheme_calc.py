@@ -8,11 +8,12 @@ Exposed
     GET  /api/schemes/{scheme_code}/input-spec       # variables the calculator needs
     POST /api/schemes/{scheme_code}/compute-budget   # returns computed head allocations
 """
-from typing import List, Optional, Any
+from typing import Any
+
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 
 
 class BudgetInputVar(BaseModel):
@@ -20,10 +21,10 @@ class BudgetInputVar(BaseModel):
     key: str
     label: str
     type: str = "number"                    # "number" | "select"
-    default: Optional[Any] = None
-    options: Optional[List[str]] = None     # for type=select
-    hint: Optional[str] = None
-    unit: Optional[str] = None
+    default: Any | None = None
+    options: list[str] | None = None     # for type=select
+    hint: str | None = None
+    unit: str | None = None
 
 
 # ─────────────── Input specs per scheme ───────────────
@@ -90,7 +91,7 @@ INPUT_SPECS: dict = {
 
 # ─────────────── Deterministic formulae ───────────────
 
-def _compute_2A(inp: dict, heads_ref: dict) -> List[dict]:
+def _compute_2A(inp: dict, heads_ref: dict) -> list[dict]:
     days = float(inp.get("match_days", 6))
     # MPCA-110 · Non-match day allowance (practice / rest / travel days)
     non_match_days = float(inp.get("non_match_days", 0))
@@ -116,7 +117,7 @@ def _compute_2A(inp: dict, heads_ref: dict) -> List[dict]:
     return rows
 
 
-def _compute_2B(inp: dict, heads: dict) -> List[dict]:
+def _compute_2B(inp: dict, heads: dict) -> list[dict]:
     days = float(inp.get("match_days", 8))
     # MPCA-110 · Non-match day allowance for Inter-Divisional hosting
     non_match_days = float(inp.get("non_match_days", 0))
@@ -164,7 +165,7 @@ def _compute_2B(inp: dict, heads: dict) -> List[dict]:
     return rows
 
 
-def _compute_2C(inp: dict, heads: dict) -> List[dict]:
+def _compute_2C(inp: dict, heads: dict) -> list[dict]:
     strength = float(inp.get("team_strength", 18))
     rail = float(inp.get("rail_fare_per_pax", 1500))
     alt = str(inp.get("alt_mode_used", "No")) == "Yes"
@@ -176,7 +177,7 @@ def _compute_2C(inp: dict, heads: dict) -> List[dict]:
 
     inter_city = alt_fare_total * 2 if alt else rail * 2 * strength     # to & fro
     rows = [
-        {"head": "Inter-city travel (to & fro)", "limit_inr": inter_city, "formula": f"{'Alt-mode ₹{:,.0f} × 2'.format(alt_fare_total) if alt else f'₹{rail:,.0f} × 2 × {strength:g} pax'}"},
+        {"head": "Inter-city travel (to & fro)", "limit_inr": inter_city, "formula": f"{f'Alt-mode ₹{alt_fare_total:,.0f} × 2' if alt else f'₹{rail:,.0f} × 2 × {strength:g} pax'}"},
         {"head": "Misc journey expense", "limit_inr": 5000, "formula": "Lump ₹5,000"},
         {"head": "District-HQ → Division-HQ joining travel", "limit_inr": join_rate * dist_pax * 2, "formula": f"₹{join_rate:,.0f} × {dist_pax:g} pax × 2 (round-trip)"},
     ]
@@ -187,7 +188,7 @@ def _compute_2C(inp: dict, heads: dict) -> List[dict]:
     return rows
 
 
-def _compute_2D(inp: dict, heads: dict) -> List[dict]:
+def _compute_2D(inp: dict, heads: dict) -> list[dict]:
     days = float(inp.get("match_days", 6))
     camp_days = float(inp.get("camp_days", 0))
     rv = float(inp.get("rooms_visiting", 8))
@@ -219,7 +220,7 @@ def _compute_2D(inp: dict, heads: dict) -> List[dict]:
     ]
 
 
-def _compute_3A(inp: dict, heads: dict) -> List[dict]:
+def _compute_3A(inp: dict, heads: dict) -> list[dict]:
     days = float(inp.get("camp_days", 14))
     pax = float(inp.get("participants", 25))
     outstation = float(inp.get("outstation_pax", 15))
@@ -231,7 +232,7 @@ def _compute_3A(inp: dict, heads: dict) -> List[dict]:
     ]
 
 
-def _compute_3D(inp: dict, heads: dict) -> List[dict]:
+def _compute_3D(inp: dict, heads: dict) -> list[dict]:
     days = min(float(inp.get("camp_days", 8)), 8)
     pax = float(inp.get("participants", 20))
     extra_pax = float(inp.get("outstation_extra_pax", 0))
@@ -255,7 +256,7 @@ class ComputeRequest(BaseModel):
 
 
 @api_router.get("/schemes/{scheme_code}/input-spec")
-async def get_input_spec(scheme_code: str, fiscal_cycle: Optional[str] = None):
+async def get_input_spec(scheme_code: str, fiscal_cycle: str | None = None):
     from routes.reimbursement_schemes import CURRENT_FISCAL_CYCLE
     fc = fiscal_cycle or CURRENT_FISCAL_CYCLE
     scheme = await db.reimbursement_schemes.find_one(
@@ -274,7 +275,7 @@ async def get_input_spec(scheme_code: str, fiscal_cycle: Optional[str] = None):
 
 
 @api_router.post("/schemes/{scheme_code}/compute-budget")
-async def compute_budget(scheme_code: str, req: ComputeRequest, fiscal_cycle: Optional[str] = None):
+async def compute_budget(scheme_code: str, req: ComputeRequest, fiscal_cycle: str | None = None):
     from routes.reimbursement_schemes import CURRENT_FISCAL_CYCLE
     fc = fiscal_cycle or CURRENT_FISCAL_CYCLE
     scheme = await db.reimbursement_schemes.find_one(

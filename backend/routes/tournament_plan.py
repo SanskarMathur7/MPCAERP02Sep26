@@ -1,28 +1,33 @@
 """Routes · Phase T1-T4 — Tournament Plan, Grant Scheme, Auto-Budget, Match Official DA."""
-from datetime import datetime, timezone
-from typing import List, Optional, Literal
-from fastapi import HTTPException, Request, Header
-from pydantic import BaseModel, Field, ConfigDict
-
 import re
-from core.infra import db, api_router
-from core.shared_services import next_seq  # H6 · atomic sequence
-from core.scoping import get_scope
-from core.helpers import _create_notification
-from models import (
-    Tournament, TournamentPlan, TournamentPlanAction, TournamentPlanStatus,
-    GrantSchemeRate, RateCardUnit,
-    TournamentBudget, BudgetHeadAllocation, ApprovalStep,
-    MatchOfficialDA, MatchOfficialDAUpdate, DAStatus,
-    DATravelSegment, DAMiscItem, DAAttachment, DAComplianceFlag,
-)
+from datetime import datetime, timezone
+from typing import Literal
 
+from fastapi import Header, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
+
+from core.helpers import _create_notification
+from core.infra import api_router, db
+from core.scoping import get_scope
+from core.shared_services import next_seq  # H6 · atomic sequence
+from models import (
+    ApprovalStep,
+    BudgetHeadAllocation,
+    DAStatus,
+    GrantSchemeRate,
+    MatchOfficialDA,
+    MatchOfficialDAUpdate,
+    Tournament,
+    TournamentBudget,
+    TournamentPlan,
+    TournamentPlanAction,
+)
 
 # ═══════════════════ Grant Scheme Rate Card ═══════════════════
 
 
-@api_router.get("/grant-scheme/rates", response_model=List[GrantSchemeRate])
-async def list_grant_rates(fiscal_cycle: Optional[str] = None, active_only: bool = True):
+@api_router.get("/grant-scheme/rates", response_model=list[GrantSchemeRate])
+async def list_grant_rates(fiscal_cycle: str | None = None, active_only: bool = True):
     q: dict = {}
     if fiscal_cycle:
         q["fiscal_cycle"] = fiscal_cycle
@@ -58,10 +63,10 @@ async def delete_grant_rate(rid: str):
 # ═══════════════════ Auto-Budget Generator ═══════════════════
 
 
-async def _compute_auto_budget(plan: TournamentPlan, fiscal_cycle: str) -> tuple[List[BudgetHeadAllocation], float, dict]:
+async def _compute_auto_budget(plan: TournamentPlan, fiscal_cycle: str) -> tuple[list[BudgetHeadAllocation], float, dict]:
     """Return (head_allocations, total, breakdown_log)."""
     rates = await db.grant_scheme_rates.find({"is_active": True, "fiscal_cycle": fiscal_cycle}, {"_id": 0}).to_list(200)
-    heads: List[BudgetHeadAllocation] = []
+    heads: list[BudgetHeadAllocation] = []
     log: dict = {"lines": [], "notes": []}
     subtotal = 0.0
     for r in rates:
@@ -424,8 +429,8 @@ async def _prebuild_da_forms(tournament: dict) -> int:
     return created
 
 
-@api_router.get("/match-official-da", response_model=List[MatchOfficialDA])
-async def list_da_forms(request: Request, tournament_id: Optional[str] = None, status: Optional[DAStatus] = None, official_name: Optional[str] = None):
+@api_router.get("/match-official-da", response_model=list[MatchOfficialDA])
+async def list_da_forms(request: Request, tournament_id: str | None = None, status: DAStatus | None = None, official_name: str | None = None):
     q: dict = {}
     if tournament_id:
         q["tournament_id"] = tournament_id
@@ -597,7 +602,7 @@ def _rupees_in_words(n: float) -> str:
             s += _two(rest)
         return s
 
-    parts: List[str] = []
+    parts: list[str] = []
     crore = n // 10_000_000; n %= 10_000_000
     lakh = n // 100_000; n %= 100_000
     thou = n // 1000; n %= 1000
@@ -614,7 +619,7 @@ def _rupees_in_words(n: float) -> str:
 
 
 # ─── Scheme compliance snapshot ───
-async def _compute_da_compliance(doc: dict) -> List[dict]:
+async def _compute_da_compliance(doc: dict) -> list[dict]:
     """Build advisory badges: DA rate, journey rate, night halt vs scheme."""
     cycle = None
     if doc.get("tournament_id"):
@@ -622,9 +627,9 @@ async def _compute_da_compliance(doc: dict) -> List[dict]:
         cycle = (t or {}).get("fiscal_cycle") or "2025-26"
     else:
         cycle = "2025-26"
-    flags: List[dict] = []
+    flags: list[dict] = []
 
-    async def _rate(head_code: str) -> Optional[float]:
+    async def _rate(head_code: str) -> float | None:
         row = await db.grant_scheme_rates.find_one(
             {"head_code": head_code, "is_active": True, "fiscal_cycle": cycle}, {"_id": 0},
         )
@@ -669,8 +674,8 @@ async def _compute_da_compliance(doc: dict) -> List[dict]:
 async def self_create_da_form(
     request: Request,
     tournament_id: str,
-    official_id: Optional[str] = None,
-    official_name: Optional[str] = None,
+    official_id: str | None = None,
+    official_name: str | None = None,
 ):
     """Match official self-creates a DA form for a tournament they officiated.
 
@@ -858,7 +863,7 @@ async def reject_da_form(did: str, actor_name: str, reason: str, actor_body_id: 
 @api_router.get("/tournaments/{tid}/my-finance-page")
 async def my_finance_page(
     tid: str,
-    x_persona_name: Optional[str] = Header(None, alias="X-Persona-Name"),
+    x_persona_name: str | None = Header(None, alias="X-Persona-Name"),
 ):
     """MPCA-234 · Consolidated payload for Match Official finance page + progress bar."""
     if not x_persona_name:
@@ -889,7 +894,7 @@ async def my_finance_page(
     }, {"_id": 0})
 
     # 6-stage progress derivation
-    is_budget_locked = bool(((t.get("unified_budget_snapshot") or {}).get("is_locked")))
+    is_budget_locked = bool((t.get("unified_budget_snapshot") or {}).get("is_locked"))
     da_status = (da_form or {}).get("status")
     stages = [
         {"key": "budget_allocated",     "label": "Budget Allocated",    "done": assignment.get("acceptance_status") == "Accepted"},
@@ -1016,9 +1021,9 @@ class _MarkPaidPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     payment_ref: str = Field(..., min_length=1)                # UTR / cheque no. / UPI txn id
     payment_mode: Literal["NEFT", "UPI", "Cheque", "Cash", "RTGS"] = "NEFT"
-    paid_amount_inr: Optional[float] = None                    # defaults to approved total_inr
-    paid_at: Optional[str] = None                              # ISO date; defaults to now
-    payment_notes: Optional[str] = None
+    paid_amount_inr: float | None = None                    # defaults to approved total_inr
+    paid_at: str | None = None                              # ISO date; defaults to now
+    payment_notes: str | None = None
     actor_name: str = "MPCA Treasurer"
 
 

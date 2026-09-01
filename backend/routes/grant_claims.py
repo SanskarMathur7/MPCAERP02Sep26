@@ -8,22 +8,24 @@ one-by-one (each AI-verified) → submits to MPCA → MPCA reviews & approves.
 Also exposes an AI Assistant chat endpoint (Gemini) for divisions/districts to
 ask "which grants am I eligible for?" and get scheme-aware answers.
 """
-import os
+import asyncio
 import json
+import os
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Literal
-from fastapi import HTTPException, Request, Header, Depends
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
+from typing import Literal
+
+from fastapi import Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-import asyncio
-from core.infra import db, api_router
-from core.shared_services import next_seq  # H6 · atomic sequence
-from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
-
+from core.infra import api_router, db
+from core.scoping import body_scope, get_scope
+from core.shared_services import next_seq  # H6 · atomic sequence
+from lib.authz import (
+    principal_body_code,
+    principal_body_type,
+)
 
 GrantClaimStatus = Literal["Draft", "Documents_Pending", "Submitted", "Under_Review", "Approved", "Rejected", "Sanctioned", "Payment_Made"]
 
@@ -32,15 +34,15 @@ class GrantClaimDoc(BaseModel):
     model_config = ConfigDict(extra="ignore")
     doc_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     required_label: str                              # matches scheme.required_documents[i]
-    filename: Optional[str] = None
-    file_url: Optional[str] = None
-    uploaded_at: Optional[str] = None
+    filename: str | None = None
+    file_url: str | None = None
+    uploaded_at: str | None = None
     ai_verified: bool = False
     ai_confidence: float = 0.0                       # 0-1
-    ai_notes: Optional[str] = None
+    ai_notes: str | None = None
     ai_extracted: dict = Field(default_factory=dict)  # amounts, dates, party names etc.
     from_vault: bool = False                         # M33 · true when attached from Body Data Warehouse
-    vault_doc_id: Optional[str] = None
+    vault_doc_id: str | None = None
 
 
 class GrantClaimExtraDoc(BaseModel):
@@ -51,18 +53,18 @@ class GrantClaimExtraDoc(BaseModel):
     model_config = ConfigDict(extra="ignore")
     doc_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     description: str                                 # short label filled by Division
-    filename: Optional[str] = None
-    file_url: Optional[str] = None
-    uploaded_at: Optional[str] = None
-    uploaded_by: Optional[str] = None
+    filename: str | None = None
+    file_url: str | None = None
+    uploaded_at: str | None = None
+    uploaded_by: str | None = None
     # Iter 125 · AI verdict (mirrors GrantClaimDoc)
-    ai_verified: Optional[bool] = None
-    ai_confidence: Optional[float] = None
-    ai_notes: Optional[str] = None
+    ai_verified: bool | None = None
+    ai_confidence: float | None = None
+    ai_notes: str | None = None
     ai_extracted: dict = Field(default_factory=dict)
-    signature_detected: Optional[bool] = None
-    stamp_detected: Optional[bool] = None
-    signed_by: Optional[str] = None
+    signature_detected: bool | None = None
+    stamp_detected: bool | None = None
+    signed_by: str | None = None
 
 
 class GrantClaimBase(BaseModel):
@@ -71,8 +73,8 @@ class GrantClaimBase(BaseModel):
     body_id: str
     fiscal_cycle: str = "2025-26"
     claimed_amount_inr: float = 0.0
-    notes: Optional[str] = None
-    purpose_of_claim: Optional[str] = None           # MPCA-250 · long-text purpose
+    notes: str | None = None
+    purpose_of_claim: str | None = None           # MPCA-250 · long-text purpose
 
 
 class GrantClaimAiSummary(BaseModel):
@@ -87,50 +89,50 @@ class GrantClaimAiSummary(BaseModel):
     docs_total: int = 0
     extras_verified: int = 0                         # Iter 125 · optional supporting docs verified
     extras_total: int = 0
-    amount_match_note: Optional[str] = None          # e.g. "Claimed ₹1L vs Detected ₹1L (match)"
-    critical_issues: List[str] = []                  # explicit red flags
-    advisory_notes: List[str] = []                   # softer signals
-    validated_at: Optional[str] = None
-    validated_by: Optional[str] = None
+    amount_match_note: str | None = None          # e.g. "Claimed ₹1L vs Detected ₹1L (match)"
+    critical_issues: list[str] = []                  # explicit red flags
+    advisory_notes: list[str] = []                   # softer signals
+    validated_at: str | None = None
+    validated_by: str | None = None
 
 
 class GrantClaim(GrantClaimBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     claim_ref: str
-    scheme_name: Optional[str] = None
-    body_name: Optional[str] = None
+    scheme_name: str | None = None
+    body_name: str | None = None
     status: GrantClaimStatus = "Draft"
-    documents: List[GrantClaimDoc] = []
-    extra_documents: List[GrantClaimExtraDoc] = []   # MPCA-250 · supporting docs
-    submitted_by: Optional[str] = None
-    submitted_at: Optional[str] = None
-    reviewed_by: Optional[str] = None
-    reviewed_at: Optional[str] = None
-    rejection_reason: Optional[str] = None
-    approved_amount_inr: Optional[float] = None
-    mpca_comments: List[dict] = Field(default_factory=list)
-    ai_summary: Optional[GrantClaimAiSummary] = None    # M38 · Claim-level AI verdict
+    documents: list[GrantClaimDoc] = []
+    extra_documents: list[GrantClaimExtraDoc] = []   # MPCA-250 · supporting docs
+    submitted_by: str | None = None
+    submitted_at: str | None = None
+    reviewed_by: str | None = None
+    reviewed_at: str | None = None
+    rejection_reason: str | None = None
+    approved_amount_inr: float | None = None
+    mpca_comments: list[dict] = Field(default_factory=list)
+    ai_summary: GrantClaimAiSummary | None = None    # M38 · Claim-level AI verdict
     # MPCA-245 · Signed-artifact workflow (matches Squad flow)
-    signed_submission_url: Optional[str] = None
-    signed_submission_at: Optional[str] = None
-    signed_submission_by: Optional[str] = None
-    signed_approval_url:   Optional[str] = None
-    signed_approval_at:    Optional[str] = None
-    signed_approval_by:    Optional[str] = None
+    signed_submission_url: str | None = None
+    signed_submission_at: str | None = None
+    signed_submission_by: str | None = None
+    signed_approval_url:   str | None = None
+    signed_approval_at:    str | None = None
+    signed_approval_by:    str | None = None
     # MPCA-245 · Payment_Made stage
-    payment_utr:         Optional[str] = None
-    payment_amount_inr:  Optional[float] = None
-    payment_date:        Optional[str] = None
-    payment_receipt_url: Optional[str] = None
-    payment_made_by:     Optional[str] = None
-    payment_made_at:     Optional[str] = None
+    payment_utr:         str | None = None
+    payment_amount_inr:  float | None = None
+    payment_date:        str | None = None
+    payment_receipt_url: str | None = None
+    payment_made_by:     str | None = None
+    payment_made_at:     str | None = None
     # Feb 2026 · Fix E · Camp reimbursement linkage
     # When a claim is auto-materialised from a Division-owned tournament's
     # locked budget + invoices, these fields link back so MPCA can see the
     # source camp and the bundled invoice evidence.
-    attached_tournament_id:        Optional[str] = None
-    attached_tournament_budget_id: Optional[str] = None
-    attached_invoice_ids:          List[str] = Field(default_factory=list)
+    attached_tournament_id:        str | None = None
+    attached_tournament_budget_id: str | None = None
+    attached_invoice_ids:          list[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -145,8 +147,8 @@ async def _next_claim_ref(cycle: str) -> str:
 
 # ═══════════════════ CRUD ═══════════════════
 
-@api_router.get("/grant-claims", response_model=List[GrantClaim])
-async def list_grant_claims(request: Request, scheme_code: Optional[str] = None, body_id: Optional[str] = None, status: Optional[GrantClaimStatus] = None, skip: int = 0, limit: int = 500):
+@api_router.get("/grant-claims", response_model=list[GrantClaim])
+async def list_grant_claims(request: Request, scheme_code: str | None = None, body_id: str | None = None, status: GrantClaimStatus | None = None, skip: int = 0, limit: int = 500):
     q: dict = {}
     if scheme_code: q["scheme_code"] = scheme_code
     if body_id: q["body_id"] = body_id
@@ -203,7 +205,7 @@ async def create_grant_claim(payload: GrantClaimCreate):
 
 
 @api_router.post("/grant-claims/{cid}/document/{doc_id}")
-async def attach_document(cid: str, doc_id: str, file_url: str, filename: str, from_vault: bool = False, vault_doc_id: Optional[str] = None):
+async def attach_document(cid: str, doc_id: str, file_url: str, filename: str, from_vault: bool = False, vault_doc_id: str | None = None):
     doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
@@ -234,8 +236,13 @@ async def attach_document(cid: str, doc_id: str, file_url: str, filename: str, f
 async def _ai_verify_document(doc: dict) -> dict:
     """Use Gemini to verify uploaded document matches the required label."""
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType  # type: ignore
         import mimetypes
+
+        from emergentintegrations.llm.chat import (  # type: ignore
+            FileContentWithMimeType,
+            LlmChat,
+            UserMessage,
+        )
         key = os.environ.get("EMERGENT_LLM_KEY")
         if not key:
             return {"ai_verified": False, "ai_confidence": 0.0, "ai_notes": "EMERGENT_LLM_KEY not set"}
@@ -307,7 +314,7 @@ Note: `signature_detected` means a handwritten or scanned signature is visible o
 
 
 @api_router.post("/grant-claims/{cid}/submit", response_model=GrantClaim)
-async def submit_grant_claim(cid: str, actor_name: Optional[str] = None):
+async def submit_grant_claim(cid: str, actor_name: str | None = None):
     doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
@@ -367,7 +374,7 @@ async def re_verify_document(cid: str, doc_id: str):
 
 
 @api_router.post("/grant-claims/{cid}/ai-review", response_model=GrantClaim)
-async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
+async def ai_review_claim(cid: str, actor_name: str | None = None):
     """M38 · Full-claim AI review — re-verifies any docs that failed or have
     low confidence, runs a cross-doc consistency check (amounts vs claimed,
     dates vs fiscal cycle, duplicate detection), and stamps a rolled-up
@@ -413,9 +420,9 @@ async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
     all_filled = filled + filled_extras
     avg_conf = round(sum(float(d.get("ai_confidence") or 0) for d in all_filled) / max(len(all_filled), 1), 3)
 
-    critical: List[str] = []
-    advisory: List[str] = []
-    amount_note: Optional[str] = None
+    critical: list[str] = []
+    advisory: list[str] = []
+    amount_note: str | None = None
 
     if filled_count < total_docs:
         critical.append(f"{total_docs - filled_count} required document(s) missing.")
@@ -424,7 +431,7 @@ async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
 
     # Cross-doc · amount consistency: sum any 'amount' fields extracted vs claimed
     claimed = float(claim.get("claimed_amount_inr") or 0)
-    detected_amounts: List[float] = []
+    detected_amounts: list[float] = []
     # Iter 125 · Amount cross-check now also considers optional supporting docs
     # (e.g. Quotation Rs 3,00,000 for infrastructure grant).
     for d in all_filled:
@@ -507,7 +514,7 @@ async def ai_review_claim(cid: str, actor_name: Optional[str] = None):
 
 
 @api_router.post("/grant-claims/{cid}/approve", response_model=GrantClaim)
-async def approve_grant_claim(cid: str, approved_amount_inr: float, actor_name: str, notes: Optional[str] = None):
+async def approve_grant_claim(cid: str, approved_amount_inr: float, actor_name: str, notes: str | None = None):
     doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Claim not found")
@@ -580,7 +587,7 @@ class SignedUploadPayload(BaseModel):
 class ExtraDocumentPayload(BaseModel):
     description: str
     file_url: str
-    filename: Optional[str] = None
+    filename: str | None = None
 
 
 class PurposePatchPayload(BaseModel):
@@ -605,14 +612,14 @@ class MpcaPaymentPayload(BaseModel):
     utr: str
     amount_inr: float
     payment_date: str
-    receipt_url: Optional[str] = None
-    notes: Optional[str] = None
+    receipt_url: str | None = None
+    notes: str | None = None
 
 
 class GrantDiscussionCreate(BaseModel):
     author_name: str
-    author_body: Optional[str] = None
-    author_body_type: Optional[str] = None
+    author_body: str | None = None
+    author_body_type: str | None = None
     message: str
 
 
@@ -623,13 +630,20 @@ async def grant_summary_pdf(cid: str, variant: str = "submission"):
     variant=submission → Division-side (claim details, purpose, requested amount, docs list)
     variant=approval   → MPCA-side (adds reviewer notes, approved amount placeholder)
     """
+    import io
+
     from fastapi.responses import Response
-    from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import cm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    import io
+    from reportlab.platypus import (
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
 
     doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
     if not doc:
@@ -772,9 +786,9 @@ async def grant_summary_pdf(cid: str, variant: str = "submission"):
 @api_router.post("/grant-claims/{cid}/signed-upload", response_model=GrantClaim)
 async def upload_division_signed(
     cid: str, payload: SignedUploadPayload,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """Division uploads the signed submission summary PDF (URL)."""
     if not payload.signed_url:
@@ -797,9 +811,9 @@ async def upload_division_signed(
 @api_router.post("/grant-claims/{cid}/mpca-signed-upload", response_model=GrantClaim)
 async def upload_mpca_signed(
     cid: str, payload: SignedUploadPayload,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """MPCA uploads the signed approval summary PDF (URL)."""
     if not payload.signed_url:
@@ -822,8 +836,8 @@ async def upload_mpca_signed(
 @api_router.post("/grant-claims/{cid}/payment", response_model=GrantClaim)
 async def mark_grant_payment_made(
     cid: str, payload: MpcaPaymentPayload,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """MPCA records the payment made against an approved grant claim."""
     doc = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
@@ -961,7 +975,7 @@ async def reopen_for_docs(cid: str, payload: ReopenPayload):
 @api_router.post("/grant-claims/{cid}/extra-document", response_model=GrantClaim)
 async def add_extra_document(
     cid: str, payload: ExtraDocumentPayload,
-    x_user_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_user_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """Add an arbitrary supporting document (with description) to a claim."""
     claim = await db.grant_claims.find_one({"id": cid}, {"_id": 0})
@@ -1062,7 +1076,7 @@ async def add_discussion(cid: str, payload: GrantDiscussionCreate):
 # ═══════════════════ AI Eligibility Recommender ═══════════════════
 
 @api_router.get("/schemes-recommendations")
-async def scheme_recommendations(request: Request, body_id: Optional[str] = None):
+async def scheme_recommendations(request: Request, body_id: str | None = None):
     """Given a body, list eligible schemes with a computed match score + eligibility gaps."""
     scope = get_scope(request)
     target_body_id = body_id or scope.body_code or "MPCA"
@@ -1104,7 +1118,7 @@ async def scheme_recommendations(request: Request, body_id: Optional[str] = None
     return {"body_id": target_body_id, "body_name": body.get("name"), "body_type": body_type, "recommendations": recos, "total_potential_inr": sum(r["potential_amount_inr"] for r in recos if r["state"] == "not_started")}
 
 
-def _reco_note(scheme: dict, body_type: str, existing: Optional[dict]) -> str:
+def _reco_note(scheme: dict, body_type: str, existing: dict | None) -> str:
     if existing and existing["status"] in ("Submitted", "Under_Review", "Approved"):
         return f"Already claimed this cycle — status {existing['status']}"
     if scheme.get("scheme_type") == "Annual_Grant":
@@ -1183,7 +1197,7 @@ Rules:
 # ═══════════════════ Scheme Master (edit) ═══════════════════
 
 @api_router.patch("/reimbursement-schemes/{scheme_code}")
-async def update_scheme(scheme_code: str, patch: dict, actor_name: Optional[str] = None):
+async def update_scheme(scheme_code: str, patch: dict, actor_name: str | None = None):
     """MPCA-only: edit an existing scheme. RBAC enforced at UI level."""
     doc = await db.reimbursement_schemes.find_one({"scheme_code": scheme_code}, {"_id": 0})
     if not doc:

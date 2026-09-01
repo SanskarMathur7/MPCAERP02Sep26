@@ -5,20 +5,23 @@ sheet aggregating all approved invoices vs budget heads. MPCA Secretary reviews,
 comments, approves (with optional lowered amount) or rejects.
 """
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import Any
+
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
-from core.infra import db, api_router
-from core.shared_services import next_seq  # H6 · atomic sequence
-from core.scoping import get_scope, body_scope
 from core.helpers import _create_notification
+from core.infra import api_router, db
+from core.scoping import body_scope, get_scope
+from core.shared_services import next_seq  # H6 · atomic sequence
 from models import (
-    TournamentReimbursementClaim, TournamentReimbursementCreate,
-    TournamentReimbursementAction, TournamentReimbursementStatus,
-    ReimbursementComment, ApprovalStep,
+    ApprovalStep,
+    ReimbursementComment,
+    TournamentReimbursementAction,
+    TournamentReimbursementClaim,
+    TournamentReimbursementCreate,
+    TournamentReimbursementStatus,
 )
-
 
 # ═══════════════════ Helpers ═══════════════════
 
@@ -27,7 +30,7 @@ async def _next_claim_ref(cycle: str) -> str:
     return f"TRC-{cycle}-{seq:04d}"
 
 
-async def _compute_summary(tournament_id: str, body_id: str, budget_id: Optional[str] = None) -> dict:
+async def _compute_summary(tournament_id: str, body_id: str, budget_id: str | None = None) -> dict:
     """Build the summary sheet: all invoices + extra-expense approvals for this
     tournament + body, aggregated per budget head.
 
@@ -56,7 +59,7 @@ async def _compute_summary(tournament_id: str, body_id: str, budget_id: Optional
         )
 
     # MPCA-235 · Scope invoices/extras/DA by budget_id when available
-    inv_q: Dict[str, Any] = {
+    inv_q: dict[str, Any] = {
         "tournament_id": tournament_id,
         "body_id": body_id,
         "status": {"$in": ["Approved", "Submitted"]},
@@ -65,7 +68,7 @@ async def _compute_summary(tournament_id: str, body_id: str, budget_id: Optional
         inv_q["budget_id"] = tb["id"]
     invoices = await db.tournament_invoices.find(inv_q, {"_id": 0}).to_list(500)
 
-    ex_q: Dict[str, Any] = {
+    ex_q: dict[str, Any] = {
         "tournament_id": tournament_id,
         "body_id": body_id,
         "status": "Approved",
@@ -243,16 +246,16 @@ async def spent_by_head(tid: str, body_id: str, request: Request):
     }
 
 
-@api_router.get("/reimbursement-claims", response_model=List[TournamentReimbursementClaim])
+@api_router.get("/reimbursement-claims", response_model=list[TournamentReimbursementClaim])
 async def list_claims(
     request: Request,
-    tournament_id: Optional[str] = None,
-    body_id: Optional[str] = None,
-    status: Optional[TournamentReimbursementStatus] = None,
-    fiscal_cycle: Optional[str] = None,
-    route_to_body_id: Optional[str] = None,    # M39z.d · filter by review destination
-    is_master: Optional[bool] = None,          # M39z.d · true = only Division master claims
-    exclude_consolidated: Optional[bool] = None,  # M39z.d · hide child District claims that are already rolled into a master
+    tournament_id: str | None = None,
+    body_id: str | None = None,
+    status: TournamentReimbursementStatus | None = None,
+    fiscal_cycle: str | None = None,
+    route_to_body_id: str | None = None,    # M39z.d · filter by review destination
+    is_master: bool | None = None,          # M39z.d · true = only Division master claims
+    exclude_consolidated: bool | None = None,  # M39z.d · hide child District claims that are already rolled into a master
     skip: int = 0,
     limit: int = 500,
 ):
@@ -337,7 +340,7 @@ async def create_claim(payload: TournamentReimbursementCreate):
     # MPCA-235 · Idempotency now scoped by budget_id: a Division with TWO
     # approved budgets (Host + Visitor across pools) can raise ONE claim per
     # budget. Legacy single-budget tournaments still get single-claim behaviour.
-    idem_q: Dict[str, Any] = {
+    idem_q: dict[str, Any] = {
         "tournament_id": payload.tournament_id,
         "body_id": payload.body_id,
         "fiscal_cycle": payload.fiscal_cycle,
@@ -437,7 +440,7 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
 
     # Compute summary at submit time — scoped by claim's budget_id (multi-pool)
     summary = await _compute_summary(doc["tournament_id"], doc["body_id"], budget_id=doc.get("budget_id"))
-    inv_q: Dict[str, Any] = {
+    inv_q: dict[str, Any] = {
         "tournament_id": doc["tournament_id"],
         "body_id": doc["body_id"],
         "status": {"$in": ["Approved", "Submitted"]},
@@ -445,7 +448,7 @@ async def submit_claim(cid: str, action: TournamentReimbursementAction):
     if doc.get("budget_id"):
         inv_q["budget_id"] = doc["budget_id"]
     invoices = await db.tournament_invoices.find(inv_q, {"_id": 0}).to_list(500)
-    ex_q: Dict[str, Any] = {
+    ex_q: dict[str, Any] = {
         "tournament_id": doc["tournament_id"],
         "body_id": doc["body_id"],
         "status": "Approved",
@@ -542,7 +545,7 @@ class DeductionPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     head: str
     amount_inr: float
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 @api_router.post("/reimbursement-claims/{cid}/deduction", response_model=TournamentReimbursementClaim)
@@ -604,8 +607,8 @@ class InvoiceReviewPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     invoice_id: str
     accepted_inr: float
-    reason: Optional[str] = None
-    reviewed_by: Optional[str] = None
+    reason: str | None = None
+    reviewed_by: str | None = None
 
 
 @api_router.post("/reimbursement-claims/{cid}/invoice-review", response_model=TournamentReimbursementClaim)
@@ -688,7 +691,7 @@ async def get_review_summary(cid: str):
     # tracker widget. Once the claim is Submitted, `invoice_ids` is authoritative.
     # MPCA-235 · Live-invoice fallback (Draft claims) scoped by budget_id
     if not invoices:
-        live_q: Dict[str, Any] = {
+        live_q: dict[str, Any] = {
             "tournament_id": doc["tournament_id"],
             "body_id": doc["body_id"],
             "status": {"$in": ["Draft", "Submitted", "Approved"]},
@@ -698,17 +701,17 @@ async def get_review_summary(cid: str):
         invoices = await db.tournament_invoices.find(live_q, {"_id": 0}).to_list(500)
     reviews_by_iid = {r["invoice_id"]: r for r in (doc.get("mpca_invoice_reviews") or [])}
 
-    per_head: Dict[str, Dict[str, float]] = {}
+    per_head: dict[str, dict[str, float]] = {}
     def _bump(head_label, spent, accepted):
         row = per_head.setdefault(head_label, {"head": head_label, "budget_inr": 0.0, "spent_inr": 0.0, "accepted_inr": 0.0, "reviewed": True})
         row["spent_inr"] += float(spent or 0)
         row["accepted_inr"] += float(accepted or 0)
 
-    invoice_lines: List[dict] = []
+    invoice_lines: list[dict] = []
     all_reviewed = True
 
     # MPCA-168 v2 · Aggregate deductions per head (case/whitespace tolerant).
-    ded_by_head: Dict[str, float] = {}
+    ded_by_head: dict[str, float] = {}
     for d in (doc.get("mpca_deductions") or []):
         key = (d.get("head") or "").strip()
         if not key:
@@ -809,7 +812,7 @@ async def get_review_summary(cid: str):
 class DivisionHeadRemarkPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     head: str
-    remark: Optional[str] = None            # None or "" removes the remark
+    remark: str | None = None            # None or "" removes the remark
 
 
 @api_router.post("/reimbursement-claims/{cid}/head-remark", response_model=TournamentReimbursementClaim)
@@ -842,7 +845,7 @@ async def set_division_head_remark(cid: str, payload: DivisionHeadRemarkPayload,
 class MpcaSignedPdfPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     signed_pdf_url: str
-    uploaded_by: Optional[str] = None
+    uploaded_by: str | None = None
 
 
 @api_router.post("/reimbursement-claims/{cid}/mpca-signed-pdf", response_model=TournamentReimbursementClaim)
@@ -1010,7 +1013,7 @@ class ConsolidatePayload(BaseModel):
     division_body_id: str
     fiscal_cycle: str = "2025-26"
     actor_name: str
-    actor_role: Optional[str] = None
+    actor_role: str | None = None
 
 
 @api_router.get("/reimbursement-claims/consolidator/preview")
@@ -1229,7 +1232,7 @@ async def delete_claim(cid: str):
 # ═══════════════════ Stats ═══════════════════
 
 @api_router.get("/reimbursement-claims-stats/summary")
-async def claims_stats(body_id: Optional[str] = None, fiscal_cycle: Optional[str] = None):
+async def claims_stats(body_id: str | None = None, fiscal_cycle: str | None = None):
     q: dict = {}
     if body_id: q["body_id"] = body_id
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle

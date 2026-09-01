@@ -1,31 +1,30 @@
 """Routes · Procurement (Three-Quote / QCBS)"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
+from datetime import datetime, timezone
+
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
-from core.shared_services import next_seq  # H6 · atomic sequence
-from models import ProcurementRequest, ProcurementRequestCreate, Quotation, AwardPayload, ApprovalStep, Body, Claim
 from core.helpers import _next_pr_no, _notify_for_procurement, _procurement_method_for
-from models import ProcurementMethod, ProcurementStatus
-
+from core.infra import api_router, db
+from core.shared_services import next_seq  # H6 · atomic sequence
+from models import (
+    AwardPayload,
+    ProcurementMethod,
+    ProcurementRequest,
+    ProcurementRequestCreate,
+    ProcurementStatus,
+    Quotation,
+)
 
 # ---------------- Routes: Procurement (Phase III.8) ----------------
+# Local `_next_pr_no` removed — imported from `core.helpers` (F811).
 
 
-async def _next_pr_no(cycle: str) -> str:
-    seq = await next_seq(f"pr:{cycle}", lambda: db.procurement_requests.count_documents({"fiscal_cycle": cycle}))
-    return f"PR-{cycle}-{seq:03d}"
-
-
-@api_router.get("/procurement", response_model=List[ProcurementRequest])
+@api_router.get("/procurement", response_model=list[ProcurementRequest])
 async def list_procurement(
-    body_id: Optional[str] = None,
-    status: Optional[ProcurementStatus] = None,
-    method: Optional[ProcurementMethod] = None,
-    fiscal_cycle: Optional[str] = None,
+    body_id: str | None = None,
+    status: ProcurementStatus | None = None,
+    method: ProcurementMethod | None = None,
+    fiscal_cycle: str | None = None,
     skip: int = 0,
     limit: int = 500,
 ):
@@ -80,9 +79,7 @@ async def add_quotation(pr_id: str, quote: Quotation):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     # If this is the 3rd+ quote and method requires it, transition to Quotes_Collected
-    if len(quotations) >= 3 and doc["method"] in ("Three_Quote", "QCBS"):
-        update["status"] = "Quotes_Collected"
-    elif doc["method"] == "Direct" and len(quotations) >= 1:
+    if len(quotations) >= 3 and doc["method"] in ("Three_Quote", "QCBS") or doc["method"] == "Direct" and len(quotations) >= 1:
         update["status"] = "Quotes_Collected"
     await db.procurement_requests.update_one({"id": pr_id}, {"$set": update})
     return await db.procurement_requests.find_one({"id": pr_id}, {"_id": 0})
@@ -204,7 +201,7 @@ async def abc_analysis(fiscal_cycle: str = "2025-26"):
         {"$match": {"status": "Disbursed", "fiscal_cycle": fiscal_cycle}},
         {"$sort": {"amount_inr": -1}},
     ]
-    rows: List[dict] = []
+    rows: list[dict] = []
     async for c in db.claims.aggregate(pipeline):
         rows.append({
             "claim_id": c["id"],

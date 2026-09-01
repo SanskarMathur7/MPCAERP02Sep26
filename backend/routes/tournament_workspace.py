@@ -11,18 +11,19 @@ Consolidates the "Tournament Detail Workspace" APIs:
   • GET                   /tournaments/{tid}/financial-summary
   • POST                  /tournaments/{tid}/closure-letter    (generates a plain-text placeholder)
 """
-from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
 import uuid
+from datetime import datetime, timezone
+from typing import Any
 
-from fastapi import HTTPException, Header, Depends, Request
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
+from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from core.wiring_guard import assert_wiring_owner, stamp_actor
-
+from lib.authz import (
+    principal_body_code,
+    principal_body_type,
+)
 
 # ─────────────────────────── Match Fixtures ───────────────────────────
 
@@ -32,87 +33,87 @@ class TournamentMatch(BaseModel):
     tournament_id: str
     match_no: int
     stage: str = "League"                       # League | Quarter_Final | Semi_Final | Final | Practice
-    match_date: Optional[str] = None            # ISO YYYY-MM-DD — start date (from_date)
-    start_time: Optional[str] = None            # HH:MM (24h)
+    match_date: str | None = None            # ISO YYYY-MM-DD — start date (from_date)
+    start_time: str | None = None            # HH:MM (24h)
     home_team: str
     away_team: str
-    venue_name: Optional[str] = None
-    ground_name: Optional[str] = None
-    result: Optional[str] = None                # free-text result note when completed
-    notes: Optional[str] = None
-    ground_id: Optional[str] = None             # MPCA-232 · link to Ground.id (venue picker)
+    venue_name: str | None = None
+    ground_name: str | None = None
+    result: str | None = None                # free-text result note when completed
+    notes: str | None = None
+    ground_id: str | None = None             # MPCA-232 · link to Ground.id (venue picker)
     # MPCA-217 · Days-engine fields — feed the unified budget compute engine.
     days: int = 1                               # scheduled days (span). 1 for LO, 3/4/5 for Multi-Day.
-    actual_days: Optional[int] = None           # early-finish override; blank = play the full span
-    nmd_manual: Optional[int] = None            # override auto-derived NMD (blank = calendar-derived)
+    actual_days: int | None = None           # early-finish override; blank = play the full span
+    nmd_manual: int | None = None            # override auto-derived NMD (blank = calendar-derived)
     other_pax: int = 0                          # VIPs / ground staff counted in AllPax driver
-    pool_id: Optional[str] = None               # mirrors setup_meta.division_pools/district_pools id
-    format: Optional[str] = None                # per-match format override (defaults to tournament.format)
-    officials_ids: Optional[Dict[str, List[str]]] = None   # {umpires:[], scorers:[], selectors:[], observers:[]}
+    pool_id: str | None = None               # mirrors setup_meta.division_pools/district_pools id
+    format: str | None = None                # per-match format override (defaults to tournament.format)
+    officials_ids: dict[str, list[str]] | None = None   # {umpires:[], scorers:[], selectors:[], observers:[]}
     # MPCA-218 · Utility-parity fields — allow inline card editor
-    label: Optional[str] = None                 # display label (e.g. "League R1", "SF-1")
-    squad: Optional[int] = None                 # per-match squad size override (blank = tournament default)
-    to_date: Optional[str] = None               # explicit end date (else derived from match_date + days - 1)
+    label: str | None = None                 # display label (e.g. "League R1", "SF-1")
+    squad: int | None = None                 # per-match squad size override (blank = tournament default)
+    to_date: str | None = None               # explicit end date (else derived from match_date + days - 1)
     # MPCA-222 · Editable driver overrides per budget head (utility-parity).
     # Shape: {head_key: qty_override}. Blank/missing = compute from formula.
-    driver_overrides: Optional[Dict[str, int]] = None
+    driver_overrides: dict[str, int] | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class TournamentMatchCreate(BaseModel):
     stage: str = "League"
-    match_date: Optional[str] = None
-    start_time: Optional[str] = None
+    match_date: str | None = None
+    start_time: str | None = None
     home_team: str
     away_team: str
-    venue_name: Optional[str] = None
-    ground_name: Optional[str] = None
-    notes: Optional[str] = None
-    ground_id: Optional[str] = None             # MPCA-232 · venue picker
+    venue_name: str | None = None
+    ground_name: str | None = None
+    notes: str | None = None
+    ground_id: str | None = None             # MPCA-232 · venue picker
     # MPCA-217 · Days-engine
     days: int = 1
-    actual_days: Optional[int] = None
-    nmd_manual: Optional[int] = None
+    actual_days: int | None = None
+    nmd_manual: int | None = None
     other_pax: int = 0
-    pool_id: Optional[str] = None
-    format: Optional[str] = None
-    officials_ids: Optional[Dict[str, List[str]]] = None
+    pool_id: str | None = None
+    format: str | None = None
+    officials_ids: dict[str, list[str]] | None = None
     # MPCA-218 · Utility-parity
-    label: Optional[str] = None
-    squad: Optional[int] = None
-    to_date: Optional[str] = None
+    label: str | None = None
+    squad: int | None = None
+    to_date: str | None = None
     # MPCA-222 · Editable driver overrides per budget head
-    driver_overrides: Optional[Dict[str, int]] = None
+    driver_overrides: dict[str, int] | None = None
 
 
 class TournamentMatchPatch(BaseModel):
-    stage: Optional[str] = None
-    match_date: Optional[str] = None
-    start_time: Optional[str] = None
-    home_team: Optional[str] = None
-    away_team: Optional[str] = None
-    venue_name: Optional[str] = None
-    ground_name: Optional[str] = None
-    result: Optional[str] = None
-    notes: Optional[str] = None
-    ground_id: Optional[str] = None             # MPCA-232 · venue picker
+    stage: str | None = None
+    match_date: str | None = None
+    start_time: str | None = None
+    home_team: str | None = None
+    away_team: str | None = None
+    venue_name: str | None = None
+    ground_name: str | None = None
+    result: str | None = None
+    notes: str | None = None
+    ground_id: str | None = None             # MPCA-232 · venue picker
     # MPCA-217 · Days-engine
-    days: Optional[int] = None
-    actual_days: Optional[int] = None
-    nmd_manual: Optional[int] = None
-    other_pax: Optional[int] = None
-    pool_id: Optional[str] = None
-    format: Optional[str] = None
-    officials_ids: Optional[Dict[str, List[str]]] = None
+    days: int | None = None
+    actual_days: int | None = None
+    nmd_manual: int | None = None
+    other_pax: int | None = None
+    pool_id: str | None = None
+    format: str | None = None
+    officials_ids: dict[str, list[str]] | None = None
     # MPCA-218 · Utility-parity
-    label: Optional[str] = None
-    squad: Optional[int] = None
-    to_date: Optional[str] = None
+    label: str | None = None
+    squad: int | None = None
+    to_date: str | None = None
     # MPCA-222 · Editable driver overrides per budget head
-    driver_overrides: Optional[Dict[str, int]] = None
+    driver_overrides: dict[str, int] | None = None
 
 
-@api_router.get("/tournaments/{tid}/matches", response_model=List[TournamentMatch])
+@api_router.get("/tournaments/{tid}/matches", response_model=list[TournamentMatch])
 async def list_tournament_matches(tid: str):
     if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
         raise HTTPException(404, "Tournament not found")
@@ -120,10 +121,10 @@ async def list_tournament_matches(tid: str):
     return docs
 
 
-@api_router.get("/matches", response_model=List[TournamentMatch])
+@api_router.get("/matches", response_model=list[TournamentMatch])
 async def list_all_matches(
-    fiscal_cycle: Optional[str] = None,
-    month: Optional[str] = None,        # e.g. "2026-04"
+    fiscal_cycle: str | None = None,
+    month: str | None = None,        # e.g. "2026-04"
 ):
     """M38f · Global match feed for the Tournament Calendar tab so individual
     match fixtures added inside a tournament's Match Calendar appear
@@ -147,8 +148,8 @@ async def list_all_matches(
 async def create_tournament_match(
     tid: str,
     payload: TournamentMatchCreate,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
         raise HTTPException(404, "Tournament not found")
@@ -164,8 +165,8 @@ async def create_tournament_match(
 @api_router.patch("/tournaments/{tid}/matches/{mid}", response_model=TournamentMatch)
 async def patch_tournament_match(
     tid: str, mid: str, patch: TournamentMatchPatch,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     await assert_wiring_owner(tid, "match_calendar", x_body_type, x_body_code,
                               action_label="match edit")
@@ -180,8 +181,8 @@ async def patch_tournament_match(
 @api_router.delete("/tournaments/{tid}/matches/{mid}")
 async def delete_tournament_match(
     tid: str, mid: str,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     await assert_wiring_owner(tid, "match_calendar", x_body_type, x_body_code,
                               action_label="match delete")
@@ -197,30 +198,30 @@ class TournamentReceipt(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     tournament_id: str
-    participant_body_code: Optional[str] = None  # M26 · attach receipt to a participant row
+    participant_body_code: str | None = None  # M26 · attach receipt to a participant row
     receipt_no: str
     receipt_date: str                            # ISO YYYY-MM-DD
     amount_inr: float
     mode: str = "NEFT"                           # NEFT | RTGS | Cheque | Cash
-    reference_no: Optional[str] = None           # UTR / cheque no
-    linked_claim_id: Optional[str] = None
-    remarks: Optional[str] = None
-    recorded_by_name: Optional[str] = None
+    reference_no: str | None = None           # UTR / cheque no
+    linked_claim_id: str | None = None
+    remarks: str | None = None
+    recorded_by_name: str | None = None
     recorded_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class TournamentReceiptCreate(BaseModel):
-    participant_body_code: Optional[str] = None
+    participant_body_code: str | None = None
     receipt_date: str
     amount_inr: float
     mode: str = "NEFT"
-    reference_no: Optional[str] = None
-    linked_claim_id: Optional[str] = None
-    remarks: Optional[str] = None
-    recorded_by_name: Optional[str] = None
+    reference_no: str | None = None
+    linked_claim_id: str | None = None
+    remarks: str | None = None
+    recorded_by_name: str | None = None
 
 
-@api_router.get("/tournaments/{tid}/receipts", response_model=List[TournamentReceipt])
+@api_router.get("/tournaments/{tid}/receipts", response_model=list[TournamentReceipt])
 async def list_tournament_receipts(tid: str):
     if not await db.tournaments.find_one({"id": tid}, {"_id": 1}):
         raise HTTPException(404, "Tournament not found")
@@ -301,7 +302,7 @@ async def finance_summary_by_body(tid: str):
     def _bucket_key(code):
         return code or "UNKNOWN"
 
-    rows: Dict[str, dict] = {}
+    rows: dict[str, dict] = {}
 
     def _get(code):
         k = _bucket_key(code)
@@ -358,7 +359,7 @@ async def finance_summary_by_body(tid: str):
             r["mpca_approved_inr"] = float(c.get("approved_amount_inr") or c.get("total_claim_inr") or 0)
 
     # Receipts — MPCA payments back to Divisions (advances + reimbursements).
-    approved_at_by_body: Dict[str, str] = {c.get("body_id"): c.get("approved_at") or "" for c in claims if c.get("status") == "Approved"}
+    approved_at_by_body: dict[str, str] = {c.get("body_id"): c.get("approved_at") or "" for c in claims if c.get("status") == "Approved"}
     for r_doc in receipts:
         code = r_doc.get("participant_body_code")
         # Skip receipts with no body attribution (legacy) so we don't inflate.
@@ -417,7 +418,7 @@ async def finance_summary_by_body(tid: str):
 # ───────────────────────────── Input Variables + Calendar Lock ─────────────────────────────
 
 class InputVariablesPayload(BaseModel):
-    input_variables: Dict[str, Any]
+    input_variables: dict[str, Any]
 
 
 @api_router.patch("/tournaments/{tid}/input-variables")
@@ -465,7 +466,7 @@ async def auto_split_budget(tid: str):
     cycle = t.get("fiscal_cycle") or "2025-26"
 
     # Compute the full scheme allocation once
-    from routes.scheme_calc import compute_budget, ComputeRequest
+    from routes.scheme_calc import ComputeRequest, compute_budget
     preview = await compute_budget(scheme_code, ComputeRequest(inputs=input_vars))
     full_heads = preview.get("head_allocations") or []
     if not full_heads:
@@ -490,8 +491,8 @@ async def auto_split_budget(tid: str):
         count = await db.tournament_budgets.count_documents({"fiscal_cycle": cycle})
         return f"TB-{cycle}-{count + 1:03d}"
 
-    created: List[dict] = []
-    skipped: List[dict] = []
+    created: list[dict] = []
+    skipped: list[dict] = []
 
     for p in participants:
         body_code = p.get("body_code")
@@ -549,7 +550,7 @@ async def auto_split_budget(tid: str):
 
 
 class SetupMetaPayload(BaseModel):
-    setup_meta: Dict[str, Any]
+    setup_meta: dict[str, Any]
 
 
 @api_router.patch("/tournaments/{tid}/setup-meta")
@@ -601,7 +602,7 @@ async def lock_tournament_calendar(tid: str, locked: bool = True):
 
 # ───────────────────────────── Progress (5 phases · derived) ─────────────────────────────
 
-def _step(key: str, label: str, done: bool, note: Optional[str] = None) -> dict:
+def _step(key: str, label: str, done: bool, note: str | None = None) -> dict:
     return {"key": key, "label": label, "done": done, "note": note}
 
 
@@ -789,9 +790,9 @@ async def tournament_financial_summary(tid: str):
 # ───────────────────────────── Closure Letter ─────────────────────────────
 
 class ClosureLetterPayload(BaseModel):
-    issued_by_name: Optional[str] = None
-    issued_by_post: Optional[str] = None
-    additional_notes: Optional[str] = None
+    issued_by_name: str | None = None
+    issued_by_post: str | None = None
+    additional_notes: str | None = None
     force: bool = False   # M26 Phase D · bypass closure-readiness guard
 
 
@@ -799,9 +800,9 @@ class ClosureLetterPayload(BaseModel):
 async def generate_closure_letter(
     tid: str,
     payload: ClosureLetterPayload,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
-    x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
+    x_persona_name: str | None = Header(None, alias="X-User-Name"),
 ):
     # MPCA-243 · Ship 1 · Wiring-driven owner guard. Closure follows the
     # `finance_console.owner` per the wiring config (BCCI/Inter-Div = MPCA,
@@ -819,7 +820,9 @@ async def generate_closure_letter(
         {"tournament_id": tid, "removed_at": None}
     )
     if active_participants > 0 and not getattr(payload, "force", False):
-        from routes.tournament_participations import closure_readiness  # local import to avoid cycles
+        from routes.tournament_participations import (
+            closure_readiness,  # local import to avoid cycles
+        )
         readiness = await closure_readiness(tid)
         if not readiness["ready_for_closure"]:
             raise HTTPException(
@@ -926,13 +929,21 @@ async def get_closure_letter_pdf(tid: str):
 
     Returns application/pdf. Falls back gracefully if any section has no data.
     """
-    from fastapi.responses import Response
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
     import io
+
+    from fastapi.responses import Response
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (
+        PageBreak,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
 
     t = await db.tournaments.find_one({"id": tid}, {"_id": 0})
     if not t:
@@ -1247,7 +1258,7 @@ async def get_closure_letter_pdf(tid: str):
     if signed_links:
         try:
             import requests as _req
-            from pypdf import PdfWriter, PdfReader
+            from pypdf import PdfWriter
             writer = PdfWriter()
             writer.append(fileobj=io.BytesIO(buf.getvalue()))
             fetched = 0
@@ -1287,9 +1298,9 @@ class ClosureSignedUploadPayload(BaseModel):
 @api_router.post("/tournaments/{tid}/closure-signed-upload")
 async def upload_signed_closure(
     tid: str, payload: ClosureSignedUploadPayload,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
-    x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
+    x_persona_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """Owner uploads a signed copy of the closure letter. Wiring-driven — the
     persona must match `tournament_closure.owner` for this tournament type."""
@@ -1312,9 +1323,9 @@ async def upload_signed_closure(
 @api_router.post("/tournaments/{tid}/close")
 async def close_tournament(
     tid: str,
-    x_body_type: Optional[str] = Depends(principal_body_type),
-    x_body_code: Optional[str] = Depends(principal_body_code),
-    x_persona_name: Optional[str] = Header(None, alias="X-User-Name"),
+    x_body_type: str | None = Depends(principal_body_type),
+    x_body_code: str | None = Depends(principal_body_code),
+    x_persona_name: str | None = Header(None, alias="X-User-Name"),
 ):
     """Final close — flips tournament.status → Completed. Requires (a) the
     signed closure PDF to be uploaded, (b) the caller's body_type to match

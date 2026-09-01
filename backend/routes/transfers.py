@@ -1,30 +1,29 @@
 """Routes · Player Transfer NOC Workflow"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
+from datetime import datetime, timezone
+
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
-from core.shared_services import next_seq  # H6 · atomic sequence
-from models import TransferRequest, TransferCreate, TransferStatus, ClaimAction, ApprovalStep, Player
 from core.helpers import _next_noc_no, _notify_for_transfer
-
+from core.infra import api_router, db
+from core.shared_services import next_seq  # H6 · atomic sequence
+from models import (
+    ApprovalStep,
+    ClaimAction,
+    TransferCreate,
+    TransferRequest,
+    TransferStatus,
+)
 
 # ---------------- Routes: Player Transfers (NOC Workflow) ----------------
+# Local `_next_noc_no` removed — imported from `core.helpers` (F811).
 
 
-async def _next_noc_no(cycle: str) -> str:
-    seq = await next_seq(f"noc:{cycle}", lambda: db.transfer_requests.count_documents({"fiscal_cycle": cycle}))
-    return f"NOC-{cycle}-{seq:03d}"
-
-
-@api_router.get("/transfers", response_model=List[TransferRequest])
+@api_router.get("/transfers", response_model=list[TransferRequest])
 async def list_transfers(
-    player_id: Optional[str] = None,
-    from_body_id: Optional[str] = None,
-    to_body_id: Optional[str] = None,
-    status: Optional[TransferStatus] = None,
+    player_id: str | None = None,
+    from_body_id: str | None = None,
+    to_body_id: str | None = None,
+    status: TransferStatus | None = None,
     skip: int = 0,
     limit: int = 500,
 ):

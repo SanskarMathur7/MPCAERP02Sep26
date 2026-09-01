@@ -1,13 +1,7 @@
 """Routes · Dashboard summary + Fairplay"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
-from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
-from models import Body, Player
-from core.helpers import _division_score, _utilization_score
+from core.helpers import _division_score
+from core.infra import api_router, db
 
 
 @api_router.get("/dashboard/stats")

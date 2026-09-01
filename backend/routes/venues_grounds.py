@@ -8,21 +8,28 @@ Three lightweight modules:
 """
 import re
 from datetime import datetime, timezone
-from typing import List, Optional
-from fastapi import HTTPException
 
-from core.infra import db, api_router
-from core.scoping import get_scope, body_scope
+from fastapi import HTTPException, Request
+
 from core.helpers import _create_notification
+from core.infra import api_router, db
+from core.scoping import body_scope, get_scope
 from models import (
-    Venue, VenueCreate, VenueCategory,
-    Ground, GroundCreate, GroundStaffMember, GroundType,
-    GroundExpense, GroundExpenseCreate, GroundExpenseAction,
-    GroundExpenseType, GroundExpenseStatus,
-    TournamentFormat, ApprovalStep,
+    ApprovalStep,
+    Ground,
+    GroundCreate,
+    GroundExpense,
+    GroundExpenseAction,
+    GroundExpenseCreate,
+    GroundExpenseStatus,
+    GroundExpenseType,
+    GroundStaffMember,
+    GroundType,
+    TournamentFormat,
+    Venue,
+    VenueCategory,
+    VenueCreate,
 )
-from fastapi import Request
-
 
 # ──────────────────── Helpers ────────────────────
 
@@ -44,15 +51,15 @@ async def _next_ge_no(cycle: str) -> str:
 
 # ──────────────────── Venues ────────────────────
 
-@api_router.get("/venues", response_model=List[Venue])
+@api_router.get("/venues", response_model=list[Venue])
 async def list_venues(
     request: Request,
-    category: Optional[VenueCategory] = None,
-    body_id: Optional[str] = None,
-    owner_body_id: Optional[str] = None,
-    managed_by_body_id: Optional[str] = None,
-    bcci_approval: Optional[str] = None,
-    city: Optional[str] = None,
+    category: VenueCategory | None = None,
+    body_id: str | None = None,
+    owner_body_id: str | None = None,
+    managed_by_body_id: str | None = None,
+    bcci_approval: str | None = None,
+    city: str | None = None,
 ):
     q: dict = {}
     if category:
@@ -183,12 +190,12 @@ async def delete_venue(vid: str):
 
 # ──────────────────── Grounds ────────────────────
 
-@api_router.get("/grounds", response_model=List[Ground])
+@api_router.get("/grounds", response_model=list[Ground])
 async def list_grounds(
-    venue_id: Optional[str] = None,
-    type: Optional[GroundType] = None,
-    format: Optional[TournamentFormat] = None,
-    owner_body_codes: Optional[str] = None,   # M29 · comma-separated body codes
+    venue_id: str | None = None,
+    type: GroundType | None = None,
+    format: TournamentFormat | None = None,
+    owner_body_codes: str | None = None,   # M29 · comma-separated body codes
 ):
     q: dict = {}
     if venue_id:
@@ -289,14 +296,14 @@ async def delete_ground(gid: str):
 
 # ──────────────────── Ground Expenses ────────────────────
 
-@api_router.get("/ground-expenses", response_model=List[GroundExpense])
+@api_router.get("/ground-expenses", response_model=list[GroundExpense])
 async def list_ground_expenses(
-    ground_id: Optional[str] = None,
-    body_id: Optional[str] = None,
-    status: Optional[GroundExpenseStatus] = None,
-    expense_type: Optional[GroundExpenseType] = None,
-    tournament_id: Optional[str] = None,
-    fiscal_cycle: Optional[str] = None,
+    ground_id: str | None = None,
+    body_id: str | None = None,
+    status: GroundExpenseStatus | None = None,
+    expense_type: GroundExpenseType | None = None,
+    tournament_id: str | None = None,
+    fiscal_cycle: str | None = None,
 ):
     q: dict = {}
     if ground_id:
@@ -406,7 +413,7 @@ async def delete_ground_expense(eid: str):
 
 
 @api_router.get("/ground-expenses-stats/summary")
-async def ground_expenses_stats(ground_id: Optional[str] = None, fiscal_cycle: Optional[str] = None):
+async def ground_expenses_stats(ground_id: str | None = None, fiscal_cycle: str | None = None):
     q: dict = {}
     if ground_id:
         q["ground_id"] = ground_id

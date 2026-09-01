@@ -10,15 +10,15 @@ Payroll register per fiscal-month can be Drafted → Finalised (locked).
 Finalising creates a Journal Voucher entry in the vouchers collection so the
 ledger stays consistent with Sprint 1 (Payroll → Salaries expense · Bank credit).
 """
-from datetime import datetime, timezone
-from typing import List, Literal, Optional
 import uuid
+from datetime import datetime, timezone
+from typing import Literal
+
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
-from core.shared_services import next_code, write_audit_log, indian_fy
-
+from core.infra import api_router, db
+from core.shared_services import indian_fy, next_code, write_audit_log
 
 EmploymentType = Literal["Permanent", "Contract", "Consultant", "Intern", "Retainer"]
 EmployeeStatus = Literal["Active", "On_Leave", "Resigned", "Terminated"]
@@ -36,16 +36,16 @@ class EmployeeBase(BaseModel):
     body_id: str = "MPCA"
     name: str
     designation: str
-    department: Optional[str] = None
+    department: str | None = None
     employment_type: EmploymentType = "Permanent"
     date_of_joining: str
-    date_of_leaving: Optional[str] = None
-    pan: Optional[str] = None
-    aadhaar: Optional[str] = None
-    bank_account_no: Optional[str] = None
-    bank_ifsc: Optional[str] = None
-    contact_phone: Optional[str] = None
-    contact_email: Optional[str] = None
+    date_of_leaving: str | None = None
+    pan: str | None = None
+    aadhaar: str | None = None
+    bank_account_no: str | None = None
+    bank_ifsc: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
     basic_pay_inr: float = Field(gt=0)
     hra_inr: float = 0.0
     special_allowance_inr: float = 0.0
@@ -63,7 +63,7 @@ class Employee(EmployeeBase):
     employee_no: str = ""  # EMP/MPCA/2026-27/00001
     status: EmployeeStatus = "Active"
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
 
 class EmployeeCreate(EmployeeBase):
@@ -97,36 +97,36 @@ class PayrollRegister(BaseModel):
     period: str  # "2026-02" year-month
     status: Literal["Draft", "Finalised"] = "Draft"
     generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    finalised_at: Optional[str] = None
-    finalised_by: Optional[str] = None
-    rows: List[PayrollRow] = []
+    finalised_at: str | None = None
+    finalised_by: str | None = None
+    rows: list[PayrollRow] = []
     total_gross_inr: float = 0.0
     total_deductions_inr: float = 0.0
     total_net_inr: float = 0.0
-    voucher_id: Optional[str] = None
+    voucher_id: str | None = None
 
 
 class PayrollGeneratePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     period: str  # "2026-02"
     body_id: str = "MPCA"
-    actor_name: Optional[str] = "MPCA Accounts"
+    actor_name: str | None = "MPCA Accounts"
 
 
 class PayrollFinalisePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    actor_name: Optional[str] = "MPCA Accounts"
-    actor_role: Optional[str] = "mpca_accounts"
-    disbursement_date: Optional[str] = None
-    note: Optional[str] = None
+    actor_name: str | None = "MPCA Accounts"
+    actor_role: str | None = "mpca_accounts"
+    disbursement_date: str | None = None
+    note: str | None = None
 
 
 # ═══════════════════ EMPLOYEE ENDPOINTS ═══════════════════
 
-@api_router.get("/employees", response_model=List[Employee])
-async def list_employees(body_id: Optional[str] = None,
-                         status: Optional[EmployeeStatus] = None,
-                         employment_type: Optional[EmploymentType] = None,
+@api_router.get("/employees", response_model=list[Employee])
+async def list_employees(body_id: str | None = None,
+                         status: EmployeeStatus | None = None,
+                         employment_type: EmploymentType | None = None,
                          skip: int = 0,
                          limit: int = 1000):
     q: dict = {}
@@ -160,7 +160,7 @@ async def create_employee(payload: EmployeeCreate):
 
 
 @api_router.get("/employees-stats/summary")
-async def employees_summary(body_id: Optional[str] = None):
+async def employees_summary(body_id: str | None = None):
     q: dict = {}
     if body_id: q["body_id"] = body_id
     docs = await db.employees.find(q, {"_id": 0}).to_list(2000)
@@ -255,10 +255,10 @@ async def generate_payroll(payload: PayrollGeneratePayload):
     return register
 
 
-@api_router.get("/payroll/registers", response_model=List[PayrollRegister])
-async def list_registers(body_id: Optional[str] = None,
-                         fiscal_cycle: Optional[str] = None,
-                         status: Optional[str] = None,
+@api_router.get("/payroll/registers", response_model=list[PayrollRegister])
+async def list_registers(body_id: str | None = None,
+                         fiscal_cycle: str | None = None,
+                         status: str | None = None,
                          skip: int = 0,
                          limit: int = 200):
     q: dict = {}
@@ -322,7 +322,7 @@ async def finalise_register(rid: str, payload: PayrollFinalisePayload):
 
 
 @api_router.get("/payroll-stats/summary")
-async def payroll_summary(fiscal_cycle: Optional[str] = None):
+async def payroll_summary(fiscal_cycle: str | None = None):
     q: dict = {}
     if fiscal_cycle: q["fiscal_cycle"] = fiscal_cycle
     docs = await db.payroll_registers.find(q, {"_id": 0}).to_list(200)

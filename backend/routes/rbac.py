@@ -20,15 +20,14 @@ Audit Log:
   • Every write in this module is logged.
   • Callers from other modules can log via `log_audit_event(...)`.
 """
-from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
 import uuid
+from datetime import datetime, timezone
+from typing import Any
 
-from fastapi import HTTPException, Request, Depends
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
-
+from core.infra import api_router, db
 
 # ─────────────────────────── Permission Catalog ───────────────────────────
 # Format: "module.action". Additions here must also be reflected in the
@@ -55,15 +54,15 @@ MODULES = {
     "disclosures":          ["view", "submit", "publish"],
     "rbac":                 ["view", "edit_roles", "assign_users", "audit_log"],
 }
-ALL_PERMISSIONS: List[str] = [f"{m}.{a}" for m, actions in MODULES.items() for a in actions]
+ALL_PERMISSIONS: list[str] = [f"{m}.{a}" for m, actions in MODULES.items() for a in actions]
 
 
 # ─────────────────────────── Default Role → Permissions matrix ───────────────────────────
-def _all(*mods) -> List[str]:
+def _all(*mods) -> list[str]:
     return [p for m in mods for p in [f"{m}.{a}" for a in MODULES[m]]]
 
 
-DEFAULT_ROLE_MATRIX: Dict[str, Dict[str, Any]] = {
+DEFAULT_ROLE_MATRIX: dict[str, dict[str, Any]] = {
     "president": {
         "name": "President",
         "body_scope": "State",
@@ -263,18 +262,10 @@ DEFAULT_ROLE_MATRIX: Dict[str, Dict[str, Any]] = {
             "receipts.view", "receipts.record",
         ],
     },
-    "joint_secretary": {
-        "name": "Joint Secretary",
-        "body_scope": "State",
-        "description": "Assists Hon. Secretary; drafts and coordinates but does not final-approve.",
-        "permissions": [
-            "members.view", "members.edit", "members.create",
-            "tournaments.view", "tournaments.edit",
-            "governance.view", "governance.schedule",
-            "calendar.view", "calendar.create", "calendar.edit",
-            "disclosures.view", "disclosures.submit",
-        ],
-    },
+    # `joint_secretary` and `manager` roles are defined later in the same
+    # ROLES dict (search "joint_secretary" further down). Duplicate literals
+    # here were flagged by ruff (F601) — kept the later definitions since
+    # dict-literal semantics let them win anyway.
     "manager": {
         "name": "Manager",
         "body_scope": "State",
@@ -317,38 +308,38 @@ class Role(BaseModel):
     name: str
     body_scope: str                          # State | Division | District | Any
     description: str
-    permissions: List[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
     is_system: bool = True                    # seeded roles are system-defined
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class RolePatch(BaseModel):
-    permissions: Optional[List[str]] = None
-    description: Optional[str] = None
-    name: Optional[str] = None
+    permissions: list[str] | None = None
+    description: str | None = None
+    name: str | None = None
 
 
 class RBACUser(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     display_name: str
-    honorific: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
+    honorific: str | None = None
+    email: str | None = None
+    phone: str | None = None
     role_id: str                             # single role per user (per user's choice Q2b)
     body_code: str = "MPCA"                  # scope
     body_type: str = "State"                  # State | Division | District | Any
     is_active: bool = True
-    persona_id: Optional[str] = None          # if bootstrapped from a fixed persona chip
+    persona_id: str | None = None          # if bootstrapped from a fixed persona chip
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class RBACUserCreate(BaseModel):
     display_name: str
-    honorific: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
+    honorific: str | None = None
+    email: str | None = None
+    phone: str | None = None
     role_id: str
     body_code: str = "MPCA"
     body_type: str = "State"
@@ -356,37 +347,37 @@ class RBACUserCreate(BaseModel):
     # Iter 113 · Admin-set-password path (option a in the roll-out plan).
     # If BOTH email + initial_password are provided, the row is written with a
     # bcrypt password_hash so the person can sign in.
-    initial_password: Optional[str] = None
+    initial_password: str | None = None
     force_password_reset: bool = True
 
 
 class RBACUserPatch(BaseModel):
-    display_name: Optional[str] = None
-    honorific: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    role_id: Optional[str] = None
-    body_code: Optional[str] = None
-    body_type: Optional[str] = None
-    is_active: Optional[bool] = None
+    display_name: str | None = None
+    honorific: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    role_id: str | None = None
+    body_code: str | None = None
+    body_type: str | None = None
+    is_active: bool | None = None
 
 
 class AuditEvent(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    actor_name: Optional[str] = None
-    actor_role: Optional[str] = None
-    actor_body: Optional[str] = None
+    actor_name: str | None = None
+    actor_role: str | None = None
+    actor_body: str | None = None
     action: str                              # rbac.role_edited / rbac.user_created / claim.approved etc.
     entity: str                              # role:hon_secretary  /  user:abc  /  claim:xyz
-    changes: Dict[str, Any] = Field(default_factory=dict)
-    reason: Optional[str] = None
+    changes: dict[str, Any] = Field(default_factory=dict)
+    reason: str | None = None
 
 
 # ─────────────────────────── Utility: extract actor from request headers ───────────────────────────
 
-def _actor_from_request(request: Request) -> Dict[str, Optional[str]]:
+def _actor_from_request(request: Request) -> dict[str, str | None]:
     """The frontend AuthContext forwards these headers on every axios call."""
     h = request.headers
     return {
@@ -400,7 +391,7 @@ def _actor_from_request(request: Request) -> Dict[str, Optional[str]]:
 RBAC_ADMIN_PERSONA_IDS = {"president", "secretary", "system-administrator", "system_administrator"}
 
 
-async def require_rbac_admin(request: Request) -> Dict[str, Optional[str]]:
+async def require_rbac_admin(request: Request) -> dict[str, str | None]:
     """FastAPI dependency: gate every RBAC endpoint to MPCA President /
     Hon. Secretary.  Iter 108 (SEC-002): auth is now enforced by the global
     AuthMiddleware, so `request.state.principal` is trusted; the no-header
@@ -424,8 +415,8 @@ async def require_rbac_admin(request: Request) -> Dict[str, Optional[str]]:
 # ─────────────────────────── Audit log helper (used by other modules) ───────────────────────────
 
 async def log_audit_event(
-    *, actor_name: Optional[str], actor_role: Optional[str], actor_body: Optional[str],
-    action: str, entity: str, changes: Optional[Dict[str, Any]] = None, reason: Optional[str] = None,
+    *, actor_name: str | None, actor_role: str | None, actor_body: str | None,
+    action: str, entity: str, changes: dict[str, Any] | None = None, reason: str | None = None,
 ) -> None:
     event = AuditEvent(
         actor_name=actor_name, actor_role=actor_role, actor_body=actor_body,
@@ -501,13 +492,13 @@ async def seed_roles_and_permissions() -> None:
 # ─────────────────────────── ROUTES ───────────────────────────
 
 @api_router.get("/rbac/permission-catalog")
-async def get_permission_catalog(_: Dict = Depends(require_rbac_admin)):
+async def get_permission_catalog(_: dict = Depends(require_rbac_admin)):
     """Returns the entire {module: [action, ...]} catalog for the UI matrix."""
     return {"modules": MODULES, "all_permissions": ALL_PERMISSIONS}
 
 
-@api_router.get("/rbac/roles", response_model=List[Role])
-async def list_roles(_: Dict = Depends(require_rbac_admin)):
+@api_router.get("/rbac/roles", response_model=list[Role])
+async def list_roles(_: dict = Depends(require_rbac_admin)):
     docs = await db.roles.find({}, {"_id": 0}).to_list(500)
     # Ordered: MPCA first, then Division, District, Any
     order = {"State": 0, "Division": 1, "District": 2, "Any": 3}
@@ -516,7 +507,7 @@ async def list_roles(_: Dict = Depends(require_rbac_admin)):
 
 
 @api_router.get("/rbac/roles/{role_id}", response_model=Role)
-async def get_role(role_id: str, _: Dict = Depends(require_rbac_admin)):
+async def get_role(role_id: str, _: dict = Depends(require_rbac_admin)):
     r = await db.roles.find_one({"id": role_id}, {"_id": 0})
     if not r:
         raise HTTPException(404, "Role not found")
@@ -524,7 +515,7 @@ async def get_role(role_id: str, _: Dict = Depends(require_rbac_admin)):
 
 
 @api_router.patch("/rbac/roles/{role_id}", response_model=Role)
-async def patch_role(role_id: str, patch: RolePatch, request: Request, actor: Dict = Depends(require_rbac_admin)):
+async def patch_role(role_id: str, patch: RolePatch, request: Request, actor: dict = Depends(require_rbac_admin)):
     updates = {k: v for k, v in patch.model_dump(exclude_none=True).items()}
     if not updates:
         raise HTTPException(400, "Nothing to update.")
@@ -561,7 +552,6 @@ _POST_TITLE_TO_ROLE_ID = {
     "President":                  "president",
     "Vice President":             "vice_president",
     "Hon. Secretary":             "hon_secretary",
-    "Chief Accounts Officer":     "hon_treasurer",
     "Internal Auditor":           "internal_auditor",
     "Hon. Treasurer":             "hon_treasurer",
     "Joint Secretary":            "joint_secretary",
@@ -608,8 +598,8 @@ def _normalize_persona_row(u: dict) -> dict:
     }
 
 
-@api_router.get("/rbac/users", response_model=List[RBACUser])
-async def list_users(_: Dict = Depends(require_rbac_admin)):
+@api_router.get("/rbac/users", response_model=list[RBACUser])
+async def list_users(_: dict = Depends(require_rbac_admin)):
     raw = await db.users.find({}, {"_id": 0}).to_list(1000)
     docs = [_normalize_persona_row(u) for u in raw]
     docs.sort(key=lambda u: (0 if u.get("body_type") == "State" else 1 if u.get("body_type") == "Division" else 2,
@@ -618,7 +608,7 @@ async def list_users(_: Dict = Depends(require_rbac_admin)):
 
 
 @api_router.post("/rbac/users", response_model=RBACUser)
-async def create_user(payload: RBACUserCreate, request: Request, actor: Dict = Depends(require_rbac_admin)):
+async def create_user(payload: RBACUserCreate, request: Request, actor: dict = Depends(require_rbac_admin)):
     # Validate role exists
     if not await db.roles.find_one({"id": payload.role_id}, {"_id": 1}):
         raise HTTPException(400, f"Unknown role_id: {payload.role_id}")
@@ -647,7 +637,7 @@ async def create_user(payload: RBACUserCreate, request: Request, actor: Dict = D
 
 
 @api_router.post("/rbac/users/{uid}/reset-password")
-async def reset_password(uid: str, request: Request, actor: Dict = Depends(require_rbac_admin)):
+async def reset_password(uid: str, request: Request, actor: dict = Depends(require_rbac_admin)):
     """Iter 113 · Admin resets a user's password.
     Body: { "new_password": "...", "force_reset": true }
     """
@@ -678,7 +668,7 @@ async def reset_password(uid: str, request: Request, actor: Dict = Depends(requi
 
 
 @api_router.patch("/rbac/users/{uid}", response_model=RBACUser)
-async def patch_user(uid: str, patch: RBACUserPatch, request: Request, actor: Dict = Depends(require_rbac_admin)):
+async def patch_user(uid: str, patch: RBACUserPatch, request: Request, actor: dict = Depends(require_rbac_admin)):
     updates = {k: v for k, v in patch.model_dump(exclude_none=True).items()}
     if not updates:
         raise HTTPException(400, "Nothing to update.")
@@ -706,7 +696,7 @@ async def patch_user(uid: str, patch: RBACUserPatch, request: Request, actor: Di
 
 
 @api_router.delete("/rbac/users/{uid}")
-async def delete_user(uid: str, request: Request, actor: Dict = Depends(require_rbac_admin)):
+async def delete_user(uid: str, request: Request, actor: dict = Depends(require_rbac_admin)):
     before = await db.users.find_one({"id": uid}, {"_id": 0})
     if not before:
         raise HTTPException(404, "User not found")
@@ -722,8 +712,8 @@ async def delete_user(uid: str, request: Request, actor: Dict = Depends(require_
 # ─────── Audit log ───────
 
 @api_router.get("/rbac/audit-log")
-async def get_audit_log(limit: int = 200, since: Optional[str] = None, _: Dict = Depends(require_rbac_admin)):
-    q: Dict[str, Any] = {}
+async def get_audit_log(limit: int = 200, since: str | None = None, _: dict = Depends(require_rbac_admin)):
+    q: dict[str, Any] = {}
     if since:
         q["at"] = {"$gte": since}
     docs = await db.audit_log.find(q, {"_id": 0}).sort("at", -1).limit(min(limit, 1000)).to_list(1000)

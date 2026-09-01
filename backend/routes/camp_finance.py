@@ -28,41 +28,39 @@ Endpoints exposed:
 Guarded by `is_division_owned_budget()` — if the wiring says the tournament
 is MPCA-owned, all endpoints return HTTP 400 with a clear rerouting hint.
 """
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
-from fastapi import HTTPException, Header, Depends, Request
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
-from pydantic import BaseModel, Field, ConfigDict
+from fastapi import Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from core.wiring_guard import is_division_owned_budget
+from lib.authz import principal_body_code
 from models import (
-    TournamentBudget, TournamentBudgetBase, BudgetHeadAllocation,
+    BudgetHeadAllocation,
+    TournamentBudget,
 )
-
 
 # ═════════════════════ Payloads ════════════════════════
 
 class DivisionPreparePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    prepared_by_name: Optional[str] = None
-    notes: Optional[str] = None
+    prepared_by_name: str | None = None
+    notes: str | None = None
 
 
 class DivisionSelfSanctionPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    sanctioned_by_name: Optional[str] = None
-    notes: Optional[str] = None
+    sanctioned_by_name: str | None = None
+    notes: str | None = None
 
 
 class SubmitReimbursementPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    submitted_by_name: Optional[str] = None
-    purpose_of_claim: Optional[str] = None
-    signed_summary_url: Optional[str] = None
+    submitted_by_name: str | None = None
+    purpose_of_claim: str | None = None
+    signed_summary_url: str | None = None
 
 
 # ═════════════════════ Helpers ═════════════════════════
@@ -94,7 +92,7 @@ async def _assert_division_owned(tid: str) -> dict:
     return t
 
 
-async def _assert_host_division_caller(tournament: dict, x_body_code: Optional[str]) -> str:
+async def _assert_host_division_caller(tournament: dict, x_body_code: str | None) -> str:
     """Only the host Division may run these endpoints. Legacy calls without
     the header (seeders, tests) are allowed for backward compat."""
     host = tournament.get("host_body_id")
@@ -124,7 +122,7 @@ async def _compute_unified_budget_for_camp(t: dict) -> dict:
 async def division_prepare_budget(
     tid: str,
     payload: DivisionPreparePayload,
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     """Division auto-computes the unified budget for its own camp and
     materialises a Draft `TournamentBudget`. Idempotent — replaces any
@@ -149,7 +147,7 @@ async def division_prepare_budget(
         raise HTTPException(400, "Compute produced no host-body allocations. Check that the Match Calendar has at least one fixture with a valid ground + teams.")
 
     # Merge head allocations across all host rows (in case of multiple pools)
-    head_map: Dict[str, float] = {}
+    head_map: dict[str, float] = {}
     for row in host_rows:
         for a in (row.get("head_allocations") or []):
             key = a.get("head") or a.get("head_key") or "Misc"
@@ -227,7 +225,7 @@ async def division_prepare_budget(
 async def division_self_sanction(
     bid: str,
     payload: DivisionSelfSanctionPayload,
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     """Division locks its Draft into `Division_Sanctioned`. Only the host
     Division of a Division-owned tournament may call this."""
@@ -261,7 +259,7 @@ async def division_self_sanction(
 async def submit_reimbursement_claim(
     tid: str,
     payload: SubmitReimbursementPayload,
-    x_body_code: Optional[str] = Depends(principal_body_code),
+    x_body_code: str | None = Depends(principal_body_code),
 ):
     """Bundle all tournament_invoices → single GrantClaim → flip
     TournamentBudget to Submitted_To_MPCA. This is the single point where
@@ -288,7 +286,7 @@ async def submit_reimbursement_claim(
         raise HTTPException(400, "No invoices to bundle. Upload at least one invoice against a budget head before submitting.")
 
     total_claimed = 0.0
-    invoice_ids: List[str] = []
+    invoice_ids: list[str] = []
     for inv in invoices:
         invoice_ids.append(inv.get("id"))
         try:

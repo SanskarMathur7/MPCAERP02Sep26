@@ -1,14 +1,8 @@
 """Routes · Public Member Verify (QR endpoint)"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
-from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from datetime import datetime, timezone
 
-from core.infra import db, api_router
+from core.infra import api_router, db
 from core.shared_services import next_seq  # H6 · atomic sequence
-from models import Member
-from core.helpers import next_uid as _
 
 
 @api_router.get("/verify/{uid}")

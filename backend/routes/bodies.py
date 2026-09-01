@@ -1,20 +1,17 @@
 """Routes · Org Structure (Multi-Tenant)"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
+from datetime import datetime, timezone
+
 from fastapi import HTTPException, Request
-from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
+from core.helpers import SLA_HOURS_BY_STATUS
+from core.infra import api_router, db
 from models import Body, BodyCreate, BodyType
-from core.helpers import _division_score, _utilization_score, SLA_HOURS_BY_STATUS
-
 
 # ---------------- Routes: Org Structure (Multi-Tenant) ----------------
 
 
-@api_router.get("/bodies", response_model=List[Body])
-async def list_bodies(body_type: Optional[BodyType] = None, parent_code: Optional[str] = None):
+@api_router.get("/bodies", response_model=list[Body])
+async def list_bodies(body_type: BodyType | None = None, parent_code: str | None = None):
     query: dict = {}
     if body_type:
         query["body_type"] = body_type

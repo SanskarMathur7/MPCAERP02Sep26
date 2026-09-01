@@ -1,17 +1,20 @@
 """Routes · Elections + Voting"""
-from datetime import datetime, timezone, date
-from typing import List, Optional, Literal
-import uuid
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
 
-from core.infra import db, api_router
-from models import Election, ElectionCreate, ElectionStatus, Candidate, CandidateCreate, VoteCast, Vote, Member
-from core.helpers import next_uid as _
+from core.infra import api_router, db
+from models import (
+    Candidate,
+    CandidateCreate,
+    Election,
+    ElectionCreate,
+    ElectionStatus,
+    Vote,
+    VoteCast,
+)
 
 
-@api_router.get("/elections", response_model=List[Election])
-async def list_elections(status: Optional[ElectionStatus] = None):
+@api_router.get("/elections", response_model=list[Election])
+async def list_elections(status: ElectionStatus | None = None):
     query = {"status": status} if status else {}
     docs = await db.elections.find(query, {"_id": 0}).sort("voting_date", -1).to_list(200)
     return docs
@@ -45,7 +48,7 @@ async def update_election(election_id: str, payload: ElectionCreate):
     return await db.elections.find_one({"id": election_id}, {"_id": 0})
 
 
-@api_router.get("/elections/{election_id}/candidates", response_model=List[Candidate])
+@api_router.get("/elections/{election_id}/candidates", response_model=list[Candidate])
 async def list_candidates(election_id: str):
     docs = await db.candidates.find({"election_id": election_id}, {"_id": 0}).sort("votes_received", -1).to_list(200)
     return docs

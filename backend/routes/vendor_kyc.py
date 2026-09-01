@@ -9,15 +9,15 @@ and cannot be selected in Purchase Orders until re-verified.
 Also carries TDS applicability + rate (default 2% u/s 194C for contractual work),
 GST verification flag, and MSME registration flag. This data flows into the PO module.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from typing import Literal
+
 from dateutil.relativedelta import relativedelta
-from typing import List, Literal, Optional
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router, logger
+from core.infra import api_router, db, logger
 from core.shared_services import write_audit_log
-
 
 KycStatus = Literal["Not_Started", "Docs_Submitted", "KYC_Verified", "Rejected", "Expired"]
 
@@ -30,22 +30,22 @@ class KycDoc(BaseModel):
     url: str
     uploaded_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     verified: bool = False
-    remarks: Optional[str] = None
+    remarks: str | None = None
 
 
 class KycSubmitPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    docs: List[KycDoc]
+    docs: list[KycDoc]
     msme_registered: bool = False
-    msme_udyam_no: Optional[str] = None
-    actor_name: Optional[str] = "Vendor"
+    msme_udyam_no: str | None = None
+    actor_name: str | None = "Vendor"
 
 
 class KycActionPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    actor_name: Optional[str] = "MPCA Accounts"
-    actor_role: Optional[str] = "mpca_accounts"
-    note: Optional[str] = None
+    actor_name: str | None = "MPCA Accounts"
+    actor_role: str | None = "mpca_accounts"
+    note: str | None = None
     tds_applicable: bool = True
     tds_rate_pct: float = 2.0
     validity_months: int = 12

@@ -29,20 +29,21 @@ layer is used by the new UI.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import HTTPException, Header, Depends, Request
-from lib.authz import principal_body_code, principal_role_id, principal_body_type, principal_persona_id
-from fastapi import Depends
+from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.infra import db, api_router
+from core.infra import api_router, db
+from lib.authz import (
+    principal_body_code,
+    principal_body_type,
+)
 from models import (
     ApprovalStep,
     BudgetHeadAllocation,
     TournamentBudget,
 )
-
 
 # ─────────────────────── Helpers ───────────────────────
 
@@ -65,7 +66,7 @@ async def _next_budget_no(cycle: str) -> str:
     return f"TB-{cycle}-{count + 1:03d}"
 
 
-def _append_chain(doc: dict, step: ApprovalStep, new_status: str) -> Dict[str, Any]:
+def _append_chain(doc: dict, step: ApprovalStep, new_status: str) -> dict[str, Any]:
     chain = list(doc.get("approval_chain") or []) + [step.model_dump()]
     return {
         "status": new_status,
@@ -97,46 +98,46 @@ async def _push_notification(*, recipient_body_id: str, recipient_role_id: str,
 
 class PreparePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    input_variables: Optional[Dict[str, Any]] = None       # global fallback IVs
-    pool_input_variables: Optional[Dict[str, Dict[str, Any]]] = None  # M39s · per-pool IVs
+    input_variables: dict[str, Any] | None = None       # global fallback IVs
+    pool_input_variables: dict[str, dict[str, Any]] | None = None  # M39s · per-pool IVs
     # M39w · MPCA may override individual head amounts per body before sending.
     # Keyed by body_code → dict of head_name → new_limit_inr. Anything omitted
     # keeps the scheme-computed value.
-    per_body_head_overrides: Optional[Dict[str, Dict[str, float]]] = None
-    prepared_by_name: Optional[str] = None
+    per_body_head_overrides: dict[str, dict[str, float]] | None = None
+    prepared_by_name: str | None = None
 
 
 class SendPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    actor_name: Optional[str] = None
-    actor_post: Optional[str] = None
-    only_budget_ids: Optional[List[str]] = None        # if provided, send only these; else all Draft/Revision_Requested for this tid
+    actor_name: str | None = None
+    actor_post: str | None = None
+    only_budget_ids: list[str] | None = None        # if provided, send only these; else all Draft/Revision_Requested for this tid
 
 
 class DivisionAcceptPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     actor_name: str
-    actor_post: Optional[str] = None
-    actor_body_id: Optional[str] = None
-    notes: Optional[str] = None
+    actor_post: str | None = None
+    actor_body_id: str | None = None
+    notes: str | None = None
 
 
 class RevisionPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     actor_name: str
-    actor_post: Optional[str] = None
-    actor_body_id: Optional[str] = None
+    actor_post: str | None = None
+    actor_body_id: str | None = None
     reason: str = Field(..., min_length=3)
 
 
 class SanctionPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
     actor_name: str
-    actor_post: Optional[str] = None
+    actor_post: str | None = None
     actor_body_id: str = "MPCA"
-    approved_total_inr: Optional[float] = None
-    approved_head_allocations: Optional[List[BudgetHeadAllocation]] = None
-    notes: Optional[str] = None
+    approved_total_inr: float | None = None
+    approved_head_allocations: list[BudgetHeadAllocation] | None = None
+    notes: str | None = None
 
 
 # ─────────────────────── Endpoints ───────────────────────
@@ -155,7 +156,7 @@ async def prepare_budgets(tid: str, payload: PreparePayload):
         raise HTTPException(404, "Tournament not found")
 
     # Save master + per-pool IVs if the caller sent them
-    update_doc: Dict[str, Any] = {}
+    update_doc: dict[str, Any] = {}
     if payload.input_variables:
         update_doc["input_variables"] = payload.input_variables
         t["input_variables"] = payload.input_variables
@@ -185,15 +186,15 @@ async def prepare_budgets(tid: str, payload: PreparePayload):
         raise HTTPException(400, "Add participants (Host + Visitors) before preparing budgets.")
 
     # Group participants by pool_id (None = "single-pool tournament")
-    pools_map: Dict[Optional[str], List[Dict[str, Any]]] = {}
+    pools_map: dict[str | None, list[dict[str, Any]]] = {}
     for p in participants:
         pools_map.setdefault(p.get("pool_id"), []).append(p)
 
-    from routes.scheme_calc import compute_budget, ComputeRequest
+    from routes.scheme_calc import ComputeRequest, compute_budget
 
-    created: List[Dict[str, Any]] = []
-    replaced: List[Dict[str, Any]] = []
-    skipped: List[Dict[str, Any]] = []
+    created: list[dict[str, Any]] = []
+    replaced: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
 
     for pool_id, pool_members in pools_map.items():
         pool_name = (pool_members[0].get("pool_name") if pool_members else None) or "Main"
@@ -352,8 +353,8 @@ UNIFIED_TOURNAMENT_TYPES = {
 
 class PrepareUnifiedPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    prepared_by_name: Optional[str] = None
-    per_body_head_overrides: Optional[Dict[str, Dict[str, float]]] = None
+    prepared_by_name: str | None = None
+    per_body_head_overrides: dict[str, dict[str, float]] | None = None
 
 
 @api_router.post("/tournaments/{tid}/finance/prepare-budgets-unified")
@@ -392,12 +393,13 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
     else:
         # Live compute — same code path as the compute endpoint (with travel merge)
         from routes.unified_budget import (
-            compute_tournament_budget, compute_travel_grant,
             _load_rate_card_for_tournament,
+            compute_tournament_budget,
+            compute_travel_grant,
         )
         setup_meta = t.get("setup_meta") or {}
         pools = list(setup_meta.get("division_pools") or []) + list(setup_meta.get("district_pools") or [])
-        matches: List[Dict[str, Any]] = []
+        matches: list[dict[str, Any]] = []
         async for m in db.tournament_matches.find({"tournament_id": tid}, {"_id": 0}):
             matches.append(m)
         async for f in db.fixtures.find({"tournament_id": tid}, {"_id": 0}):
@@ -430,9 +432,9 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
         raise HTTPException(400, "Unified budget produced no per-body allocations. Ensure the Match Calendar has fixtures with pool + host + teams set.")
 
     cycle = t.get("fiscal_cycle") or "2025-26"
-    created: List[Dict[str, Any]] = []
-    replaced: List[Dict[str, Any]] = []
-    skipped: List[Dict[str, Any]] = []
+    created: list[dict[str, Any]] = []
+    replaced: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
 
     for row in by_body:
         body_code = row.get("body_code")
@@ -454,7 +456,7 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
         # MPCA-237 · Dedup existing budgets for this (body,pool) — INCLUDING legacy
         # rows that pre-date pool_id storage (pool_id is null). Otherwise a legacy
         # Approved row + a fresh Draft would both persist as phantom duplicates.
-        live_q: Dict[str, Any] = {
+        live_q: dict[str, Any] = {
             "tournament_id": tid,
             "body_id": body_code,
             "fiscal_cycle": cycle,
@@ -474,7 +476,7 @@ async def prepare_budgets_unified(tid: str, payload: PrepareUnifiedPayload):
 
         # Replace any Draft / Revision_Requested / Returned rows for this (body,pool)
         # + legacy pool_id-less siblings.
-        draft_q: Dict[str, Any] = {
+        draft_q: dict[str, Any] = {
             "tournament_id": tid,
             "body_id": body_code,
             "fiscal_cycle": cycle,
@@ -580,7 +582,7 @@ async def send_budgets(tid: str, payload: SendPayload):
             "step — the Division self-prepares its own budget."
         )
 
-    q: Dict[str, Any] = {
+    q: dict[str, Any] = {
         "tournament_id": tid,
         "status": {"$in": ["Draft", "Revision_Requested"]},
     }
@@ -591,7 +593,7 @@ async def send_budgets(tid: str, payload: SendPayload):
         raise HTTPException(400, "No draft budgets to send. Prepare budgets first.")
 
     now = datetime.now(timezone.utc).isoformat()
-    sent: List[Dict[str, Any]] = []
+    sent: list[dict[str, Any]] = []
     for d in docs:
         step = ApprovalStep(
             stage="Sent_To_Division",
@@ -629,7 +631,7 @@ async def send_budgets(tid: str, payload: SendPayload):
 
 @api_router.post("/tournament-budgets/{bid}/division-accept", response_model=TournamentBudget)
 async def division_accept(bid: str, payload: DivisionAcceptPayload,
-                          x_user_body_code: Optional[str] = Depends(principal_body_code)):
+                          x_user_body_code: str | None = Depends(principal_body_code)):
     """Division taps Accept on the MPCA-sent budget.
 
     M39z · Since MPCA authored the budget in the first place, a separate
@@ -698,7 +700,7 @@ async def division_accept(bid: str, payload: DivisionAcceptPayload,
 
 @api_router.post("/tournament-budgets/{bid}/request-revision", response_model=TournamentBudget)
 async def request_revision(bid: str, payload: RevisionPayload,
-                           x_user_body_code: Optional[str] = Depends(principal_body_code)):
+                           x_user_body_code: str | None = Depends(principal_body_code)):
     """Division asks MPCA to revise the sent budget."""
     doc = await db.tournament_budgets.find_one({"id": bid}, {"_id": 0})
     if not doc:
@@ -790,8 +792,8 @@ async def sanction(bid: str, payload: SanctionPayload):
 @api_router.get("/tournaments/{tid}/finance/matrix")
 async def finance_matrix(
     tid: str,
-    x_body_code: Optional[str] = Header(None, alias="X-Body-Code"),
-    x_body_type: Optional[str] = Depends(principal_body_type),
+    x_body_code: str | None = Header(None, alias="X-Body-Code"),
+    x_body_type: str | None = Depends(principal_body_type),
 ):
     """One-row-per-body matrix for the MPCA console. Renders:
        body · role · budget_status · totals · division response · MPCA action ·
@@ -824,7 +826,7 @@ async def finance_matrix(
     # own the finance console for District/School/Club/Camp tournaments.
     is_wiring_owner = False
     try:
-        from core.wiring_guard import resolve_wiring_cell, _OWNER_TO_BODY_TYPES
+        from core.wiring_guard import _OWNER_TO_BODY_TYPES, resolve_wiring_cell
         fc_cell = await resolve_wiring_cell(tid, "finance_console")
         fc_owner = (fc_cell or {}).get("owner")
         if fc_owner and (x_body_type or "") in _OWNER_TO_BODY_TYPES.get(fc_owner, set()):
@@ -838,12 +840,12 @@ async def finance_matrix(
         or is_parent_div_of_host_dist
         or is_wiring_owner
     )
-    parts_query: Dict[str, Any] = {"tournament_id": tid, "removed_at": None}
+    parts_query: dict[str, Any] = {"tournament_id": tid, "removed_at": None}
     if not is_state and x_body_code:
         parts_query["body_code"] = x_body_code
     parts = await db.tournament_participations.find(parts_query, {"_id": 0}).to_list(500)
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for p in parts:
         body_code = p.get("body_code")
         role = p.get("role", "Visitor")
@@ -926,7 +928,7 @@ async def finance_matrix(
         })
 
     # M39s · Build a pools summary so the UI can group + iterate
-    pools_summary: List[Dict[str, Any]] = []
+    pools_summary: list[dict[str, Any]] = []
     seen_pools: set = set()
     for r in rows:
         pid = r.get("pool_id")
@@ -954,7 +956,7 @@ async def finance_matrix(
     # Approved/Rejected remain visible; the rest are redacted with a hint.
     on_submit_gated = False
     try:
-        from core.wiring_guard import resolve_wiring_cell, _OWNER_TO_BODY_TYPES
+        from core.wiring_guard import _OWNER_TO_BODY_TYPES, resolve_wiring_cell
         _fc_cell = await resolve_wiring_cell(tid, "finance_console")
         _visibility = (_fc_cell or {}).get("visibility")
         _fc_owner = (_fc_cell or {}).get("owner")
@@ -1012,7 +1014,7 @@ async def finance_matrix(
     }
 
 
-def _next_action_hint(budget: dict, claim: dict, role: str) -> Dict[str, str]:
+def _next_action_hint(budget: dict, claim: dict, role: str) -> dict[str, str]:
     """Returns {waiting_on, action} — a UI-friendly cue for who needs to act."""
     bs = (budget or {}).get("status")
     if not budget:
